@@ -1,0 +1,9 @@
+venv
+.vscode
+__pycache__
+*/__pycache__
+.env
+/spotify-downloader
+/data/html
+/profiles
+/data/db
