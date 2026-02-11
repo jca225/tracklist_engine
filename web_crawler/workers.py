@@ -273,7 +273,18 @@ def run_serial(
                     log.info(f"Scraping set={tracklist_id} url={url}")
 
                     response = page.goto(url, wait_until="domcontentloaded")
-                    time.sleep(1)
+                    html = page.content()
+                    soup = BeautifulSoup(html, "html.parser")
+
+                    if is_forwarding_stall_page(soup):
+                        log.warning(f"Forwarding/captcha stall page for set={tracklist_id} - attempting click")
+                        try:
+                            page.locator('form input[type=\"submit\"][value=\"here\"]').first.click(timeout=2000)
+                            time.sleep(2)
+                            html = page.content()
+                            soup = BeautifulSoup(html, "html.parser")
+                        except Exception:
+                            pass
 
                     captcha_found, captcha_solved = handle_captcha(page, cfg, log, tracklist_id)
                     if captcha_found and not captcha_solved:
@@ -292,25 +303,6 @@ def run_serial(
 
                     html = page.content()
                     soup = BeautifulSoup(html, "html.parser")
-
-                    if is_forwarding_stall_page(soup):
-                        log.warning(f"Forwarding/captcha stall page for set={tracklist_id} - attempting click")
-                        try:
-                            page.locator('form input[type=\"submit\"][value=\"here\"]').first.click(timeout=2000)
-                            time.sleep(2)
-                            html = page.content()
-                            soup = BeautifulSoup(html, "html.parser")
-                        except Exception:
-                            pass
-
-                        if is_forwarding_stall_page(soup):
-                            log.warning(f"Forwarding/captcha stall page persisted for set={tracklist_id}")
-                            record_failure("forwarding_stall_page")
-                            if cfg.failure.fail_fast:
-                                break
-                            else:
-                                time.sleep(10)
-                                continue
 
                     if (soup_tracklist := extract_tracklist_id(soup)) != tracklist_id:
                         page.close()

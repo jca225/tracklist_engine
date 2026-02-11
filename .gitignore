@@ -4,6 +4,6 @@ __pycache__
 */__pycache__
 .env
 /spotify-downloader
-/data/html
+/data/*
 /profiles
-/data/db
+/logs
