@@ -306,6 +306,12 @@ _FP_MIN_SCORE: float = 0.65
 _FP_DENSITY_WINDOW_S: float = 10.0
 _FP_MIN_DENSITY: int = 2
 _FP_ANCHOR_BONUS: float = 1.5
+# Full-track exclusion is only safe while the union mask covers a small
+# fraction of the mix. On 5-ref BB11 it covers ~15 %; at 119 refs the
+# union inflates and starts hard-masking real acap/instr plays, which
+# regressed Gnash 0.857 → 0.27. Above this coverage threshold we disable
+# full_excl entirely for the set and let the within-universe Viterbi decide.
+_FP_FULL_EXCL_COVERAGE_CAP: float = 0.40
 
 # Earliest-run-near-cue cleanup thresholds.
 _MERGE_GAP_M: int = 10
@@ -484,19 +490,57 @@ def _clean_path(
 ) -> np.ndarray:
     """Post-process a Viterbi path:
 
-      1. Per ref, merge runs separated by SILENCE-only gaps ≤ _MERGE_GAP_M.
-      2. Per ref, keep the EARLIEST merged run (≥ _MIN_DURATION_M) whose
+      1. PRE-PRUNE: strip runs of any ref j that can't pass its own
+         cue-proximity test (run start > _CUE_TOLERANCE_S away from
+         cue_j). Those cells are already guaranteed to be wiped by
+         j's own cleanup, so treating them as effectively-SILENCE now
+         lets ref i's merge step bridge across them. Without this,
+         a competing ref's single stray cell in the middle of ref i's
+         real play window breaks the merge (requires gap all-SILENCE)
+         and ref i gets fragmented into sub-threshold runs.
+      2. Per ref, merge runs separated by SILENCE-only gaps ≤ _MERGE_GAP_M
+         (where SILENCE is judged after the pre-prune).
+      3. Per ref, keep the EARLIEST merged run (≥ _MIN_DURATION_M) whose
          start is within _CUE_TOLERANCE_S of the scraped cue. Later runs →
          spurious re-entry → wiped. Earlier-but-far-from-cue runs also
          wiped (belt-and-braces against the cue gate).
-      3. Drop the ref entirely if no run qualifies.
+      4. Drop the ref entirely if no run qualifies.
 
     Never overrides another ref's frames — only fills SILENCE cells or
     clears spurious ref frames back to SILENCE.
     """
+    # Precompute, per ref j, the run-starts whose distance to cue_j
+    # exceeds _CUE_TOLERANCE_S. These cells are guaranteed to be wiped
+    # by j's own cleanup, so when bridging ref i's merge gap we treat
+    # them as effectively-SILENCE. We do NOT strip ref i's own cells
+    # here — a ref can legitimately have fragmented runs across a wide
+    # time range that all belong to one real play (e.g. Bastille loops
+    # the same 0:32-1:53 section across the mix at 26s, 106s, 150s).
+    doomed_by_ref: dict[int, np.ndarray] = {}
+    T_ = len(path)
+    for j in range(K):
+        cue_j = cues_by_idx[j]
+        if cue_j <= 1.0:
+            continue
+        doomed = np.zeros(T_, dtype=bool)
+        for s, e in _runs_of(path, j):
+            if abs(float(times[s]) - cue_j) > _CUE_TOLERANCE_S:
+                doomed[s:e] = True
+        if doomed.any():
+            doomed_by_ref[j] = doomed
+
     out = path.copy()
     for i in range(K):
-        runs = _runs_of(path, i)
+        # Strip other refs' doomed strays from i's view so that
+        # ref i's merge can bridge across them.
+        view = path.copy()
+        for j, doomed in doomed_by_ref.items():
+            if j == i:
+                continue
+            mask = doomed & (view == j)
+            view[mask] = -1
+
+        runs = _runs_of(view, i)
         if not runs:
             continue
 
@@ -505,7 +549,7 @@ def _clean_path(
         cur_s, cur_e = runs[0]
         for s, e in runs[1:]:
             gap = s - cur_e
-            gap_cells = path[cur_e:s]
+            gap_cells = view[cur_e:s]
             if gap <= _MERGE_GAP_M and np.all(gap_cells == -1):
                 cur_e = e
             else:

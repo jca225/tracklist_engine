@@ -687,10 +687,19 @@ def align_set(
         # Single-pass decode using the raw-fp full_excl (validated approach).
         full_excl = raw_full_excl
         T = len(mix_times)
-        if progress:
+        coverage = float(full_excl.sum()) / T if T else 0.0
+        if coverage > ind._FP_FULL_EXCL_COVERAGE_CAP:
+            if progress:
+                print(f"[sota] full-track exclusion DISABLED: coverage "
+                      f"{coverage:.2%} > cap {ind._FP_FULL_EXCL_COVERAGE_CAP:.0%} "
+                      f"(too many full-tagged refs with fp hits; hard-masking "
+                      f"the acap/instr universes would wipe real plays)",
+                      flush=True)
+            full_excl = np.zeros(T, dtype=bool)
+        elif progress:
             print(f"[sota] full-track exclusion: "
                   f"{int(full_excl.sum())}/{T} measures "
-                  f"(from raw fingerprint anchors)", flush=True)
+                  f"({coverage:.2%}, from raw fingerprint anchors)", flush=True)
 
         # Full universe decodes without cross-universe exclusion (it IS
         # the source of full_excl, not a subject).
