@@ -12,11 +12,6 @@ from config import Result
 from data_models import DJSetMediaLink, DJSetTrackMediaLink, ScrapeFailure, DJSetRow
 
 
-def get_full_title(track_div: Tag) -> str:
-    track_val = track_div.select_one(".trackValue")
-    return track_val.text.strip().replace('\xa0', ' ') if track_val else "Unknown"
-
-
 @dataclass
 class ScrapedSetData:
     """Data object returning the result of a set scrape."""
@@ -171,7 +166,7 @@ def request_ajax_media_link(params: dict[str, str], page: Any) -> Result[dict[st
         )
 
         if not response.ok:
-            return Result.fail(response.error)
+            return Result.fail(f"HTTP {response.status} {response.status_text}")
 
         result_json = response.json()
         items = result_json.get("data", [])

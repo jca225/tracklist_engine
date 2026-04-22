@@ -40,8 +40,7 @@ browser:
     width: 1366
     height: 768
   user_agent: "Chrome/120.0.0.0 Safari/537.36"
-  args:
-    ["--disable-blink-features=AutomationControlled"]
+  args: ["--disable-session-crashed-bubble", "--hide-crash-restore-bubble", "--disable-blink-features=AutomationControlled"]
   nav_timeout_ms: 60000
   selector_timeout_ms: 10000
 
@@ -51,6 +50,11 @@ failure:
   ajax_failure: continue
   ajax_wait_s: 1800
   kill_process_after_consecutive_failures: 5
+
+retry:
+  max_retries: 3
+  retry_delay_s: 10
+  retry_jitter_s: 2
 
 captcha:
   mode: continue

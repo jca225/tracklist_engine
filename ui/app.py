@@ -611,7 +611,11 @@ def _aligned_rows_for(set_id: str, *, source: str | None = None) -> pd.DataFrame
             except _json.JSONDecodeError:
                 pass
 
-        return "⚠ unaligned"
+        # Fallthrough: the row IS aligned, but we have no version-tag in
+        # the label and sota.py doesn't populate stem_match_rates_json /
+        # cutup_plan_json, so we can't classify which stem was audible.
+        # This is a stem-mask UNKNOWN, not an alignment failure.
+        return "🔊 stem unknown"
 
     df["stem_mask"] = df.apply(_section_label, axis=1)
     return df
@@ -624,7 +628,7 @@ _MASK_COLOR: dict[str, str] = {
     "🎤 acappella":    "#3a7bd5",   # blue
     "🥁 instrumental": "#d6a64a",   # yellow
     "🧩 partial":      "#c97a3a",   # orange
-    "⚠ unaligned":     "#555555",   # gray
+    "🔊 stem unknown": "#555555",   # gray — aligned but stem class unknown
 }
 
 def _assign_lanes(df: pd.DataFrame) -> pd.DataFrame:
@@ -1324,6 +1328,179 @@ def _corpus_counts() -> pd.DataFrame:
     )
 
 
+# ---------- missing-audio helpers (shared between pages) ---------------------
+# Hoisted so the "Alignment review" page can render an inline "not aligned"
+# panel (skipped tracks + URL entry) without duplicating the parse/insert
+# flow that lives on the "Missing audio" page.
+
+def _parse_media_url(raw: str) -> tuple[str, str] | None:
+    """Returns (platform, player_id) or None if we can't parse.
+    Mirrors the rules that `dj_set_track_media_links` was scraped with:
+    11-char YouTube IDs from `?v=`/`youtu.be/`, numeric SoundCloud IDs
+    from `api.soundcloud.com/tracks/<n>`, else the SC slug."""
+    import re as _re
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    m = _re.search(r"[?&]v=([A-Za-z0-9_-]{11})", raw) or \
+        _re.search(r"youtu\.be/([A-Za-z0-9_-]{11})", raw)
+    if m:
+        return "youtube", m.group(1)
+    m = _re.search(r"api\.soundcloud\.com/tracks/(\d+)", raw)
+    if m:
+        return "soundcloud", m.group(1)
+    if "soundcloud.com/" in raw:
+        return "soundcloud", raw.rstrip("/").split("/")[-1]
+    return None
+
+
+def _render_not_aligned_panel(set_id: str, aligned_df: pd.DataFrame) -> None:
+    """Show the tracklist rows the SOTA aligner dropped for this set,
+    with the reason and an inline form to paste a YouTube/SoundCloud
+    URL. 'no_url' = scraper never captured a downloadable link (user
+    must find one manually — e.g. Barenaked Ladies - One Week only
+    had a Spotify row). 'not_downloaded' = link exists but the audio
+    asset hasn't been fetched yet (just run the downloader)."""
+    from audio_pipeline.adapters import db as db_adapter
+    from audio_pipeline.adapters.downloader import DownloadConfig, download_one
+    from audio_pipeline.models import (
+        MediaSource, soundcloud_api_url, youtube_url,
+    )
+
+    tracks_dir = Path.home() / "Desktop" / "tracklist_audio_drive" / "tracks"
+
+    bb = _load_bb()
+    tokens = bb["tokens"]
+    set_tokens = tokens[
+        (tokens["set_id"] == set_id)
+        & (tokens["row_kind"] == "track")
+        & tokens["track_key"].notna()
+    ]
+
+    conn = _connect()
+    have_audio = {
+        r["track_id"] for r in conn.execute(
+            "SELECT DISTINCT ta.track_id FROM track_audio ta "
+            "JOIN dj_set_track_media_links tml ON tml.track_id = ta.track_id "
+            "WHERE tml.set_id = ?",
+            (set_id,),
+        ).fetchall()
+    }
+    have_url = {
+        r["track_id"] for r in conn.execute(
+            "SELECT DISTINCT track_id FROM dj_set_track_media_links "
+            "WHERE set_id = ? AND platform IN ('youtube','soundcloud') "
+            "AND track_id IS NOT NULL AND track_id != ''",
+            (set_id,),
+        ).fetchall()
+    }
+
+    rows: list[dict] = []
+    seen: set[str] = set()
+    for tr in set_tokens.itertuples(index=False):
+        tid = str(getattr(tr, "track_key", "") or "")
+        if not tid or tid in seen or tid in have_audio:
+            continue
+        seen.add(tid)
+        label = str(
+            getattr(tr, "full_name", None) or getattr(tr, "title", None) or tid
+        )
+        rows.append({
+            "row": int(getattr(tr, "row_index", -1)),
+            "track_id": tid,
+            "label": label,
+            "reason": "no_url" if tid not in have_url else "not_downloaded",
+        })
+
+    st.markdown("### Tracks not aligned — no audio")
+    if not rows:
+        st.caption("Every tracklist row has downloaded audio. ✓")
+        return
+
+    miss_df = pd.DataFrame(rows).sort_values("row").reset_index(drop=True)
+    n_no_url = int((miss_df["reason"] == "no_url").sum())
+    n_not_dl = int((miss_df["reason"] == "not_downloaded").sum())
+    st.caption(
+        f"{len(miss_df)} tracks were skipped. "
+        f"**{n_no_url}** have no YouTube/SoundCloud URL (paste one below "
+        f"to recover), **{n_not_dl}** have a URL but no audio file yet "
+        "(run the downloader)."
+    )
+    st.dataframe(
+        miss_df[["row", "label", "reason", "track_id"]],
+        width="stretch", hide_index=True,
+        column_config={
+            "row":      st.column_config.NumberColumn("row", format="%d"),
+            "label":    st.column_config.TextColumn("song"),
+            "reason":   st.column_config.TextColumn("reason"),
+            "track_id": st.column_config.TextColumn("track_id"),
+        },
+    )
+
+    st.markdown("**Add a URL for one of these**")
+    pick_i = st.selectbox(
+        "Track", list(range(len(miss_df))),
+        format_func=lambda i: (
+            f"row {int(miss_df.at[i, 'row'])} · "
+            f"{str(miss_df.at[i, 'label'])[:70]} "
+            f"[{miss_df.at[i, 'reason']}]"
+        ),
+        key=f"align_missing_pick_{set_id}",
+    )
+    picked_tid = str(miss_df.at[pick_i, "track_id"])
+    picked_label = str(miss_df.at[pick_i, "label"])
+    url = st.text_input(
+        "Paste YouTube or SoundCloud URL",
+        placeholder="https://www.youtube.com/watch?v=... or https://soundcloud.com/...",
+        key=f"align_missing_url_{set_id}",
+    )
+    go_download = st.checkbox(
+        "Download immediately after registering the link",
+        value=True, key=f"align_missing_go_{set_id}",
+    )
+
+    if st.button(
+        "Register URL", type="primary", disabled=not url,
+        key=f"align_missing_submit_{set_id}",
+    ):
+        parsed = _parse_media_url(url)
+        if parsed is None:
+            st.error("Couldn't detect platform. Expected a YouTube or SoundCloud URL.")
+            return
+        platform, player_id = parsed
+        r = db_adapter.insert_track_media_link(
+            DB_PATH, set_id=set_id, track_id=picked_tid,
+            platform=platform, player_id=player_id, url=url, tlp_id=None,
+        )
+        if not r.is_ok():
+            st.error(f"DB insert failed: {r.error.kind} — {r.error.detail}")
+            return
+        st.success(f"Registered {platform} · {player_id} for '{picked_label}'.")
+        if go_download:
+            out_dir = tracks_dir / set_id
+            out_dir.mkdir(parents=True, exist_ok=True)
+            can_url = (
+                youtube_url(player_id) if platform == "youtube"
+                else soundcloud_api_url(player_id)
+            )
+            src = MediaSource(platform=platform, player_id=player_id, url=can_url)
+            with st.spinner(f"Downloading via yt-dlp → {out_dir}..."):
+                dl = download_one(picked_tid, src, DownloadConfig(out_dir=out_dir))
+            if not dl.is_ok():
+                st.error(f"Download failed: {dl.error.kind} — {dl.error.detail}")
+                return
+            ins = db_adapter.insert_audio(DB_PATH, dl.value)
+            if not ins.is_ok():
+                st.error(f"insert_audio failed: {ins.error}")
+                return
+            st.success(
+                f"Downloaded → {dl.value.path}. Re-run "
+                "`audio_pipeline.alignment.sota` to pick up the new ref."
+            )
+        st.cache_data.clear()
+        st.rerun()
+
+
 # ---------- sidebar / page routing ------------------------------------------
 
 # Pages are grouped like a DAW browser: catalog views up top, playback /
@@ -1524,7 +1701,6 @@ elif page == "Missing audio":
         "audio drive. Optionally also downloads it immediately."
     )
 
-    import re as _re
     from audio_pipeline.adapters import db as db_adapter
     from audio_pipeline.adapters.downloader import DownloadConfig, download_one
     from audio_pipeline.models import (
@@ -1609,24 +1785,6 @@ elif page == "Missing audio":
     )
     go_download = st.checkbox("Download immediately after registering the link", value=True)
 
-    def _parse_media_url(raw: str) -> tuple[str, str] | None:
-        """Returns (platform, player_id) or None if we can't parse."""
-        raw = raw.strip()
-        if not raw:
-            return None
-        m = _re.search(r"[?&]v=([A-Za-z0-9_-]{11})", raw) or _re.search(r"youtu\.be/([A-Za-z0-9_-]{11})", raw)
-        if m:
-            return "youtube", m.group(1)
-        m = _re.search(r"api\.soundcloud\.com/tracks/(\d+)", raw)
-        if m:
-            return "soundcloud", m.group(1)
-        if "soundcloud.com/" in raw:
-            # Non-numeric slug; yt-dlp still handles it, but we need a stable
-            # player_id. Use the slug (the scraper stores numeric IDs normally).
-            slug = raw.rstrip("/").split("/")[-1]
-            return "soundcloud", slug
-        return None
-
     if st.button("Register URL", type="primary", disabled=not url):
         parsed = _parse_media_url(url)
         if parsed is None:
@@ -1705,9 +1863,9 @@ elif page == "Alignment review":
 
         set_audio_path = _set_audio_path_for(set_id)
 
-        # SOTA-only display. Reads rows tagged by the Viterbi pipeline
-        # (audio_pipeline/alignment/indicators_debug.py). Legacy rows
-        # are hidden.
+        # SOTA-only display. Reads rows written by the canonical
+        # orchestrator in audio_pipeline/alignment/sota.py, tagged
+        # `confidence_source='sota_v2'`. See SOTA.md for the stack.
         df = _aligned_rows_for(set_id, source="sota_v2")
         st.caption(
             f"SOTA v2 (MERT + cue-detr bracket + mutual exclusion) — **{len(df)}** rows · "
@@ -1742,6 +1900,15 @@ elif page == "Alignment review":
                 "stem_mask":   st.column_config.TextColumn("stem mask"),
             },
         )
+
+        # --- Tracks not aligned (no audio) ---------------------------
+        # Tracklist rows that SOTA dropped because there's no downloadable
+        # audio. Either the scraper never captured a YT/SC URL ('no_url'
+        # — user has to paste one manually) or the URL exists but the
+        # file hasn't been fetched yet ('not_downloaded' — just run the
+        # downloader). Keep this adjacent to the aligned table so users
+        # reconciling the tracklist against the timeline see the gaps.
+        _render_not_aligned_panel(set_id, df)
 
         st.markdown("### ▶ Playback")
         pick = st.selectbox(
@@ -2336,51 +2503,70 @@ elif page == "Stem player":
 elif page == "Annotate GT":
     st.title("Annotate ground truth")
     st.caption(
-        "Edit a fixture yaml alongside the mix audio. Start from a scaffold "
-        "(see `audio_pipeline/alignment/scaffold_fixture.py`) or an existing "
-        "fixture. Fill in `version_tag`, `set_start_s`, `set_end_s` per track; "
-        "leave set_start_s empty to drop a row the DJ never played. The "
-        "alignment eval harness picks up any `*_ground_truth.yaml` in "
-        "`tests/fixtures/`."
+        "Edit or create a fixture yaml alongside the mix audio. Pick an "
+        "existing fixture from the sidebar, or start a new one. Edits live "
+        "in-browser; nothing touches disk until you click **Save yaml**. "
+        "Every save archives the previous version under "
+        "`tests/fixtures/.archive/` so you can restore it."
     )
 
     import re
-    FIXTURE_DIR = _REPO_ROOT / "tests" / "fixtures"
-    yaml_paths = sorted(FIXTURE_DIR.glob("*.yaml"))
-    if not yaml_paths:
-        st.warning(
-            f"No yaml files found in {FIXTURE_DIR}. Run "
-            "`venvs/audio/bin/python -m audio_pipeline.alignment.scaffold_fixture "
-            "--set-id <id> --out tests/fixtures/<name>_scaffold.yaml` to create one."
-        )
-        st.stop()
-    picked_yaml_idx = st.sidebar.selectbox(
-        "Fixture", range(len(yaml_paths)), format_func=lambda i: yaml_paths[i].name,
-    )
-    yaml_path = yaml_paths[picked_yaml_idx]
+    import shutil
+    from datetime import datetime as _dt
 
-    # Parse the yaml. Structure is tolerant — only the `set_id` and the
-    # `tracks:` list of {track, track_id?, version_tag?, set_start_s?,
-    # set_end_s?} dicts are required.
+    FIXTURE_DIR = _REPO_ROOT / "tests" / "fixtures"
+    ARCHIVE_DIR = FIXTURE_DIR / ".archive"
+    FIXTURE_DIR.mkdir(parents=True, exist_ok=True)
+    ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+
     try:
         import yaml
     except ImportError:
         st.error("PyYAML is not installed in this venv. `venvs/audio/bin/pip install pyyaml`")
         st.stop()
-    try:
-        doc = yaml.safe_load(yaml_path.read_text()) or {}
-    except yaml.YAMLError as e:
-        st.error(f"Failed to parse {yaml_path.name}: {e}")
-        st.stop()
 
-    set_id = str(doc.get("set_id") or "").strip()
-    if not set_id:
-        st.error(f"{yaml_path.name} has no `set_id:` field.")
-        st.stop()
-    tracks = doc.get("tracks") or []
-    if not isinstance(tracks, list):
-        st.error(f"{yaml_path.name}'s `tracks:` must be a list.")
-        st.stop()
+    yaml_paths = sorted(FIXTURE_DIR.glob("*.yaml"))
+    NEW_OPTION = "+ New fixture…"
+    options = [NEW_OPTION] + [p.name for p in yaml_paths]
+    picked = st.sidebar.selectbox("Fixture", options, index=(1 if yaml_paths else 0))
+
+    is_new = (picked == NEW_OPTION)
+    if is_new:
+        new_set_id = st.sidebar.text_input(
+            "set_id for new fixture", value="",
+            help="Use the canonical set_id from `dj_sets` if this fixture "
+                 "covers a scraped set. For a mix that's not yet in the DB, "
+                 "use any stable string — it's the primary key for matching "
+                 "GT rows back to aligned rows.",
+        )
+        new_name = st.sidebar.text_input(
+            "file name (without .yaml)", value="",
+            help="Defaults to `<set_id>_ground_truth` if blank.",
+        )
+        if not new_set_id.strip():
+            st.info("Enter a `set_id` in the sidebar to start a new fixture.")
+            st.stop()
+        set_id = new_set_id.strip()
+        stem = new_name.strip() or f"{set_id}_ground_truth"
+        yaml_path = FIXTURE_DIR / f"{stem}.yaml"
+        doc = {"set_id": set_id, "source": "ableton_session", "annotated_by": "user", "tracks": []}
+        tracks = []
+        st.info(f"Starting new fixture at `{yaml_path.name}`. Add rows in the table below.")
+    else:
+        yaml_path = FIXTURE_DIR / picked
+        try:
+            doc = yaml.safe_load(yaml_path.read_text()) or {}
+        except yaml.YAMLError as e:
+            st.error(f"Failed to parse {yaml_path.name}: {e}")
+            st.stop()
+        set_id = str(doc.get("set_id") or "").strip()
+        if not set_id:
+            st.error(f"{yaml_path.name} has no `set_id:` field.")
+            st.stop()
+        tracks = doc.get("tracks") or []
+        if not isinstance(tracks, list):
+            st.error(f"{yaml_path.name}'s `tracks:` must be a list.")
+            st.stop()
 
     # Audio
     audio_path_str = _set_audio_path_for(set_id)
@@ -2391,52 +2577,425 @@ elif page == "Annotate GT":
         st.caption(f"Audio: `{audio_path_str}`")
     else:
         st.info(
-            f"No downloaded audio for set {set_id}. You can still edit the "
-            "yaml, but won't be able to listen. Download via the 'Missing "
-            "audio' page (once the set's tracks are registered)."
+            f"No downloaded mix audio for set `{set_id}` yet. You can still "
+            "annotate — paste media URLs per track and run the downloader."
         )
 
-    # Editable table. Use st.data_editor with a stable column order and
-    # numeric inputs for times so bad types fail loudly on save.
+    # Build editor rows. Tolerant of missing fields so an older fixture
+    # upgrades cleanly when opened. `ref_start_s` / `ref_end_s` are
+    # surfaced either from the top-level key or from the FIRST entry of
+    # `ref_segments` (loop / cut-up yamls).
+    def _first_num(*vals: object) -> float | None:
+        for v in vals:
+            if isinstance(v, (int, float)):
+                return float(v)
+        return None
+
+    # Build a track_id → {platform: url} map from the DB. URLs are
+    # reconstructed from platform+player_id (the scraper stores IDs, not
+    # URLs). Matches the canonical builder in audio_pipeline.models.
+    # Uses a fresh connection: the cached st.cache_resource sqlite
+    # connection is shared across concurrent Streamlit reruns and can
+    # raise sqlite3.InterfaceError ("bad parameter or other API misuse")
+    # when another rerun is mid-fetch. A per-page-render connection
+    # avoids the contention; cost is a ~1 ms reopen.
+    from audio_pipeline.models import youtube_url as _yt_url
+    from audio_pipeline.models import soundcloud_api_url as _sc_url
+    from audio_pipeline.models import spotify_track_url as _sp_url
+    db_links_by_tid: dict[str, dict[str, str]] = {}
+    try:
+        _ephem = sqlite3.connect(str(DB_PATH))
+        _ephem.row_factory = sqlite3.Row
+        try:
+            for _r in _ephem.execute(
+                "SELECT track_id, platform, player_id FROM dj_set_track_media_links "
+                "WHERE set_id=? AND track_id IS NOT NULL AND track_id != '' "
+                "AND player_id IS NOT NULL AND player_id != ''",
+                (str(set_id),),
+            ).fetchall():
+                _tid = _r["track_id"]; _plat = _r["platform"]; _pid = _r["player_id"]
+                if _plat == "youtube":
+                    _url = _yt_url(_pid)
+                elif _plat == "soundcloud":
+                    _url = _sc_url(_pid)
+                elif _plat == "spotify":
+                    _url = _sp_url(_pid)
+                else:
+                    _url = ""
+                if _url:
+                    db_links_by_tid.setdefault(_tid, {})[_plat] = _url
+        finally:
+            _ephem.close()
+    except sqlite3.Error:
+        # Catch the full Error hierarchy — InterfaceError, DatabaseError,
+        # OperationalError etc. If the lookup fails, fall back to empty
+        # (editor still works, URLs just start blank).
+        pass
+
     rows_for_editor: list[dict] = []
     for t in tracks:
         if not isinstance(t, dict):
             continue
+        segs = t.get("ref_segments") or []
+        seg0 = segs[0] if segs and isinstance(segs[0], dict) else {}
+        ml = t.get("media_links") or {}
+        if not isinstance(ml, dict):
+            ml = {}
+        # Merge DB-derived URLs in as defaults. YAML-authored media_links
+        # take precedence (the user's explicit edits beat scraper-state).
+        tid = str(t.get("track_id") or "").strip()
+        db_ml = db_links_by_tid.get(tid, {}) if tid else {}
+        def _pref(yaml_val: object, db_key: str) -> str:
+            v = str(yaml_val or "").strip()
+            return v if v else db_ml.get(db_key, "")
         rows_for_editor.append({
-            "track": str(t.get("track") or "").strip(),
-            "track_id": str(t.get("track_id") or "").strip(),
-            "version_tag": (t.get("version_tag") or "").strip() if isinstance(t.get("version_tag"), str) else "",
-            "set_start_s": t.get("set_start_s") if isinstance(t.get("set_start_s"), (int, float)) else None,
-            "set_end_s": t.get("set_end_s") if isinstance(t.get("set_end_s"), (int, float)) else None,
+            "track":          str(t.get("track") or "").strip(),
+            "track_id":       tid,
+            "version_tag":    (t.get("version_tag") or "").strip() if isinstance(t.get("version_tag"), str) else "",
+            "set_start_s":    _first_num(t.get("set_start_s")),
+            "set_end_s":      _first_num(t.get("set_end_s")),
+            "ref_start_s":    _first_num(t.get("ref_start_s"), seg0.get("ref_start_s")),
+            "ref_end_s":      _first_num(t.get("ref_end_s"),   seg0.get("ref_end_s")),
+            "youtube_url":    _pref(ml.get("youtube"),    "youtube"),
+            "spotify_url":    _pref(ml.get("spotify"),    "spotify"),
+            "soundcloud_url": _pref(ml.get("soundcloud"), "soundcloud"),
+            "other_url":      str(ml.get("other") or "").strip(),
         })
-    df_edit = pd.DataFrame(rows_for_editor, columns=["track", "track_id", "version_tag", "set_start_s", "set_end_s"])
+    columns = [
+        "track", "track_id", "version_tag",
+        "set_start_s", "set_end_s", "ref_start_s", "ref_end_s",
+        "youtube_url", "spotify_url", "soundcloud_url", "other_url",
+    ]
+    df_edit = pd.DataFrame(rows_for_editor, columns=columns)
+
+    # Auto-reset the editor's session state when the schema changes (e.g. a
+    # new column like youtube_url is added but cached state still has the
+    # old 5-column layout and won't surface the new cells).
+    _editor_key = f"gt_editor::{yaml_path.name}"
+    _schema_marker_key = f"gt_editor_schema::{yaml_path.name}"
+    _schema_marker = ",".join(df_edit.columns)
+    if st.session_state.get(_schema_marker_key) != _schema_marker:
+        st.session_state.pop(_editor_key, None)
+        st.session_state[_schema_marker_key] = _schema_marker
+
+    rc1, rc2 = st.columns([1, 4])
+    if rc1.button("↻ Reload from disk",
+                   help="Discards any in-browser edits and re-reads the "
+                        "fixture yaml + DB links. Useful if URL / track_id "
+                        "columns look stale."):
+        st.session_state.pop(_editor_key, None)
+        # Also clear per-track loops state so they reseed from disk.
+        for k in list(st.session_state.keys()):
+            if isinstance(k, str) and k.startswith(f"gt_segments::{yaml_path.name}::"):
+                st.session_state.pop(k, None)
+        st.rerun()
+    rc2.caption(
+        "Editor auto-resets only when the column schema changes. If you "
+        "added/edited rows, they're preserved across reruns until you save "
+        "— reload here to discard."
+    )
 
     edited = st.data_editor(
         df_edit,
-        width="stretch", height=480,
+        width="stretch", height=520,
         column_config={
-            "track":       st.column_config.TextColumn("Track", width="large", disabled=True),
-            "track_id":    st.column_config.TextColumn("track_id", width="small", disabled=True),
+            "track":       st.column_config.TextColumn("Track", width="large"),
+            "track_id":    st.column_config.TextColumn("track_id", width="small",
+                                                       help="DB track_id. Required for scraped tracks; optional for DJ-added tracks the tracklist missed."),
             "version_tag": st.column_config.SelectboxColumn(
                 "version_tag", options=["", "instrumental", "acappella", "full"], width="small",
             ),
-            "set_start_s": st.column_config.NumberColumn("set_start_s", step=1.0, format="%.1f"),
-            "set_end_s":   st.column_config.NumberColumn("set_end_s",   step=1.0, format="%.1f"),
+            "set_start_s": st.column_config.NumberColumn("mix start (s)", step=1.0, format="%.1f"),
+            "set_end_s":   st.column_config.NumberColumn("mix end (s)",   step=1.0, format="%.1f"),
+            "ref_start_s": st.column_config.NumberColumn("ref start (s)", step=1.0, format="%.1f",
+                                                          help="Where in the ref track the played region begins. Leave blank for straight-through plays."),
+            "ref_end_s":   st.column_config.NumberColumn("ref end (s)",   step=1.0, format="%.1f"),
+            "youtube_url":    st.column_config.TextColumn("YouTube URL"),
+            "spotify_url":    st.column_config.TextColumn("Spotify URL"),
+            "soundcloud_url": st.column_config.TextColumn("SoundCloud URL"),
+            "other_url":      st.column_config.TextColumn("Other URL"),
         },
-        num_rows="fixed",
-        key=f"gt_editor::{yaml_path.name}",
+        num_rows="dynamic",
+        key=_editor_key,
     )
 
-    c1, c2, c3 = st.columns(3)
-    filled = edited[edited["set_start_s"].notna() & edited["set_end_s"].notna()]
-    c1.metric("tracks filled", len(filled))
-    c2.metric("version_tag set", int((edited["version_tag"].astype(str).str.len() > 0).sum()))
-    c3.metric("total rows", len(edited))
+    # Fill metrics. A row counts as "filled" if it has a track name AND
+    # both mix-side times. Ref-side times and media links are independent.
+    edited = edited.copy()
+    edited["track"] = edited["track"].fillna("").astype(str)
+    has_track   = edited["track"].str.len() > 0
+    has_mix     = edited["set_start_s"].notna() & edited["set_end_s"].notna()
+    has_ref     = edited["ref_start_s"].notna() & edited["ref_end_s"].notna()
+    has_link    = (
+        (edited["youtube_url"].fillna("").astype(str).str.len() > 0)
+        | (edited["spotify_url"].fillna("").astype(str).str.len() > 0)
+        | (edited["soundcloud_url"].fillna("").astype(str).str.len() > 0)
+        | (edited["other_url"].fillna("").astype(str).str.len() > 0)
+    )
+    filled = edited[has_track & has_mix]
 
-    if st.button("Save yaml", type="primary"):
-        # Serialize back — keep only rows with BOTH times filled (the
-        # fixture format treats empty times as 'dropped row'). Preserve
-        # top-level metadata (set_id, source, annotated_by).
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("total rows", len(edited))
+    c2.metric("tracks with mix span", int(len(filled)))
+    c3.metric("… + ref span",        int((has_track & has_mix & has_ref).sum()))
+    c4.metric("… + media link",      int((has_track & has_mix & has_link).sum()))
+
+    # ---- Inline helpers for the player + tracklist-reference panels -----
+    def _gt_track_variants(track_id: str) -> list[dict]:
+        """Return playable audio options for a given track_id: every
+        `track_audio` row (labeled by variant_tag) plus each `track_stem`
+        (vocals / instrumental / drums / bass / other). Empty if the
+        track isn't in the DB or has no downloaded audio."""
+        if not track_id:
+            return []
+        conn = _connect()
+        opts: list[dict] = []
+        for ta in conn.execute(
+            "SELECT track_audio_id, path, variant_tag, is_reference "
+            "FROM track_audio WHERE track_id = ? "
+            "ORDER BY is_reference DESC, track_audio_id", (track_id,),
+        ).fetchall():
+            tag = (ta["variant_tag"] or "original").strip()
+            opts.append({"label": f"{tag}", "path": ta["path"],
+                         "track_audio_id": int(ta["track_audio_id"])})
+            for st_row in conn.execute(
+                "SELECT stem_name, path FROM track_stems "
+                "WHERE track_audio_id = ? ORDER BY stem_name",
+                (int(ta["track_audio_id"]),),
+            ).fetchall():
+                opts.append({
+                    "label": f"{tag} / {st_row['stem_name']}",
+                    "path":  st_row["path"],
+                    "track_audio_id": int(ta["track_audio_id"]),
+                })
+        return opts
+
+    # --- Selected-track player + loops editor ----------------------------
+    st.markdown("### 🔎 Selected track")
+    st.caption(
+        "Pick any track you've added above to audition it. The mix player "
+        "jumps to `set_start_s`; the ref player picks any variant or "
+        "demucs stem that the DB has on disk for that `track_id`. "
+        "Use the loops table below for tracks the DJ looped or cut up "
+        "(e.g. BB11 Good Grief: ref 0:32–1:53 once, then 0:32–1:27 again)."
+    )
+
+    selectable = edited[edited["track"].astype(str).str.len() > 0].copy()
+    if len(selectable) == 0:
+        st.caption("No tracks yet — add one in the table above (use the "
+                   "dynamic `+` row) or from the reference panel below.")
+    else:
+        selectable["_display"] = selectable.apply(
+            lambda r: (
+                f"{str(r['track'])[:70]}"
+                + (f"  ·  mix {float(r['set_start_s']):.0f}-{float(r['set_end_s']):.0f}s"
+                   if pd.notna(r['set_start_s']) and pd.notna(r['set_end_s']) else "")
+                + (f"  ·  {r['version_tag']}" if r['version_tag'] else "")
+            ), axis=1,
+        )
+        pick_idx = st.selectbox(
+            "Track",
+            selectable.index.tolist(),
+            format_func=lambda i: selectable.at[i, "_display"],
+            key=f"gt_player_sel::{yaml_path.name}",
+        )
+        pick_row = selectable.loc[pick_idx]
+        pick_tid = str(pick_row.get("track_id") or "").strip()
+        pick_track_key = pick_tid or str(pick_row["track"])
+
+        pc1, pc2 = st.columns(2)
+        with pc1:
+            st.markdown("**Mix-side** (jumps to `set_start_s`)")
+            if audio_path_str and Path(audio_path_str).exists():
+                preview = _ensure_preview_audio(audio_path_str)
+                start = int(pick_row["set_start_s"]) if pd.notna(pick_row["set_start_s"]) else 0
+                st.audio(preview or audio_path_str, start_time=start)
+                mix_end = (f"{float(pick_row['set_end_s']):.0f}s"
+                           if pd.notna(pick_row["set_end_s"]) else "—")
+                st.caption(f"set_start_s={start}  ·  set_end_s={mix_end}")
+            else:
+                st.caption("No mix audio for this set yet.")
+
+        with pc2:
+            st.markdown("**Ref-side** (pick a variant / stem)")
+            variants = _gt_track_variants(pick_tid)
+            if not variants:
+                st.caption(
+                    f"No track_audio in the DB for `{pick_tid or '<no track_id>'}`. "
+                    "Paste a media URL in the main table and run the downloader."
+                )
+            else:
+                vlabels = [v["label"] for v in variants]
+                default_idx = 0
+                for i, v in enumerate(variants):
+                    if v["label"] == "original":
+                        default_idx = i; break
+                vpick = st.selectbox(
+                    "variant / stem", vlabels, index=default_idx,
+                    key=f"gt_ref_variant::{yaml_path.name}::{pick_idx}",
+                )
+                vpath = next(v["path"] for v in variants if v["label"] == vpick)
+                if Path(vpath).exists():
+                    rstart = int(pick_row["ref_start_s"]) if pd.notna(pick_row["ref_start_s"]) else 0
+                    st.audio(vpath, start_time=rstart)
+                    rend = (f"{float(pick_row['ref_end_s']):.0f}s"
+                            if pd.notna(pick_row["ref_end_s"]) else "—")
+                    st.caption(f"ref_start_s={rstart}  ·  ref_end_s={rend}")
+                else:
+                    st.warning(f"File missing on disk: `{vpath}`")
+
+        # Loops / cut-ups editor for the selected track.
+        st.markdown("#### Loops / cut-ups")
+        seg_key = f"gt_segments::{yaml_path.name}::{pick_track_key}"
+        if seg_key not in st.session_state:
+            # Seed from the yaml on first render for this track.
+            seeded: list[dict] = []
+            for t in tracks:
+                if not isinstance(t, dict):
+                    continue
+                this_key = str(t.get("track_id") or t.get("track") or "")
+                if this_key == pick_track_key:
+                    for s in (t.get("ref_segments") or []):
+                        if not isinstance(s, dict):
+                            continue
+                        if not all(k in s for k in ("mix_start_s", "ref_start_s", "ref_end_s")):
+                            continue
+                        seeded.append({
+                            "mix_start_s": float(s["mix_start_s"]),
+                            "ref_start_s": float(s["ref_start_s"]),
+                            "ref_end_s":   float(s["ref_end_s"]),
+                        })
+                    break
+            st.session_state[seg_key] = seeded
+
+        seg_df = pd.DataFrame(
+            st.session_state[seg_key],
+            columns=["mix_start_s", "ref_start_s", "ref_end_s"],
+        )
+        seg_edited = st.data_editor(
+            seg_df, width="stretch", height=220, num_rows="dynamic",
+            column_config={
+                "mix_start_s": st.column_config.NumberColumn("mix start (s)", step=1.0, format="%.1f"),
+                "ref_start_s": st.column_config.NumberColumn("ref start (s)", step=1.0, format="%.1f"),
+                "ref_end_s":   st.column_config.NumberColumn("ref end (s)",   step=1.0, format="%.1f"),
+            },
+            key=f"gt_seg_editor::{yaml_path.name}::{pick_track_key}",
+        )
+        # Mirror the editor's current state back into session_state so the
+        # save handler (below) can see it. Skip rows with any blank field.
+        st.session_state[seg_key] = [
+            {"mix_start_s": float(r["mix_start_s"]),
+             "ref_start_s": float(r["ref_start_s"]),
+             "ref_end_s":   float(r["ref_end_s"])}
+            for _, r in seg_edited.iterrows()
+            if pd.notna(r["mix_start_s"]) and pd.notna(r["ref_start_s"]) and pd.notna(r["ref_end_s"])
+        ]
+        if st.session_state[seg_key]:
+            st.caption(
+                f"{len(st.session_state[seg_key])} segment(s) will be written to "
+                "`ref_segments:` on save. The main table's flat `ref_start_s`/"
+                "`ref_end_s` are ignored for this track when segments exist."
+            )
+
+    # --- Tracklist reference (read-only) --------------------------------
+    with st.expander(
+        f"Tracklist reference — every track the scraper captured for `{set_id}`",
+        expanded=False,
+    ):
+        st.caption(
+            "DB view of this set's tracklist. Use as a lookup when building "
+            "a fixture manually: copy the track name and `track_id` into "
+            "the main table. Each row's player uses the canonical "
+            "downloaded audio (variant `original`) — switch variant in the "
+            "Selected-track panel above once you've added the row."
+        )
+        conn = _connect()
+        ref_rows = conn.execute(
+            """
+            SELECT r.row_index, r.text_excerpt, tml.track_id,
+                   MAX(ta.path) AS any_path
+            FROM dj_set_rows r
+            LEFT JOIN dj_set_track_media_links tml
+                   ON tml.set_id = r.set_id AND r.element_id = ('tlp_' || tml.tlp_id)
+            LEFT JOIN track_audio ta ON ta.track_id = tml.track_id
+            WHERE r.set_id = ? AND tml.track_id IS NOT NULL AND tml.track_id != ''
+            GROUP BY r.row_index, r.text_excerpt, tml.track_id
+            ORDER BY r.row_index
+            """,
+            (set_id,),
+        ).fetchall()
+        if not ref_rows:
+            st.caption("No tracklist rows found for this set_id in the DB.")
+        else:
+            st.caption(f"{len(ref_rows)} tracks on tracklist.")
+            for r in ref_rows:
+                cols = st.columns([1, 5, 2, 2])
+                cols[0].caption(f"row {r['row_index']}")
+                cols[1].code(
+                    (r["text_excerpt"] or "")[:90],
+                    language="text",
+                )
+                cols[2].caption(r["track_id"] or "—")
+                playable = r["any_path"] and Path(r["any_path"]).exists()
+                if playable:
+                    if cols[3].button("▶ play", key=f"gt_ref_play::{r['row_index']}::{r['track_id']}"):
+                        st.session_state[f"gt_ref_inline_play::{r['track_id']}"] = r["any_path"]
+                    inline = st.session_state.get(f"gt_ref_inline_play::{r['track_id']}")
+                    if inline:
+                        st.audio(inline)
+                        cols[3].caption("playing: original")
+                else:
+                    cols[3].caption("no audio")
+
+    # Archive browser
+    archived = sorted(ARCHIVE_DIR.glob(f"{yaml_path.stem}_*.yaml"), reverse=True)
+    with st.expander(f"Archive ({len(archived)} prior versions)", expanded=False):
+        if not archived:
+            st.caption(
+                "No archive snapshots yet. Saving an existing fixture "
+                "automatically copies its prior contents to "
+                f"`{ARCHIVE_DIR.relative_to(_REPO_ROOT)}/` first, so you "
+                "can always roll back."
+            )
+        for ap in archived[:25]:
+            ar1, ar2, ar3 = st.columns([3, 1, 1])
+            ar1.code(ap.name, language="text")
+            if ar2.button("Preview", key=f"gt_preview::{ap.name}"):
+                st.text_area(
+                    f"Contents of {ap.name}",
+                    ap.read_text(),
+                    height=280,
+                    key=f"gt_preview_area::{ap.name}",
+                )
+            if ar3.button("Restore", key=f"gt_restore::{ap.name}",
+                           help="Overwrites the current fixture with this "
+                                "archived copy. Also archives the current "
+                                "file first so you can undo the restore."):
+                if yaml_path.exists():
+                    stamp = _dt.now().strftime("%Y%m%d-%H%M%S")
+                    shutil.copy2(yaml_path, ARCHIVE_DIR / f"{yaml_path.stem}_{stamp}.yaml")
+                shutil.copy2(ap, yaml_path)
+                st.success(f"Restored `{ap.name}` → `{yaml_path.name}`. Reloading…")
+                st.rerun()
+
+    # --- Save ---------------------------------------------------------------
+    sc1, sc2 = st.columns([1, 3])
+    save_clicked = sc1.button("Save yaml", type="primary",
+                               help="Writes the editor contents to disk. "
+                                    "Archives the previous version first.")
+    sc2.caption("Edits stay in-browser until you click Save. Unsaved changes "
+                "are lost on page reload.")
+
+    if save_clicked:
+        # Archive the current on-disk version before overwriting.
+        archived_note = "new fixture (nothing to archive)"
+        if yaml_path.exists():
+            stamp = _dt.now().strftime("%Y%m%d-%H%M%S")
+            archive_path = ARCHIVE_DIR / f"{yaml_path.stem}_{stamp}.yaml"
+            shutil.copy2(yaml_path, archive_path)
+            archived_note = f"previous version archived → `{archive_path.relative_to(_REPO_ROOT)}`"
+
+        # Serialize.
         out_lines: list[str] = []
         title = ""
         try:
@@ -2457,19 +3016,55 @@ elif page == "Annotate GT":
             tag = (row["version_tag"] or "").strip()
             label = (row["track"] or "").replace('"', r'\"')
             out_lines.append(f"  - track: \"{label}\"")
-            if row["track_id"]:
-                out_lines.append(f"    track_id: {row['track_id']}")
+            tid = str(row.get("track_id") or "").strip()
+            if tid:
+                out_lines.append(f"    track_id: {tid}")
             if tag:
                 out_lines.append(f"    version_tag: {tag}")
             out_lines.append(f"    set_start_s: {float(row['set_start_s']):g}")
             out_lines.append(f"    set_end_s:   {float(row['set_end_s']):g}")
-        # Save as a sibling "_ground_truth.yaml" if this was a scaffold;
-        # otherwise overwrite in place.
+            # Segments (loops / cut-ups) win over the flat ref_start_s /
+            # ref_end_s when present, per the schema.
+            row_key = str(row.get("track_id") or "").strip() or str(row["track"])
+            row_segs = st.session_state.get(
+                f"gt_segments::{yaml_path.name}::{row_key}", []
+            )
+            if row_segs:
+                out_lines.append("    ref_segments:")
+                for s in row_segs:
+                    out_lines.append(f"      - mix_start_s: {float(s['mix_start_s']):g}")
+                    out_lines.append(f"        ref_start_s: {float(s['ref_start_s']):g}")
+                    out_lines.append(f"        ref_end_s:   {float(s['ref_end_s']):g}")
+            else:
+                if pd.notna(row["ref_start_s"]):
+                    out_lines.append(f"    ref_start_s: {float(row['ref_start_s']):g}")
+                if pd.notna(row["ref_end_s"]):
+                    out_lines.append(f"    ref_end_s:   {float(row['ref_end_s']):g}")
+            links: list[tuple[str, str]] = []
+            for col, key in (
+                ("youtube_url", "youtube"),
+                ("spotify_url", "spotify"),
+                ("soundcloud_url", "soundcloud"),
+                ("other_url", "other"),
+            ):
+                url = str(row.get(col) or "").strip()
+                if url:
+                    links.append((key, url))
+            if links:
+                out_lines.append("    media_links:")
+                for k, v in links:
+                    out_lines.append(f"      {k}: {v}")
+
+        # A _scaffold.yaml saves as a sibling _ground_truth.yaml. Anything
+        # else (including new fixtures) overwrites in place.
         if re.search(r"_scaffold\.ya?ml$", yaml_path.name):
             out_path = yaml_path.with_name(yaml_path.name.replace("_scaffold", "_ground_truth"))
         else:
             out_path = yaml_path
         out_path.write_text("\n".join(out_lines) + "\n")
-        st.success(f"Saved {len(filled)} annotated rows → `{out_path}`")
+        st.success(
+            f"Saved {len(filled)} annotated rows → `{out_path.relative_to(_REPO_ROOT)}`. "
+            f"{archived_note}."
+        )
         st.caption("Run the eval harness to score against all fixtures: "
                    "`venvs/audio/bin/python -m audio_pipeline.alignment.eval`")
