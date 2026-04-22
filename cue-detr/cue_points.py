@@ -47,8 +47,9 @@ def predict_cue_points_for_dir(
     if not tracks_path.is_dir():
         raise NotADirectoryError(f"Expected directory, got: {tracks_path}")
 
+    _AUDIO_EXTS = {".mp3", ".wav", ".flac", ".m4a", ".ogg", ".webm"}
     tracklist = sorted(
-        file.name for file in tracks_path.iterdir() if file.is_file() and file.suffix.lower() == ".mp3"
+        file.name for file in tracks_path.iterdir() if file.is_file() and file.suffix.lower() in _AUDIO_EXTS
     )
     cue_points: dict[str, list[float]] = {track: [] for track in tracklist}
 

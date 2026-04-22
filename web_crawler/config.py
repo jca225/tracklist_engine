@@ -104,6 +104,13 @@ class FailureConfig:
 
 
 @dataclass(frozen=True)
+class RetryConfig:
+    max_retries: int
+    retry_delay_s: float
+    retry_jitter_s: float
+
+
+@dataclass(frozen=True)
 class CaptchaConfig:
     mode: Literal["twocaptcha", "kill", "continue", "wait"]
     twocaptcha_api_key_env: str
@@ -122,6 +129,7 @@ class AppConfig:
     timing: TimingConfig
     browser: BrowserConfig
     failure: FailureConfig
+    retry: RetryConfig
     captcha: CaptchaConfig
 
     @staticmethod
@@ -175,6 +183,7 @@ class AppConfig:
                 ajax_wait_s=data['failure']['ajax_wait_s'],
                 kill_process_after_consecutive_failures=data['failure'].get('kill_process_after_consecutive_failures', 5),
             ),
+            retry=RetryConfig(**data['retry']),
             captcha=CaptchaConfig(**data['captcha'])
         )
 

@@ -179,6 +179,32 @@ class MusicDatabase:
         self.conn.executemany(sql, rows)
         self.conn.commit()
 
+    def get_ajax_failures(self, max_retries: int) -> list[dict]:
+        sql = """
+        SELECT failure_id, set_id, set_url, track_title, track_id, tlp_id,
+               params_json, error, retries
+        FROM scrape_failures
+        WHERE stage = 'ajax' AND retries < ?
+        ORDER BY set_id, failure_id
+        """
+        self.cursor.execute(sql, (max_retries,))
+        cols = [d[0] for d in self.cursor.description]
+        return [dict(zip(cols, row)) for row in self.cursor.fetchall()]
+
+    def increment_failure_retries(self, failure_id: int) -> None:
+        self.conn.execute(
+            "UPDATE scrape_failures SET retries = retries + 1 WHERE failure_id = ?",
+            (failure_id,),
+        )
+        self.conn.commit()
+
+    def delete_failure(self, failure_id: int) -> None:
+        self.conn.execute(
+            "DELETE FROM scrape_failures WHERE failure_id = ?",
+            (failure_id,),
+        )
+        self.conn.commit()
+
     def insert_rows(self, rows_iter: Iterable[DJSetRow]) -> None:
         rows = []
         for row in rows_iter:

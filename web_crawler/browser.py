@@ -50,7 +50,7 @@ def create_browser_context(
 
             args=config.browser.args,
             timeout=config.browser.nav_timeout_ms,
-
+            
             # Reduce shared memory usage issues in Docker/Linux
             ignore_default_args=["--enable-automation"],
         )
