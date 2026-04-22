@@ -84,7 +84,23 @@ All crawler behavior is controlled via `config.yaml`:
 
 ## Database
 
-SQLite with 6 tables: `dj_sets` (canonical metadata), `dj_set_crawls` (HTML snapshots with ETag dedup), `dj_set_media_links`, `dj_set_rows`, `dj_set_track_media_links`, `scrape_failures`. Schema enforces foreign keys with cascade deletes.
+SQLite with ~25 tables split into two groups, all with cascade-deleting FKs.
+
+**Scraper tables** (populated by `web_crawler/`):
+`dj_sets` (canonical metadata), `dj_set_crawls` (HTML snapshots with ETag dedup),
+`dj_set_media_links`, `dj_set_rows`, `dj_set_track_media_links`, `scrape_failures`.
+
+**Audio-pipeline tables** (populated downstream of the scraper):
+`set_audio` / `set_stems` / `set_measures` (mix-side audio + demucs stems + beat
+grid), `track_audio` / `track_stems` / `track_measures` (ref-track equivalents),
+`track_analysis` / `track_identity` / `track_audio_features` / `track_mert_sections` /
+`track_sections` (per-ref analysis outputs), `canonical_track_cue_points`
+(cue-detr cues keyed by track_id, full-song @ sensitivity=0.5), `track_fingerprints` /
+`set_fingerprint_hits` (chromaprint ingestion + mix scan), `set_section_alignment`
+(sota.py output, `confidence_source='sota_v2'`), `measure_alignment`,
+`set_playback_score`, `set_timeline`, `set_analysis`.
+
+Schema lives in [web_crawler/database/schema.sql](web_crawler/database/schema.sql).
 
 ## Environment
 

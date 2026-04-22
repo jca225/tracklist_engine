@@ -102,9 +102,8 @@ Three structural priors the pipeline exploits:
 │        skip (Δ≥2)         → cost 0.3·Δ   (speed-up)                      │
 │        backward (Δ<0)     → cost 2.0·|Δ| (loop-back, rare)               │
 │    Output: `ref_measure_idx[mix_measure_idx]` — MONOTONIC by construction│
-│    (same family as production `measure_dtw.py`; equivalent to            │
-│    subsequence DTW). Replaces naive argmax which gave descending cue     │
-│    brackets like `[117-60s]`.                                            │
+│    (subsequence-DTW family). Replaces naive argmax which gave descending │
+│    cue brackets like `[117-60s]`.                                        │
 └──────────────────────────────────────────────────────────────────────────┘
                                    ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
@@ -122,10 +121,11 @@ Three structural priors the pipeline exploits:
                                    ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
 │  8. PERSIST TO set_section_alignment                                      │
-│    Write rows tagged `confidence_source='indicators_sota_v1'` at         │
-│    section_idx 100000+ (offset from legacy 0-range) so the UI's          │
-│    Ableton timeline can pick them up via the existing data path.         │
-│    Label column populated from REFS.label so humans see meaningful text. │
+│    Write one row per aligned tracklist ref with                          │
+│    `confidence_source='sota_v2'` and `section_idx = tracklist row_index`.│
+│    Prior rows for the set (any source) are deleted first — the UI reads  │
+│    only this source. Label column is populated so the timeline shows     │
+│    human-readable text.                                                  │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -151,7 +151,7 @@ Three structural priors the pipeline exploits:
 |---|---|---|---|
 | `track_audio` | `variant_tag` | Added this session | `'original'` / `'acappella'` / `'instrumental'` / `'remix'` — which version of the song this file IS |
 | `canonical_track_cue_points` | (whole table) | Added this session | One cue-list per `track_id`, shared across all audio variants |
-| `set_section_alignment` | `confidence_source` | Added this session | `'indicators_sota_v1'` vs `'legacy'` — so UI can filter |
+| `set_section_alignment` | `confidence_source` | Added this session | `'sota_v2'` (the only writer) — UI reads this source exclusively |
 | `set_section_alignment` | `label` | Added this session | Human label for UI display (avoids empty `text_excerpt` issue) |
 
 ---
@@ -240,7 +240,11 @@ See [`_archive/README.md`](_archive/README.md). Summary:
 
 - **MERT argmax remains unreliable for position inference even in short spans** — CRJ's 15-s play has all 3 position samples collapse to ref_t=29s, so the snap becomes degenerate (same as no-snap). Partial symptoms still visible at IoU 0.625.
 - **Full variants don't benefit from cue snap** — tested Antoine, regressed 0.950→0.826. Skipped in the current pipeline.
-- **Non-GT refs get cue-based fallback spans only** — real SOTA on 119 BB11 refs would need ~30 min MERT compute (cache-miss path). The cache is now wired in, so subsequent runs for the same set are fast.
+- **Non-GT refs now get real alignment** — as of sota.py (2026-04-22), every
+  tracklist row with audio + measures is aligned by the full stack. The prior
+  cue-based 60 s placeholder path (`populate_cue_fallbacks.py`) is deleted.
+  First-run MERT compute for ~120 refs is ~30 min cold; `.npz` cache amortises
+  re-runs to minutes.
 - **Variant detection during scraping is not automated** — `track_audio.variant_tag` is hand-populated. Parsing scraped row text (`(Acappella)` / `(Instrumental)` markers) should fill this automatically for future sets.
 - **Demucs has not been re-run on `variant_tag='original'` downloads** — Fray's new original (track_audio_id 122) has no stems. MERT alignment still uses the scraped-acappella variant (ta=3). Running demucs on originals would let the pipeline use dense cue-based stems everywhere.
 
@@ -248,7 +252,12 @@ See [`_archive/README.md`](_archive/README.md). Summary:
 
 ## 10. File-level pointer for a future LLM / contributor
 
-- Start at [`indicators_debug.py`'s module docstring](indicators_debug.py) — it lists the pipeline inline.
+- Start at [`sota.py`'s module docstring](sota.py) — it lists the pipeline
+  stages and matches the diagram above.
+- `sota.py` is the only persistence writer. `indicators_debug.py` holds the
+  Viterbi primitives it imports + an offline IoU harness against the GT
+  fixture (no DB writes).
 - Cross-reference with [`ROADMAP.md`](../ROADMAP.md) "CURRENT SOTA" header.
-- Before proposing a change, read [`_archive/README.md`](_archive/README.md) to confirm you're not re-trying something already ruled out.
+- Before proposing a change, read [`_archive/README.md`](_archive/README.md)
+  to confirm you're not re-trying something already ruled out.
 - Any proposed change is gated on `alignment/eval.py` IoU not regressing.

@@ -1,9 +1,9 @@
 # Archived alignment experiments
 
 **Purpose**: record dropped approaches so future contributors (human or LLM)
-don't re-try them without fresh evidence. The SOTA pipeline lives in
-[../indicators_debug.py](../indicators_debug.py) and the production
-Viterbi in [../measure_dtw.py](../measure_dtw.py). Each entry below was
+don't re-try them without fresh evidence. The canonical SOTA pipeline lives
+in [../sota.py](../sota.py); it imports Viterbi primitives from
+[../indicators_debug.py](../indicators_debug.py). Each entry below was
 evaluated against `tests/fixtures/bigbootie11_ground_truth.yaml` with
 `mean_mix_IoU` as the scoring metric.
 
@@ -94,9 +94,9 @@ playback position. Concrete BB11 failures:
 - Snap-via-argmax mean IoU: **0.751** (vs Viterbi-snap 0.891, raw 0.872)
 
 **Verdict**: DROPPED. Replaced by `ref_position_viterbi()` in
-[../indicators_debug.py](../indicators_debug.py) — a lightweight
-monotonic Viterbi over ref-measure states, the same family as production
-`../measure_dtw.py`. Argmax is retained in the output ONLY for
+[../indicators_debug.py](../indicators_debug.py) — a lightweight monotonic
+Viterbi over ref-measure states (subsequence-DTW family), imported by
+[../sota.py](../sota.py). Argmax is retained in the output ONLY for
 side-by-side comparison to demonstrate the IoU gap.
 
 ---
