@@ -1,0 +1,836 @@
+# Ground-truth scaffold for Two Friends - Big Bootie Mix Volume 12
+# date_played: 2017-09-08
+#
+# Fill in set_start_s, set_end_s and version_tag per track.
+# version_tag ∈ {instrumental, acappella, full}. Delete rows
+# the DJ didn't actually play. cue_seconds is the scraped cue — a
+# hint for where set_start_s usually lands, not a hard anchor.
+set_id: 1fsnxchk
+source: ableton_session
+annotated_by: TBD
+tracks:
+  - track: "Carmen Twillie — Circle Of Life"
+    track_id: 12m8zb3x    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Post Malone — Congratulations"
+    track_id: 281u6p4x    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Two Friends — Emily"
+    track_id: h7fpwbf    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Avicii — Fade Into Darkness"
+    track_id: 728rvg5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Manse — Freeze Time"
+    track_id: mtck04x    # scraped cue: 127s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "AJR — Weak"
+    track_id: 1wvvqwsf    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Galantis, Hook N Sling — Love On Me"
+    track_id: 2q0xyjzp    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Calvin Harris — Outside"
+    track_id: y10w66f    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Calvin Harris — Outside"
+    track_id: 14jvfw6x    # scraped cue: 225s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Michael Jackson — Beat It"
+    track_id: 716vt0f    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Jay Karama — Keep Calm"
+    track_id: 10w3pxyx    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Mako — Our Story"
+    track_id: 1n9qvhhp    # scraped cue: 322s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Martin Garrix, Bebe Rexha — In The Name Of Love"
+    track_id: 2p25k23p    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Cascada — Everytime We Touch"
+    track_id: scsk9cx    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Chromeo — Jealous"
+    track_id: 1b4hd9lp    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Madonna — Ghosttown"
+    track_id: 28vyhrnp    # scraped cue: 423s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Green Day — Good Riddance"
+    track_id: zxuqpkf    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Sean Kingston — Take You There"
+    track_id: 2ktthuwp    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Dropgun — Ninja"
+    track_id: 13n64sf5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Eminem — Just Lose It"
+    track_id: 1v0zv1s5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Armin van Buuren — Freefall"
+    track_id: qn6lhlp    # scraped cue: 509s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Twenty One Pilots — Tear In My Heart"
+    track_id: nrtk415    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Martin Garrix, Florian Picasso — Make Up Your Mind"
+    track_id: j47669p    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "NGHTMRE, Boombox Cartel — Aftershock"
+    track_id: sh4csf5    # scraped cue: 593s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Blink-182 — What's My Age Again?"
+    track_id: 2fj43sgf    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Aryay — The Lawnmower"
+    track_id: 1mdpuq6f    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Drake — Forever"
+    track_id: 1qbbnpkp    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "KYLE — iSpy"
+    track_id: nupqlv5    # scraped cue: 675s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "The Beatles — Can't Buy Me Love"
+    track_id: jbl6gt95    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Blink-182 — Bored To Death"
+    track_id: nsvvu7p    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Going Deeper — Little Big Adventure"
+    track_id: 10ww36y5    # scraped cue: 761s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Creedence Clearwater Revival — Have You Ever Seen The Rain?"
+    track_id: 2r51v1tp    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "AFROJACK — Ten Feet Tall"
+    track_id: 186yndjf    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Panic! At The Disco — Victorious"
+    track_id: 1knfs11f    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Vicetone — Nothing Stopping Me"
+    track_id: j2dbhzf    # scraped cue: 837s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "The Beach Boys — Wouldn't It Be Nice"
+    track_id: 5ch4vs5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Harry Styles — Sign Of The Times"
+    track_id: xgbll1f    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Breathe Carolina — Blackout"
+    track_id: 2cuwzvd5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Krewella — Alive"
+    track_id: 8upwr0x    # scraped cue: 914s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Halsey — Now Or Never"
+    track_id: 2qy7u05p    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "DJ Snake — Middle"
+    track_id: 1znyu24x    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Roy Orbison — Pretty Woman"
+    track_id: 6xdz8mf    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "NGHTMRE, Carmada — Embrace"
+    track_id: x730hz5    # scraped cue: 1007s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Ludacris — Get Back"
+    track_id: 2km1b5p5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Jonas Aden — Feel My Soul"
+    track_id: 2hgr7xjx    # scraped cue: 1071s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Chance The Rapper — No Problem"
+    track_id: 1t3m1kmf    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "The Killers — Somebody Told Me"
+    track_id: 1zggjhbf    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Two Friends — Pacific Coast Highway"
+    track_id: 2uq9800f    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Martin Garrix, Troye Sivan — There For You"
+    track_id: 100hm0dp    # scraped cue: 1135s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "The Killers — When You Were Young"
+    track_id: 1q8nc02p    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Kenny Loggins — Footloose"
+    track_id: 1jny6u9f    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Usher — DJ Got Us Fallin' In Love"
+    track_id: ygllqp    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "RetroVision — Waves"
+    track_id: 2ct10nbx    # scraped cue: 1211s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "The Chainsmokers — Honest"
+    track_id: dgrjwux    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Sam Hunt — House Party"
+    track_id: 26n3brqp    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Ke$ha — Die Young"
+    track_id: nrmh6yp    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "ASTRVL — Elevate"
+    track_id: 14pm0srf    # scraped cue: 1291s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "The Neighbourhood — Sweater Weather"
+    track_id: 244dn6tx    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Matoma — Running Out"
+    track_id: 2m5knd0f    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "The All-American Rejects — Dirty Little Secret"
+    track_id: 2lf3hxvf    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "RetroVision — Here We Go"
+    track_id: prgr9tp    # scraped cue: 1389s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Mike Posner — Cooler Than Me"
+    track_id: 62f04m5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Major Lazer — Be Together"
+    track_id: 1gv9w2px    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "A$AP Rocky — Fuckin' Problems"
+    track_id: 1cvrjurf    # scraped cue: 1453s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Hardwell — Spaceman"
+    track_id: 4gyw2tx    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Twista — Overnight Celebrity"
+    track_id: 17hz4g3x    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Passion Pit — Sleepyhead"
+    track_id: 22gqmxm5    # scraped cue: 1553s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Lauv — I Like Me Better"
+    track_id: 1hutuwzf    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Fifth Harmony — Work From Home"
+    track_id: sjwvyqx    # scraped cue: 1638s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Galantis — Rich Boy"
+    track_id: 21kvmkk5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Nelly Furtado — Say It Right"
+    track_id: 2j9zlwuf    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Disclosure — Latch"
+    track_id: jwwcskx    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "JAUZ, Crankdat — I Hold Still"
+    track_id: 2gk2y9yp    # scraped cue: 1733s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Idina Menzel — Let It Go"
+    track_id: 252ys8cx    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "David Guetta, Showtek — BAD"
+    track_id: v67u23p    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Brooks — Pinball"
+    track_id: 189yqtcx    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Thomas Gold — Saints & Sinners"
+    track_id: 1r8f4fc5    # scraped cue: 1816s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Ed Sheeran — Castle On The Hill"
+    track_id: 1wx0v09f    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "All Time Low — Dear Maria, Count Me In"
+    track_id: 1j0r992f    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Alexandra Stan — Mr. Saxobeat"
+    track_id: 1tubbh5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Coldplay — A Sky Full Of Stars"
+    track_id: 1xnqbffp    # scraped cue: 1912s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Two Friends — Emily"
+    track_id: h7fpwbf    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Coldplay — A Sky Full Of Stars"
+    track_id: 2l4m5cnp    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Vicetone — Nothing Stopping Me"
+    track_id: 2tscznp5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "DVBBS, Jay Hardway — Voodoo"
+    track_id: 2hd7v8rx    # scraped cue: 1990s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Good Charlotte — Dance Floor Anthem"
+    track_id: 85    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Sara Bareilles — Love Song"
+    track_id: 26ps3505    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Quintino — Winner"
+    track_id: g5wmg7x    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Martin Garrix — Pizza"
+    track_id: 1v0nypb5    # scraped cue: 2087s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "The Notorious B.I.G. — Mo Money Mo Problems"
+    track_id: mh1jzf    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Robin S — Show Me Love"
+    track_id: ut8vl5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Don Diablo — My Window"
+    track_id: 2nz91yqp    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "RL Grime, What So Not, Skrillex — Waiting"
+    track_id: 1u1nm3lp    # scraped cue: 2174s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Eminem — Cleanin' Out My Closet"
+    track_id: 93    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "RetroVision, Humain — Sunday"
+    track_id: 2dql58gx    # scraped cue: 2219s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Pat Benatar — Hit Me With Your Best Shot"
+    track_id: 91r659f5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Avril Lavigne — Here's To Never Growing Up"
+    track_id: 1hn0wlpx    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "The Killers vs. CAZZETTE — Shot At Night"
+    track_id: 1vs4rjnx    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Martin Garrix, Dua Lipa — Scared To Be Lonely"
+    track_id: 1wvndht5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Osen, Navaz — Wings"
+    track_id: 1xs1zmjp    # scraped cue: 2288s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Poison — Every Rose Has Its Thorn"
+    track_id: 100    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Rascal Flatts — Life Is A Highway"
+    track_id: 1jz334x5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Valentino Khan — Pump"
+    track_id: 2trpj1b5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "LMFAO — I'm In Miami Bitch"
+    track_id: pryzw5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Alan Walker — Faded"
+    track_id: 1lnqmw75    # scraped cue: 2363s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "The Lonely Island — I Just Had Sex"
+    track_id: 4dq3mld5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Alan Walker — Faded"
+    track_id: z059fc5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Black Eyed Peas — I Gotta Feeling"
+    track_id: 67z8kmp    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Mako — Smoke Filled Room"
+    track_id: lvzr9s5    # scraped cue: 2444s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Clean Bandit — Rather Be"
+    track_id: 2l4gzr8x    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Cheat Codes — No Promises"
+    track_id: 1t4gvsx5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Mako — Smoke Filled Room"
+    track_id: 23b7cvbx    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Calvin Harris — Sweet Nothing"
+    track_id: 860w28f    # scraped cue: 2539s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Selena Gomez — Fetish"
+    track_id: nuw31u5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Maroon 5 — Payphone"
+    track_id: 2ysyh5f    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Calvin Harris — Sweet Nothing"
+    track_id: 3x1qh5f    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Galantis — You"
+    track_id: 27w2d10f    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Lux Holm — Omega"
+    track_id: 117    # scraped cue: 2635s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "The Killers — Spaceman"
+    track_id: 1b52k3xx    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Maroon 5 — Maps"
+    track_id: 11w684zx    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Jordi Rivera, Sonny Bass — Bubblegum"
+    track_id: z1vw4vf    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "OneRepublic — Stop & Stare"
+    track_id: ms7blu5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Bingo Players — Mode"
+    track_id: 1lm1yrff    # scraped cue: 2717s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Britney Spears — Till The World Ends"
+    track_id: 65usc75    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Ylvis — The Fox"
+    track_id: w2zgk1p    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Calvin Harris — Slide"
+    track_id: 13ruhr5p    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Manse — All Around"
+    track_id: 1q9r2r8x    # scraped cue: 2793s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "No Doubt — Hella Good"
+    track_id: thz5xjp    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Lost Kings — You"
+    track_id: 1gufy38f    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "The Chainsmokers — KANYE"
+    track_id: 13m0ltjp    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Gryffin, ILLENIUM — Feel Good"
+    track_id: 1xtcwkpp    # scraped cue: 2876s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Alesso vs. OneRepublic — If I Lose Myself"
+    track_id: 1dx4nn2f    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Daniel Powter — Bad Day"
+    track_id: dkg1c995    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Audien — Something Better"
+    track_id: 1q89rul5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Curbi X Mesto — BRUH"
+    track_id: nu09jz5    # scraped cue: 2967s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Linkin Park — Heavy"
+    track_id: 257v8xqx    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Tiësto, KSHMR — Secrets"
+    track_id: 1ynndn1x    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Dúné — Heiress Of Valentina"
+    track_id: 94tc2y5    # scraped cue: 3052s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Oasis — Champagne Supernova"
+    track_id: lpmk45    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Martin Jensen — Solo Dance"
+    track_id: 2p248zwf    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Bassjackers, Brooks — Joyride"
+    track_id: fclk03p    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Lady GaGa — The Cure"
+    track_id: z47gcpf    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Swedish House Mafia — Save The World"
+    track_id: 68m610x    # scraped cue: 3149s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Katy Perry — I Kissed A Girl"
+    track_id: 1q93dn65    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Third Eye Blind — Jumper"
+    track_id: 272r6s6f    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Swedish House Mafia — Save The World"
+    track_id: 68m610x    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Porter Robinson, Madeon — Shelter"
+    track_id: pr18kmx    # scraped cue: 3255s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "The Chainsmokers — All We Know"
+    track_id: bkmhtc5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Porter Robinson, Madeon — Shelter"
+    track_id: 148    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Jay Hardway — Golden Pineapple"
+    track_id: cj91dsp    # scraped cue: 3323s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Dua Lipa — New Rules"
+    track_id: mxbsn4p    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Snakehips — All My Friends"
+    track_id: 2umb1315    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Don Diablo — Momentum"
+    track_id: 1zpfjwkx    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Lucas, Steve, Mike Williams x Curbi — Let's Go"
+    track_id: 2n51zgwf    # scraped cue: 3418s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Shawn Mendes — There's Nothing Holdin' Me Back"
+    track_id: 23f2h1h5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Owl City, Carly Rae Jepsen — Good Time"
+    track_id: 42wv4vp    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Christina Aguilera — Come On Over"
+    track_id: 156    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "The Chainsmokers — Honest"
+    track_id: 2wk088j5    # scraped cue: 3502s
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Taylor Swift — Mean"
+    track_id: lyu6xx5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Macy Gray — I Try"
+    track_id: 17pu9hk5    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "The Chainsmokers — Honest"
+    track_id: dgrjwux    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Calvin Harris — Slide"
+    track_id: 13ruhr5p    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "The Chainsmokers — Honest"
+    track_id: h80tgnf    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "Justin Bieber — Sorry"
+    track_id: 2fl7wsnx    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in
+  - track: "The Chainsmokers — Honest"
+    track_id: 2vmxu50p    # scraped cue: none
+    version_tag:  # fill in: instrumental | acappella | full
+    set_start_s:  # fill in
+    set_end_s:    # fill in

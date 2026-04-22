@@ -1,0 +1,127 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Final
+
+
+@dataclass(frozen=True)
+class MediaSource:
+    """A resolved URL on one platform for a canonical 1001tracklists track."""
+    platform: str            # 'youtube' | 'soundcloud' | 'spotify' | 'apple'
+    player_id: str           # YT video id | SC track id | Spotify track id
+    url: str
+
+
+@dataclass(frozen=True)
+class Track:
+    """A canonical track as seen in the crawler DB."""
+    track_id: str            # 1001tracklists data-trackid
+    tlp_ids: tuple[str, ...] # per-set-row ids this track appears under
+    sources: tuple[MediaSource, ...]
+
+    def source_for(self, platform: str) -> MediaSource | None:
+        for s in self.sources:
+            if s.platform == platform:
+                return s
+        return None
+
+
+@dataclass(frozen=True)
+class AudioAsset:
+    """A downloaded audio file on disk, linked to a canonical track."""
+    track_audio_id: int | None  # None pre-insert
+    track_id: str
+    platform: str
+    source_url: str
+    player_id: str
+    path: str
+    sha256: str | None
+    duration_s: float | None
+    sample_rate: int | None
+    codec: str | None
+    bitrate_kbps: int | None
+
+
+@dataclass(frozen=True)
+class SetMediaLink:
+    """A resolved set-level (full-mix) URL on one platform."""
+    set_id: str
+    platform: str               # 'youtube' | 'soundcloud' | 'mixcloud' | 'other'
+    url: str
+
+
+@dataclass(frozen=True)
+class SetAudioAsset:
+    """A downloaded full-mix audio file for a DJ set."""
+    set_audio_id: int | None
+    set_id: str
+    platform: str
+    source_url: str
+    path: str
+    sha256: str | None
+    duration_s: float | None
+    sample_rate: int | None
+    codec: str | None
+    bitrate_kbps: int | None
+
+
+@dataclass(frozen=True)
+class TimelineSegment:
+    """One tokenized row on the set's timeline.
+
+    `cue_seconds_section` is the resolved audio-section anchor (ffilled from
+    the parent of any `w/` layer group); it defines *when* this token should
+    be audible in the full-mix audio.
+    """
+    row_index: int
+    track_id: str | None
+    tlp_id: str | None
+    title: str | None
+    artists: tuple[str, ...]
+    cue_seconds_section: float | None
+    is_ided: bool
+    is_concurrent: bool
+    is_remixish: bool
+    has_yt: bool
+    has_sc: bool
+    has_sp: bool
+
+
+@dataclass(frozen=True)
+class SetTimeline:
+    set_id: str
+    set_audio_id: int | None
+    segments: tuple[TimelineSegment, ...]
+
+
+# URL builders — pure, no I/O.
+def youtube_url(video_id: str) -> str:
+    return f"https://www.youtube.com/watch?v={video_id}"
+
+
+def soundcloud_api_url(track_id: str) -> str:
+    # yt-dlp accepts the api.soundcloud.com form for numeric IDs
+    return f"https://api.soundcloud.com/tracks/{track_id}"
+
+
+def spotify_track_url(track_id: str) -> str:
+    return f"https://open.spotify.com/track/{track_id}"
+
+
+def normalize_set_media_url(raw: str) -> str:
+    """Unwrap SC widget URLs (`w.soundcloud.com/player/?url=...`) into the
+    underlying api.soundcloud.com URL. Pass other URLs through unchanged.
+    Pure — no I/O."""
+    if not raw:
+        return raw
+    if "w.soundcloud.com/player" in raw:
+        from urllib.parse import urlparse, parse_qs, unquote
+        parsed = urlparse(raw)
+        inner = parse_qs(parsed.query).get("url", [None])[0]
+        if inner:
+            return unquote(inner)
+    return raw
+
+
+# Platform preference order for downloads (higher index = lower priority).
+DOWNLOAD_PLATFORM_PRIORITY: Final[tuple[str, ...]] = ("youtube", "soundcloud")
