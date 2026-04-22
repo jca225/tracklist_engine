@@ -176,6 +176,7 @@ _REASON_BLURB: dict[str, str] = {
 def _load_tracklist_refs(
     conn: sqlite3.Connection, set_id: str,
     *, progress: bool = False,
+    track_ids_filter: set[str] | None = None,
 ) -> tuple[list[GtRef], list[SkippedTrack]]:
     """One GtRef per tracklist row that has downloaded audio + a
     measures grid. `version_tag` is derived from the tokenizer's
@@ -217,6 +218,8 @@ def _load_tracklist_refs(
     for row in tracks.itertuples(index=False):
         tid = str(row.track_key)
         if tid in seen:
+            continue
+        if track_ids_filter is not None and tid not in track_ids_filter:
             continue
         seen.add(tid)
         label = str(
@@ -616,6 +619,7 @@ def _persist(
 
 def align_set(
     set_id: str, db_path: Path = DB_PATH, *, progress: bool = True,
+    track_ids_filter: set[str] | None = None,
 ) -> None:
     with _connect(db_path) as conn:
         sa = _set_audio_row(conn, set_id)
@@ -628,7 +632,10 @@ def align_set(
         if not mix_measures:
             raise SystemExit(f"no set_measures for set_audio_id={set_audio_id}")
 
-        refs, skipped = _load_tracklist_refs(conn, set_id, progress=progress)
+        refs, skipped = _load_tracklist_refs(
+            conn, set_id, progress=progress,
+            track_ids_filter=track_ids_filter,
+        )
         if not refs:
             raise SystemExit("no refs with audio+measures for this set")
         if progress:
@@ -771,13 +778,22 @@ def main(argv: list[str]) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--set-id", required=True)
     p.add_argument("--db", default=str(DB_PATH))
+    p.add_argument(
+        "--track-ids",
+        default=None,
+        help="Comma-separated track_ids to restrict alignment to (for GT-only fast iteration).",
+    )
     args = p.parse_args(argv)
 
     # Point the indicators_debug module-level DB_PATH at ours so its
     # helper DB queries use the right database file.
     ind.DB_PATH = Path(args.db)
 
-    align_set(args.set_id, Path(args.db), progress=True)
+    tid_filter: set[str] | None = None
+    if args.track_ids:
+        tid_filter = {t.strip() for t in args.track_ids.split(",") if t.strip()}
+
+    align_set(args.set_id, Path(args.db), progress=True, track_ids_filter=tid_filter)
     return 0
 
 
