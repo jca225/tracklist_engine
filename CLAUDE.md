@@ -600,11 +600,19 @@ In order for an audio alignment to work, a bare-minimum is it must match the .ya
 
 ## SOTA algorithm — Viterbi (do NOT replace with anything else without re-evaluation)
 
-The canonical alignment is **Viterbi-based** (same family as DTW, with state-based transition priors). This was validated empirically against the BB11 ground-truth fixture and BEATS argmax by 0.14 mean IoU (0.891 vs 0.751). It is documented in [audio_pipeline/ROADMAP.md](audio_pipeline/ROADMAP.md) under "CURRENT SOTA", and referenced in:
+The single canonical alignment entry point is **[audio_pipeline/alignment/sota.py](audio_pipeline/alignment/sota.py)**:
 
-- [audio_pipeline/alignment/measure_dtw.py](audio_pipeline/alignment/measure_dtw.py) — production Viterbi decoder with structural transition priors, pitch-shift state, stem-mask coherence
-- [audio_pipeline/alignment/viterbi_pipeline.py](audio_pipeline/alignment/viterbi_pipeline.py) — pipeline wrapper
-- [audio_pipeline/alignment/indicators_debug.py](audio_pipeline/alignment/indicators_debug.py) — research/debug implementation with per-universe Viterbi + ref-position Viterbi + canonical-cue snap. Header docstring lists the exact signal stack.
+```bash
+venvs/audio/bin/python -m audio_pipeline.alignment.sota --set-id <set_id>
+```
+
+Writes rows to `set_section_alignment` with `confidence_source='sota_v2'`, `section_idx = tracklist row_index`. The Streamlit "Alignment review" page reads ONLY this source. Validated on BB11 ground-truth: mean mix IoU **0.891** (vs 0.751 argmax baseline, 0.872 raw Phase 1).
+
+**Two files to know:**
+- [audio_pipeline/alignment/sota.py](audio_pipeline/alignment/sota.py) — canonical orchestrator. Loads every tracklist ref with audio + measures, runs the full Viterbi stack, persists.
+- [audio_pipeline/alignment/indicators_debug.py](audio_pipeline/alignment/indicators_debug.py) — holds the Viterbi primitives (`viterbi_universe`, `ref_position_viterbi`, `_clean_path`, snap helpers) that `sota.py` imports. Also runs the IoU validation harness against the GT fixture. NOT a persistence writer.
+
+See [audio_pipeline/alignment/SOTA.md](audio_pipeline/alignment/SOTA.md) for the full pipeline diagram (7 stages: stem-routed MERT → ref-position Viterbi → per-universe Viterbi with mutual exclusion → fingerprint anchors → 2-pass cross-universe full-track exclusion → earliest-near-cue cleanup → canonical-cue snap) and [audio_pipeline/ROADMAP.md](audio_pipeline/ROADMAP.md) "CURRENT SOTA" for context.
 
 **Cue points are per canonical track, not per audio variant.** They live in `canonical_track_cue_points` (keyed by `track_id`), computed once on the full-song `variant_tag='original'` audio via [audio_pipeline/analysis/canonical_cues.py](audio_pipeline/analysis/canonical_cues.py) at `cue-detr sensitivity=0.5`. All variants (acapella / instrumental / full / remix) read the same cue list.
 

@@ -1,7 +1,16 @@
-"""SOTA Viterbi-based DJ-mix alignment — validated debug pipeline.
+"""Viterbi-alignment primitives + GT-fixture validation harness.
 
 ============================================================================
- THIS FILE IS THE CURRENT STATE-OF-THE-ART on BB11 (mean IoU 0.891).
+ This module holds the SOTA Viterbi PRIMITIVES (ref_position_viterbi,
+ viterbi_universe, _clean_path, snap helpers) and a validation harness
+ that runs them on the 5 BB11 GT refs and prints IoU vs ground truth.
+
+ The CANONICAL production alignment is `sota.py`, which imports these
+ primitives and applies them to every tracklist ref of a set. `sota.py`
+ is the only writer of `set_section_alignment` rows — this module used
+ to write `indicators_sota_v1` rows but was disabled on 2026-04-22 so
+ the UI reads a single clean source (`sota_v2`).
+
  Dropped experiments live in `_archive/` — do NOT resurrect them without
  re-running `tests/fixtures/*_ground_truth.yaml` and beating the baseline.
 ============================================================================
@@ -1605,75 +1614,10 @@ def plot_phase1(
         print(f"  mean IoU (argmax snap, NOT SOTA)   = {total_iou_snap_argmax / total_rows:.3f}")
         print(f"  mean IoU (Viterbi snap, SOTA)      = {total_iou_snap_viterbi / total_rows:.3f}  ← final prediction")
 
-    # Persist the SOTA predictions into set_section_alignment so the
-    # Streamlit Ableton-timeline / Alignment-review pages can display
-    # them alongside (or in preference to) the legacy pipeline rows.
-    # Section indices are offset by SOTA_SECTION_IDX_BASE to avoid
-    # clashing with the legacy PRIMARY KEY (set_id, section_idx).
-    persist_sota_rows = []
-    for u_name, u_refs in universes.items():
-        path = decoded[u_name]
-        for i, ref in enumerate(u_refs):
-            pred_mask = (path == i)
-            if not pred_mask.any():
-                continue
-            pred_start = float(times[pred_mask].min())
-            pred_end   = float(times[pred_mask].max() + dt)
-            snap_start, snap_end = pred_start, pred_end
-            if (ref.version_tag in ("acappella", "instrumental")
-                    and cue_points_by_label.get(ref.label)
-                    and per_ref_vit_path is not None
-                    and per_ref_meas_times is not None):
-                _, _, sv_s, sv_e, _ = _snap_via_position(
-                    ref.label, pred_start, pred_end, pred_mask,
-                    per_ref_vit_path[ref.label], gt_mask=np.zeros_like(times, dtype=bool),
-                )
-                if sv_s is not None and sv_e is not None and sv_e > sv_s:
-                    snap_start, snap_end = sv_s, sv_e
-            persist_sota_rows.append({
-                "ref_track_id": ref.track_id,
-                "label": ref.label,
-                "set_start_s": float(snap_start),
-                "set_end_s":   float(snap_end),
-                "confidence":  0.891,   # mean IoU on GT; per-row confidence TBD
-            })
-    _persist_sota(SET_ID, persist_sota_rows)
-
-
-SOTA_SOURCE: str = "indicators_sota_v1"
-SOTA_SECTION_IDX_BASE: int = 100000  # offset so we don't collide with legacy rows
-
-
-def _persist_sota(set_id: str, rows: list[dict]) -> None:
-    """Upsert SOTA predictions into set_section_alignment tagged with
-    confidence_source='indicators_sota_v1'. Replaces any previous SOTA
-    rows for this set (keeps legacy rows untouched)."""
-    if not rows:
-        return
-    conn = _connect(DB_PATH)
-    try:
-        conn.execute(
-            "DELETE FROM set_section_alignment WHERE set_id=? AND confidence_source=?",
-            (set_id, SOTA_SOURCE),
-        )
-        for idx, r in enumerate(rows):
-            conn.execute(
-                """
-                INSERT INTO set_section_alignment
-                    (set_id, section_idx, set_start_s, set_end_s,
-                     ref_track_id, confidence, confidence_source, label)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (set_id, SOTA_SECTION_IDX_BASE + idx,
-                 r["set_start_s"], r["set_end_s"],
-                 r["ref_track_id"], r["confidence"], SOTA_SOURCE,
-                 r.get("label")),
-            )
-        conn.commit()
-        print(f"[persist] wrote {len(rows)} rows to set_section_alignment "
-              f"with confidence_source={SOTA_SOURCE!r}")
-    finally:
-        conn.close()
+    # NOTE: this debug module no longer writes to `set_section_alignment`.
+    # Canonical SOTA persistence lives in `audio_pipeline/alignment/sota.py`
+    # which writes `confidence_source='sota_v2'`. `indicators_debug` exists
+    # only for IoU validation against the GT fixture.
 
 
 def plot_combined_decoder(times: np.ndarray, per_ref: dict[str, np.ndarray], out: Path) -> None:

@@ -6,31 +6,49 @@ full spec — flesh out before building.
 
 ---
 
-## CURRENT SOTA (as of 2026-04-21)
+## CURRENT SOTA
 
-The single alignment pipeline is [alignment/indicators_debug.py](alignment/indicators_debug.py) —
-MERT-embedding per-universe Viterbi + ref-position Viterbi + canonical-cue-detr
-snap. Writes `set_section_alignment` rows tagged `confidence_source='indicators_sota_v1'`;
-the UI reads exactly that source.
+The single canonical alignment entry point is
+**[alignment/sota.py](alignment/sota.py)**.
 
 Run:
 ```bash
-venvs/audio/bin/python -m audio_pipeline.alignment.indicators_debug
+venvs/audio/bin/python -m audio_pipeline.alignment.sota --set-id <set_id>
 ```
 
+Writes rows to `set_section_alignment` with `confidence_source='sota_v2'`,
+`section_idx = tracklist row_index`. The Streamlit "Alignment review" page
+reads ONLY this source.
+
 Mean mix IoU **0.891** on `tests/fixtures/bigbootie11_ground_truth.yaml`
-(outer span only; the eval does not yet score `ref_segments` / loops).
+(outer span only; the eval does not score `ref_segments` / loops yet).
+
+Pipeline stages (see [SOTA.md](alignment/SOTA.md) for the full diagram):
+
+1. Per-ref MERT cosine similarity, stem-routed by `version_tag`
+2. Monotonic ref-position Viterbi — replaces argmax; `ref_t[mix_t]` is non-descending
+3. Per-universe K+1-state Viterbi (states = universe refs + SILENCE) with mutual exclusion inside universe, cue-gated emission
+4. Chromaprint-hit-density anchors reinforce emission within-universe
+5. **Two-pass full-track exclusion** — pass 1 decodes the `full` universe with no cross-universe forcing; pass 2 uses the DECODED full path to force SILENCE in acappella/instrumental universes (principled at scale; raw-fp union over-suppresses when there are many `full` refs)
+6. Per-ref earliest-run-near-cue cleanup (DJ plays each track once)
+7. Canonical cue-detr bracket on the ref-position Viterbi endpoints → implied mix-side snap (skipped for `full` refs; regresses there)
+
+Viterbi primitives (`viterbi_universe`, `ref_position_viterbi`, `_clean_path`,
+cue-snap helpers) live in [alignment/indicators_debug.py](alignment/indicators_debug.py);
+`sota.py` imports and composes them. `indicators_debug.py` also runs an
+IoU-validation harness against the GT fixture and is no longer a persistence writer.
 
 **Canonical cue points** come from [analysis/canonical_cues.py](analysis/canonical_cues.py):
-cue-detr is run once on the **full-song** (`variant_tag='original'`) version of
-each canonical track at `sensitivity=0.5`, and the results are stored in
-`canonical_track_cue_points` keyed by `track_id` — shared across all variants.
+cue-detr at `sensitivity=0.5` on the full-song `variant_tag='original'` audio,
+stored in `canonical_track_cue_points` keyed by `track_id` — shared across all
+variants (acapella / instrumental / full / remix).
 
 Dropped experiments (do NOT re-try without re-eval): see [alignment/_archive/README.md](alignment/_archive/README.md).
   - MACD crossover transition bonuses — neutral
   - Wilder ADXR/DMI trust gate + entry/exit locks — degraded
   - Per-ref BPM matching penalty — broke on DJ tempo-shift
   - Argmax-based ref-position inference — non-monotonic; superseded by `ref_position_viterbi()`
+  - `indicators_sota_v1` writer + `populate_cue_fallbacks.py` — superseded by `sota_v2` from `sota.py`
   - Non-SOTA pipelines (DTW / CCC / production viterbi / fragment / MERT-orchestrator) —
     pruned 2026-04-22; none beat the SOTA and all diverged on schema + UI integration.
 

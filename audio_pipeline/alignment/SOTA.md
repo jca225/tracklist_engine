@@ -135,14 +135,11 @@ Three structural priors the pipeline exploits:
 
 | File | Role |
 |---|---|
-| [`indicators_debug.py`](indicators_debug.py) | **The SOTA implementation.** Docstring lists the signal stack. |
+| **[`sota.py`](sota.py)** | **The canonical SOTA orchestrator.** Loads every tracklist ref with audio + measures, runs the full stack, persists `confidence_source='sota_v2'` rows. This is the single entry point. |
+| [`indicators_debug.py`](indicators_debug.py) | Holds the Viterbi primitives (`viterbi_universe`, `ref_position_viterbi`, `_clean_path`, `_bracket_cue_points`, `_snap_via_position`) that `sota.py` imports. Also runs the IoU validation against the GT fixture. No longer a persistence writer. |
 | [`ref_position_viterbi`](indicators_debug.py) (function) | Step 6 — monotonic ref-position Viterbi |
 | [`viterbi_universe`](indicators_debug.py) (function) | Step 2 — per-universe ref-selection Viterbi |
-| [`_persist_sota`](indicators_debug.py) (function) | Step 8 — DB write |
-| [`measure_dtw.py`](measure_dtw.py) | Production Viterbi with `ref_measure × pitch_shift` states + stem-mask coherence + structural priors. Same family as Step 6, more features. |
-| [`viterbi_pipeline.py`](viterbi_pipeline.py) | Production pipeline wrapper — routes through `TRACKLIST_ALIGN_ALGO=viterbi`. |
 | [`../analysis/canonical_cues.py`](../analysis/canonical_cues.py) | Populates `canonical_track_cue_points` by downloading full-song audio + running cue-detr at sensitivity=0.5. |
-| [`populate_cue_fallbacks.py`](populate_cue_fallbacks.py) | Writes rough cue-based fallback rows for scraped tracks without a real SOTA prediction, so the UI shows the whole tracklist without paying full MERT cost. |
 | [`eval.py`](eval.py) | Evaluation harness — scores `set_section_alignment` against `tests/fixtures/*_ground_truth.yaml`. |
 | [`_archive/README.md`](_archive/README.md) | Dropped-experiment log with measured deltas + root-cause analysis. |
 
@@ -168,20 +165,21 @@ Three structural priors the pipeline exploits:
 venvs/audio/bin/python -m audio_pipeline.analysis.canonical_cues \
     --set-id 2nvzlh2k
 
-# Run the SOTA alignment on a set and persist to set_section_alignment.
-venvs/audio/bin/python -m audio_pipeline.alignment.indicators_debug
-
-# Optional: fill in cue-based fallback rows for scraped tracks that
-# don't have real SOTA predictions, so the UI shows every track in
-# the tracklist. Cheap (no MERT).
-venvs/audio/bin/python -m audio_pipeline.alignment.populate_cue_fallbacks \
+# SOTA alignment on a set — writes confidence_source='sota_v2' rows
+# keyed on tracklist row_index. This is the ONLY alignment writer.
+venvs/audio/bin/python -m audio_pipeline.alignment.sota \
     --set-id 2nvzlh2k
 
-# Evaluate against hand-annotated fixtures.
+# Validate against the ground-truth fixtures.
 venvs/audio/bin/python -m audio_pipeline.alignment.eval \
     --db data/db/music_database.db
 
-# View in the Streamlit UI — "Alignment review" page shows SOTA rows.
+# Internal consistency check — reproduces the sota_v2 result on the 5
+# GT refs and prints per-row IoU vs ground truth. Not a persistence
+# writer anymore, just a debug/validation harness.
+venvs/audio/bin/python -m audio_pipeline.alignment.indicators_debug
+
+# View in the Streamlit UI — "Alignment review" page shows sota_v2 rows.
 venvs/audio/bin/streamlit run ui/app.py
 ```
 
