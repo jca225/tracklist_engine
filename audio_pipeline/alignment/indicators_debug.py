@@ -9,7 +9,7 @@ Nothing in this module writes to the database or knows about a specific
 set_id — those concerns live in `sota.py`. The `DB_PATH` module variable
 lets `sota.main()` point downstream DB helpers at the right file.
 
-See [SOTA.md](SOTA.md) for the pipeline diagram.
+See [docs/SOTA.md](../../docs/SOTA.md) for the pipeline diagram.
 """
 from __future__ import annotations
 
@@ -146,7 +146,7 @@ def _bracket_cue_points(ref_t: float, cue_points_ref: list[float]) -> float | No
 # needs SMA + rolling std; ATR uses Wilder smoothing. Everything else
 # from the research stack (Bollinger / RSI / ADX / ADXR / DI / MACD
 # crossovers / trust gates) was evaluated and dropped — see
-# [_archive/README.md](_archive/README.md).
+# [docs/alignment_archive.md](../../docs/alignment_archive.md).
 
 def ema(x: np.ndarray, span: int) -> np.ndarray:
     """Exponential moving average, pandas span convention: alpha=2/(span+1)."""

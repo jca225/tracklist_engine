@@ -3,8 +3,6 @@ from .track_tokenizer import parse_track_row
 from .suggestion_tokenizer import parse_suggestion_row
 from .text_tokenizer import parse_bItmH_row
 
-tokens = []
-
 
 def tokenize_row(row_raw_html: str):
     """Dispatch a raw HTML row to the right parser based on its outer container.

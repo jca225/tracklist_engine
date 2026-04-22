@@ -1865,7 +1865,7 @@ elif page == "Alignment review":
 
         # SOTA-only display. Reads rows written by the canonical
         # orchestrator in audio_pipeline/alignment/sota.py, tagged
-        # `confidence_source='sota_v2'`. See SOTA.md for the stack.
+        # `confidence_source='sota_v2'`. See docs/SOTA.md for the stack.
         df = _aligned_rows_for(set_id, source="sota_v2")
         st.caption(
             f"SOTA v2 (MERT + cue-detr bracket + mutual exclusion) — **{len(df)}** rows · "

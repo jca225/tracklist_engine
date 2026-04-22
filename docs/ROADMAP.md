@@ -9,7 +9,7 @@ full spec — flesh out before building.
 ## CURRENT SOTA
 
 The single canonical alignment entry point is
-**[alignment/sota.py](alignment/sota.py)**.
+**[audio_pipeline/alignment/sota.py](../audio_pipeline/alignment/sota.py)**.
 
 Run:
 ```bash
@@ -23,7 +23,7 @@ reads ONLY this source.
 Mean mix IoU **0.891** on `tests/fixtures/bigbootie11_ground_truth.yaml`
 (outer span only; the eval does not score `ref_segments` / loops yet).
 
-Pipeline stages (see [SOTA.md](alignment/SOTA.md) for the full diagram):
+Pipeline stages (see [SOTA.md](SOTA.md) for the full diagram):
 
 1. Per-ref MERT cosine similarity, stem-routed by `version_tag`
 2. Monotonic ref-position Viterbi — replaces argmax; `ref_t[mix_t]` is non-descending
@@ -34,16 +34,16 @@ Pipeline stages (see [SOTA.md](alignment/SOTA.md) for the full diagram):
 7. Canonical cue-detr bracket on the ref-position Viterbi endpoints → implied mix-side snap (skipped for `full` refs; regresses there)
 
 Viterbi primitives (`viterbi_universe`, `ref_position_viterbi`, `_clean_path`,
-cue-snap helpers) live in [alignment/indicators_debug.py](alignment/indicators_debug.py);
+cue-snap helpers) live in [audio_pipeline/alignment/indicators_debug.py](../audio_pipeline/alignment/indicators_debug.py);
 `sota.py` imports and composes them. `indicators_debug.py` also runs an
 IoU-validation harness against the GT fixture and is no longer a persistence writer.
 
-**Canonical cue points** come from [analysis/canonical_cues.py](analysis/canonical_cues.py):
+**Canonical cue points** come from [audio_pipeline/analysis/canonical_cues.py](../audio_pipeline/analysis/canonical_cues.py):
 cue-detr at `sensitivity=0.5` on the full-song `variant_tag='original'` audio,
 stored in `canonical_track_cue_points` keyed by `track_id` — shared across all
 variants (acapella / instrumental / full / remix).
 
-Dropped experiments (do NOT re-try without re-eval): see [alignment/_archive/README.md](alignment/_archive/README.md).
+Dropped experiments (do NOT re-try without re-eval): see [alignment_archive.md](alignment_archive.md).
   - MACD crossover transition bonuses — neutral
   - Wilder ADXR/DMI trust gate + entry/exit locks — degraded
   - Per-ref BPM matching penalty — broke on DJ tempo-shift
@@ -70,7 +70,7 @@ replayed at mix 1:46) collapse to one outer span. Candidate approach:
 finite `backward_cost` on `delta < 0` transitions in `ref_position_viterbi`
 and carry the resulting non-monotone path through into multiple
 `measure_alignment` rows per tracklist row. The eval harness
-[alignment/eval.py](alignment/eval.py) would need to score `ref_segments`
+[audio_pipeline/alignment/eval.py](../audio_pipeline/alignment/eval.py) would need to score `ref_segments`
 list-to-list rather than outer-span IoU to measure success.
 
 ### 2. Global ILP across rows

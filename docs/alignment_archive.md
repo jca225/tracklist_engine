@@ -2,8 +2,8 @@
 
 **Purpose**: record dropped approaches so future contributors (human or LLM)
 don't re-try them without fresh evidence. The canonical SOTA pipeline lives
-in [../sota.py](../sota.py); it imports Viterbi primitives from
-[../indicators_debug.py](../indicators_debug.py). Each entry below was
+in [`sota.py`](../audio_pipeline/alignment/sota.py); it imports Viterbi primitives from
+[`indicators_debug.py`](../audio_pipeline/alignment/indicators_debug.py). Each entry below was
 evaluated against `tests/fixtures/bigbootie11_ground_truth.yaml` with
 `mean_mix_IoU` as the scoring metric.
 
@@ -94,9 +94,9 @@ playback position. Concrete BB11 failures:
 - Snap-via-argmax mean IoU: **0.751** (vs Viterbi-snap 0.891, raw 0.872)
 
 **Verdict**: DROPPED. Replaced by `ref_position_viterbi()` in
-[../indicators_debug.py](../indicators_debug.py) — a lightweight monotonic
+[`indicators_debug.py`](../audio_pipeline/alignment/indicators_debug.py) — a lightweight monotonic
 Viterbi over ref-measure states (subsequence-DTW family), imported by
-[../sota.py](../sota.py). Argmax is retained in the output ONLY for
+[`sota.py`](../audio_pipeline/alignment/sota.py). Argmax is retained in the output ONLY for
 side-by-side comparison to demonstrate the IoU gap.
 
 ---
@@ -104,7 +104,7 @@ side-by-side comparison to demonstrate the IoU gap.
 ## Rule of thumb for future changes
 
 1. Propose → prototype in `indicators_debug.py` alongside the current SOTA.
-2. Evaluate against `tests/fixtures/*_ground_truth.yaml` (run `alignment/eval.py`).
+2. Evaluate against `tests/fixtures/*_ground_truth.yaml` (run `audio_pipeline/alignment/eval.py`).
 3. If the change **does not beat current SOTA on mean IoU across all
    fixtures**, it goes in this archive with:
    - The idea
@@ -112,4 +112,4 @@ side-by-side comparison to demonstrate the IoU gap.
    - The root cause of failure
    - A verdict
 4. If it beats SOTA: update the header docstring in `indicators_debug.py`
-   and call it out in `../../ROADMAP.md`.
+   and call it out in [`ROADMAP.md`](ROADMAP.md).

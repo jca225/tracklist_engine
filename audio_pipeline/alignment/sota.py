@@ -514,7 +514,7 @@ def _extract_sections(
             set_start_s = float(mix_times[s])
             set_end_s = float(mix_times[min(e - 1, len(mix_times) - 1)])
 
-            # Ref-side endpoints per SOTA.md step 7: take the MEDIAN of the
+            # Ref-side endpoints per docs/SOTA.md step 7: take the MEDIAN of the
             # first / last 3 measures of the ref-position Viterbi path for
             # noise tolerance — a single-measure endpoint has been observed
             # to drift on short spans (CRJ's 15 s play has all 3 collapse
@@ -535,7 +535,7 @@ def _extract_sections(
             ref_t_start = float(ref_times[ref_m_lo])
             ref_t_end = float(ref_times[ref_m_hi])
 
-            # Canonical-cue snap (SOTA.md step 7). FULL refs are NOT snapped
+            # Canonical-cue snap (docs/SOTA.md step 7). FULL refs are NOT snapped
             # — empirically regressed on Antoine (IoU 0.950 → 0.826) because
             # cue-detr on a full-band track fires a lot and the nearest cue
             # frequently sits inside the real play window.

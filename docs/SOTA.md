@@ -4,7 +4,7 @@
 (5 hand-annotated GT refs; per-row IoUs 0.625–1.000; argmax baseline 0.751; raw no-snap 0.872).
 
 > Do **not** replace components here without re-running the eval and beating
-> the baseline. Dropped experiments live in `_archive/README.md`.
+> the baseline. Dropped experiments live in [`alignment_archive.md`](alignment_archive.md).
 
 ---
 
@@ -135,13 +135,13 @@ Three structural priors the pipeline exploits:
 
 | File | Role |
 |---|---|
-| **[`sota.py`](sota.py)** | **The canonical SOTA orchestrator.** Loads every tracklist ref with audio + measures, runs the full stack, persists `confidence_source='sota_v2'` rows. This is the single entry point. |
-| [`indicators_debug.py`](indicators_debug.py) | Holds the Viterbi primitives (`viterbi_universe`, `ref_position_viterbi`, `_clean_path`, `_bracket_cue_points`, `_snap_via_position`) that `sota.py` imports. Also runs the IoU validation against the GT fixture. No longer a persistence writer. |
-| [`ref_position_viterbi`](indicators_debug.py) (function) | Step 6 — monotonic ref-position Viterbi |
-| [`viterbi_universe`](indicators_debug.py) (function) | Step 2 — per-universe ref-selection Viterbi |
-| [`../analysis/canonical_cues.py`](../analysis/canonical_cues.py) | Populates `canonical_track_cue_points` by downloading full-song audio + running cue-detr at sensitivity=0.5. |
-| [`eval.py`](eval.py) | Evaluation harness — scores `set_section_alignment` against `tests/fixtures/*_ground_truth.yaml`. |
-| [`_archive/README.md`](_archive/README.md) | Dropped-experiment log with measured deltas + root-cause analysis. |
+| **[`sota.py`](../audio_pipeline/alignment/sota.py)** | **The canonical SOTA orchestrator.** Loads every tracklist ref with audio + measures, runs the full stack, persists `confidence_source='sota_v2'` rows. This is the single entry point. |
+| [`indicators_debug.py`](../audio_pipeline/alignment/indicators_debug.py) | Holds the Viterbi primitives (`viterbi_universe`, `ref_position_viterbi`, `_clean_path`, `_bracket_cue_points`, `_snap_via_position`) that `sota.py` imports. Also runs the IoU validation against the GT fixture. No longer a persistence writer. |
+| [`ref_position_viterbi`](../audio_pipeline/alignment/indicators_debug.py) (function) | Step 6 — monotonic ref-position Viterbi |
+| [`viterbi_universe`](../audio_pipeline/alignment/indicators_debug.py) (function) | Step 2 — per-universe ref-selection Viterbi |
+| [`canonical_cues.py`](../audio_pipeline/analysis/canonical_cues.py) | Populates `canonical_track_cue_points` by downloading full-song audio + running cue-detr at sensitivity=0.5. |
+| [`eval.py`](../audio_pipeline/alignment/eval.py) | Evaluation harness — scores `set_section_alignment` against `tests/fixtures/*_ground_truth.yaml`. |
+| [`alignment_archive.md`](alignment_archive.md) | Dropped-experiment log with measured deltas + root-cause analysis. |
 
 ---
 
@@ -224,7 +224,7 @@ Current SOTA on BB11: mean IoU **0.891**, span inflation near 1.0, recall 5/5 on
 
 ## 8. Dropped experiments (for future sessions — DO NOT RE-TRY WITHOUT EVAL)
 
-See [`_archive/README.md`](_archive/README.md). Summary:
+See [`alignment_archive.md`](alignment_archive.md). Summary:
 
 | Experiment | Why dropped |
 |---|---|
@@ -252,12 +252,12 @@ See [`_archive/README.md`](_archive/README.md). Summary:
 
 ## 10. File-level pointer for a future LLM / contributor
 
-- Start at [`sota.py`'s module docstring](sota.py) — it lists the pipeline
+- Start at [`sota.py`'s module docstring](../audio_pipeline/alignment/sota.py) — it lists the pipeline
   stages and matches the diagram above.
 - `sota.py` is the only persistence writer. `indicators_debug.py` holds the
   Viterbi primitives it imports + an offline IoU harness against the GT
   fixture (no DB writes).
-- Cross-reference with [`ROADMAP.md`](../ROADMAP.md) "CURRENT SOTA" header.
-- Before proposing a change, read [`_archive/README.md`](_archive/README.md)
+- Cross-reference with [`ROADMAP.md`](ROADMAP.md) "CURRENT SOTA" header.
+- Before proposing a change, read [`alignment_archive.md`](alignment_archive.md)
   to confirm you're not re-trying something already ruled out.
-- Any proposed change is gated on `alignment/eval.py` IoU not regressing.
+- Any proposed change is gated on `audio_pipeline/alignment/eval.py` IoU not regressing.

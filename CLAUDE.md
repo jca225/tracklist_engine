@@ -628,11 +628,11 @@ Writes rows to `set_section_alignment` with `confidence_source='sota_v2'`, `sect
 - [audio_pipeline/alignment/sota.py](audio_pipeline/alignment/sota.py) — canonical orchestrator. Loads every tracklist ref with audio + measures, runs the full Viterbi stack, persists.
 - [audio_pipeline/alignment/indicators_debug.py](audio_pipeline/alignment/indicators_debug.py) — holds the Viterbi primitives (`viterbi_universe`, `ref_position_viterbi`, `_clean_path`, snap helpers) that `sota.py` imports. Also runs the IoU validation harness against the GT fixture. NOT a persistence writer.
 
-See [audio_pipeline/alignment/SOTA.md](audio_pipeline/alignment/SOTA.md) for the full pipeline diagram (7 stages: stem-routed MERT → ref-position Viterbi → per-universe Viterbi with mutual exclusion → fingerprint anchors → 2-pass cross-universe full-track exclusion → earliest-near-cue cleanup → canonical-cue snap) and [audio_pipeline/ROADMAP.md](audio_pipeline/ROADMAP.md) "CURRENT SOTA" for context.
+See [docs/SOTA.md](docs/SOTA.md) for the full pipeline diagram (7 stages: stem-routed MERT → ref-position Viterbi → per-universe Viterbi with mutual exclusion → fingerprint anchors → 2-pass cross-universe full-track exclusion → earliest-near-cue cleanup → canonical-cue snap) and [docs/ROADMAP.md](docs/ROADMAP.md) "CURRENT SOTA" for context.
 
 **Cue points are per canonical track, not per audio variant.** They live in `canonical_track_cue_points` (keyed by `track_id`), computed once on the full-song `variant_tag='original'` audio via [audio_pipeline/analysis/canonical_cues.py](audio_pipeline/analysis/canonical_cues.py) at `cue-detr sensitivity=0.5`. All variants (acapella / instrumental / full / remix) read the same cue list.
 
-Dropped experiments are archived in [audio_pipeline/alignment/_archive/README.md](audio_pipeline/alignment/_archive/README.md). Do not re-try them without re-running eval and beating the SOTA baseline.
+Dropped experiments are archived in [docs/alignment_archive.md](docs/alignment_archive.md). Do not re-try them without re-running eval and beating the SOTA baseline.
 
 ## Hand-annotated ground-truth yamls
 
