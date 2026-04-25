@@ -44,6 +44,10 @@ Everything outside this chain is one of:
 - A vendored dependency: `cue-detr/` (DETR-based cue-point detection model,
   consumed only by `audio_pipeline/analysis/canonical_cues.py`).
 - Exploration / scratch: `data_analysis/` notebooks.
+- Experimental forks of chain modules: `workspaces/` (e.g.
+  `workspaces/alignment_workbench` is a fork of `browser_daw/`). Promote a
+  fork out of `workspaces/` when it stabilizes (same pattern used for
+  `ui/` → `browser_daw/`).
 - Archive: `archive/` (e.g. the legacy Streamlit alignment-review app).
 
 New features land inside one of the three chain modules. New top-level folders
