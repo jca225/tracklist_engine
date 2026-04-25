@@ -28,7 +28,26 @@ existing modules. This is cheap insurance and makes every delete reversible.
 
 ## Project Overview
 
-Tracklist Engine is a web scraping and data analysis pipeline that extracts DJ set metadata, track listings, and streaming links from 1001Tracklists.com. It also includes a DETR-based ML model for detecting cue points in electronic music audio.
+Tracklist Engine is a pipeline for analyzing recorded DJ mixes against the
+tracklists scraped for them. The chain has three stages, each in its own
+top-level module:
+
+1. **scrape** — `web_crawler/` extracts DJ set metadata, track listings, and
+   streaming links from 1001Tracklists.com.
+2. **align** — `audio_pipeline/` downloads each scraped track, runs Demucs
+   stems + MIR + MERT analysis, and aligns the recorded mix audio against the
+   tracklist via Viterbi (see [docs/SOTA.md](docs/SOTA.md)).
+3. **view** — `browser_daw/` is the canonical viewer (frontend + backend) for
+   browsing aligned sets and clipping segments.
+
+Everything outside this chain is one of:
+- A vendored dependency: `cue-detr/` (DETR-based cue-point detection model,
+  consumed only by `audio_pipeline/analysis/canonical_cues.py`).
+- Exploration / scratch: `data_analysis/` notebooks.
+- Archive: `archive/` (e.g. the legacy Streamlit alignment-review app).
+
+New features land inside one of the three chain modules. New top-level folders
+require explicit justification.
 
 ## Key Commands
 
