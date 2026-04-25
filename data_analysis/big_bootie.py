@@ -17,14 +17,14 @@ from typing import Iterable
 
 import pandas as pd
 
-# `row_tokens/` lives at the repo root (shared by data_analysis + audio_pipeline).
-# Named `row_tokens` rather than `tokenizers` to avoid colliding with the
+# `row_tokens/` lives under `web_crawler/` (it parses scraped 1001tracklists row
+# HTML). Named `row_tokens` rather than `tokenizers` to avoid colliding with the
 # HuggingFace `tokenizers` package that may be on the Python path.
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from row_tokens import classify_row, tokenize_row
+from web_crawler.row_tokens import classify_row, tokenize_row
 
 
 BIG_BOOTIE_TITLE_LIKE = "%Big Bootie%"
