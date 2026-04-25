@@ -179,8 +179,9 @@ venvs/audio/bin/python -m audio_pipeline.alignment.eval \
 # writer anymore, just a debug/validation harness.
 venvs/audio/bin/python -m audio_pipeline.alignment.indicators_debug
 
-# View in the Streamlit UI — "Alignment review" page shows sota_v2 rows.
-venvs/audio/bin/streamlit run ui/app.py
+# View aligned sets in the browser DAW. See browser_daw/README.md for setup.
+# (The legacy Streamlit "Alignment review" app is archived under archive/ui/.)
+./browser_daw/run_browser_daw.sh
 ```
 
 ---

@@ -2656,14 +2656,32 @@ elif page == "Annotate GT":
             "set_end_s":      _first_num(t.get("set_end_s")),
             "ref_start_s":    _first_num(t.get("ref_start_s"), seg0.get("ref_start_s")),
             "ref_end_s":      _first_num(t.get("ref_end_s"),   seg0.get("ref_end_s")),
+            "is_loop":        bool(t.get("is_loop", False)),
             "youtube_url":    _pref(ml.get("youtube"),    "youtube"),
             "spotify_url":    _pref(ml.get("spotify"),    "spotify"),
             "soundcloud_url": _pref(ml.get("soundcloud"), "soundcloud"),
             "other_url":      str(ml.get("other") or "").strip(),
         })
+
+    # Consume any pending "add to editor" rows the user queued from the
+    # Tracklist reference panel below. Dedupe on track_id so clicking
+    # twice doesn't duplicate. Rows are appended once per page render
+    # and then the queue is drained so they don't re-appear on reload.
+    _pending_key = f"gt_pending_add::{yaml_path.name}"
+    pending_rows = st.session_state.get(_pending_key, [])
+    if pending_rows:
+        existing_tids = {r["track_id"] for r in rows_for_editor if r["track_id"]}
+        for pr in pending_rows:
+            if pr.get("track_id") and pr["track_id"] in existing_tids:
+                continue
+            rows_for_editor.append(pr)
+            if pr.get("track_id"):
+                existing_tids.add(pr["track_id"])
+        st.session_state[_pending_key] = []
+
     columns = [
         "track", "track_id", "version_tag",
-        "set_start_s", "set_end_s", "ref_start_s", "ref_end_s",
+        "set_start_s", "set_end_s", "ref_start_s", "ref_end_s", "is_loop",
         "youtube_url", "spotify_url", "soundcloud_url", "other_url",
     ]
     df_edit = pd.DataFrame(rows_for_editor, columns=columns)
@@ -2708,8 +2726,12 @@ elif page == "Annotate GT":
             "set_start_s": st.column_config.NumberColumn("mix start (s)", step=1.0, format="%.1f"),
             "set_end_s":   st.column_config.NumberColumn("mix end (s)",   step=1.0, format="%.1f"),
             "ref_start_s": st.column_config.NumberColumn("ref start (s)", step=1.0, format="%.1f",
-                                                          help="Where in the ref track the played region begins. Leave blank for straight-through plays."),
+                                                          help="MANDATORY. Seconds into the ref where the DJ dropped in. 0 = played from start."),
             "ref_end_s":   st.column_config.NumberColumn("ref end (s)",   step=1.0, format="%.1f"),
+            "is_loop":     st.column_config.CheckboxColumn(
+                "loop", width="small",
+                help="Check if the DJ looped or cut up this track. Requires at least one ref_segment row in the Loops/cut-ups editor below.",
+            ),
             "youtube_url":    st.column_config.TextColumn("YouTube URL"),
             "spotify_url":    st.column_config.TextColumn("Spotify URL"),
             "soundcloud_url": st.column_config.TextColumn("SoundCloud URL"),
@@ -2820,10 +2842,118 @@ elif page == "Annotate GT":
             st.markdown("**Ref-side** (pick a variant / stem)")
             variants = _gt_track_variants(pick_tid)
             if not variants:
-                st.caption(
-                    f"No track_audio in the DB for `{pick_tid or '<no track_id>'}`. "
-                    "Paste a media URL in the main table and run the downloader."
-                )
+                # Inline download: if the row has URLs in the editor, let the
+                # user download right here instead of bouncing out to the
+                # 'Register missing URL' page. Spotify URLs are shown for
+                # reference but yt-dlp can only fetch YouTube / SoundCloud.
+                row_urls = [
+                    ("youtube",    str(pick_row.get("youtube_url") or "").strip()),
+                    ("soundcloud", str(pick_row.get("soundcloud_url") or "").strip()),
+                    ("other",      str(pick_row.get("other_url") or "").strip()),
+                ]
+                downloadable = [
+                    (plat, url) for plat, url in row_urls
+                    if url and _parse_media_url(url) is not None
+                ]
+                if not pick_tid:
+                    st.caption(
+                        "No `track_id` on this row — can't attach downloaded "
+                        "audio. Copy a `track_id` from the **Tracklist "
+                        "reference** expander below, or pick a track_id "
+                        "manually."
+                    )
+                elif not downloadable:
+                    st.caption(
+                        f"No track_audio in the DB for `{pick_tid}`. Paste a "
+                        "YouTube or SoundCloud URL into the editor row "
+                        "(columns above), then return here to download."
+                    )
+                else:
+                    st.caption(
+                        f"No track_audio yet for `{pick_tid}`. Download "
+                        "below — the file is saved under the audio drive "
+                        "and registered as `track_audio` for this track_id."
+                    )
+                    # Lazy import keeps UI boot time snappy when the GT tab
+                    # isn't touched.
+                    from audio_pipeline.adapters import db as _gt_db
+                    from audio_pipeline.adapters.downloader import (
+                        DownloadConfig as _GtDlCfg, download_one as _gt_download_one,
+                    )
+                    from audio_pipeline.models import (
+                        MediaSource as _GtMediaSource,
+                        youtube_url as _gt_yt_url,
+                        soundcloud_api_url as _gt_sc_url,
+                    )
+                    _GT_TRACKS_DIR = (
+                        Path.home() / "Desktop" / "tracklist_audio_drive" / "tracks"
+                    )
+                    for plat, url in downloadable:
+                        parsed = _parse_media_url(url)
+                        if parsed is None:
+                            continue
+                        platform, player_id = parsed
+                        btn_key = f"gt_dl::{yaml_path.name}::{pick_tid}::{platform}::{player_id}"
+                        if st.button(
+                            f"↓ Download from {platform}",
+                            key=btn_key,
+                            help=f"{url[:80]}",
+                        ):
+                            # Register the link first so the scraper's view of
+                            # this track gains the URL, then fetch audio.
+                            ins = _gt_db.insert_track_media_link(
+                                DB_PATH,
+                                set_id=str(set_id),
+                                track_id=pick_tid,
+                                platform=platform,
+                                player_id=player_id,
+                                url=url,
+                                tlp_id=None,
+                            )
+                            if not ins.is_ok():
+                                st.error(
+                                    f"DB insert_track_media_link failed: "
+                                    f"{ins.error.kind} — {ins.error.detail}"
+                                )
+                            else:
+                                out_dir = _GT_TRACKS_DIR / str(set_id)
+                                out_dir.mkdir(parents=True, exist_ok=True)
+                                can_url = (
+                                    _gt_yt_url(player_id)
+                                    if platform == "youtube"
+                                    else _gt_sc_url(player_id)
+                                )
+                                src = _GtMediaSource(
+                                    platform=platform,
+                                    player_id=player_id,
+                                    url=can_url,
+                                )
+                                with st.spinner(
+                                    f"Downloading {platform} → {out_dir}…"
+                                ):
+                                    dl = _gt_download_one(
+                                        pick_tid, src, _GtDlCfg(out_dir=out_dir),
+                                    )
+                                if not dl.is_ok():
+                                    st.error(
+                                        f"Download failed: "
+                                        f"{dl.error.kind} — {dl.error.detail}"
+                                    )
+                                else:
+                                    asset = dl.value
+                                    ia = _gt_db.insert_audio(DB_PATH, asset)
+                                    if not ia.is_ok():
+                                        st.error(
+                                            f"DB insert_audio failed: {ia.error}"
+                                        )
+                                    else:
+                                        st.success(
+                                            f"Downloaded → `{asset.path}`. "
+                                            "Reloading to pick it up as a "
+                                            "variant…"
+                                        )
+                                        st.cache_data.clear()
+                                        st.rerun()
             else:
                 vlabels = [v["label"] for v in variants]
                 default_idx = 0
@@ -2897,55 +3027,110 @@ elif page == "Annotate GT":
                 "`ref_end_s` are ignored for this track when segments exist."
             )
 
-    # --- Tracklist reference (read-only) --------------------------------
+    # --- Tracklist reference (+ "add to editor") ------------------------
     with st.expander(
         f"Tracklist reference — every track the scraper captured for `{set_id}`",
         expanded=False,
     ):
         st.caption(
-            "DB view of this set's tracklist. Use as a lookup when building "
-            "a fixture manually: copy the track name and `track_id` into "
-            "the main table. Each row's player uses the canonical "
-            "downloaded audio (variant `original`) — switch variant in the "
-            "Selected-track panel above once you've added the row."
+            "DB view of this set's tracklist. Includes rows the scraper "
+            "never found a media URL for — click **+ Add** to copy them "
+            "into the GT editor above, then paste a URL into the main "
+            "table to enable download."
         )
         conn = _connect()
+        # Use json_extract on data_attrs_json so rows missing from
+        # dj_set_track_media_links still appear (user can still add them
+        # and paste a URL). track_media_links join remains as LEFT JOIN
+        # only to pull scraped URLs when available.
         ref_rows = conn.execute(
             """
-            SELECT r.row_index, r.text_excerpt, tml.track_id,
-                   MAX(ta.path) AS any_path
+            SELECT r.row_index,
+                   r.text_excerpt,
+                   json_extract(r.data_attrs_json, '$."data-trackid"') AS track_id,
+                   MAX(ta.path) AS any_path,
+                   MAX(tml.platform || '|' || COALESCE(tml.player_id, '')) AS any_tml
             FROM dj_set_rows r
             LEFT JOIN dj_set_track_media_links tml
-                   ON tml.set_id = r.set_id AND r.element_id = ('tlp_' || tml.tlp_id)
-            LEFT JOIN track_audio ta ON ta.track_id = tml.track_id
-            WHERE r.set_id = ? AND tml.track_id IS NOT NULL AND tml.track_id != ''
-            GROUP BY r.row_index, r.text_excerpt, tml.track_id
+                   ON tml.set_id = r.set_id
+                      AND tml.track_id = json_extract(r.data_attrs_json, '$."data-trackid"')
+            LEFT JOIN track_audio ta
+                   ON ta.track_id = json_extract(r.data_attrs_json, '$."data-trackid"')
+            WHERE r.set_id = ?
+              AND json_extract(r.data_attrs_json, '$."data-trackid"') IS NOT NULL
+              AND json_extract(r.data_attrs_json, '$."data-trackid"') != ''
+            GROUP BY r.row_index, r.text_excerpt, track_id
             ORDER BY r.row_index
             """,
             (set_id,),
         ).fetchall()
         if not ref_rows:
-            st.caption("No tracklist rows found for this set_id in the DB.")
+            st.caption("No tracklist rows with a data-trackid found for this set_id in the DB.")
         else:
+            # Already-in-editor track_ids (so the + Add button can dedupe).
+            in_editor_tids: set[str] = {
+                str(t.get("track_id") or "").strip()
+                for t in (tracks or []) if isinstance(t, dict) and t.get("track_id")
+            }
+            # Also fold pending additions so rapid-fire clicks don't duplicate.
+            for pr in st.session_state.get(_pending_key, []):
+                if pr.get("track_id"):
+                    in_editor_tids.add(pr["track_id"])
             st.caption(f"{len(ref_rows)} tracks on tracklist.")
             for r in ref_rows:
-                cols = st.columns([1, 5, 2, 2])
+                cols = st.columns([1, 4, 2, 1, 1])
                 cols[0].caption(f"row {r['row_index']}")
                 cols[1].code(
                     (r["text_excerpt"] or "")[:90],
                     language="text",
                 )
-                cols[2].caption(r["track_id"] or "—")
+                tid_str = r["track_id"] or ""
+                cols[2].caption(tid_str or "—")
                 playable = r["any_path"] and Path(r["any_path"]).exists()
                 if playable:
-                    if cols[3].button("▶ play", key=f"gt_ref_play::{r['row_index']}::{r['track_id']}"):
-                        st.session_state[f"gt_ref_inline_play::{r['track_id']}"] = r["any_path"]
-                    inline = st.session_state.get(f"gt_ref_inline_play::{r['track_id']}")
+                    if cols[3].button("▶ play", key=f"gt_ref_play::{r['row_index']}::{tid_str}"):
+                        st.session_state[f"gt_ref_inline_play::{tid_str}"] = r["any_path"]
+                    inline = st.session_state.get(f"gt_ref_inline_play::{tid_str}")
                     if inline:
                         st.audio(inline)
                         cols[3].caption("playing: original")
                 else:
                     cols[3].caption("no audio")
+                # + Add to editor. Disabled when the track_id is already
+                # present in the fixture (or queued). Copies a prefilled
+                # row into the editor's pending queue and reruns so the
+                # row appears on the next render.
+                already = tid_str and tid_str in in_editor_tids
+                add_label = "✓ in" if already else "+ Add"
+                if cols[4].button(
+                    add_label, key=f"gt_ref_add::{r['row_index']}::{tid_str}",
+                    disabled=bool(already) or not tid_str,
+                    help="Copy this tracklist row into the GT editor as a new line."
+                         if not already else "Already in the editor.",
+                ):
+                    cleaned = _clean_clip_label(r["text_excerpt"] or "")
+                    new_row = {
+                        "track": cleaned,
+                        "track_id": tid_str,
+                        "version_tag": "",
+                        "set_start_s": None,
+                        "set_end_s": None,
+                        "ref_start_s": None,
+                        "ref_end_s": None,
+                        "is_loop": False,
+                        "youtube_url": "",
+                        "spotify_url": "",
+                        "soundcloud_url": "",
+                        "other_url": "",
+                    }
+                    queue = list(st.session_state.get(_pending_key, []))
+                    queue.append(new_row)
+                    st.session_state[_pending_key] = queue
+                    # Clear the editor key so the new row appears. In-progress
+                    # edits to other rows are lost; this is the intended
+                    # trade-off (documented next to the Reload button above).
+                    st.session_state.pop(_editor_key, None)
+                    st.rerun()
 
     # Archive browser
     archived = sorted(ARCHIVE_DIR.glob(f"{yaml_path.stem}_*.yaml"), reverse=True)
@@ -3023,23 +3208,33 @@ elif page == "Annotate GT":
                 out_lines.append(f"    version_tag: {tag}")
             out_lines.append(f"    set_start_s: {float(row['set_start_s']):g}")
             out_lines.append(f"    set_end_s:   {float(row['set_end_s']):g}")
-            # Segments (loops / cut-ups) win over the flat ref_start_s /
-            # ref_end_s when present, per the schema.
+            # ref_start_s is MANDATORY. If the user didn't fill it, default
+            # to the first segment's ref_start_s when we have one, else 0.
             row_key = str(row.get("track_id") or "").strip() or str(row["track"])
             row_segs = st.session_state.get(
                 f"gt_segments::{yaml_path.name}::{row_key}", []
             )
+            if pd.notna(row["ref_start_s"]):
+                ref_start_val = float(row["ref_start_s"])
+            elif row_segs:
+                ref_start_val = float(row_segs[0]["ref_start_s"])
+            else:
+                ref_start_val = 0.0
+            out_lines.append(f"    ref_start_s: {ref_start_val:g}")
+            if pd.notna(row["ref_end_s"]):
+                out_lines.append(f"    ref_end_s:   {float(row['ref_end_s']):g}")
+            # is_loop explicitly, when checked. Auto-promote to True if the
+            # user added segments but forgot the checkbox — the schema
+            # requires is_loop when segments exist.
+            is_loop = bool(row.get("is_loop", False)) or bool(row_segs)
+            if is_loop:
+                out_lines.append(f"    is_loop:     true")
             if row_segs:
                 out_lines.append("    ref_segments:")
                 for s in row_segs:
                     out_lines.append(f"      - mix_start_s: {float(s['mix_start_s']):g}")
                     out_lines.append(f"        ref_start_s: {float(s['ref_start_s']):g}")
                     out_lines.append(f"        ref_end_s:   {float(s['ref_end_s']):g}")
-            else:
-                if pd.notna(row["ref_start_s"]):
-                    out_lines.append(f"    ref_start_s: {float(row['ref_start_s']):g}")
-                if pd.notna(row["ref_end_s"]):
-                    out_lines.append(f"    ref_end_s:   {float(row['ref_end_s']):g}")
             links: list[tuple[str, str]] = []
             for col, key in (
                 ("youtube_url", "youtube"),
