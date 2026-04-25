@@ -1,0 +1,808 @@
+const loadTracksBtn = document.getElementById("loadTracksBtn");
+const trackListEl = document.getElementById("trackList");
+const trackSearchInput = document.getElementById("trackSearchInput");
+const arrangerEl = document.getElementById("arranger");
+const lanesContainerEl = document.getElementById("lanesContainer");
+const timeRulerEl = document.getElementById("timeRuler");
+const apiBaseInput = document.getElementById("apiBase");
+const themeSelect = document.getElementById("themeSelect");
+const projectSelect = document.getElementById("projectSelect");
+const masterBpmInput = document.getElementById("masterBpmInput");
+const masterCamelotSelect = document.getElementById("masterCamelotSelect");
+const saveProjectBtn = document.getElementById("saveProjectBtn");
+const autoSyncCheckbox = document.getElementById("autoSyncCheckbox");
+const splitClipBtn = document.getElementById("splitClipBtn");
+const trimLeftBtn = document.getElementById("trimLeftBtn");
+const trimRightBtn = document.getElementById("trimRightBtn");
+const moveClipUpBtn = document.getElementById("moveClipUpBtn");
+const moveClipDownBtn = document.getElementById("moveClipDownBtn");
+const addLaneBtn = document.getElementById("addLaneBtn");
+const deleteClipBtn = document.getElementById("deleteClipBtn");
+const playBtn = document.getElementById("playBtn");
+const pauseBtn = document.getElementById("pauseBtn");
+const stopBtn = document.getElementById("stopBtn");
+const playheadEl = document.getElementById("playhead");
+const loopRegionEl = document.getElementById("loopRegion");
+const loopEnabledCheckbox = document.getElementById("loopEnabledCheckbox");
+const loopStartInput = document.getElementById("loopStartInput");
+const loopEndInput = document.getElementById("loopEndInput");
+const setLoopFromPlayheadBtn = document.getElementById("setLoopFromPlayheadBtn");
+const setLoopEndFromPlayheadBtn = document.getElementById("setLoopEndFromPlayheadBtn");
+const clipVolumeSlider = document.getElementById("clipVolumeSlider");
+const clipVolumeValue = document.getElementById("clipVolumeValue");
+
+const PX_PER_SEC = 18;
+const RULER_HEIGHT = 24;
+let dragState = null;
+let selectedClipId = null;
+let tracksById = new Map();
+let playheadSeconds = 0;
+let transportTimer = null;
+let audioCtx = null;
+let projectClips = [];
+const decodedBufferCache = new Map();
+let activeSources = [];
+const clipVolumeById = new Map();
+const trackVariantSelections = new Map();
+let transportIsRunning = false;
+let laneCount = 3;
+let allTracks = [];
+
+function apiBase() {
+  return apiBaseInput.value.trim();
+}
+
+function keyLabel(keyPc, keyMode) {
+  if (keyPc === null || keyPc === undefined) return "Unknown";
+  const names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  const mode = keyMode === "minor" ? "m" : keyMode === "major" ? "M" : "";
+  return `${names[keyPc]}${mode}`;
+}
+
+function clearClips() {
+  arrangerEl.querySelectorAll(".clip").forEach((el) => el.remove());
+}
+
+function renderLanes() {
+  lanesContainerEl.innerHTML = "";
+  for (let laneIdx = 1; laneIdx <= laneCount; laneIdx += 1) {
+    const lane = document.createElement("div");
+    lane.className = "lane";
+    lane.dataset.lane = String(laneIdx);
+    lanesContainerEl.appendChild(lane);
+  }
+}
+
+function timelineContentWidthPx() {
+  const maxEndSec = projectClips.reduce((acc, clip) => {
+    const end = Number(clip.timeline_start_s) + clipDurationTimelineSeconds(clip);
+    return Math.max(acc, end);
+  }, 16);
+  return Math.max(arrangerEl.clientWidth, Math.ceil(maxEndSec * PX_PER_SEC + 320));
+}
+
+function applyTimelineWidth() {
+  const w = timelineContentWidthPx();
+  lanesContainerEl.style.width = `${w}px`;
+  timeRulerEl.style.width = `${w}px`;
+}
+
+function renderTimeMarkers() {
+  timeRulerEl.innerHTML = "";
+  const totalSec = Math.ceil(timelineContentWidthPx() / PX_PER_SEC);
+  for (let sec = 0; sec <= totalSec; sec += 4) {
+    const major = sec % 16 === 0;
+    const marker = document.createElement("div");
+    marker.className = `time-marker${major ? " major" : ""}`;
+    marker.style.left = `${sec * PX_PER_SEC}px`;
+    timeRulerEl.appendChild(marker);
+    if (major) {
+      const label = document.createElement("div");
+      label.className = "time-marker-label";
+      label.style.left = `${sec * PX_PER_SEC}px`;
+      label.textContent = `${sec}s`;
+      timeRulerEl.appendChild(label);
+    }
+  }
+}
+
+function selectedProjectId() {
+  const id = Number(projectSelect.value);
+  if (!id) return null;
+  return id;
+}
+
+function clipDurationTimelineSeconds(clip) {
+  const srcDur = Number(clip.src_end_s) - Number(clip.src_start_s);
+  return srcDur / Number(clip.tempo_ratio || 1);
+}
+
+async function loadProjects() {
+  const resp = await fetch(`${apiBase()}/projects`);
+  if (!resp.ok) {
+    alert(`Failed to load projects: ${resp.status}`);
+    return;
+  }
+  const payload = await resp.json();
+  const items = payload.items || [];
+  projectSelect.innerHTML = "";
+  items.forEach((p) => {
+    const opt = document.createElement("option");
+    opt.value = String(p.project_id);
+    opt.textContent = `#${p.project_id} ${p.name}`;
+    projectSelect.appendChild(opt);
+  });
+  if (items.length > 0) {
+    projectSelect.value = String(items[0].project_id);
+    applyProjectFields(items[0]);
+    await loadProjectClips();
+  }
+}
+
+function applyProjectFields(project) {
+  masterBpmInput.value = String(project.master_bpm ?? 128);
+  masterCamelotSelect.value = project.master_camelot || "";
+}
+
+async function saveProjectSettings() {
+  const projectId = selectedProjectId();
+  if (!projectId) return;
+  const body = {
+    master_bpm: Number(masterBpmInput.value || 128),
+    master_camelot: masterCamelotSelect.value || null,
+  };
+  const resp = await fetch(`${apiBase()}/projects/${projectId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    alert(`Failed to save project: ${resp.status}`);
+  }
+}
+
+async function loadTracks() {
+  const resp = await fetch(`${apiBase()}/tracks?limit=150`);
+  if (!resp.ok) {
+    alert(`Failed to load tracks: ${resp.status}`);
+    return;
+  }
+  const payload = await resp.json();
+  allTracks = payload.items || [];
+  renderTrackList(allTracks);
+}
+
+function renderTrackList(items) {
+  tracksById = new Map();
+  trackListEl.innerHTML = "";
+  items.forEach((track) => {
+    tracksById.set(track.track_id, track);
+    const li = document.createElement("li");
+    const variants = track.available_variants && track.available_variants.length > 0
+      ? track.available_variants
+      : ["original"];
+    const selectedVariant = trackVariantSelections.get(track.track_id) || (variants.includes("original") ? "original" : variants[0]);
+    li.innerHTML = `
+      <strong>${track.song_name || track.track_id}</strong><br/>
+      <span>${track.artist_name || "Unknown artist"}</span><br/>
+      <span>BPM: ${track.bpm ?? "?"} | Key: ${keyLabel(track.key_pc, track.key_mode)} | ${track.platform || "?"}/${track.variant_tag || "?"}</span><br/>
+      <span class="muted">ID: ${track.track_id}</span><br/>
+      <span class="muted">${track.release_label || ""} ${track.isrc ? `| ISRC ${track.isrc}` : ""}</span><br/>
+      <span class="muted">meta: ${track.metadata_source || "unresolved"}</span>
+    `;
+    const variantSelect = document.createElement("select");
+    variants.forEach((variant) => {
+      const opt = document.createElement("option");
+      opt.value = variant;
+      opt.textContent = variant;
+      variantSelect.appendChild(opt);
+    });
+    variantSelect.value = selectedVariant;
+    variantSelect.addEventListener("change", () => {
+      trackVariantSelections.set(track.track_id, variantSelect.value);
+    });
+    const addBtn = document.createElement("button");
+    addBtn.textContent = "Add";
+    addBtn.addEventListener("click", () => createClip(track.track_id, 1, variantSelect.value));
+    li.appendChild(document.createElement("br"));
+    li.appendChild(variantSelect);
+    li.appendChild(addBtn);
+    trackListEl.appendChild(li);
+  });
+}
+
+function applyTrackSearchFilter() {
+  const q = (trackSearchInput.value || "").trim().toLowerCase();
+  if (!q) {
+    renderTrackList(allTracks);
+    return;
+  }
+  const filtered = allTracks.filter((track) => {
+    const hay = [
+      track.song_name || "",
+      track.artist_name || "",
+      track.track_id || "",
+      track.scraped_track_title || "",
+    ]
+      .join(" ")
+      .toLowerCase();
+    return hay.includes(q);
+  });
+  renderTrackList(filtered);
+}
+
+async function createClip(trackId, laneIdx, variantTag) {
+  const projectId = selectedProjectId();
+  if (!projectId) return;
+  const body = {
+    track_id: trackId,
+    variant_tag: variantTag || "original",
+    lane_idx: Math.max(1, Math.min(256, Number(laneIdx) || 1)),
+    timeline_start_s: 0,
+    src_start_s: 0,
+    src_end_s: 32,
+    auto_sync: autoSyncCheckbox.checked,
+  };
+  const resp = await fetch(`${apiBase()}/projects/${projectId}/clips`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    alert(`Failed to create clip: ${resp.status}`);
+    return;
+  }
+  await loadProjectClips();
+}
+
+async function loadProjectClips() {
+  const projectId = selectedProjectId();
+  if (!projectId) return;
+  const resp = await fetch(`${apiBase()}/projects/${projectId}/clips`);
+  if (!resp.ok) {
+    alert(`Failed to load clips: ${resp.status}`);
+    return;
+  }
+  const payload = await resp.json();
+  projectClips = payload.items || [];
+  const maxLane = projectClips.reduce((acc, clip) => Math.max(acc, Number(clip.lane_idx) || 1), 1);
+  laneCount = Math.max(laneCount, maxLane);
+  renderLanes();
+  applyTimelineWidth();
+  renderTimeMarkers();
+  clearClips();
+  projectClips.forEach((clip) => renderClip(clip));
+  if (selectedClipId !== null) {
+    const exists = projectClips.some((c) => Number(c.clip_id) === Number(selectedClipId));
+    if (!exists) selectedClipId = null;
+  }
+  syncSelectedClass();
+}
+
+function renderClip(clip) {
+  const lane = arrangerEl.querySelector(`.lane[data-lane="${clip.lane_idx}"]`);
+  if (!lane) return;
+  const track = tracksById.get(clip.track_id);
+  const el = document.createElement("div");
+  el.className = "clip";
+  el.dataset.clipId = String(clip.clip_id);
+  el.dataset.lane = String(clip.lane_idx);
+  el.style.left = `${Number(clip.timeline_start_s) * PX_PER_SEC}px`;
+  el.style.width = `${clipDurationTimelineSeconds(clip) * PX_PER_SEC}px`;
+  const waveformCanvas = document.createElement("canvas");
+  waveformCanvas.className = "waveform";
+  el.appendChild(waveformCanvas);
+  const clipName = track?.song_name || clip.track_id;
+  const label = document.createElement("div");
+  label.className = "clip-label";
+  label.textContent = `${clipName} [${clip.variant_tag || "original"}] (${track?.bpm ?? "?"} BPM, shift ${clip.pitch_shift_semi})`;
+  el.appendChild(label);
+  el.addEventListener("click", () => {
+    selectedClipId = Number(clip.clip_id);
+    syncSelectedClass();
+    syncVolumeUiForSelection();
+  });
+  el.addEventListener("pointerdown", onClipPointerDown);
+  lane.appendChild(el);
+  renderClipWaveform(el, clip).catch((err) => {
+    console.warn("waveform render failed", clip.clip_id, err);
+  });
+}
+
+function syncSelectedClass() {
+  arrangerEl.querySelectorAll(".clip").forEach((el) => {
+    const isSelected = Number(el.dataset.clipId) === Number(selectedClipId);
+    el.classList.toggle("selected", isSelected);
+  });
+}
+
+function onClipPointerDown(event) {
+  const clip = event.currentTarget;
+  const clipId = Number(clip.dataset.clipId);
+  selectedClipId = clipId;
+  syncSelectedClass();
+  syncVolumeUiForSelection();
+  dragState = {
+    clip,
+    clipId,
+    pointerStartX: event.clientX,
+    pointerStartY: event.clientY,
+    clipStartLeft: parseInt(clip.style.left, 10) || 0,
+    laneStartIdx: Number(clip.dataset.lane || 1),
+  };
+  clip.setPointerCapture(event.pointerId);
+  clip.style.cursor = "grabbing";
+}
+
+function onPointerMove(event) {
+  if (!dragState) return;
+  const dx = event.clientX - dragState.pointerStartX;
+  const newLeft = Math.max(0, dragState.clipStartLeft + dx);
+  dragState.clip.style.left = `${newLeft}px`;
+  const target = document.elementFromPoint(event.clientX, event.clientY);
+  const laneEl = target && target.closest ? target.closest(".lane") : null;
+  if (laneEl && laneEl.dataset.lane) {
+    const laneIdx = Number(laneEl.dataset.lane);
+    if (laneIdx >= 1) {
+      dragState.clip.dataset.lane = String(laneIdx);
+      laneEl.appendChild(dragState.clip);
+    }
+  }
+}
+
+async function onPointerUp() {
+  if (!dragState) return;
+  dragState.clip.style.cursor = "grab";
+  const newStartS = (parseInt(dragState.clip.style.left, 10) || 0) / PX_PER_SEC;
+  const clipId = dragState.clipId;
+  const newLane = Number(dragState.clip.dataset.lane || dragState.laneStartIdx || 1);
+  dragState = null;
+  await patchClip(clipId, {
+    timeline_start_s: Math.round(newStartS * 1000) / 1000,
+    lane_idx: Math.max(1, Math.min(256, newLane)),
+  });
+}
+
+async function patchClip(clipId, body) {
+  const resp = await fetch(`${apiBase()}/clips/${clipId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    alert(`Failed to update clip: ${resp.status}`);
+    return;
+  }
+  await loadProjectClips();
+}
+
+async function splitSelectedClip() {
+  if (!selectedClipId) return;
+  const clipEl = arrangerEl.querySelector(`.clip[data-clip-id="${selectedClipId}"]`);
+  if (!clipEl) return;
+  const clip = await getSelectedClip();
+  if (!clip) return;
+  const splitSrcMid = (Number(clip.src_start_s) + Number(clip.src_end_s)) / 2;
+  const splitSrc = await snapToNearestPoint(clip.track_id, splitSrcMid, 2.0);
+  const resp = await fetch(`${apiBase()}/clips/${selectedClipId}/split?split_at_src_s=${encodeURIComponent(splitSrc)}`, {
+    method: "POST",
+  });
+  if (!resp.ok) {
+    alert(`Failed to split clip: ${resp.status}`);
+    return;
+  }
+  await loadProjectClips();
+}
+
+async function trimSelectedLeft() {
+  await trimSelected(1, 0);
+}
+
+async function trimSelectedRight() {
+  await trimSelected(0, -1);
+}
+
+async function trimSelected(deltaStartS, deltaEndS) {
+  const clip = await getSelectedClip();
+  if (!clip) return;
+  let srcStart = Math.max(0, Number(clip.src_start_s) + deltaStartS);
+  let srcEnd = Math.max(srcStart + 0.1, Number(clip.src_end_s) + deltaEndS);
+  if (deltaStartS !== 0) {
+    srcStart = await snapToDirectionalPoint(clip.track_id, srcStart, "next", Number(clip.src_start_s));
+  }
+  if (deltaEndS !== 0) {
+    srcEnd = await snapToDirectionalPoint(clip.track_id, srcEnd, "prev", Number(clip.src_end_s));
+  }
+  srcEnd = Math.max(srcStart + 0.1, srcEnd);
+  await patchClip(selectedClipId, { src_start_s: srcStart, src_end_s: srcEnd });
+}
+
+async function deleteSelectedClip() {
+  if (!selectedClipId) return;
+  const resp = await fetch(`${apiBase()}/clips/${selectedClipId}`, { method: "DELETE" });
+  if (!resp.ok) {
+    alert(`Failed to delete clip: ${resp.status}`);
+    return;
+  }
+  selectedClipId = null;
+  syncVolumeUiForSelection();
+  await loadProjectClips();
+}
+
+function onGlobalKeyDown(event) {
+  const target = event.target;
+  const tag = target && target.tagName ? target.tagName.toLowerCase() : "";
+  const isTypingField = tag === "input" || tag === "textarea" || tag === "select";
+  if (isTypingField) return;
+  if (event.code === "Space") {
+    event.preventDefault();
+    if (transportIsRunning) {
+      pauseTransport();
+    } else {
+      startTransport();
+    }
+    return;
+  }
+  if ((event.key === "Delete" || event.key === "Backspace") && selectedClipId) {
+    event.preventDefault();
+    deleteSelectedClip().catch((err) => {
+      console.error(err);
+    });
+  }
+}
+
+async function moveSelectedClipLane(delta) {
+  const clip = await getSelectedClip();
+  if (!clip) return;
+  const nextLane = Math.max(1, Number(clip.lane_idx) + delta);
+  laneCount = Math.max(laneCount, nextLane);
+  renderLanes();
+  await patchClip(selectedClipId, { lane_idx: nextLane });
+}
+
+async function getSelectedClip() {
+  if (!selectedClipId) return null;
+  const projectId = selectedProjectId();
+  const clipsResp = await fetch(`${apiBase()}/projects/${projectId}/clips`);
+  if (!clipsResp.ok) return null;
+  const clipsPayload = await clipsResp.json();
+  return (clipsPayload.items || []).find((c) => Number(c.clip_id) === Number(selectedClipId)) || null;
+}
+
+async function fetchTrackSnapPoints(trackId) {
+  const resp = await fetch(`${apiBase()}/tracks/${encodeURIComponent(trackId)}/analysis`);
+  if (!resp.ok) return [];
+  const payload = await resp.json();
+  const points = [...(payload.measure_times || []), ...(payload.cue_points || [])]
+    .map((v) => Number(v))
+    .filter((v) => Number.isFinite(v) && v >= 0);
+  return Array.from(new Set(points)).sort((a, b) => a - b);
+}
+
+async function snapToNearestPoint(trackId, valueS, maxDistanceS) {
+  const points = await fetchTrackSnapPoints(trackId);
+  if (points.length === 0) return valueS;
+  let best = valueS;
+  let bestDist = Number.POSITIVE_INFINITY;
+  points.forEach((p) => {
+    const d = Math.abs(p - valueS);
+    if (d < bestDist) {
+      bestDist = d;
+      best = p;
+    }
+  });
+  return bestDist <= maxDistanceS ? best : valueS;
+}
+
+async function snapToDirectionalPoint(trackId, fallbackValueS, direction, anchorValueS) {
+  const points = await fetchTrackSnapPoints(trackId);
+  if (points.length === 0) return fallbackValueS;
+  if (direction === "next") {
+    const next = points.find((p) => p > anchorValueS + 0.001);
+    return next !== undefined ? next : fallbackValueS;
+  }
+  if (direction === "prev") {
+    for (let i = points.length - 1; i >= 0; i -= 1) {
+      if (points[i] < anchorValueS - 0.001) return points[i];
+    }
+  }
+  return fallbackValueS;
+}
+
+function renderPlayhead() {
+  playheadEl.style.left = `${playheadSeconds * PX_PER_SEC}px`;
+  renderLoopRegion();
+}
+
+function currentLoopBounds() {
+  const loopStart = Math.max(0, Number(loopStartInput.value || 0));
+  const loopEndRaw = Math.max(0, Number(loopEndInput.value || 0));
+  const loopEnd = Math.max(loopStart + 0.01, loopEndRaw);
+  return { loopStart, loopEnd };
+}
+
+function renderLoopRegion() {
+  const { loopStart, loopEnd } = currentLoopBounds();
+  const left = loopStart * PX_PER_SEC;
+  const width = Math.max(0, (loopEnd - loopStart) * PX_PER_SEC);
+  loopRegionEl.style.left = `${left}px`;
+  loopRegionEl.style.width = `${width}px`;
+  loopRegionEl.style.display = loopEnabledCheckbox.checked ? "block" : "none";
+}
+
+function startTransport() {
+  if (transportIsRunning) return;
+  transportIsRunning = true;
+  stopAllAudioSources();
+  playAudioFromPlayhead().catch((err) => {
+    console.error(err);
+    alert(`Audio playback failed: ${err.message || err}`);
+  });
+  let last = performance.now();
+  transportTimer = window.setInterval(() => {
+    const now = performance.now();
+    const dt = (now - last) / 1000;
+    last = now;
+    playheadSeconds += dt;
+    if (loopEnabledCheckbox.checked) {
+      const { loopStart, loopEnd } = currentLoopBounds();
+      if (playheadSeconds >= loopEnd) {
+        playheadSeconds = loopStart;
+        stopAllAudioSources();
+        playAudioFromPlayhead().catch((err) => {
+          console.error(err);
+        });
+      }
+    }
+    renderPlayhead();
+  }, 16);
+}
+
+function stopTransport() {
+  if (transportTimer) {
+    window.clearInterval(transportTimer);
+    transportTimer = null;
+  }
+  transportIsRunning = false;
+  stopAllAudioSources();
+}
+
+function resetTransport() {
+  stopTransport();
+  playheadSeconds = 0;
+  renderPlayhead();
+}
+
+function pauseTransport() {
+  stopTransport();
+}
+
+function stopAllAudioSources() {
+  activeSources.forEach((src) => {
+    try {
+      src.stop();
+    } catch (_) {
+      // ignore stop races
+    }
+  });
+  activeSources = [];
+}
+
+async function ensureAudioContext() {
+  if (!audioCtx) {
+    audioCtx = new window.AudioContext();
+  }
+  if (audioCtx.state === "suspended") {
+    await audioCtx.resume();
+  }
+  return audioCtx;
+}
+
+async function fetchDecodedTrackBuffer(trackId, variantTag) {
+  const cacheKey = `${trackId}::${variantTag || "original"}`;
+  if (decodedBufferCache.has(cacheKey)) {
+    return decodedBufferCache.get(cacheKey);
+  }
+  const ctx = await ensureAudioContext();
+  const resp = await fetch(
+    `${apiBase()}/tracks/${encodeURIComponent(trackId)}/audio?variant_tag=${encodeURIComponent(variantTag || "original")}`,
+  );
+  if (!resp.ok) {
+    throw new Error(`Failed audio fetch for ${trackId}: HTTP ${resp.status}`);
+  }
+  const arr = await resp.arrayBuffer();
+  const buf = await ctx.decodeAudioData(arr.slice(0));
+  decodedBufferCache.set(cacheKey, buf);
+  return buf;
+}
+
+function clipVolumeGainForId(clipId) {
+  const v = clipVolumeById.get(Number(clipId));
+  if (v === undefined) return 0.72;
+  return Math.max(0, Math.min(1.2, Number(v)));
+}
+
+function syncVolumeUiForSelection() {
+  if (!selectedClipId) {
+    clipVolumeSlider.value = "0.72";
+    clipVolumeValue.textContent = "72%";
+    return;
+  }
+  const v = clipVolumeGainForId(selectedClipId);
+  clipVolumeSlider.value = String(v);
+  clipVolumeValue.textContent = `${Math.round(v * 100)}%`;
+}
+
+async function renderClipWaveform(clipEl, clip) {
+  const canvas = clipEl.querySelector(".waveform");
+  if (!canvas) return;
+  const buffer = await fetchDecodedTrackBuffer(clip.track_id, clip.variant_tag);
+  const w = Math.max(80, Math.floor(clipDurationTimelineSeconds(clip) * PX_PER_SEC));
+  const h = 44;
+  canvas.width = w;
+  canvas.height = h;
+  const ctx2d = canvas.getContext("2d");
+  if (!ctx2d) return;
+  ctx2d.clearRect(0, 0, w, h);
+  ctx2d.fillStyle = "rgba(15, 30, 60, 0.4)";
+  ctx2d.fillRect(0, 0, w, h);
+  ctx2d.strokeStyle = "rgba(180, 220, 255, 0.85)";
+  ctx2d.lineWidth = 1;
+  const data = buffer.getChannelData(0);
+  const srcStart = Math.max(0, Math.floor(Number(clip.src_start_s) * buffer.sampleRate));
+  const srcEnd = Math.min(data.length, Math.floor(Number(clip.src_end_s) * buffer.sampleRate));
+  const samples = Math.max(1, srcEnd - srcStart);
+  const step = Math.max(1, Math.floor(samples / w));
+  ctx2d.beginPath();
+  for (let x = 0; x < w; x += 1) {
+    const start = srcStart + x * step;
+    const end = Math.min(srcEnd, start + step);
+    let peak = 0;
+    for (let i = start; i < end; i += 1) {
+      const a = Math.abs(data[i] || 0);
+      if (a > peak) peak = a;
+    }
+    const y = (1 - peak) * (h / 2);
+    ctx2d.moveTo(x + 0.5, y);
+    ctx2d.lineTo(x + 0.5, h - y);
+  }
+  ctx2d.stroke();
+}
+
+async function playAudioFromPlayhead() {
+  const ctx = await ensureAudioContext();
+  const baseWhen = ctx.currentTime + 0.05;
+  const nowPlayhead = playheadSeconds;
+
+  const clipsToStart = projectClips
+    .map((clip) => ({ clip, startTimeline: Number(clip.timeline_start_s) }))
+    .filter(({ clip, startTimeline }) => {
+      const endTimeline = startTimeline + clipDurationTimelineSeconds(clip);
+      return endTimeline > nowPlayhead;
+    });
+
+  for (const { clip, startTimeline } of clipsToStart) {
+    const buffer = await fetchDecodedTrackBuffer(clip.track_id, clip.variant_tag);
+    const ratio = Number(clip.tempo_ratio || 1);
+    const clipSrcStart = Number(clip.src_start_s);
+    const clipSrcEnd = Number(clip.src_end_s);
+    const clipTimelineDuration = (clipSrcEnd - clipSrcStart) / ratio;
+    const playOffsetTimeline = Math.max(0, nowPlayhead - startTimeline);
+    const sourceOffsetInTrack = clipSrcStart + playOffsetTimeline * ratio;
+    const remainTimeline = Math.max(0, clipTimelineDuration - playOffsetTimeline);
+    const sourceDuration = remainTimeline * ratio;
+    if (sourceDuration <= 0.01) continue;
+    if (sourceOffsetInTrack >= buffer.duration) continue;
+
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.playbackRate.value = ratio;
+    const gainNode = ctx.createGain();
+    gainNode.gain.value = clipVolumeGainForId(clip.clip_id);
+    source.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    const startWhen = baseWhen + Math.max(0, startTimeline - nowPlayhead);
+    const safeDuration = Math.min(sourceDuration, Math.max(0, buffer.duration - sourceOffsetInTrack));
+    try {
+      source.start(startWhen, sourceOffsetInTrack, safeDuration);
+      activeSources.push(source);
+      source.onended = () => {
+        activeSources = activeSources.filter((s) => s !== source);
+      };
+    } catch (err) {
+      console.warn("clip start failed", clip.clip_id, err);
+    }
+  }
+}
+
+function seekPlayheadFromPointerEvent(event) {
+  const targetIsClip = event.target && event.target.closest && event.target.closest(".clip");
+  if (targetIsClip) return;
+  const rect = arrangerEl.getBoundingClientRect();
+  const x = Math.max(0, event.clientX - rect.left + arrangerEl.scrollLeft);
+  playheadSeconds = x / PX_PER_SEC;
+  renderPlayhead();
+  if (transportIsRunning) {
+    stopAllAudioSources();
+    playAudioFromPlayhead().catch((err) => {
+      console.error(err);
+    });
+  }
+}
+
+loadTracksBtn.addEventListener("click", loadTracks);
+saveProjectBtn.addEventListener("click", saveProjectSettings);
+projectSelect.addEventListener("change", loadProjectClips);
+splitClipBtn.addEventListener("click", splitSelectedClip);
+trimLeftBtn.addEventListener("click", trimSelectedLeft);
+trimRightBtn.addEventListener("click", trimSelectedRight);
+deleteClipBtn.addEventListener("click", deleteSelectedClip);
+moveClipUpBtn.addEventListener("click", () => moveSelectedClipLane(-1));
+moveClipDownBtn.addEventListener("click", () => moveSelectedClipLane(1));
+playBtn.addEventListener("click", startTransport);
+pauseBtn.addEventListener("click", pauseTransport);
+stopBtn.addEventListener("click", resetTransport);
+arrangerEl.addEventListener("pointerdown", seekPlayheadFromPointerEvent);
+loopEnabledCheckbox.addEventListener("change", renderLoopRegion);
+loopStartInput.addEventListener("input", () => {
+  renderLoopRegion();
+});
+loopEndInput.addEventListener("input", () => {
+  renderLoopRegion();
+});
+setLoopFromPlayheadBtn.addEventListener("click", () => {
+  loopStartInput.value = String(Math.max(0, Math.round(playheadSeconds * 100) / 100));
+  const { loopStart, loopEnd } = currentLoopBounds();
+  if (loopEnd <= loopStart) {
+    loopEndInput.value = String(Math.round((loopStart + 4) * 100) / 100);
+  }
+  renderLoopRegion();
+});
+setLoopEndFromPlayheadBtn.addEventListener("click", () => {
+  const { loopStart } = currentLoopBounds();
+  const candidate = Math.max(loopStart + 0.1, playheadSeconds);
+  loopEndInput.value = String(Math.round(candidate * 100) / 100);
+  renderLoopRegion();
+});
+addLaneBtn.addEventListener("click", () => {
+  laneCount += 1;
+  renderLanes();
+  applyTimelineWidth();
+  renderTimeMarkers();
+});
+themeSelect.addEventListener("change", () => {
+  const theme = themeSelect.value || "dark";
+  document.body.classList.remove("theme-dark", "theme-light", "theme-blue", "theme-sunset");
+  document.body.classList.add(`theme-${theme}`);
+});
+clipVolumeSlider.addEventListener("input", () => {
+  const v = Number(clipVolumeSlider.value);
+  clipVolumeValue.textContent = `${Math.round(v * 100)}%`;
+  if (selectedClipId) {
+    clipVolumeById.set(Number(selectedClipId), v);
+  }
+});
+trackSearchInput.addEventListener("input", applyTrackSearchFilter);
+window.addEventListener("pointermove", onPointerMove);
+window.addEventListener("pointerup", onPointerUp);
+window.addEventListener("keydown", onGlobalKeyDown);
+
+async function boot() {
+  const healthResp = await fetch(`${apiBase()}/health`);
+  if (!healthResp.ok) {
+    alert("Backend is not reachable. Start uvicorn first.");
+    return;
+  }
+  document.body.classList.add("theme-dark");
+  renderLanes();
+  await loadProjects();
+  await loadTracks();
+  applyTimelineWidth();
+  renderTimeMarkers();
+  renderPlayhead();
+  renderLoopRegion();
+  syncVolumeUiForSelection();
+}
+
+boot();
