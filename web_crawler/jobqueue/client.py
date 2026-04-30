@@ -7,7 +7,16 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
+from pathlib import Path
 from typing import Iterable
+
+# Allow `from web_crawler.jobqueue.client import JobQueueClient` to resolve
+# the bare `data_models` import below — matches the sys.path convention
+# already used in retry.py and jobqueue.server.
+_WEB_CRAWLER_DIR = Path(__file__).resolve().parent.parent
+if str(_WEB_CRAWLER_DIR) not in sys.path:
+    sys.path.insert(0, str(_WEB_CRAWLER_DIR))
 
 import httpx
 
