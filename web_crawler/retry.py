@@ -55,41 +55,16 @@ BIG_BOOTIE_TITLE_LIKE = "%Big Bootie%"
 
 
 # ---------- DB query --------------------------------------------------------
+# Moved to MusicDatabase.fetch_ajax_failures so JobQueueClient can mirror
+# the same interface for RPC-mode runs from pi-worker. Keep this thin
+# wrapper for backward-compat; new callers should use the method directly.
 
 def fetch_ajax_failures(
-    db: MusicDatabase,
+    db,
     max_retries: int,
     title_like: str | None,
 ) -> list[dict]:
-    """AJAX failures with `retries < max_retries`, optionally scoped to a
-    `dj_sets.title LIKE` pattern. `set_url` is taken from the canonical
-    `dj_sets` row (more reliable than `scrape_failures.set_url`)."""
-    if title_like is None:
-        sql = """
-        SELECT f.failure_id, f.set_id, s.set_url, f.track_title, f.track_id,
-               f.tlp_id, f.params_json, f.error, f.retries
-        FROM scrape_failures f
-        JOIN dj_sets s USING(set_id)
-        WHERE f.stage = 'ajax'
-          AND f.retries < ?
-        ORDER BY f.set_id, f.failure_id
-        """
-        params: tuple = (max_retries,)
-    else:
-        sql = """
-        SELECT f.failure_id, f.set_id, s.set_url, f.track_title, f.track_id,
-               f.tlp_id, f.params_json, f.error, f.retries
-        FROM scrape_failures f
-        JOIN dj_sets s USING(set_id)
-        WHERE s.title LIKE ?
-          AND f.stage = 'ajax'
-          AND f.retries < ?
-        ORDER BY f.set_id, f.failure_id
-        """
-        params = (title_like, max_retries)
-    db.cursor.execute(sql, params)
-    cols = [d[0] for d in db.cursor.description]
-    return [dict(zip(cols, row)) for row in db.cursor.fetchall()]
+    return db.fetch_ajax_failures(max_retries, title_like)
 
 
 # ---------- retry runner ----------------------------------------------------
@@ -330,6 +305,11 @@ def main() -> int:
     scope.add_argument("--title-like", type=str, default=None,
                        help="Restrict retries to sets whose dj_sets.title matches this SQL LIKE pattern.")
 
+    p.add_argument("--rpc-url", type=str, default=None,
+                   help="When set, talk to a remote jobqueue server instead of opening "
+                        "the SQLite DB directly. Used by pi-worker to retry against pi-storage's DB. "
+                        "Token comes from $JOBQUEUE_TOKEN.")
+
     args = p.parse_args()
     title_like = BIG_BOOTIE_TITLE_LIKE if args.big_bootie else args.title_like
 
@@ -349,11 +329,17 @@ def main() -> int:
     setup_logging(cfg)
     log = logging.getLogger("Retry-Main")
     log.info(
-        "AJAX retry — title_like=%s limit=%d dry_run=%s",
-        title_like, args.limit, args.dry_run,
+        "AJAX retry — title_like=%s limit=%d dry_run=%s rpc=%s",
+        title_like, args.limit, args.dry_run, args.rpc_url or "off",
     )
 
-    db = MusicDatabase(str(cfg.paths.db_path), str(cfg.paths.schema_path))
+    db: object
+    if args.rpc_url:
+        from jobqueue.client import JobQueueClient
+        db = JobQueueClient(args.rpc_url)
+    else:
+        db = MusicDatabase(str(cfg.paths.db_path), str(cfg.paths.schema_path))
+
     try:
         run_retries(
             cfg, db,

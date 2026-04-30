@@ -191,6 +191,38 @@ class MusicDatabase:
         cols = [d[0] for d in self.cursor.description]
         return [dict(zip(cols, row)) for row in self.cursor.fetchall()]
 
+    def fetch_ajax_failures(self, max_retries: int, title_like: str | None) -> list[dict]:
+        """AJAX failures with `retries < max_retries`, optionally scoped to a
+        `dj_sets.title LIKE` pattern. `set_url` comes from the canonical
+        `dj_sets` row (more reliable than `scrape_failures.set_url`).
+        Mirrored by jobqueue.client.JobQueueClient.fetch_ajax_failures."""
+        if title_like is None:
+            sql = """
+            SELECT f.failure_id, f.set_id, s.set_url, f.track_title, f.track_id,
+                   f.tlp_id, f.params_json, f.error, f.retries
+            FROM scrape_failures f
+            JOIN dj_sets s USING(set_id)
+            WHERE f.stage = 'ajax'
+              AND f.retries < ?
+            ORDER BY f.set_id, f.failure_id
+            """
+            params: tuple = (max_retries,)
+        else:
+            sql = """
+            SELECT f.failure_id, f.set_id, s.set_url, f.track_title, f.track_id,
+                   f.tlp_id, f.params_json, f.error, f.retries
+            FROM scrape_failures f
+            JOIN dj_sets s USING(set_id)
+            WHERE s.title LIKE ?
+              AND f.stage = 'ajax'
+              AND f.retries < ?
+            ORDER BY f.set_id, f.failure_id
+            """
+            params = (title_like, max_retries)
+        self.cursor.execute(sql, params)
+        cols = [d[0] for d in self.cursor.description]
+        return [dict(zip(cols, row)) for row in self.cursor.fetchall()]
+
     def increment_failure_retries(self, failure_id: int) -> None:
         self.conn.execute(
             "UPDATE scrape_failures SET retries = retries + 1 WHERE failure_id = ?",
