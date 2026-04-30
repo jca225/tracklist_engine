@@ -1,0 +1,87 @@
+# Hand-verified alignment ground truth for Big Bootie Volume 11.
+#
+# Source of truth: user-annotated play spans from the Ableton session
+# for this mix. These are what the alignment output *should* converge on.
+# Use for regression tests, UI spot-checks, and to validate any
+# alignment-primitive change (DTW, CCC, future content-ID scan).
+#
+# Schema
+# ------
+#   set_id:           the mix's canonical set_id in `dj_sets`
+#   tracks: list of:
+#     track:          free-form label (for humans; not a DB foreign key)
+#     track_id:       1001tracklists data-trackid — DB foreign key into
+#                     `tracks` / `track_audio`. Needed for the Streamlit
+#                     ground-truth UI to locate ref audio.
+#     version_tag:    instrumental | acappella | full — what the DJ played
+#     set_start_s:    outer mix-side start, seconds (first audible beat)
+#     set_end_s:      outer mix-side end, seconds (last audible beat)
+#     ref_start_s:    MANDATORY. Seconds into the reference where the DJ
+#                     first dropped in. For loops this matches the first
+#                     ref_segments entry's ref_start_s.
+#     is_loop:        OPTIONAL, default false. Set true when the DJ loops
+#                     or cuts up the reference; then `ref_segments` MUST
+#                     be populated with one entry per iteration / slice.
+#     ref_segments:   OPTIONAL list of which portions of the reference
+#                     track were actually played. Each segment is
+#                     {ref_start_s, ref_end_s, mix_start_s}. Required
+#                     when is_loop is true; omitted otherwise.
+#
+# NOTE: all times are approximate to ±1 s — beat-grid quantisation on
+# the aligner side will shift reported times by a beat or two, so
+# evaluation code should allow slack before failing.
+set_id: 2nvzlh2k
+source: ableton_session
+annotated_by: user
+tracks:
+  - track:       "Bastille - Good Grief (Don Diablo Remix) (Instrumental)"
+    track_id:    g8gtgdx
+    version_tag: instrumental
+    set_start_s: 25
+    set_end_s:   187    # 3:07
+    ref_start_s: 32     # 0:32 — first drop-in, matches first ref_segments entry
+    is_loop:     true
+    # The DJ loops the track: ref 0:32–1:53 plays once, then ref
+    # 0:32–1:27 plays again. Ref 0:00–0:32 (intro) and ref 1:53→end
+    # are never played.
+    ref_segments:
+      - ref_start_s: 32      # 0:32
+        ref_end_s:   113     # 1:53
+        mix_start_s: 25      # 0:25 — first loop iteration begins
+      - ref_start_s: 32      # 0:32 — looped back
+        ref_end_s:   87      # 1:27
+        mix_start_s: 106     # 1:46 — second loop iteration begins (approx)
+  # NOTE: scraped tracklist at 0:40 is "The Fray - Over My Head (Cable Car)"
+  # (track_id 26b4gz6f), not "How to Save a Life". Ableton label vs. tracklist
+  # transcription disagree — verify from session and correct the label if
+  # needed. Using the scraped track_id so the UI can load ref audio.
+  - track:       "The Fray - How to Save a Life (Acappella)"
+    track_id:    26b4gz6f
+    version_tag: acappella
+    set_start_s: 40     # 0:40
+    set_end_s:   87     # 1:27
+    ref_start_s: 0      # TODO: verify from Ableton
+  - track:       "Carly Rae Jepsen - Call Me Maybe (Acappella)"
+    track_id:    4gy6y1p
+    version_tag: acappella
+    set_start_s: 86     # 1:26
+    set_end_s:   101    # 1:41
+    ref_start_s: 0      # TODO: verify from Ableton
+  - track:       "Gnash ft. Olivia O'Brien - I Hate U, I Love U (Acappella)"
+    track_id:    2m5wh0t5
+    version_tag: acappella
+    set_start_s: 135    # 2:15
+    set_end_s:   172    # 2:52
+    ref_start_s: 0      # TODO: verify from Ableton
+  - track:       "Barenaked Ladies - One Week (Acappella)"
+    track_id:    n3lnrzgp
+    version_tag: acappella
+    set_start_s: 172    # 2:52
+    set_end_s:   184    # 3:04
+    ref_start_s: 0      # TODO: verify from Ableton
+  - track:       "Antoine Delvig & Paul Vinx - Blondies"
+    track_id:    ntm7wqx
+    version_tag: full
+    set_start_s: 187    # 3:07
+    set_end_s:   219    # 3:39
+    ref_start_s: 0      # TODO: verify from Ableton

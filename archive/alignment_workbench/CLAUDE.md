@@ -2,6 +2,30 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Git hygiene — DO NOT lose work
+
+`audio_pipeline/` is the main body of recent work and is historically UNTRACKED in git.
+Before any bulk delete, refactor, or "prune" — verify the files are committed.
+
+**Mandatory checks before destructive operations:**
+
+1. Run `git status` and confirm the target files appear as tracked (no `??` prefix).
+2. If `audio_pipeline/` (or any new module directory) is untracked, **commit it first**
+   with a clear "checkpoint before refactor" message — even if the contents are
+   work-in-progress. Uncommitted deletions are unrecoverable: `rm` bypasses
+   `~/.Trash`, Time Machine, and APFS local snapshots.
+3. After committing the checkpoint, proceed with the destructive change.
+4. Never run `rm -rf` / bulk `rm` on a directory without first running
+   `git ls-files <dir>` to confirm what git actually tracks.
+
+SOTA alignment code was lost once (2026-04-22) because I pruned untracked modules
+without this check. The files were not in `~/.Trash`, VSCode backups, or APFS
+snapshots. Do not repeat.
+
+**Commit policy for ongoing work:** when the user asks for a feature build,
+commit a "WIP checkpoint" before starting any prune/refactor that touches
+existing modules. This is cheap insurance and makes every delete reversible.
+
 ## Project Overview
 
 Tracklist Engine is a pipeline for analyzing recorded DJ mixes against the
@@ -20,10 +44,6 @@ Everything outside this chain is one of:
 - A vendored dependency: `cue-detr/` (DETR-based cue-point detection model,
   consumed only by `audio_pipeline/analysis/canonical_cues.py`).
 - Exploration / scratch: `data_analysis/` notebooks.
-- Experimental forks of chain modules: `workspaces/` (e.g.
-  `workspaces/alignment_workbench` is a fork of `browser_daw/`). Promote a
-  fork out of `workspaces/` when it stabilizes (same pattern used for
-  `ui/` → `browser_daw/`).
 - Archive: `archive/` (e.g. the legacy Streamlit alignment-review app).
 
 New features land inside one of the three chain modules. New top-level folders
@@ -608,3 +628,60 @@ Before submitting any Python code, verify:
 - [ ] Pattern matching is used for union type dispatch
 - [ ] No module-level mutable state
 
+
+# Audio Alignment
+
+In order for an audio alignment to work, a bare-minimum is it must match the .yaml file, indicating hand-written human annotated locations.
+
+## SOTA algorithm — Viterbi (do NOT replace with anything else without re-evaluation)
+
+The single canonical alignment entry point is **[audio_pipeline/alignment/sota.py](audio_pipeline/alignment/sota.py)**:
+
+```bash
+venvs/audio/bin/python -m audio_pipeline.alignment.sota --set-id <set_id>
+```
+
+Writes rows to `set_section_alignment` with `confidence_source='sota_v2'`, `section_idx = tracklist row_index`. The Streamlit "Alignment review" page reads ONLY this source. Validated on BB11 ground-truth: mean mix IoU **0.891** (vs 0.751 argmax baseline, 0.872 raw Phase 1).
+
+**Two files to know:**
+- [audio_pipeline/alignment/sota.py](audio_pipeline/alignment/sota.py) — canonical orchestrator. Loads every tracklist ref with audio + measures, runs the full Viterbi stack, persists.
+- [audio_pipeline/alignment/indicators_debug.py](audio_pipeline/alignment/indicators_debug.py) — holds the Viterbi primitives (`viterbi_universe`, `ref_position_viterbi`, `_clean_path`, snap helpers) that `sota.py` imports. Also runs the IoU validation harness against the GT fixture. NOT a persistence writer.
+
+See [docs/SOTA.md](docs/SOTA.md) for the full pipeline diagram (7 stages: stem-routed MERT → ref-position Viterbi → per-universe Viterbi with mutual exclusion → fingerprint anchors → 2-pass cross-universe full-track exclusion → earliest-near-cue cleanup → canonical-cue snap) and [docs/ROADMAP.md](docs/ROADMAP.md) "CURRENT SOTA" for context.
+
+**Cue points are per canonical track, not per audio variant.** They live in `canonical_track_cue_points` (keyed by `track_id`), computed once on the full-song `variant_tag='original'` audio via [audio_pipeline/analysis/canonical_cues.py](audio_pipeline/analysis/canonical_cues.py) at `cue-detr sensitivity=0.5`. All variants (acapella / instrumental / full / remix) read the same cue list.
+
+Dropped experiments are archived in [docs/alignment_archive.md](docs/alignment_archive.md). Do not re-try them without re-running eval and beating the SOTA baseline.
+
+## Hand-annotated ground-truth yamls
+
+Per-set hand-annotated play spans live at:
+
+```
+tests/fixtures/<set>_ground_truth.yaml       # e.g. tests/fixtures/bigbootie11_ground_truth.yaml
+```
+
+Each file lists the tracks actually played by the DJ (from the user's
+Ableton session) with `set_start_s` / `set_end_s` and optional
+`ref_segments` for loops/cutups. Schema is documented in the header
+comment of every fixture. These are the primary regression anchor for
+alignment — every algorithm change must be evaluated against them.
+
+**Evaluation harness:**
+
+```bash
+./venvs/audio/bin/python -m audio_pipeline.alignment.eval --db data/db/music_database.db
+```
+
+Scores every yaml in `tests/fixtures/*_ground_truth.yaml` against the
+current `set_section_alignment` rows. Reports mean mix IoU per set
+and per-row (a reference/gold-standard metric: 1.0 = span matches
+human annotation exactly, 0.0 = no overlap) plus span-inflation
+(>>1 = over-reported, <<1 = under-reported). Implementation:
+[audio_pipeline/alignment/eval.py](audio_pipeline/alignment/eval.py).
+
+Any alignment change (new algorithm, tuning knob, pipeline rewire)
+MUST be gated on the eval score moving up — or at worst, staying
+flat on already-solved rows while unlocking previously-failed rows.
+Run the eval before and after; include the delta in any commit
+message or PR description that touches the alignment pipeline.
