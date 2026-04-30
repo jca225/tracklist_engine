@@ -1,5 +1,5 @@
 beautifulsoup4==4.14.3
-ddddocr==1.4.8
+ddddocr==1.6.1
 numpy==2.2.6
 Pillow==9.5.0
 playwright==1.58.0
