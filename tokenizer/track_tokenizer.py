@@ -6,6 +6,8 @@ from typing import List, Optional
 
 from bs4 import BeautifulSoup, Tag
 
+from ._parser import BS_PARSER
+
 
 # -----------------------------
 # Data model (pipeline-friendly)
@@ -212,7 +214,7 @@ def parse_track_row(row_html: str) -> TrackRow:
     Parse a single 1001tracklists track row into a structured TrackRow.
     Only extracts fields currently present in TrackRow.
     """
-    soup = BeautifulSoup(row_html, "html.parser")
+    soup = BeautifulSoup(row_html, BS_PARSER)
     row = soup.find("div")
     if not row:
         return TrackRow()

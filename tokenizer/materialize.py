@@ -30,11 +30,11 @@ if str(_REPO_ROOT) not in sys.path:
 
 from bs4 import BeautifulSoup
 
+from tokenizer._parser import BS_PARSER
 from tokenizer.tokenizer import classify_row
 from tokenizer.track_tokenizer import parse_track_row as parse_track_main
 from tokenizer.track_tokenizer import TrackRow
 from tokenizer.suggestion_tokenizer import parse_suggestion_row
-from tokenizer.id_tokenizer import parse_track_row as parse_id_lens
 
 log = logging.getLogger("tokenizer.materialize")
 
@@ -135,19 +135,6 @@ def _flush_suggestions(conn: sqlite3.Connection, buf: list[tuple]) -> None:
     conn.commit()
 
 
-def _flush_links(conn: sqlite3.Connection, buf: list[tuple]) -> None:
-    if not buf:
-        return
-    conn.executemany(
-        "INSERT OR IGNORE INTO track_id_links ("
-        "set_id, tlp_id, linker_user_name, linker_user_href, linker_user_followers, "
-        "linked_tracklist_href, linked_tracklist_text"
-        ") VALUES (?,?,?,?,?,?,?)",
-        buf,
-    )
-    conn.commit()
-
-
 def _flush_metadata(conn: sqlite3.Connection, rows: list[dict[str, Any]]) -> None:
     if not rows:
         return
@@ -174,10 +161,11 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
     conn.commit()
 
     log.info("clearing destination tables for clean rebuild")
+    # Note: track_id_links is populated by a separate focused pass
+    # (`tokenizer.id_links` — to be written), so we leave its rows intact here.
     conn.executescript("""
         DELETE FROM track_metadata;
         DELETE FROM track_suggestions;
-        DELETE FROM track_id_links;
     """)
     conn.commit()
 
@@ -188,8 +176,7 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
 
     metadata = _MetadataAccumulator()
     sug_buf: list[tuple] = []
-    link_buf: list[tuple] = []
-    counts = {"track": 0, "suggestion": 0, "text": 0, "id_links": 0, "errors": 0}
+    counts = {"track": 0, "suggestion": 0, "text": 0, "errors": 0}
 
     offset = 0
     last_log_pct = -10
@@ -208,43 +195,37 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
             if not raw:
                 continue
             try:
-                kind = classify_row(raw)
-                if kind == "track":
-                    tr = parse_track_main(raw)
+                # Single BS parse per row, dispatch by outer-div class set.
+                # This replaces the old (classify_row + parser) double-parse
+                # and skips the id_tokenizer second-lens entirely (track_id_links
+                # gets populated by a focused later pass).
+                soup = BeautifulSoup(raw, BS_PARSER)
+                outer = soup.find("div")
+                if outer is None:
+                    continue
+                outer_classes = set(outer.get("class") or [])
+
+                if "tlpItem" in outer_classes:
+                    tr = parse_track_main(raw)  # internally parses once with BS_PARSER too
                     if tr.track_key:
                         metadata.update(tr, row["set_id"])
                         counts["track"] += 1
-                    # second lens: id_tokenizer for linked-tracklist hints
-                    outer = BeautifulSoup(raw, "html.parser").find("div", class_="tlpItem")
-                    if outer is not None:
-                        id_t = parse_id_lens(outer)
-                        for link in id_t.linked_items:
-                            link_buf.append((
-                                row["set_id"], id_t.tlp_id,
-                                link.user_name, link.user_href,
-                                link.user_followers_text,
-                                link.linked_tracklist_href,
-                                link.linked_tracklist_text,
-                            ))
-                            counts["id_links"] += 1
 
-                elif kind == "suggestion":
-                    outer = BeautifulSoup(raw, "html.parser").find("div", class_="sugTog")
-                    if outer is not None:
-                        sug = parse_suggestion_row(outer)
-                        sug_buf.append((
-                            sug.sug_id, row["set_id"], sug.tlp_id, sug.pos,
-                            sug.track_slug, sug.track_display, sug.artist_title,
-                            sug.suggester_user_id, sug.suggester_name,
-                            sug.suggestion_timestamp,
-                            int(bool(sug.is_remix)) if sug.is_remix is not None else None,
-                            int(bool(sug.has_youtube)),
-                            int(bool(sug.has_soundcloud)),
-                            int(bool(sug.has_spotify)),
-                        ))
-                        counts["suggestion"] += 1
+                elif "sugTog" in outer_classes:
+                    sug = parse_suggestion_row(outer)
+                    sug_buf.append((
+                        sug.sug_id, row["set_id"], sug.tlp_id, sug.pos,
+                        sug.track_slug, sug.track_display, sug.artist_title,
+                        sug.suggester_user_id, sug.suggester_name,
+                        sug.suggestion_timestamp,
+                        int(bool(sug.is_remix)) if sug.is_remix is not None else None,
+                        int(bool(sug.has_youtube)),
+                        int(bool(sug.has_soundcloud)),
+                        int(bool(sug.has_spotify)),
+                    ))
+                    counts["suggestion"] += 1
 
-                elif kind == "text":
+                elif "bItmH" in outer_classes:
                     counts["text"] += 1
 
             except Exception as e:
@@ -254,23 +235,19 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
             if len(sug_buf) >= _BATCH_INSERT:
                 _flush_suggestions(conn, sug_buf)
                 sug_buf.clear()
-            if len(link_buf) >= _BATCH_INSERT:
-                _flush_links(conn, link_buf)
-                link_buf.clear()
 
         offset += batch_size
         pct = int(100 * offset / max(total, 1))
         if pct - last_log_pct >= 5:
             log.info(
-                "%d/%s (%d%%) — track=%d sug=%d links=%d errors=%d",
+                "%d/%s (%d%%) — track=%d sug=%d errors=%d",
                 offset, f"{total:,}", pct,
-                counts["track"], counts["suggestion"], counts["id_links"], counts["errors"],
+                counts["track"], counts["suggestion"], counts["errors"],
             )
             last_log_pct = pct
 
     # Final tail flushes
     _flush_suggestions(conn, sug_buf)
-    _flush_links(conn, link_buf)
 
     # Upsert track_metadata (single big batch — ~50k rows expected)
     md_rows = metadata.finalize_rows()
@@ -282,7 +259,6 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
     result = {
         "track_metadata": len(md_rows),
         "track_suggestions": counts["suggestion"],
-        "track_id_links": counts["id_links"],
         "errors": counts["errors"],
     }
     log.info("DONE — %s", result)

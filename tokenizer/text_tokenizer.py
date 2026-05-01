@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional, Literal
 from bs4 import BeautifulSoup, Tag
 from pydantic import BaseModel, Field
 
+from ._parser import BS_PARSER
+
 
 RowType = Literal[
     "artist_played",
@@ -268,7 +270,7 @@ def parse_bItmH_row(html: str) -> TextRowToken:
     Tokenizes ONE <div class="bItmH ...">...</div> row into a structured object.
     If you pass a fragment that contains multiple root divs, use tokenize_bItmH_rows().
     """
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html, BS_PARSER)
     root = soup.find("div")
     if not root or not isinstance(root, Tag):
         return TextRowToken(

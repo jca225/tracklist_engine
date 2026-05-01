@@ -1,4 +1,6 @@
 from bs4 import BeautifulSoup
+
+from ._parser import BS_PARSER
 from .track_tokenizer import parse_track_row
 from .suggestion_tokenizer import parse_suggestion_row
 from .text_tokenizer import parse_bItmH_row
@@ -12,7 +14,7 @@ def tokenize_row(row_raw_html: str):
       - parse_suggestion_row: bs4.Tag
       - parse_bItmH_row: raw HTML string
     """
-    row_soup = BeautifulSoup(row_raw_html, "html.parser")
+    row_soup = BeautifulSoup(row_raw_html, BS_PARSER)
     if (outer_div := row_soup.find("div", class_="tlpItem")):
         return parse_track_row(str(outer_div))
     if (outer_div := row_soup.find("div", class_="sugTog")):
@@ -24,7 +26,7 @@ def tokenize_row(row_raw_html: str):
 
 def classify_row(row_raw_html: str) -> str:
     """Return a string label for the row kind without fully parsing it."""
-    row_soup = BeautifulSoup(row_raw_html, "html.parser")
+    row_soup = BeautifulSoup(row_raw_html, BS_PARSER)
     if row_soup.find("div", class_="tlpItem"):
         return "track"
     if row_soup.find("div", class_="sugTog"):

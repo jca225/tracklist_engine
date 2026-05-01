@@ -1,4 +1,5 @@
 beautifulsoup4==4.14.3
+lxml>=5.2  # ~3x faster BS parser; tokenizer/_parser.py picks it up if present
 ddddocr==1.6.1
 numpy==2.2.6
 Pillow>=10.4.0
