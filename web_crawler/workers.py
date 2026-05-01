@@ -15,7 +15,7 @@ from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
 from browser import create_browser_context, safe_close_context
-from captcha_solver import EmailCaptchaSolver, solve_captcha_api
+from captcha_solver import EmailCaptchaSolver, solve_captcha_ocr
 from config import AppConfig
 from data_models import DJSet, DJSetCrawl, ScrapeFailure
 from database import MusicDatabase
@@ -114,9 +114,9 @@ def handle_captcha(page, cfg: AppConfig, log: logging.Logger, set_id: str) -> tu
 
             _persist_captcha_image(img_bytes, set_id, cfg.paths.captcha_imgs_dir)
 
-            solution = solve_captcha_api(img_bytes, cfg.captcha.twocaptcha_api_key_env)
+            solution = solve_captcha_ocr(img_bytes)
             if not solution:
-                log.warning(f"Captcha API solver failed on attempt {attempt + 1}.")
+                log.warning(f"OCR captcha solver failed on attempt {attempt + 1}.")
                 continue
 
             log.info(f"Captcha solution guessed (attempt {attempt + 1}).")

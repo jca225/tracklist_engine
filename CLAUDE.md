@@ -57,7 +57,7 @@ Jupyter notebooks in `data_analysis/` — use `common.py` for shared DB access a
 - **`scraper.py`** — HTML parsing: extracts set metadata, track info, media links from page content.
 - **`database.py`** — SQLite interface. Schema lives in `web_crawler/database/schema.sql`.
 - **`browser.py`** — Playwright browser context management with profile rotation.
-- **`captcha_solver.py`** — Automated CAPTCHA solving via TwoCaptcha API.
+- **`captcha_solver.py`** — Local CAPTCHA OCR via ddddocr (no API key, no network call). Optional `EmailCaptchaSolver` falls back to a human-in-the-loop email round-trip.
 - **`data_models.py`** — Frozen dataclasses for type-safe immutable records (DJSet, DJSetMediaLink, etc.).
 
 ### CUE-DETR (`cue-detr/`)
@@ -79,7 +79,7 @@ All crawler behavior is controlled via `config.yaml`:
 - **browser** — Headless Chrome settings, viewport, timeouts
 - **profiles** — Browser profile rotation (retirement after 750 sites)
 - **failure** — Error handling modes (fail-fast, ajax_failure behavior, consecutive failure limits)
-- **captcha** — Solver mode (continue/wait/kill), TwoCaptcha API config
+- **captcha** — Solver mode (ocr/continue/wait/kill), wait timeout, max OCR attempts
 
 ## Database
 
@@ -104,7 +104,7 @@ Schema lives in [web_crawler/database/schema.sql](web_crawler/database/schema.sq
 ## Environment
 
 - Python project — no pyproject.toml, uses `requirements.txt` files
-- `.env` file expected for API keys (TwoCaptcha, etc.) — loaded via python-dotenv
+- `.env` file (loaded via python-dotenv) holds optional secrets for the email-based captcha fallback (CAPTCHA_EMAIL_SENDER / CAPTCHA_EMAIL_PASSWORD / etc.). The default OCR path needs no secrets.
 - Virtual environments in `venvs/` (gitignored)
 - `data/`, `profiles/`, `logs/` are gitignored — only `data/djs/*.json` job files are tracked
 

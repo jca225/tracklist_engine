@@ -112,8 +112,12 @@ class RetryConfig:
 
 @dataclass(frozen=True)
 class CaptchaConfig:
-    mode: Literal["twocaptcha", "kill", "continue", "wait"]
-    twocaptcha_api_key_env: str
+    # mode controls behavior on captcha hits:
+    #   ocr       — local ddddocr OCR (no network) up to solver_max_attempts
+    #   continue  — try OCR first; if it fails, skip the set and continue
+    #   wait      — try OCR first; if it fails, fall back to email solver
+    #   kill      — abort the whole run on any captcha
+    mode: Literal["ocr", "kill", "continue", "wait"]
     captcha_wait_s: int
     solver_max_attempts: int
 

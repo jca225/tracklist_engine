@@ -58,6 +58,5 @@ retry:
 
 captcha:
   mode: continue
-  twocaptcha_api_key_env: "TWOCAPTCHA_API_KEY"
   captcha_wait_s: 300
   solver_max_attempts: 100

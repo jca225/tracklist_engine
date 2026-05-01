@@ -134,8 +134,12 @@ class EmailCaptchaSolver:
         return result
 
 
-def solve_captcha_api(img_bytes: bytes, api_key_env: str) -> str | None:
+def solve_captcha_ocr(img_bytes: bytes) -> str | None:
+    """Local CAPTCHA OCR via ddddocr (no API key, no network call).
+    Returns the predicted text uppercased on alpha chars (matching the
+    site's captcha form expectation), or None if OCR returned empty."""
     ocr = DdddOcr(show_ad=False)
     captcha_solution = ocr.classification(img_bytes)
-    print(captcha_solution)
+    if not captcha_solution:
+        return None
     return "".join(c.upper() if c.isalpha() else c for c in captcha_solution)
