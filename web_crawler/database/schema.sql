@@ -476,3 +476,74 @@ CREATE TABLE IF NOT EXISTS set_section_alignment (
     PRIMARY KEY (set_id, section_idx),
     FOREIGN KEY (set_id) REFERENCES dj_sets(set_id) ON DELETE CASCADE
 );
+
+
+-- =============================================================================
+-- TOKEN MATERIALIZATION
+-- Output of tokenizer/materialize.py running over dj_set_rows.raw_html.
+-- All three tables are rebuildable from scratch (re-running materialize
+-- drops + repopulates).
+-- =============================================================================
+
+-- Confirmed track identity from track_tokenizer.TrackRow where is_ided=True.
+-- One row per track_id, aggregated across every set the track appears in.
+CREATE TABLE IF NOT EXISTS track_metadata (
+    track_id          TEXT PRIMARY KEY,
+    title             TEXT,
+    artists_json      TEXT,                 -- JSON array of artist names
+    full_name         TEXT,                 -- meta itemprop=name, e.g. "Artist - Title"
+    genre             TEXT,
+    duration_seconds  INTEGER,
+    is_remixish       INTEGER DEFAULT 0,
+    version_tag       TEXT,                 -- Remix | Rework | Acappella | AltVersion | NULL
+    has_youtube       INTEGER DEFAULT 0,
+    has_soundcloud    INTEGER DEFAULT 0,
+    has_spotify       INTEGER DEFAULT 0,
+    has_apple         INTEGER DEFAULT 0,
+    plays_total       INTEGER,              -- max plays observed across sets
+    set_count         INTEGER,              -- distinct sets this track appears in
+    artwork_url       TEXT,
+    updated_at        DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_track_metadata_title ON track_metadata(title);
+
+
+-- User-contributed track identity guesses from suggestion_tokenizer.SuggestionRow.
+-- Many suggestions can target the same track slot (set_id, tlp_id).
+CREATE TABLE IF NOT EXISTS track_suggestions (
+    sug_id                INTEGER PRIMARY KEY,
+    set_id                TEXT NOT NULL,
+    tlp_id                INTEGER,
+    pos                   INTEGER,
+    track_slug            TEXT,             -- when suggestion points at an existing track_id
+    track_display         TEXT,             -- raw "Artist - Title (Remix)"
+    artist_title          TEXT,             -- cleaned
+    suggester_user_id     INTEGER,
+    suggester_name        TEXT,
+    suggestion_timestamp  TEXT,
+    is_remix              INTEGER,
+    has_youtube           INTEGER,
+    has_soundcloud        INTEGER,
+    has_spotify           INTEGER,
+    parsed_at             DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_track_sug_set  ON track_suggestions(set_id);
+CREATE INDEX IF NOT EXISTS idx_track_sug_tlp  ON track_suggestions(tlp_id);
+CREATE INDEX IF NOT EXISTS idx_track_sug_slug ON track_suggestions(track_slug);
+
+
+-- Cross-tracklist linkage hints from id_tokenizer.IDTrack.linked_items.
+-- For an unidentified track slot in set X, users link to set Y where the
+-- same track *is* identified — useful to resolve IDs by transitivity.
+CREATE TABLE IF NOT EXISTS track_id_links (
+    set_id                  TEXT NOT NULL,
+    tlp_id                  INTEGER NOT NULL,
+    linker_user_name        TEXT,
+    linker_user_href        TEXT,
+    linker_user_followers   TEXT,
+    linked_tracklist_href   TEXT,
+    linked_tracklist_text   TEXT,
+    parsed_at               DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (set_id, tlp_id, linker_user_name, linked_tracklist_href)
+);
+CREATE INDEX IF NOT EXISTS idx_track_id_links_target ON track_id_links(linked_tracklist_href);
