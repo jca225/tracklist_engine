@@ -24,7 +24,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from web_crawler.row_tokens import classify_row, tokenize_row
+from tokenizer import classify_row, tokenize_row
 
 
 BIG_BOOTIE_TITLE_LIKE = "%Big Bootie%"
