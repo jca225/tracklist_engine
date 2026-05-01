@@ -33,7 +33,9 @@ timing:
   random_jitter_s: 2
 
 browser:
-  headless: false
+  # Production default: headless on the Pi cluster (no display).
+  # Override locally on Mac/dev when you want a visible browser.
+  headless: true
   locale: "en-US"
   timezone: "America/New_York"
   viewport:
