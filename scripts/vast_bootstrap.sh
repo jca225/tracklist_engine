@@ -34,13 +34,19 @@ apt-get install -y -qq ffmpeg libsndfile1 build-essential pkg-config \
 echo "    ffmpeg: $(ffmpeg -version 2>&1 | head -1 | awk '{print $3}')"
 
 echo "==> [2/7] Repo clone / update"
-if [ ! -d "$REPO_DIR/.git" ]; then
+if [ "${SKIP_CLONE:-0}" = "1" ]; then
+    echo "    SKIP_CLONE=1 — assuming repo is already at $REPO_DIR (e.g. rsync'd from Mac)"
+elif [ ! -d "$REPO_DIR/.git" ]; then
     git clone --depth 1 "$REPO_URL" "$REPO_DIR"
 else
     git -C "$REPO_DIR" pull --ff-only
 fi
 cd "$REPO_DIR"
-echo "    HEAD: $(git -C "$REPO_DIR" log -1 --oneline)"
+if [ -d .git ]; then
+    echo "    HEAD: $(git -C "$REPO_DIR" log -1 --oneline)"
+else
+    echo "    (no .git — running from rsync'd snapshot)"
+fi
 
 echo "==> [3/7] Verify /venv/main GPU stack"
 /venv/main/bin/python - <<'PY'
