@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from archive.audio_pipeline.models import (
+from audio_pipeline.models import (
     MediaSource, Track,
     youtube_url, soundcloud_api_url, spotify_track_url,
     DOWNLOAD_PLATFORM_PRIORITY,

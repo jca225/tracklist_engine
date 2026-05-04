@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import sqlite3
 import subprocess
@@ -24,7 +25,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-_ORIGINALS_DIR = Path.home() / "Desktop/tracklist_audio_drive/tracks/canonical_originals"
+# Audio storage root. Default points at the canonical pi-storage path; override
+# via TRACKLIST_AUDIO_ROOT for local-scratch runs (see CLAUDE.md → Storage).
+_AUDIO_ROOT = Path(os.environ.get("TRACKLIST_AUDIO_ROOT", "/mnt/storage"))
+_ORIGINALS_DIR = _AUDIO_ROOT / "objects" / "canonical_originals"
 DEFAULT_DB_PATH = _REPO_ROOT / "data/db/music_database.db"
 
 # Cue-detr sensitivity: the default (0.9) is tuned for strong EDM drops.

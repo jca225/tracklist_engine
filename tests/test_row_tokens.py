@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from web_crawler.row_tokens import classify_row, tokenize_row
+from tokenizer import classify_row, tokenize_row
 
 
 FIX = Path(__file__).parent / "fixtures"

@@ -11,7 +11,12 @@ from pathlib import Path
 
 import numpy as np
 
-from .adapters import audio_io, beat_this_adapter, cue_detr_adapter, demucs_adapter, loudness
+import logging
+
+from .adapters import (
+    audio_io, beat_this_adapter, cue_detr_adapter, demucs_adapter,
+    essentia_adapter, loudness,
+)
 
 from ..models import AudioAsset
 from ..result import Err, Ok, Result
@@ -20,19 +25,28 @@ from .errors import AnalysisError
 from .models import (
     BeatGrid,
     CuePoints,
+    EssentiaFeatures,
     LoudnessReading,
     SectionEmbedding,
     TrackAnalysisResult,
 )
 
+_log = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True)
 class Analyzers:
-    """All model handles bundled so they load once per process."""
+    """All model handles bundled so they load once per process.
+
+    `with_essentia` flips automatically based on whether the
+    venvs/essentia/ sandbox exists on disk — Essentia is best-effort,
+    not required.
+    """
     demucs: demucs_adapter.DemucsHandle
     beats: beat_this_adapter.BeatThisHandle
     cues: cue_detr_adapter.CueDetrHandle
     mert: mert_adapter.MertHandle
+    with_essentia: bool = False
 
 
 def load_analyzers(device: str = "auto") -> Result[Analyzers, AnalysisError]:
@@ -49,7 +63,10 @@ def load_analyzers(device: str = "auto") -> Result[Analyzers, AnalysisError]:
     m = mert_adapter.load(device=device)
     if not m.is_ok():
         return m
-    return Ok(Analyzers(demucs=d.value, beats=b.value, cues=c.value, mert=m.value))
+    return Ok(Analyzers(
+        demucs=d.value, beats=b.value, cues=c.value, mert=m.value,
+        with_essentia=essentia_adapter.is_available(),
+    ))
 
 
 def _section_bounds(
@@ -132,6 +149,24 @@ def analyze_track(
         "cue_detr": a.cues.checkpoint,
         "mert": a.mert.version,
     }
+
+    # Essentia: best-effort enrichment. The sandbox lives in venvs/essentia/
+    # (Py 3.13) and is invoked via subprocess. If the venv is missing or the
+    # worker fails, we log and continue — stems/beats/MERT are the contract,
+    # Essentia features are a bonus layer.
+    essentia_features: EssentiaFeatures | None = None
+    if a.with_essentia:
+        ess_r = essentia_adapter.analyze(audio_path, asset.track_audio_id)
+        match ess_r:
+            case Ok(feat):
+                essentia_features = feat
+                versions["essentia"] = feat.version
+            case Err(err):
+                _log.warning(
+                    "essentia worker failed for track_audio_id=%s: %s — %s",
+                    asset.track_audio_id, err.kind, err.detail,
+                )
+
     return Ok(TrackAnalysisResult(
         track_audio_id=asset.track_audio_id,
         stems=stems_r.value,
@@ -153,4 +188,5 @@ def analyze_track(
         ),
         sections=tuple(sections),
         analyzer_versions=versions,
+        essentia=essentia_features,
     ))

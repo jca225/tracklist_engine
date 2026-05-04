@@ -40,6 +40,13 @@ class LoudnessError:
     detail: str
 
 
+@dataclass(frozen=True)
+class EssentiaError:
+    kind: str  # 'venv_missing' | 'audio_missing' | 'timeout' | 'worker_failed' | 'bad_json'
+    detail: str
+
+
 type AnalysisError = (
     AudioIoError | StemError | BeatError | CueError | MertError | LoudnessError
+    | EssentiaError
 )

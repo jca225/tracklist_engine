@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-from ..analysis.models import TrackAnalysisResult
+from ..analysis.models import EssentiaFeatures, TrackAnalysisResult
 from ..analysis.set_analysis import SetAnalysisResult
 from ..errors import DbError
 from ..models import (
@@ -649,6 +649,99 @@ def persist_analysis(db_path: Path, result: TrackAnalysisResult) -> Result[None,
                     ),
                 )
 
+            if result.essentia is not None:
+                _write_essentia_row(conn, result.essentia)
+
+            conn.commit()
+    except sqlite3.DatabaseError as e:
+        return Err(DbError(kind="integrity", detail=str(e)))
+    return Ok(None)
+
+
+# Map Essentia's KeyExtractor tonic strings to pitch class 0..11 (C=0).
+_PITCH_CLASS: dict[str, int] = {
+    "C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4,
+    "F": 5, "F#": 6, "Gb": 6, "G": 7, "G#": 8, "Ab": 8,
+    "A": 9, "A#": 10, "Bb": 10, "B": 11,
+}
+
+
+def _key_pc(tonic: str) -> int | None:
+    return _PITCH_CLASS.get(tonic)
+
+
+def _write_essentia_row(conn: sqlite3.Connection, feat: EssentiaFeatures) -> None:
+    """INSERT/UPDATE one essentia_v2 row using the caller's transaction."""
+    instrumentalness = 1.0 - feat.voice_prob if feat.voice_prob is not None else None
+    confidence: dict[str, object] = {
+        "models_present": list(feat.models_present),
+        "key_strength": feat.key_strength,
+        "key_profile": feat.key_profile,
+        "danceability_sp": feat.danceability_sp,
+        "danceability_tf": feat.danceability_tf,
+        "mood_happy": feat.mood_happy,
+        "mood_aggressive": feat.mood_aggressive,
+        "valence_raw_emomusic_1_9": feat.valence_raw,
+        "arousal_raw_emomusic_1_9": feat.arousal_raw,
+        "voice_prob": feat.voice_prob,
+        "yamnet_raw": feat.yamnet_raw,
+        "time_sig_assumption": "4/4 default, not measured",
+    }
+    conn.execute(
+        """
+        INSERT INTO track_audio_features
+          (track_audio_id, source, key_pc, key_mode, bpm,
+           time_sig_num, time_sig_den,
+           danceability, energy, valence,
+           acousticness, instrumentalness, speechiness, liveness,
+           confidence_json)
+        VALUES (?, 'essentia_v2', ?, ?, ?, 4, 4, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(track_audio_id, source) DO UPDATE SET
+            key_pc           = excluded.key_pc,
+            key_mode         = excluded.key_mode,
+            bpm              = excluded.bpm,
+            danceability     = excluded.danceability,
+            energy           = excluded.energy,
+            valence          = excluded.valence,
+            acousticness     = excluded.acousticness,
+            instrumentalness = excluded.instrumentalness,
+            speechiness      = excluded.speechiness,
+            liveness         = excluded.liveness,
+            confidence_json  = excluded.confidence_json,
+            analyzed_at      = CURRENT_TIMESTAMP
+        """,
+        (
+            feat.track_audio_id,
+            _key_pc(feat.key_tonic),
+            feat.key_mode,
+            feat.bpm,
+            feat.danceability_tf if feat.danceability_tf is not None
+                else feat.danceability_sp / 3.0,
+            feat.mood_aggressive,
+            feat.valence,
+            feat.mood_acoustic,
+            instrumentalness,
+            feat.speechiness,
+            feat.liveness,
+            json.dumps(confidence),
+        ),
+    )
+
+
+def persist_essentia_features(
+    db_path: Path, feat: EssentiaFeatures,
+) -> Result[None, DbError]:
+    """Standalone writer for the `essentia_v2` row.
+
+    `persist_analysis` writes this row inline as part of its own
+    transaction; this function is the one-shot entry point for callers
+    that already have an EssentiaFeatures and want only that row updated
+    (e.g. backfilling Essentia values without re-running the full MIR
+    pipeline).
+    """
+    try:
+        with _connect(db_path) as conn:
+            _write_essentia_row(conn, feat)
             conn.commit()
     except sqlite3.DatabaseError as e:
         return Err(DbError(kind="integrity", detail=str(e)))

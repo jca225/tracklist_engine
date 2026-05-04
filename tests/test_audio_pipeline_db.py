@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from archive.audio_pipeline.adapters import db as db_adapter
-from archive.audio_pipeline.models import AudioAsset
-from archive.audio_pipeline.result import Ok, Err
+from audio_pipeline.adapters import db as db_adapter
+from audio_pipeline.models import AudioAsset
+from audio_pipeline.result import Ok, Err
 
 
 _SCHEMA_PATH = Path(__file__).resolve().parent.parent / "web_crawler" / "database" / "schema.sql"
