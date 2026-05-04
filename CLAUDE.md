@@ -101,6 +101,51 @@ grid), `track_audio` / `track_stems` / `track_measures` (ref-track equivalents),
 
 Schema lives in [web_crawler/database/schema.sql](web_crawler/database/schema.sql).
 
+## Storage & cluster
+
+The project runs across three machines (see [Makefile](Makefile) for cluster ops):
+
+- **pi-storage** (Linux aarch64) — canonical state (DB + audio + stems) + scraper services + **CPU-side analysis** (yt-dlp downloads, beat_this, cue-detr, librosa, pyloudnorm). Long-running services live here. Reachable via Tailscale MagicDNS.
+- **pi-worker** (Linux aarch64) — AJAX retry drain (`tracklist-ajax-retry.service`). Spare CPU available for batch CPU analysis when idle.
+- **Vast.ai spot GPU** (rented, ephemeral) — **GPU-bound analysis** (Demucs, MERT) and **Essentia** (no aarch64 wheels — must run on x86_64). Job pulls audio from pi-storage over Tailscale, runs inference, writes results back, terminates. Cost target ≤$5–10 for the whole 16k-track corpus on a 3090/4090 spot.
+- **Mac** — development driver only. Code edits, EDA, manual queries, ad-hoc test runs of the analysis stack. Not part of the production data path.
+
+**Analysis split (which dep runs where):**
+
+| Component | Runs on | Why |
+|---|---|---|
+| yt-dlp / spotdl downloads | pi-storage | CPU-only; cross-arch wheels work |
+| beat_this (beats/downbeats) | pi-storage CPU | PyTorch has aarch64 wheels; small model |
+| cue-detr (EDM cues) | pi-storage CPU | DETR transformer; small model |
+| librosa, pyloudnorm | pi-storage | pure Python |
+| **Essentia** (key/BPM/valence/mood/etc.) | **Vast.ai** | no aarch64 wheels — Essentia ships only x86_64 manylinux + macOS arm64 |
+| **Demucs** stems | **Vast.ai** | GPU-bound; ~30s/track on Pi CPU vs ~1s/track on 4090 |
+| **MERT** embeddings | **Vast.ai** | same |
+
+The Mac mirrors most of the pi-storage stack (`venvs/audio/`) plus an extra `venvs/essentia/` Py3.13 sandbox so all of analysis can be exercised locally during development. Production runs do not touch the Mac.
+
+**Canonical paths on pi-storage:**
+
+| Kind | Path |
+|---|---|
+| DB | `/mnt/storage/data/db/music_database.db` |
+| Track audio | `/mnt/storage/objects/{track_id}/{track_id}__{platform}__{player_id}.{ext}` |
+| Demucs stems | `/mnt/storage/stems/{track_audio_id}/{vocals,drums,bass,other,instrumental}.{ext}` |
+| Human-readable library | `/mnt/storage/library/{Artist}/{Title}/...` (symlinks built by [library/builder.py](library/builder.py)) |
+| Essentia TF model cache | `/mnt/storage/data/essentia_models/*.pb` (synced from Vast.ai or fetched on first use) |
+
+The repo's `data/db/music_database.db` is **a stale local copy for development — never the source of truth.** Services on pi-storage write to the canonical DB continuously; the local copy diverges quickly. To inspect canonical state, query pi-storage directly: `ssh pi-storage 'sqlite3 /mnt/storage/data/db/music_database.db "..."'` or via the FastAPI jobqueue.
+
+**Pi-storage venvs:**
+- `venvs/web_crawler/` — scraper, materializer, FastAPI jobqueue (BeautifulSoup, lxml, ddddocr, FastAPI).
+- `venvs/audio/` — yt-dlp + spotdl for downloads, plus the CPU analysis stack (PyTorch CPU, beat_this, cue-detr, librosa, pyloudnorm). **Does not include Essentia / Demucs / MERT** — those run on Vast.ai.
+
+Use [Makefile](Makefile) for cluster ops (`make deploy`, `make status`, `make ssh-storage`).
+
+## Git workflow
+
+Use your best judgement on when to commit and push. The default Claude Code rule "only commit when explicitly asked" is **overridden for this project** — proactively commit logical units of work and push them so pi-storage / pi-worker can pick them up via `make deploy`. Group changes into reviewable commits (one feature per commit, not one-giant-blob). Don't push directly to `main` if a pending change is still unstable; otherwise keep it moving.
+
 ## Environment
 
 - Python project — no pyproject.toml, uses `requirements.txt` files
