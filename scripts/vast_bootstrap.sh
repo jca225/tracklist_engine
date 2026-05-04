@@ -91,16 +91,23 @@ echo "==> [4/7] Install audio pipeline deps INTO /venv/main"
 /venv/main/bin/pip install --quiet \
     "yt-dlp>=2026.5.0" "yt-dlp-ejs" "spotdl>=3.9.6" "spotipy>=2.26.0" \
     "librosa>=0.11" "pyloudnorm>=0.2" "soundfile>=0.13" \
-    "beat-this>=1.1" "transformers>=4.57" "timm>=1.0"
+    "beat-this>=1.1" "transformers>=4.57" "timm>=1.0" \
+    "matplotlib"   # cue-detr/cue_points.py imports this at module level
 echo "    /venv/main now has audio pipeline deps"
 
-echo "==> [5/7] Create /venv/essentia (Py3.13, separate venv to isolate TF)"
+echo "==> [5/7] Create /venv/essentia (Py3.10-3.13, separate venv to isolate TF)"
 if [ ! -d /venv/essentia ]; then
     "$ESSENTIA_PYBIN" -m venv /venv/essentia
 fi
 /venv/essentia/bin/pip install --quiet --upgrade pip
 /venv/essentia/bin/pip install --quiet -r requirements-essentia.txt
 echo "    essentia venv: $(/venv/essentia/bin/python --version 2>&1)"
+
+# essentia_adapter.py looks at <repo>/venvs/essentia/bin/python; symlink so
+# the path it expects resolves on Vast (where we keep envs at /venv/...).
+mkdir -p "$REPO_DIR/venvs"
+ln -sfn /venv/essentia "$REPO_DIR/venvs/essentia"
+echo "    symlink: $REPO_DIR/venvs/essentia -> /venv/essentia"
 
 echo "==> [6/7] Download Essentia .pb models (~40 MB)"
 PYTHONPATH="$REPO_DIR" /venv/essentia/bin/python - <<'PY'
