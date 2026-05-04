@@ -25,13 +25,33 @@ set -euo pipefail
 
 REPO_URL="${REPO_URL:-https://github.com/jca225/tracklist_engine.git}"
 REPO_DIR="${REPO_DIR:-/workspace/tracklist_engine}"
-ESSENTIA_PYBIN="${ESSENTIA_PYBIN:-/usr/bin/python3.13}"
 
-echo "==> [1/7] apt: ffmpeg + libsndfile + build tools"
+# Essentia ships cp310-cp313 wheels for x86_64 Linux. Pick whatever Python
+# the host actually has — Vast images vary (some have 3.13, some 3.12,
+# some 3.11). Fail loudly if none is available.
+if [ -z "${ESSENTIA_PYBIN:-}" ]; then
+    for v in python3.13 python3.12 python3.11 python3.10; do
+        if command -v "$v" >/dev/null 2>&1; then
+            ESSENTIA_PYBIN="$(command -v "$v")"
+            break
+        fi
+    done
+fi
+if [ -z "${ESSENTIA_PYBIN:-}" ]; then
+    echo "ERROR: no python3.{10,11,12,13} found on this host. Essentia wheels"
+    echo "       only exist for those interpreters. Install via apt then re-run."
+    exit 1
+fi
+
+echo "==> [1/7] apt: ffmpeg + nodejs + libsndfile + build tools"
 apt-get update -qq
-apt-get install -y -qq ffmpeg libsndfile1 build-essential pkg-config \
+# nodejs needed for yt-dlp's n-challenge JS runtime (see audio_pipeline/
+# adapters/downloader.py — without it ~all YouTube videos return only
+# image formats and downloads fail with "Signature solving failed").
+apt-get install -y -qq ffmpeg nodejs libsndfile1 build-essential pkg-config \
     git rsync curl ca-certificates >/dev/null
-echo "    ffmpeg: $(ffmpeg -version 2>&1 | head -1 | awk '{print $3}')"
+echo "    ffmpeg : $(ffmpeg -version 2>&1 | head -1 | awk '{print $3}')"
+echo "    node   : $(node --version 2>/dev/null || echo MISSING)"
 
 echo "==> [2/7] Repo clone / update"
 if [ "${SKIP_CLONE:-0}" = "1" ]; then
@@ -62,11 +82,14 @@ PY
 
 echo "==> [4/7] Install audio pipeline deps INTO /venv/main"
 # Don't reinstall torch/torchaudio/torchcodec — they're pre-built against
-# this exact CUDA driver. Adding the rest on top.
-/venv/main/bin/pip install --quiet --no-deps \
-    "demucs>=4.0.1"
+# this exact CUDA driver. Install demucs with --no-deps so its torch pin
+# doesn't downgrade the CUDA build, then explicitly add demucs's other
+# deps (dora-search, julius, lameenc, openunmix).
+/venv/main/bin/pip install --quiet --no-deps "demucs>=4.0.1"
 /venv/main/bin/pip install --quiet \
-    "yt-dlp>=2026.3.17" "spotdl>=3.9.6" "spotipy>=2.26.0" \
+    "dora-search" "julius>=0.2.3" "lameenc>=1.2" "openunmix"
+/venv/main/bin/pip install --quiet \
+    "yt-dlp>=2026.5.0" "yt-dlp-ejs" "spotdl>=3.9.6" "spotipy>=2.26.0" \
     "librosa>=0.11" "pyloudnorm>=0.2" "soundfile>=0.13" \
     "beat-this>=1.1" "transformers>=4.57" "timm>=1.0"
 echo "    /venv/main now has audio pipeline deps"
