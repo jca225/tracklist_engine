@@ -58,7 +58,7 @@ from common import (
     cue_section_durations_for_set,
 )
 
-REPO_ROOT = Path('/Users/johnnycabrahams/Desktop/tracklist_engine')
+REPO_ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = REPO_ROOT / 'data' / 'db' / 'music_database.db'
 
 conn = sqlite3.connect(str(DB_PATH))
