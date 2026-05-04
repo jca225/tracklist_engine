@@ -37,7 +37,14 @@ from pathlib import Path
 log = logging.getLogger("library.builder")
 
 
+import unicodedata as _unicodedata
+
 # Filesystem name sanitization
+# - NFC-normalize so combining marks like U+0308 (combining diaeresis) get
+#   merged into the precomposed form (Beyoncé instead of Beyonce´). Linux
+#   filesystems accept either, but if the systemd unit doesn't set
+#   PYTHONUTF8=1 / LC_ALL=*.UTF-8, Python falls back to latin-1 for
+#   filesystem encoding and combining marks then crash mkdir.
 # - drop control chars
 # - replace path separators
 # - replace shell-hostile chars
@@ -47,6 +54,7 @@ _BAD_CHARS = re.compile(r'[\x00-\x1f/\\:*?"<>|]')
 
 
 def sanitize_component(s: str, max_len: int = 200) -> str:
+    s = _unicodedata.normalize("NFC", s)
     s = _BAD_CHARS.sub("-", s)
     s = re.sub(r"\s+", " ", s).strip(" .")
     if len(s) > max_len:
