@@ -192,6 +192,10 @@ CREATE TABLE IF NOT EXISTS track_audio_features (
     danceability      REAL,
     energy            REAL,
     valence           REAL,
+    acousticness      REAL,                   -- 0..1, P(acoustic) from Essentia mood_acoustic
+    instrumentalness  REAL,                   -- 0..1, 1 - P(voice) from voice_instrumental
+    speechiness       REAL,                   -- 0..1, max P(speech | conversation) from YAMNet
+    liveness          REAL,                   -- 0..1, peak P(applause | cheering | crowd) from YAMNet
     confidence_json   TEXT,                   -- per-field confidences as JSON
     analyzed_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
 

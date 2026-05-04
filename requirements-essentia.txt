@@ -1,0 +1,18 @@
+# Essentia sandbox venv — Python 3.13.
+#
+# Essentia has no Py 3.14 wheels, so it lives in its own venv at
+# venvs/essentia/ and the main pipeline shells out via
+# audio_pipeline/analysis/adapters/essentia_adapter.py.
+#
+# Setup (one-time):
+#   brew install python@3.13 expat
+#   /opt/homebrew/bin/python3.13 -m venv venvs/essentia
+#   DYLD_LIBRARY_PATH=/opt/homebrew/opt/expat/lib \
+#     venvs/essentia/bin/pip install -r requirements-essentia.txt
+#
+# The DYLD_LIBRARY_PATH workaround is needed because Homebrew's
+# Python 3.13 links pyexpat against a newer libexpat than ships in
+# /usr/lib/. The adapter sets the same env var when invoking the
+# worker subprocess.
+essentia-tensorflow==2.1b6.dev1389
+numpy>=2.0
