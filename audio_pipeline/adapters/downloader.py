@@ -7,6 +7,7 @@ spotdl_adapter.py) — this module intentionally does not mix the two.
 from __future__ import annotations
 
 import hashlib
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -31,6 +32,17 @@ class DownloadConfig:
                                        #   --skip-download "https://youtube.com"`)
 
 
+def _detect_node() -> str | None:
+    """Locate a Node.js binary for yt-dlp's n-challenge JS runtime.
+
+    YouTube's n-parameter obfuscation means yt-dlp needs a JS runtime to
+    deobfuscate stream URLs. yt-dlp_ejs provides the solver scripts, but
+    they need an interpreter — node works on every box we run on.
+    Without this, ~all current YouTube videos return only image formats.
+    """
+    return shutil.which("node") or shutil.which("nodejs")
+
+
 def _ydl_opts(cfg: DownloadConfig, out_template: str) -> dict:
     opts: dict = {
         "format": "bestaudio/best",
@@ -48,6 +60,9 @@ def _ydl_opts(cfg: DownloadConfig, out_template: str) -> dict:
     }
     if cfg.cookies_path is not None:
         opts["cookiefile"] = str(cfg.cookies_path)
+    node_path = _detect_node()
+    if node_path is not None:
+        opts["js_runtimes"] = {"node": {"location": node_path}}
     return opts
 
 
