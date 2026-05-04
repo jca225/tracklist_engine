@@ -8,11 +8,16 @@ import json
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
+from typing import TYPE_CHECKING, Iterator
 
 from ..analysis.models import EssentiaFeatures, MeasureEmbedding, TrackAnalysisResult
-from ..analysis.set_analysis import SetAnalysisResult
 from ..errors import DbError
+
+# `set_analysis` transitively imports torch/demucs/MERT via pipeline.py, which
+# we don't want to drag into the downloader-only path on pi-storage. Defer to
+# the call site (persist_set_analysis below).
+if TYPE_CHECKING:
+    from ..analysis.set_analysis import SetAnalysisResult
 from ..models import (
     AudioAsset, MediaSource, SetAudioAsset, SetMediaLink, SetTimeline,
     TimelineSegment, Track,
@@ -519,7 +524,7 @@ def upsert_section_alignment(
     return Ok(None)
 
 
-def persist_set_analysis(db_path: Path, result: SetAnalysisResult) -> Result[None, DbError]:
+def persist_set_analysis(db_path: Path, result: "SetAnalysisResult") -> Result[None, DbError]:
     """Write `SetAnalysisResult` atomically to set_analysis + set_stems.
 
     Both tables are keyed by set_audio_id; the stems UNIQUE constraint is
