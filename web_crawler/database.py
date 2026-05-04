@@ -16,6 +16,12 @@ class MusicDatabase:
 
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        # WAL: readers don't block writers; busy_timeout: brief contention
+        # waits instead of raising 'database is locked' immediately. Without
+        # these the jobqueue's UPDATE scrape_failures path would 500 whenever
+        # a sibling reader held the lock.
+        self.conn.execute("PRAGMA journal_mode = WAL;")
+        self.conn.execute("PRAGMA busy_timeout = 5000;")
         self.conn.execute("PRAGMA foreign_keys = ON;")
         self.cursor = self.conn.cursor()
         self._init_tables()

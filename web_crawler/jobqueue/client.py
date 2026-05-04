@@ -8,8 +8,9 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import time
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable
 
 # Allow `from web_crawler.jobqueue.client import JobQueueClient` to resolve
 # the bare `data_models` import below — matches the sys.path convention
@@ -57,13 +58,34 @@ class JobQueueClient:
         r.raise_for_status()
         return r.json()
 
+    def _bookkeep_with_retry(self, send: Callable[[], httpx.Response]) -> None:
+        # Bookkeeping endpoints (mark-retry, delete) can hit a transient
+        # SQLite lock on the server. Retry on 5xx with exponential backoff
+        # so a momentary contention doesn't kill a multi-thousand-row drain.
+        # Fetch and insert paths are intentionally not wrapped — a fetch
+        # failure is fatal, and an insert must surface so we don't delete
+        # the failure row believing the data landed.
+        attempts = 4
+        for attempt in range(attempts):
+            r = send()
+            if r.status_code < 500 or attempt == attempts - 1:
+                r.raise_for_status()
+                return
+            log.warning(
+                "jobqueue %s -> %d (attempt %d/%d), retrying",
+                r.request.url, r.status_code, attempt + 1, attempts,
+            )
+            time.sleep(0.5 * (2 ** attempt))
+
     def increment_failure_retries(self, failure_id: int) -> None:
-        r = self._client.post(f"/ajax/failures/{failure_id}/retry")
-        r.raise_for_status()
+        self._bookkeep_with_retry(
+            lambda: self._client.post(f"/ajax/failures/{failure_id}/retry")
+        )
 
     def delete_failure(self, failure_id: int) -> None:
-        r = self._client.delete(f"/ajax/failures/{failure_id}")
-        r.raise_for_status()
+        self._bookkeep_with_retry(
+            lambda: self._client.delete(f"/ajax/failures/{failure_id}")
+        )
 
     def insert_track_media_links(self, links: Iterable[DJSetTrackMediaLink]) -> None:
         payload = [
