@@ -41,9 +41,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .adapters import db as db_adapter
-from .adapters.downloader import DownloadConfig, download_one
+from .adapters.downloader import DownloadConfig, download_one, download_set_mix
 from .errors import DbError, DownloadError
-from .models import AudioAsset, MediaSource, Track
+from .models import AudioAsset, MediaSource, SetMediaLink, Track
 from .result import Err, Ok, Result
 
 _log = logging.getLogger("audio_pipeline.main")
@@ -56,6 +56,9 @@ _BIG_BOOTIE_10_15: frozenset[str] = frozenset((
 # Platform preference order. yt-dlp can resolve both reliably; YT has
 # better coverage in our scrape (88% vs 4% in the tier-1 corpus).
 _PLATFORM_PREFERENCE: tuple[str, ...] = ("youtube", "soundcloud")
+
+# Mix-side preferences include Mixcloud since DJ sets often live there.
+_MIX_PLATFORM_PREFERENCE: tuple[str, ...] = ("youtube", "soundcloud", "mixcloud")
 
 
 @dataclass(frozen=True)
@@ -86,6 +89,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="Stop after downloading N tracks (smoke testing)")
     p.add_argument("--bb-only", action="store_true",
                    help="Restrict to Big Bootie 10-15 set_ids only")
+    p.add_argument("--with-mixes", action="store_true",
+                   help="Also download the full DJ mix audio per set into "
+                        "<audio_root>/sets/<set_id>/. Off by default to keep "
+                        "the per-track ref pipeline lean.")
+    p.add_argument("--mixes-only", action="store_true",
+                   help="Skip per-track downloads entirely; only fetch the "
+                        "mix audio for each set. Implies --with-mixes.")
     p.add_argument("--dry-run", action="store_true",
                    help="Print what would be downloaded; do not invoke yt-dlp")
     p.add_argument("--audio-format", default="m4a",
@@ -120,6 +130,62 @@ def _pick_source(track: Track) -> MediaSource | None:
         if src is not None:
             return src
     return None
+
+
+def _pick_mix_link(links: tuple[SetMediaLink, ...]) -> SetMediaLink | None:
+    """Choose the best mix-audio link: YT > SC > Mixcloud, first-match-wins."""
+    for platform in _MIX_PLATFORM_PREFERENCE:
+        for link in links:
+            if link.platform == platform:
+                return link
+    return None
+
+
+def _process_set_mix(
+    db_path: Path,
+    set_id: str,
+    out_dir: Path,
+    audio_format: str,
+    retries: int,
+    dry_run: bool,
+) -> tuple[str, str | None]:
+    """Returns (status, detail). Status: 'downloaded' | 'skip_existing' |
+    'no_source' | 'download_failed' | 'db_failed' | 'dry_run'."""
+    links_r = db_adapter.load_set_media_links(db_path, set_id)
+    match links_r:
+        case Err(err):
+            return ("db_failed", f"load_set_media_links: {err.detail}")
+        case Ok(links):
+            pass
+
+    chosen = _pick_mix_link(links)
+    if chosen is None:
+        return ("no_source", None)
+
+    seen_r = db_adapter.already_downloaded_set(db_path, set_id, chosen.platform, chosen.url)
+    match seen_r:
+        case Err(err):
+            return ("db_failed", f"already_downloaded_set: {err.detail}")
+        case Ok(True):
+            return ("skip_existing", None)
+        case Ok(False):
+            pass
+
+    if dry_run:
+        return ("dry_run", f"{chosen.platform} {chosen.url[:80]}")
+
+    cfg = DownloadConfig(out_dir=out_dir, audio_format=audio_format, retries=retries)
+    dl_r = download_set_mix(set_id, chosen.platform, chosen.url, cfg)
+    match dl_r:
+        case Err(err):
+            return ("download_failed", f"{err.kind}: {err.detail[:200]}")
+        case Ok(asset):
+            ins_r = db_adapter.insert_set_audio(db_path, asset)
+            match ins_r:
+                case Err(e):
+                    return ("db_failed", f"insert_set_audio: {e.detail}")
+                case Ok(_):
+                    return ("downloaded", asset.path)
 
 
 def _process_track(
@@ -186,10 +252,36 @@ def _run(args: argparse.Namespace) -> int:
               len(set_ids), args.db, args.audio_root, args.dry_run)
 
     objects_root = args.audio_root / "objects"
+    sets_root = args.audio_root / "sets"
+    with_mixes = args.with_mixes or args.mixes_only
+    skip_tracks = args.mixes_only
     stats = RunStats()
     t0 = time.monotonic()
 
     for set_idx, set_id in enumerate(set_ids, 1):
+        # --- Mix audio (full DJ mix) ---
+        if with_mixes:
+            mix_dir = sets_root / set_id
+            mix_status, mix_detail = _process_set_mix(
+                args.db, set_id, mix_dir, args.audio_format, args.retries, args.dry_run,
+            )
+            if mix_status == "downloaded":
+                _log.info("[%d/%d] set=%s MIX OK -> %s", set_idx, len(set_ids), set_id, mix_detail)
+            elif mix_status == "dry_run":
+                _log.info("[%d/%d] set=%s MIX DRY %s", set_idx, len(set_ids), set_id, mix_detail)
+            elif mix_status == "skip_existing":
+                _log.debug("[%d/%d] set=%s MIX skip (already downloaded)", set_idx, len(set_ids), set_id)
+            elif mix_status == "no_source":
+                _log.warning("[%d/%d] set=%s MIX no media link", set_idx, len(set_ids), set_id)
+            elif mix_status == "download_failed":
+                _log.warning("[%d/%d] set=%s MIX FAIL %s", set_idx, len(set_ids), set_id, mix_detail)
+            elif mix_status == "db_failed":
+                _log.error("[%d/%d] set=%s MIX DB %s", set_idx, len(set_ids), set_id, mix_detail)
+
+        if skip_tracks:
+            continue
+
+        # --- Per-track refs ---
         tracks_r = db_adapter.load_set_tracks(args.db, set_id)
         match tracks_r:
             case Err(err):
