@@ -24,10 +24,15 @@ class DownloadConfig:
     audio_format: str = "m4a"       # yt-dlp postprocessor target
     audio_quality: str = "0"         # best
     retries: int = 3
+    cookies_path: Path | None = None  # Netscape cookies.txt for age-gated YouTube
+                                       # (export from a browser via
+                                       # `yt-dlp --cookies-from-browser <name>
+                                       #   --cookies cookies.txt
+                                       #   --skip-download "https://youtube.com"`)
 
 
 def _ydl_opts(cfg: DownloadConfig, out_template: str) -> dict:
-    return {
+    opts: dict = {
         "format": "bestaudio/best",
         "outtmpl": out_template,
         "quiet": True,
@@ -41,6 +46,9 @@ def _ydl_opts(cfg: DownloadConfig, out_template: str) -> dict:
             }
         ],
     }
+    if cfg.cookies_path is not None:
+        opts["cookiefile"] = str(cfg.cookies_path)
+    return opts
 
 
 def _sha256(path: Path) -> str:

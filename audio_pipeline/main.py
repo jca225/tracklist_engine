@@ -102,6 +102,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="yt-dlp postprocessor output format (default m4a)")
     p.add_argument("--retries", type=int, default=3,
                    help="Per-track yt-dlp retry count (default 3)")
+    p.add_argument("--cookies", type=Path,
+                   default=Path(os.environ["TRACKLIST_YT_COOKIES"])
+                       if os.environ.get("TRACKLIST_YT_COOKIES") else None,
+                   help="Netscape cookies.txt for age-gated YouTube. Without this, "
+                        "~5-15%% of tracks fail with 'Sign in to confirm your age'. "
+                        "Export from your browser on Mac and scp to pi-storage:  "
+                        "yt-dlp --cookies-from-browser chrome --cookies /tmp/yt.txt "
+                        "--skip-download 'https://youtube.com'")
     p.add_argument("--log-level", default="INFO",
                    choices=("DEBUG", "INFO", "WARNING", "ERROR"))
     return p.parse_args(argv)
@@ -148,6 +156,7 @@ def _process_set_mix(
     audio_format: str,
     retries: int,
     dry_run: bool,
+    cookies_path: Path | None = None,
 ) -> tuple[str, str | None]:
     """Returns (status, detail). Status: 'downloaded' | 'skip_existing' |
     'no_source' | 'download_failed' | 'db_failed' | 'dry_run'."""
@@ -174,7 +183,8 @@ def _process_set_mix(
     if dry_run:
         return ("dry_run", f"{chosen.platform} {chosen.url[:80]}")
 
-    cfg = DownloadConfig(out_dir=out_dir, audio_format=audio_format, retries=retries)
+    cfg = DownloadConfig(out_dir=out_dir, audio_format=audio_format,
+                         retries=retries, cookies_path=cookies_path)
     dl_r = download_set_mix(set_id, chosen.platform, chosen.url, cfg)
     match dl_r:
         case Err(err):
@@ -195,6 +205,7 @@ def _process_track(
     audio_format: str,
     retries: int,
     dry_run: bool,
+    cookies_path: Path | None = None,
 ) -> tuple[str, str | None]:
     """Returns (status, detail). Status: 'downloaded' | 'skip_existing' |
     'no_source' | 'download_failed' | 'db_failed' | 'dry_run'."""
@@ -214,7 +225,8 @@ def _process_track(
     if dry_run:
         return ("dry_run", f"{source.platform} {source.player_id}")
 
-    cfg = DownloadConfig(out_dir=out_dir, audio_format=audio_format, retries=retries)
+    cfg = DownloadConfig(out_dir=out_dir, audio_format=audio_format,
+                         retries=retries, cookies_path=cookies_path)
     dl_r = download_one(track.track_id, source, cfg)
     match dl_r:
         case Err(err):
@@ -264,6 +276,7 @@ def _run(args: argparse.Namespace) -> int:
             mix_dir = sets_root / set_id
             mix_status, mix_detail = _process_set_mix(
                 args.db, set_id, mix_dir, args.audio_format, args.retries, args.dry_run,
+                cookies_path=args.cookies,
             )
             if mix_status == "downloaded":
                 _log.info("[%d/%d] set=%s MIX OK -> %s", set_idx, len(set_ids), set_id, mix_detail)
@@ -313,6 +326,7 @@ def _run(args: argparse.Namespace) -> int:
             out_dir = objects_root / track.track_id
             status, detail = _process_track(
                 args.db, track, out_dir, args.audio_format, args.retries, args.dry_run,
+                cookies_path=args.cookies,
             )
             if status == "downloaded":
                 stats = RunStats(**{**stats.__dict__, "downloaded": stats.downloaded + 1})
