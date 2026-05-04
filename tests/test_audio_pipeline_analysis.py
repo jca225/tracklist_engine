@@ -21,7 +21,7 @@ from audio_pipeline.analysis.models import (
     CuePoints,
     EssentiaFeatures,
     LoudnessReading,
-    SectionEmbedding,
+    MeasureEmbedding,
     StemAsset,
     StemSet,
     TrackAnalysisResult,
@@ -108,7 +108,7 @@ def db_with_audio(tmp_path: Path) -> tuple[Path, int]:
 
 
 def _fake_result(tid: int) -> TrackAnalysisResult:
-    emb = np.arange(24, dtype=np.float16).reshape(2, 12).tobytes()
+    emb = np.arange(12, dtype=np.float16).tobytes()
     return TrackAnalysisResult(
         track_audio_id=tid,
         stems=StemSet(
@@ -123,15 +123,15 @@ def _fake_result(tid: int) -> TrackAnalysisResult:
         beats=BeatGrid(
             track_audio_id=tid,
             beat_times=(0.0, 0.5, 1.0, 1.5),
-            downbeat_times=(0.0, 2.0),
-            measure_times=(0.0, 2.0),
+            downbeat_times=(0.0, 2.0, 4.0),
+            measure_times=(0.0, 2.0, 4.0),
             bpm=120.0,
         ),
         cues=CuePoints(track_audio_id=tid, cue_times=(10.0, 60.0), model_version="v1"),
         loudness=LoudnessReading(track_audio_id=tid, integrated_lufs=-14.2),
-        sections=(
-            SectionEmbedding(tid, 0, 0.0, 10.0, 2, 12, "float16", emb),
-            SectionEmbedding(tid, 1, 10.0, 60.0, 2, 12, "float16", emb),
+        measures=(
+            MeasureEmbedding(tid, 0, 0.0, 2.0, 12, "float16", emb),
+            MeasureEmbedding(tid, 1, 2.0, 4.0, 12, "float16", emb),
         ),
         analyzer_versions={"demucs": "htdemucs_ft", "beat_this": "final0"},
     )
@@ -154,7 +154,7 @@ def test_persist_analysis_writes_all_four_tables(db_with_audio: tuple[Path, int]
         (tid,),
     ).fetchone()
     assert ta[0] == "[10.0, 60.0]"
-    assert ta[1] == "[0.0, 2.0]"
+    assert ta[1] == "[0.0, 2.0, 4.0]"
 
     feat = conn.execute(
         "SELECT bpm, lufs FROM track_audio_features WHERE track_audio_id = ?",
@@ -162,37 +162,37 @@ def test_persist_analysis_writes_all_four_tables(db_with_audio: tuple[Path, int]
     ).fetchone()
     assert feat == (120.0, -14.2)
 
-    sections = conn.execute(
-        "SELECT section_idx, n_frames, dim, dtype FROM track_mert_sections "
-        "WHERE track_audio_id = ? ORDER BY section_idx",
+    measures = conn.execute(
+        "SELECT measure_idx, dim, dtype FROM track_mert_measures "
+        "WHERE track_audio_id = ? ORDER BY measure_idx",
         (tid,),
     ).fetchall()
-    assert sections == [(0, 2, 12, "float16"), (1, 2, 12, "float16")]
+    assert measures == [(0, 12, "float16"), (1, 12, "float16")]
     conn.close()
 
 
-def test_persist_analysis_replaces_prior_sections(db_with_audio: tuple[Path, int]) -> None:
-    """Re-running analysis should not leave stale MERT rows for the track."""
+def test_persist_analysis_replaces_prior_measures(db_with_audio: tuple[Path, int]) -> None:
+    """Re-running analysis should not leave stale per-measure MERT rows."""
     path, tid = db_with_audio
     first = _fake_result(tid)
     assert isinstance(db_adapter.persist_analysis(path, first), Ok)
 
-    # Re-run with a single-section result — the prior two rows must be gone.
-    emb = np.zeros((1, 12), dtype=np.float16).tobytes()
+    # Re-run with a single-measure result — the prior two rows must be gone.
+    emb = np.zeros(12, dtype=np.float16).tobytes()
     replay = TrackAnalysisResult(
         track_audio_id=tid,
         stems=first.stems,
         beats=first.beats,
         cues=CuePoints(track_audio_id=tid, cue_times=(), model_version="v1"),
         loudness=first.loudness,
-        sections=(SectionEmbedding(tid, 0, 0.0, 120.0, 1, 12, "float16", emb),),
+        measures=(MeasureEmbedding(tid, 0, 0.0, 2.0, 12, "float16", emb),),
         analyzer_versions=first.analyzer_versions,
     )
     assert isinstance(db_adapter.persist_analysis(path, replay), Ok)
 
     conn = sqlite3.connect(path)
     rows = conn.execute(
-        "SELECT section_idx FROM track_mert_sections WHERE track_audio_id = ?",
+        "SELECT measure_idx FROM track_mert_measures WHERE track_audio_id = ?",
         (tid,),
     ).fetchall()
     conn.close()

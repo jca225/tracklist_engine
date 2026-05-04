@@ -27,7 +27,7 @@ from .models import (
     CuePoints,
     EssentiaFeatures,
     LoudnessReading,
-    SectionEmbedding,
+    MeasureEmbedding,
     TrackAnalysisResult,
 )
 
@@ -94,24 +94,30 @@ def analyze_track(
     asset: AudioAsset,
     stems_dir: Path,
 ) -> Result[TrackAnalysisResult, AnalysisError]:
-    """Run the full per-track analysis, streaming resources linearly."""
-    assert asset.track_audio_id is not None, "AudioAsset must be persisted before analysis"
-    audio_path = Path(asset.path)
+    """Run the full per-track analysis, streaming resources linearly.
 
-    # Demucs first (uses its own torchaudio loader).
+    All analysis (BPM, beats, downbeats, measure grid, cue points, MERT,
+    Essentia, loudness) runs against the **original full-mix audio** at
+    asset.path — never the demucs-separated vocal/instrumental stems.
+    Stems are produced as a side output for downstream alignment use only.
+    """
+    assert asset.track_audio_id is not None, "AudioAsset must be persisted before analysis"
+    audio_path = Path(asset.path)   # original full audio — single source of truth for all analysis
+
+    # Demucs writes stems to disk; its output is not fed back into the analyzers below.
     stems_r = demucs_adapter.separate(a.demucs, audio_path, stems_dir, asset.track_audio_id)
     if not stems_r.is_ok():
         return stems_r
 
-    # beat_this reads the file directly too.
+    # beat_this on the original audio.
     beats_r = beat_this_adapter.predict(a.beats, audio_path)
     if not beats_r.is_ok():
         return beats_r
     beat_times, downbeat_times = beats_r.value
     bpm = beat_this_adapter.estimate_bpm(beat_times)
-    measures = beat_this_adapter.measure_times(downbeat_times)
+    measure_times = beat_this_adapter.measure_times(downbeat_times)
 
-    # cue-detr on the same file.
+    # cue-detr on the original audio.
     cues_r = cue_detr_adapter.predict(a.cues, audio_path)
     if not cues_r.is_ok():
         return cues_r
@@ -122,26 +128,21 @@ def analyze_track(
     if not wf_r.is_ok():
         return wf_r
     wf = wf_r.value
-    total_s = wf.samples.size / wf.sample_rate
 
     lufs_r = loudness.integrated_lufs(wf.samples, wf.sample_rate)
     if not lufs_r.is_ok():
         return lufs_r
 
-    bounds = _section_bounds(cue_times, total_s)
-    sections: list[SectionEmbedding] = []
-    for idx, (s, e) in enumerate(bounds):
-        chunk = _slice(wf.samples, wf.sample_rate, s, e)
-        emb_r = mert_adapter.embed_section(
-            a.mert, chunk, asset.track_audio_id, idx, s, e,
-        )
-        match emb_r:
-            case Err(err) if err.kind == "empty_section":
-                continue              # skip ultra-short cue gaps, keep others
-            case Err(_):
-                return emb_r
-            case Ok(emb):
-                sections.append(emb)
+    # Per-measure MERT: one embedding per beat_this-derived measure.
+    # Single forward pass over the full track; mean-pool frames per measure.
+    # The BPE cue-point optimizer (Phase 8b) re-aggregates these into
+    # post-BPE section embeddings without rerunning MERT.
+    measures_r = mert_adapter.embed_track_per_measure(
+        a.mert, wf.samples, asset.track_audio_id, measure_times,
+    )
+    if not measures_r.is_ok():
+        return measures_r
+    measure_embeddings = measures_r.value
 
     versions = {
         "demucs": a.demucs.version,
@@ -174,7 +175,7 @@ def analyze_track(
             track_audio_id=asset.track_audio_id,
             beat_times=beat_times,
             downbeat_times=downbeat_times,
-            measure_times=measures,
+            measure_times=measure_times,
             bpm=bpm,
         ),
         cues=CuePoints(
@@ -186,7 +187,7 @@ def analyze_track(
             track_audio_id=asset.track_audio_id,
             integrated_lufs=lufs_r.value,
         ),
-        sections=tuple(sections),
+        measures=measure_embeddings,
         analyzer_versions=versions,
         essentia=essentia_features,
     ))

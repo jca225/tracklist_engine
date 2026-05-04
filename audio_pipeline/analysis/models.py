@@ -71,14 +71,36 @@ class LoudnessReading:
 class SectionEmbedding:
     """MERT embedding for one cue-delimited section of a track.
 
-    `embedding` is serialized as raw bytes at persistence time to keep this
-    dataclass hashable; shape is (n_frames, dim).
+    Populated post-BPE — sections are determined by the cue-point optimizer
+    that runs after raw per-measure MERT data is in place. `embedding` is
+    serialized as raw bytes; shape is (dim,) when mean-pooled (the post-BPE
+    common case) or (n_frames, dim) for legacy raw-frame storage.
     """
     track_audio_id: int
     section_idx: int
     start_s: float
     end_s: float
     n_frames: int
+    dim: int
+    dtype: str                     # 'float16'
+    embedding_bytes: bytes
+
+
+@dataclass(frozen=True)
+class MeasureEmbedding:
+    """Mean-pooled MERT embedding for one beat-this-derived measure.
+
+    Computed at analysis time over every measure of every track. The BPE
+    cue-point optimizer (Phase 8b) re-aggregates these into post-BPE
+    `SectionEmbedding`s without needing a MERT rerun — so the per-measure
+    cache pays for itself many times over during algorithm dev.
+
+    Shape of `embedding_bytes`: (dim,), float16. ~1.5 KB per measure.
+    """
+    track_audio_id: int
+    measure_idx: int
+    start_s: float
+    end_s: float
     dim: int
     dtype: str                     # 'float16'
     embedding_bytes: bytes
@@ -138,6 +160,6 @@ class TrackAnalysisResult:
     beats: BeatGrid
     cues: CuePoints
     loudness: LoudnessReading
-    sections: tuple[SectionEmbedding, ...]
+    measures: tuple[MeasureEmbedding, ...]
     analyzer_versions: dict[str, str]
     essentia: EssentiaFeatures | None = None

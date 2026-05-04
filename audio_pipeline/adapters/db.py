@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-from ..analysis.models import EssentiaFeatures, TrackAnalysisResult
+from ..analysis.models import EssentiaFeatures, MeasureEmbedding, TrackAnalysisResult
 from ..analysis.set_analysis import SetAnalysisResult
 from ..errors import DbError
 from ..models import (
@@ -632,20 +632,20 @@ def persist_analysis(db_path: Path, result: TrackAnalysisResult) -> Result[None,
             )
 
             conn.execute(
-                "DELETE FROM track_mert_sections WHERE track_audio_id = ?",
+                "DELETE FROM track_mert_measures WHERE track_audio_id = ?",
                 (tid,),
             )
-            for s in result.sections:
+            for m in result.measures:
                 conn.execute(
                     """
-                    INSERT INTO track_mert_sections
-                      (track_audio_id, section_idx, start_s, end_s,
-                       n_frames, dim, dtype, embedding)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO track_mert_measures
+                      (track_audio_id, measure_idx, start_s, end_s,
+                       dim, dtype, embedding)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        s.track_audio_id, s.section_idx, s.start_s, s.end_s,
-                        s.n_frames, s.dim, s.dtype, s.embedding_bytes,
+                        m.track_audio_id, m.measure_idx, m.start_s, m.end_s,
+                        m.dim, m.dtype, m.embedding_bytes,
                     ),
                 )
 

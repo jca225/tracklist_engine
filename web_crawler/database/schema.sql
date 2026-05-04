@@ -218,8 +218,30 @@ CREATE TABLE IF NOT EXISTS track_analysis (
 );
 
 
--- MERT embeddings stored per cue-delimited section, not per measure.
--- embedding is raw float16 bytes; shape is (n_frames, dim) — store dims for reloading.
+-- Per-measure mean-pooled MERT embeddings. One row per beat_this-derived
+-- measure of the original full-mix audio. embedding is float16 (dim,) bytes.
+-- This is the raw cache; the BPE cue-point optimizer (Phase 8b) reaggregates
+-- ranges of these into post-BPE section embeddings without rerunning MERT.
+CREATE TABLE IF NOT EXISTS track_mert_measures (
+    track_audio_id INTEGER NOT NULL,
+    measure_idx    INTEGER NOT NULL,
+    start_s        REAL NOT NULL,
+    end_s          REAL NOT NULL,
+    dim            INTEGER NOT NULL,
+    dtype          TEXT NOT NULL,             -- 'float16'
+    embedding      BLOB NOT NULL,             -- (dim,) bytes, mean-pooled
+    created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (track_audio_id, measure_idx),
+    FOREIGN KEY (track_audio_id) REFERENCES track_audio(track_audio_id) ON DELETE CASCADE
+);
+
+
+-- MERT embeddings stored per cue-delimited section. Populated post-BPE (the
+-- cue-point optimizer in Phase 8b decides section boundaries, then reads
+-- track_mert_measures and writes mean-pooled section embeddings here).
+-- Pre-BPE, this table is empty. embedding is float16 bytes; shape is
+-- (n_frames, dim) for legacy raw storage or (dim,) when n_frames=1 mean-pool.
 CREATE TABLE IF NOT EXISTS track_mert_sections (
     track_audio_id INTEGER NOT NULL,
     section_idx    INTEGER NOT NULL,
