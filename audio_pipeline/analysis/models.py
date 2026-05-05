@@ -9,15 +9,20 @@ from dataclasses import dataclass
 from typing import Final
 
 
-STEM_NAMES: Final[tuple[str, ...]] = ("vocals", "drums", "bass", "other")
+# DJs split tracks into vocals vs instrumental (everything else summed) —
+# no use case for keeping drums/bass/other separately. We run htdemucs_ft
+# (which still internally computes 4 sources, the cost is unchanged) but
+# only persist the two we actually use: vocals.wav and instrumental.wav.
+# Saves ~60% of stem disk + simplifies the library + downstream alignment.
+STEM_NAMES: Final[tuple[str, ...]] = ("vocals", "instrumental")
 
-# Derived stems — not produced by demucs directly, computed as sums of
-# demucs outputs. `instrumental` = drums + bass + other is what a DJ
-# plays when the text says "(Instrumental)"; pre-summing once at
-# ingestion turns the 3-stem instrumental hypothesis into a single-file
-# alignment target downstream. Kept separate from STEM_NAMES so the
-# demucs loop doesn't try to find it in the model output.
-DERIVED_STEM_NAMES: Final[tuple[str, ...]] = ("instrumental",)
+# What sources from htdemucs_ft compose each persisted stem. vocals is a
+# direct passthrough; instrumental is the sample-accurate sum of
+# drums+bass+other (the conventional "no-vocals" definition).
+_STEM_RECIPES: Final[dict[str, tuple[str, ...]]] = {
+    "vocals": ("vocals",),
+    "instrumental": ("drums", "bass", "other"),
+}
 
 
 @dataclass(frozen=True)

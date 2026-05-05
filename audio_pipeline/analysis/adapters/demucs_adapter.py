@@ -1,7 +1,11 @@
-"""Demucs adapter: 4-stem split using `htdemucs_ft`.
+"""Demucs adapter: 2-stem split (vocals / instrumental) via `htdemucs_ft`.
 
-Model loads once via `load()`, then `separate(handle, audio_path, out_dir,
-track_audio_id)` writes four WAVs to disk and returns `StemAsset`s.
+The model still internally computes 4 sources (vocals/drums/bass/other) —
+that's how htdemucs_ft works, no faster way to get just two. We just
+persist only `vocals.wav` (direct) and `instrumental.wav` (drums + bass +
+other summed sample-accurately). DJs split on this axis and there's no
+use case in the rest of the pipeline for keeping the individual
+non-vocal stems.
 """
 from __future__ import annotations
 
@@ -10,15 +14,7 @@ from pathlib import Path
 
 from ...result import Err, Ok, Result
 from ..errors import StemError
-from ..models import DERIVED_STEM_NAMES, STEM_NAMES, StemAsset, StemSet
-
-
-# Map of derived stem name → which demucs sources to sum. Kept here
-# (not in models.py) because it's an implementation detail of how we
-# construct derived stems from the raw demucs output.
-_DERIVED_RECIPES: dict[str, tuple[str, ...]] = {
-    "instrumental": ("drums", "bass", "other"),
-}
+from ..models import STEM_NAMES, _STEM_RECIPES, StemAsset, StemSet
 
 
 @dataclass(frozen=True)
@@ -72,42 +68,25 @@ def separate(
     dest = out_dir / str(track_audio_id)
     dest.mkdir(parents=True, exist_ok=True)
     assets: list[StemAsset] = []
-    source_tensors: dict[str, object] = {}
     try:
-        for name in STEM_NAMES:
-            if name not in model_sources:
-                return Err(StemError(kind="inference", detail=f"model missing stem {name!r}"))
-            idx = model_sources.index(name)
-            src = sources[idx].cpu()
-            source_tensors[name] = src
-            path = dest / f"{name}.wav"
-            torchaudio.save(str(path), src, h._model.samplerate)
-            assets.append(StemAsset(
-                track_audio_id=track_audio_id,
-                stem_name=name,
-                path=str(path),
-                codec="wav",
-            ))
+        # Cache raw demucs source tensors so we can compose persisted
+        # stems from them without re-running the model.
+        raw_sources: dict[str, object] = {}
+        for src_name in set().union(*(_STEM_RECIPES[n] for n in STEM_NAMES)):
+            if src_name not in model_sources:
+                return Err(StemError(kind="inference", detail=f"model missing source {src_name!r}"))
+            raw_sources[src_name] = sources[model_sources.index(src_name)].cpu()
 
-        # Derived stems (instrumental = drums + bass + other). Written
-        # alongside raw stems so alignment can treat the 3-stem
-        # instrumental hypothesis as a single-file CCC/DTW target — big
-        # speedup on tagged rows and avoids re-summing in the render
-        # path. Sample-accurate addition in torch before one
-        # `torchaudio.save` call.
-        for derived_name in DERIVED_STEM_NAMES:
-            recipe = _DERIVED_RECIPES.get(derived_name, ())
-            tensors = [source_tensors[s] for s in recipe if s in source_tensors]
-            if len(tensors) != len(recipe):
-                continue
-            mix = tensors[0].clone()
-            for t in tensors[1:]:
-                mix = mix + t
-            path = dest / f"{derived_name}.wav"
+        for stem_name in STEM_NAMES:
+            recipe = _STEM_RECIPES[stem_name]
+            mix = raw_sources[recipe[0]].clone()
+            for s in recipe[1:]:
+                mix = mix + raw_sources[s]
+            path = dest / f"{stem_name}.wav"
             torchaudio.save(str(path), mix, h._model.samplerate)
             assets.append(StemAsset(
                 track_audio_id=track_audio_id,
-                stem_name=derived_name,
+                stem_name=stem_name,
                 path=str(path),
                 codec="wav",
             ))

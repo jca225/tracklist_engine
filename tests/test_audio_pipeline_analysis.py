@@ -115,9 +115,7 @@ def _fake_result(tid: int) -> TrackAnalysisResult:
             track_audio_id=tid,
             stems=(
                 StemAsset(tid, "vocals", "/tmp/v.wav", "wav"),
-                StemAsset(tid, "drums", "/tmp/d.wav", "wav"),
-                StemAsset(tid, "bass", "/tmp/b.wav", "wav"),
-                StemAsset(tid, "other", "/tmp/o.wav", "wav"),
+                StemAsset(tid, "instrumental", "/tmp/i.wav", "wav"),
             ),
         ),
         beats=BeatGrid(
@@ -147,7 +145,7 @@ def test_persist_analysis_writes_all_four_tables(db_with_audio: tuple[Path, int]
         "SELECT stem_name, path FROM track_stems WHERE track_audio_id = ? ORDER BY stem_name",
         (tid,),
     ).fetchall()
-    assert [s[0] for s in stems] == ["bass", "drums", "other", "vocals"]
+    assert [s[0] for s in stems] == ["instrumental", "vocals"]
 
     ta = conn.execute(
         "SELECT cue_points_json, measure_times_json FROM track_analysis WHERE track_audio_id = ?",
