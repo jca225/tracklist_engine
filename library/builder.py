@@ -123,46 +123,66 @@ def _strip_first_match(s: str, *patterns: re.Pattern) -> tuple[str, bool]:
     return (s, False)
 
 
-def classify_variant(title: str | None, version_tag: str | None) -> tuple[str, str]:
-    """Strip trailing acappella/instrumental markers from `title` and
-    return (clean_title, variant_filename_stem).
+def classify_variant(
+    title: str | None,
+    full_name: str | None,
+    version_tag: str | None,
+) -> tuple[str, str]:
+    """Determine (folder_title, variant_filename_stem) for a track.
 
-    variant_filename_stem ∈ {'original', 'acappella', 'instrumental'}.
-    The stem becomes the basename inside the per-track folder, so the
-    corresponding file is `acappella.<ext>` etc.
+    Three signal sources, in priority order:
+      1. version_tag column ('Acappella' is the only reliable tag value
+         the tokenizer sets).
+      2. trailing acappella/instrumental marker in `title` (the tokenizer
+         usually strips this into version_tag, but not always).
+      3. trailing marker in `full_name` (the raw 1001tracklists
+         "Artist - Title (Instrumental Mix)" string — this is where
+         instrumental markers reliably live, since `tm.title` keeps just
+         the cleaned core title).
 
-    Detection priority: version_tag first (DB-enforced), then trailing
-    title pattern. Both are case-insensitive. Remix/Rework/AltVersion
-    are recorded in version_tag too but those denote distinct recordings
-    rather than stems-equivalent variants — they fall through as
-    'original' (the recording IS the original of *that* remix folder).
+    Returns (folder_title, variant) where variant ∈ {'original',
+    'acappella', 'instrumental'}. folder_title is the cleaned `title`
+    (stripped of any marker if present); when the marker only lived in
+    `full_name`, the original title is already clean so we return it
+    as-is.
     """
-    raw = title or ""
+    raw_title = title or ""
+    raw_full = full_name or ""
     tag = (version_tag or "").strip().lower()
 
-    # version_tag='Acappella' → strip any acappella suffix from title and
-    # tag the file as acappella (covers cases where the title doesn't
-    # also carry the marker).
     if tag == "acappella":
         cleaned, _ = _strip_first_match(
-            raw, _ACAPPELLA_PARENS_RE, _ACAPPELLA_DASH_RE, _ACAPPELLA_SUFFIX_RE,
+            raw_title, _ACAPPELLA_PARENS_RE, _ACAPPELLA_DASH_RE, _ACAPPELLA_SUFFIX_RE,
         )
         return (cleaned, "acappella")
 
-    # No reliable version_tag — title-pattern detection.
+    # Title-pattern detection — when the marker survives into title.
     cleaned, hit = _strip_first_match(
-        raw, _ACAPPELLA_PARENS_RE, _ACAPPELLA_DASH_RE, _ACAPPELLA_SUFFIX_RE,
+        raw_title, _ACAPPELLA_PARENS_RE, _ACAPPELLA_DASH_RE, _ACAPPELLA_SUFFIX_RE,
     )
     if hit:
         return (cleaned, "acappella")
-
     cleaned, hit = _strip_first_match(
-        raw, _INSTRUMENTAL_PARENS_RE, _INSTRUMENTAL_DASH_RE, _INSTRUMENTAL_SUFFIX_RE,
+        raw_title, _INSTRUMENTAL_PARENS_RE, _INSTRUMENTAL_DASH_RE, _INSTRUMENTAL_SUFFIX_RE,
     )
     if hit:
         return (cleaned, "instrumental")
 
-    return (raw, "original")
+    # full_name detection — the marker reliably lives here even when the
+    # tokenizer stripped it from title. Use raw title (already clean) for
+    # the folder name.
+    _, hit = _strip_first_match(
+        raw_full, _ACAPPELLA_PARENS_RE, _ACAPPELLA_DASH_RE, _ACAPPELLA_SUFFIX_RE,
+    )
+    if hit:
+        return (raw_title, "acappella")
+    _, hit = _strip_first_match(
+        raw_full, _INSTRUMENTAL_PARENS_RE, _INSTRUMENTAL_DASH_RE, _INSTRUMENTAL_SUFFIX_RE,
+    )
+    if hit:
+        return (raw_title, "instrumental")
+
+    return (raw_title, "original")
 
 
 def make_symlink(src: str | Path, dst: Path) -> bool:
@@ -208,6 +228,7 @@ def build(db_path: Path, library_root: Path) -> dict[str, int]:
             ta.codec          AS audio_codec,
             ta.variant_tag    AS variant_tag,
             tm.title          AS title,
+            tm.full_name      AS full_name,
             tm.artists_json   AS artists_json,
             tm.version_tag    AS version_tag
         FROM track_audio ta
@@ -257,7 +278,9 @@ def build(db_path: Path, library_root: Path) -> dict[str, int]:
         # Strip acappella/instrumental markers from the folder name and
         # capture them as a per-file variant indicator (acappella.m4a /
         # instrumental.m4a / original.m4a).
-        clean_title, variant = classify_variant(row["title"], row["version_tag"])
+        clean_title, variant = classify_variant(
+            row["title"], row["full_name"], row["version_tag"],
+        )
         title_dir = track_dir_name(clean_title, None)
 
         # Disambiguate folder collisions only across distinct track_ids
