@@ -46,6 +46,10 @@ from .result import Err, Ok, Result
 
 _log = logging.getLogger("audio_pipeline.vast_worker")
 
+_BIG_BOOTIE_10_15: tuple[str, ...] = (
+    "w1mgcjt", "2nvzlh2k", "1fsnxchk", "qj4v0wt", "1yl70ql1", "237tdqmk",
+)
+
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -65,29 +69,61 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="Poll DB for next unanalyzed track and process repeatedly until empty")
     p.add_argument("--max-tracks", type=int, default=None,
                    help="Stop after analyzing N tracks (smoke testing)")
+    p.add_argument("--set-ids", type=str, default=None,
+                   help="Comma-separated set_ids: only process tracks that "
+                        "appear in any of these sets. Useful for prioritizing "
+                        "a small subset (e.g. Big Bootie 10-15) before "
+                        "draining the rest of the corpus.")
+    p.add_argument("--bb-only", action="store_true",
+                   help="Shortcut for --set-ids matching the 6 Big Bootie "
+                        "10-15 set_ids.")
     p.add_argument("--device", default="auto", choices=("auto", "cuda", "mps", "cpu"))
     p.add_argument("--log-level", default="INFO",
                    choices=("DEBUG", "INFO", "WARNING", "ERROR"))
     return p.parse_args(argv)
 
 
-def _next_unanalyzed(db_path: Path) -> Result[tuple[int, str] | None, str]:
+def _next_unanalyzed(
+    db_path: Path, set_ids: tuple[str, ...] | None = None,
+) -> Result[tuple[int, str] | None, str]:
     """Return (track_audio_id, audio_path) for the next track that has
-    a track_audio row but no track_analysis row. None when DB is drained."""
+    a track_audio row but no track_analysis row. When set_ids is non-empty,
+    restrict to tracks that appear in any of those sets (via
+    dj_set_track_media_links). Returns None when the queue is drained.
+    """
     try:
         conn = sqlite3.connect(db_path)
         try:
-            row = conn.execute(
-                """
-                SELECT ta.track_audio_id, ta.path
-                FROM track_audio ta
-                LEFT JOIN track_analysis tan
-                  ON tan.track_audio_id = ta.track_audio_id
-                WHERE tan.track_audio_id IS NULL
-                ORDER BY ta.track_audio_id
-                LIMIT 1
-                """
-            ).fetchone()
+            if set_ids:
+                placeholders = ",".join("?" * len(set_ids))
+                row = conn.execute(
+                    f"""
+                    SELECT ta.track_audio_id, ta.path
+                    FROM track_audio ta
+                    LEFT JOIN track_analysis tan
+                      ON tan.track_audio_id = ta.track_audio_id
+                    WHERE tan.track_audio_id IS NULL
+                      AND ta.track_id IN (
+                          SELECT DISTINCT track_id FROM dj_set_track_media_links
+                          WHERE set_id IN ({placeholders})
+                      )
+                    ORDER BY ta.track_audio_id
+                    LIMIT 1
+                    """,
+                    set_ids,
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    """
+                    SELECT ta.track_audio_id, ta.path
+                    FROM track_audio ta
+                    LEFT JOIN track_analysis tan
+                      ON tan.track_audio_id = ta.track_audio_id
+                    WHERE tan.track_audio_id IS NULL
+                    ORDER BY ta.track_audio_id
+                    LIMIT 1
+                    """
+                ).fetchone()
             return Ok((int(row[0]), str(row[1])) if row else None)
         finally:
             conn.close()
@@ -195,10 +231,19 @@ def _run(args: argparse.Namespace) -> int:
         _log.info("OK track_audio_id=%s in %.1fs", args.track_audio_id, r.value)
         return 0
 
+    # Resolve --set-ids / --bb-only into a tuple
+    set_filter: tuple[str, ...] | None = None
+    if args.bb_only:
+        set_filter = _BIG_BOOTIE_10_15
+    elif args.set_ids:
+        set_filter = tuple(s.strip() for s in args.set_ids.split(",") if s.strip())
+    if set_filter:
+        _log.info("filtering to %d set_ids: %s", len(set_filter), ",".join(set_filter))
+
     # Loop mode: drain unanalyzed tracks one at a time
     n_done = 0
     while args.max_tracks is None or n_done < args.max_tracks:
-        nxt = _next_unanalyzed(args.db)
+        nxt = _next_unanalyzed(args.db, set_filter)
         if not nxt.is_ok():
             _log.error(nxt.error)
             return 1
