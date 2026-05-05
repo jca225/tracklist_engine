@@ -92,12 +92,35 @@ def track_dir_name(title: str | None, version_tag: str | None) -> str:
     return sanitize_component(base)
 
 
-# Regex matches trailing acappella/instrumental markers in scraped titles.
-# Anchored at the end with optional whitespace + parens/dash separator.
-_ACAPPELLA_RE = re.compile(r"\s*[\(\[]?\s*acappel?la\s*[\)\]]?\s*$", re.IGNORECASE)
-_INSTRUMENTAL_RE = re.compile(r"\s*[\(\[]?\s*instrumental\s*[\)\]]?\s*$", re.IGNORECASE)
-_DASH_ACAPPELLA_RE = re.compile(r"\s*-\s*acappel?la\s*$", re.IGNORECASE)
-_DASH_INSTRUMENTAL_RE = re.compile(r"\s*-\s*instrumental\s*$", re.IGNORECASE)
+# Trailing-version markers in scraped titles. Patterns we want to strip:
+#   "(Acappella)"                          → acappella
+#   " - Acappella"                         → acappella
+#   "(Instrumental)"                       → instrumental
+#   "(Instrumental Mix)"                   → instrumental
+#   "(DJ Tonka Instrumental)"              → instrumental
+#   " - Instrumental Mix"                  → instrumental
+#   "Instrumental Mix" (bare suffix)       → instrumental
+# Each regex anchored at end-of-string; case-insensitive.
+_ACAPPELLA_PARENS_RE = re.compile(
+    r"\s*[\(\[][^()\[\]]*acappel?la[^()\[\]]*[\)\]]\s*$", re.IGNORECASE,
+)
+_ACAPPELLA_DASH_RE = re.compile(r"\s*-\s*[^()\[\]]*acappel?la[^()\[\]]*\s*$", re.IGNORECASE)
+_ACAPPELLA_SUFFIX_RE = re.compile(r"\s+acappel?la(\s+mix)?\s*$", re.IGNORECASE)
+
+_INSTRUMENTAL_PARENS_RE = re.compile(
+    r"\s*[\(\[][^()\[\]]*instrumental[^()\[\]]*[\)\]]\s*$", re.IGNORECASE,
+)
+_INSTRUMENTAL_DASH_RE = re.compile(r"\s*-\s*[^()\[\]]*instrumental[^()\[\]]*\s*$", re.IGNORECASE)
+_INSTRUMENTAL_SUFFIX_RE = re.compile(r"\s+instrumental(\s+mix)?\s*$", re.IGNORECASE)
+
+
+def _strip_first_match(s: str, *patterns: re.Pattern) -> tuple[str, bool]:
+    """Apply patterns in order; return (cleaned, True) on first hit."""
+    for p in patterns:
+        new = p.sub("", s)
+        if new != s:
+            return (new.strip(), True)
+    return (s, False)
 
 
 def classify_variant(title: str | None, version_tag: str | None) -> tuple[str, str]:
@@ -117,22 +140,27 @@ def classify_variant(title: str | None, version_tag: str | None) -> tuple[str, s
     raw = title or ""
     tag = (version_tag or "").strip().lower()
 
+    # version_tag='Acappella' → strip any acappella suffix from title and
+    # tag the file as acappella (covers cases where the title doesn't
+    # also carry the marker).
     if tag == "acappella":
-        cleaned = _DASH_ACAPPELLA_RE.sub("", raw)
-        cleaned = _ACAPPELLA_RE.sub("", cleaned)
-        return (cleaned.strip(), "acappella")
+        cleaned, _ = _strip_first_match(
+            raw, _ACAPPELLA_PARENS_RE, _ACAPPELLA_DASH_RE, _ACAPPELLA_SUFFIX_RE,
+        )
+        return (cleaned, "acappella")
 
-    # No tag — try title-pattern detection (covers cases where the
-    # 1001tracklists tagger missed the version_tag column).
-    cleaned = _DASH_ACAPPELLA_RE.sub("", raw)
-    cleaned = _ACAPPELLA_RE.sub("", cleaned)
-    if cleaned != raw:
-        return (cleaned.strip(), "acappella")
+    # No reliable version_tag — title-pattern detection.
+    cleaned, hit = _strip_first_match(
+        raw, _ACAPPELLA_PARENS_RE, _ACAPPELLA_DASH_RE, _ACAPPELLA_SUFFIX_RE,
+    )
+    if hit:
+        return (cleaned, "acappella")
 
-    cleaned = _DASH_INSTRUMENTAL_RE.sub("", raw)
-    cleaned = _INSTRUMENTAL_RE.sub("", cleaned)
-    if cleaned != raw:
-        return (cleaned.strip(), "instrumental")
+    cleaned, hit = _strip_first_match(
+        raw, _INSTRUMENTAL_PARENS_RE, _INSTRUMENTAL_DASH_RE, _INSTRUMENTAL_SUFFIX_RE,
+    )
+    if hit:
+        return (cleaned, "instrumental")
 
     return (raw, "original")
 
