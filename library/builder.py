@@ -199,8 +199,81 @@ def build(db_path: Path, library_root: Path) -> dict[str, int]:
             if make_symlink(stem_path, track_dir / f"{stem_name}.{stem_ext}"):
                 counts["stems_linked"] += 1
 
+    # ---- Mixes: human-readable per-set symlinks ----------------------
+    mix_counts = _build_mix_symlinks(conn, library_root)
+    counts.update({f"mix_{k}": v for k, v in mix_counts.items()})
+
     conn.close()
     log.info("DONE — %s", counts)
+    return counts
+
+
+def _build_mix_symlinks(
+    conn: sqlite3.Connection, library_root: Path,
+) -> dict[str, int]:
+    """Symlink every downloaded mix at <library>/_mixes/<sortable name>.<ext>.
+
+    Filename: `{date_played} - {title}.{ext}` so Finder lists chronologically.
+    Falls back to `{title}.{ext}` if date_played is missing.
+    Picks the YouTube mix when multiple platforms exist for one set;
+    SoundCloud / other are second-choice.
+    """
+    mixes_root = library_root / "_mixes"
+    mixes_root.mkdir(parents=True, exist_ok=True)
+
+    rows = conn.execute("""
+        SELECT s.set_id,
+               s.title,
+               s.date_played,
+               (
+                   SELECT path FROM set_audio
+                   WHERE set_id = s.set_id
+                   ORDER BY CASE platform
+                       WHEN 'youtube'    THEN 0
+                       WHEN 'soundcloud' THEN 1
+                       WHEN 'mixcloud'   THEN 2
+                       ELSE 3
+                   END
+                   LIMIT 1
+               ) AS mix_path
+        FROM dj_sets s
+        WHERE EXISTS (SELECT 1 FROM set_audio WHERE set_id = s.set_id)
+        ORDER BY s.date_played
+    """).fetchall()
+
+    counts = {"linked": 0, "skipped_missing_path": 0, "skipped_no_title": 0}
+    seen_filenames: set[str] = set()
+
+    for r in rows:
+        src = Path(r["mix_path"]) if r["mix_path"] else None
+        if src is None or not src.exists():
+            counts["skipped_missing_path"] += 1
+            continue
+
+        title = sanitize_component((r["title"] or "").strip())
+        if not title:
+            counts["skipped_no_title"] += 1
+            # Still link under set_id so it's at least visible
+            title = r["set_id"]
+
+        date_prefix = (r["date_played"] or "")[:10]
+        ext = src.suffix.lstrip(".") or "m4a"
+        if date_prefix:
+            filename = sanitize_component(f"{date_prefix} - {title}") + f".{ext}"
+        else:
+            filename = f"{title}.{ext}"
+
+        # Disambiguate filename collisions (rare — same date + sanitized title)
+        if filename in seen_filenames:
+            filename = (
+                sanitize_component(f"{date_prefix or 'no-date'} - {title} ({r['set_id']})")
+                + f".{ext}"
+            )
+        seen_filenames.add(filename)
+
+        if make_symlink(src, mixes_root / filename):
+            counts["linked"] += 1
+
     return counts
 
 
