@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,7 +22,12 @@ from .downloader import DownloadConfig
 
 
 def _spotdl_bin() -> str | None:
-    """Find spotdl on PATH (installed in venvs/audio)."""
+    """Find spotdl: prefer the same venv as the running Python (so the
+    pip-installed spotdl in venvs/audio/bin is found even when PATH
+    doesn't include venv bin dirs), fall back to PATH lookup."""
+    candidate = Path(sys.executable).parent / "spotdl"
+    if candidate.is_file():
+        return str(candidate)
     return shutil.which("spotdl")
 
 
