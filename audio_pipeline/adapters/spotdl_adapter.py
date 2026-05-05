@@ -49,7 +49,7 @@ def _sha256(path: Path) -> str:
 
 
 def download_one(
-    track_id: str, source: MediaSource, cfg: DownloadConfig, timeout_s: float = 300.0,
+    track_id: str, source: MediaSource, cfg: DownloadConfig, timeout_s: float = 120.0,
 ) -> Result[AudioAsset, DownloadError]:
     """Download a Spotify track via spotdl + yt-music search.
 
