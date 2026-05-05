@@ -103,6 +103,24 @@ def already_downloaded(
     return Ok(row is not None)
 
 
+def has_any_audio(db_path: Path, track_id: str) -> Result[bool, DbError]:
+    """True if any track_audio row exists for this canonical track_id.
+
+    Used by the fallback-chain downloader to skip a track entirely when
+    we already have audio from any platform — the chain shouldn't attempt
+    SoundCloud just because the YouTube row uses a different player_id.
+    """
+    try:
+        with _connect(db_path) as conn:
+            row = conn.execute(
+                "SELECT 1 FROM track_audio WHERE track_id=? LIMIT 1",
+                (track_id,),
+            ).fetchone()
+    except sqlite3.DatabaseError as e:
+        return Err(DbError(kind="query_failed", detail=str(e)))
+    return Ok(row is not None)
+
+
 def load_set_media_links(db_path: Path, set_id: str) -> Result[tuple[SetMediaLink, ...], DbError]:
     """Load all full-mix URLs posted for this set, normalized for yt-dlp.
 

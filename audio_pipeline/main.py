@@ -13,8 +13,12 @@ Designed for pi-storage long-running background runs:
   same canonical track is downloaded once even when it appears in many sets.
 - **Resilient** — a single yt-dlp failure logs and moves on; one bad URL
   doesn't kill a 16k-track run.
-- **YouTube preferred, SoundCloud fallback** — we try YT first; only fall
-  back to SC if YT is missing or fails.
+- **Platform fallback chain** — YouTube → spotdl/Spotify → SoundCloud.
+  We walk every available scraped source and stop at the first one that
+  successfully produces audio. spotdl is preferred over SoundCloud for
+  Spotify-linked tracks because it finds the official mastered release
+  via Spotify metadata + YouTube Music search; SoundCloud uploads tend
+  to be lower-quality DJ rips.
 
 Usage:
     venvs/audio/bin/python -m audio_pipeline.main \\
@@ -41,6 +45,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .adapters import db as db_adapter
+from .adapters import spotdl_adapter
 from .adapters.downloader import DownloadConfig, download_one, download_set_mix
 from .errors import DbError, DownloadError
 from .models import AudioAsset, MediaSource, SetMediaLink, Track
@@ -53,9 +58,18 @@ _BIG_BOOTIE_10_15: frozenset[str] = frozenset((
     "w1mgcjt", "2nvzlh2k", "1fsnxchk", "qj4v0wt", "1yl70ql1", "237tdqmk",
 ))
 
-# Platform preference order. yt-dlp can resolve both reliably; YT has
-# better coverage in our scrape (88% vs 4% in the tier-1 corpus).
-_PLATFORM_PREFERENCE: tuple[str, ...] = ("youtube", "soundcloud")
+# Platform fallback order for per-track downloads. We walk these in order
+# and stop at the first one that successfully produces audio for a given
+# track_id. Rationale:
+# - YouTube has 88% coverage in our scrape and `download_one` (yt-dlp) is
+#   the most reliable primary path.
+# - Spotify is preferred OVER SoundCloud as the secondary because spotdl
+#   uses Spotify's canonical metadata to seed a YouTube Music search,
+#   which finds the official mastered release. SoundCloud uploads are
+#   often DJ rips of varying quality.
+# - SoundCloud is the last-resort fallback for tracks that have no YT
+#   and no Spotify scraped link.
+_PLATFORM_PREFERENCE: tuple[str, ...] = ("youtube", "spotify", "soundcloud")
 
 # Mix-side preferences include Mixcloud since DJ sets often live there.
 _MIX_PLATFORM_PREFERENCE: tuple[str, ...] = ("youtube", "soundcloud", "mixcloud")
@@ -140,6 +154,30 @@ def _pick_source(track: Track) -> MediaSource | None:
     return None
 
 
+def _pick_sources(track: Track) -> tuple[MediaSource, ...]:
+    """Ordered list of MediaSources to try as fallback chain.
+
+    Returns every available scraped source in priority order
+    (youtube → spotify → soundcloud), filtering out platforms the track
+    wasn't scraped on. Empty tuple = nothing downloadable for this track.
+    """
+    out: list[MediaSource] = []
+    for platform in _PLATFORM_PREFERENCE:
+        src = track.source_for(platform)
+        if src is not None:
+            out.append(src)
+    return tuple(out)
+
+
+def _download_via_platform(
+    source: MediaSource, track_id: str, cfg: DownloadConfig,
+) -> Result[AudioAsset, DownloadError]:
+    """Dispatch to the correct adapter based on source.platform."""
+    if source.platform == "spotify":
+        return spotdl_adapter.download_one(track_id, source, cfg)
+    return download_one(track_id, source, cfg)
+
+
 def _pick_mix_link(links: tuple[SetMediaLink, ...]) -> SetMediaLink | None:
     """Choose the best mix-audio link: YT > SC > Mixcloud, first-match-wins."""
     for platform in _MIX_PLATFORM_PREFERENCE:
@@ -208,36 +246,58 @@ def _process_track(
     cookies_path: Path | None = None,
 ) -> tuple[str, str | None]:
     """Returns (status, detail). Status: 'downloaded' | 'skip_existing' |
-    'no_source' | 'download_failed' | 'db_failed' | 'dry_run'."""
-    source = _pick_source(track)
-    if source is None:
+    'no_source' | 'download_failed' | 'db_failed' | 'dry_run'.
+
+    Walks the platform fallback chain (youtube → spotify → soundcloud),
+    trying each scraped source until one succeeds. Skips entirely if any
+    track_audio row already exists for this track_id (regardless of which
+    platform produced it — we don't redundantly download from a second
+    source if we already have audio).
+    """
+    sources = _pick_sources(track)
+    if not sources:
         return ("no_source", None)
 
-    seen_r = db_adapter.already_downloaded(db_path, track.track_id, source.platform, source.player_id)
-    match seen_r:
+    has_r = db_adapter.has_any_audio(db_path, track.track_id)
+    match has_r:
         case Err(err):
-            return ("db_failed", f"already_downloaded: {err.detail}")
+            return ("db_failed", f"has_any_audio: {err.detail}")
         case Ok(True):
             return ("skip_existing", None)
         case Ok(False):
             pass
 
     if dry_run:
-        return ("dry_run", f"{source.platform} {source.player_id}")
+        chain = " → ".join(f"{s.platform}:{s.player_id}" for s in sources)
+        return ("dry_run", chain)
 
     cfg = DownloadConfig(out_dir=out_dir, audio_format=audio_format,
                          retries=retries, cookies_path=cookies_path)
-    dl_r = download_one(track.track_id, source, cfg)
-    match dl_r:
-        case Err(err):
-            return ("download_failed", f"{err.kind}: {err.detail[:200]}")
-        case Ok(asset):
-            ins_r = db_adapter.insert_audio(db_path, asset)
-            match ins_r:
-                case Err(e):
-                    return ("db_failed", f"insert_audio: {e.detail}")
-                case Ok(_):
-                    return ("downloaded", asset.path)
+    last_err: DownloadError | None = None
+    tried: list[str] = []
+    for source in sources:
+        tried.append(source.platform)
+        dl_r = _download_via_platform(source, track.track_id, cfg)
+        match dl_r:
+            case Err(err):
+                last_err = err
+                _log.debug("        try %s failed: %s — falling back",
+                           source.platform, err.kind)
+                continue
+            case Ok(asset):
+                ins_r = db_adapter.insert_audio(db_path, asset)
+                match ins_r:
+                    case Err(e):
+                        return ("db_failed", f"insert_audio: {e.detail}")
+                    case Ok(_):
+                        return ("downloaded",
+                                f"[{'+'.join(tried)}] {asset.path}")
+    detail = (
+        f"all {len(sources)} platforms failed (tried {','.join(tried)}); "
+        f"last={last_err.kind}: {last_err.detail[:160]}"
+        if last_err else "no platforms tried"
+    )
+    return ("download_failed", detail)
 
 
 def _run(args: argparse.Namespace) -> int:
