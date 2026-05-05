@@ -80,10 +80,61 @@ def join_artists(artists: list[str]) -> str:
 
 
 def track_dir_name(title: str | None, version_tag: str | None) -> str:
+    """Folder name = sanitized title with no version_tag suffix.
+
+    Acappella / Instrumental variants used to get baked into the folder
+    label (e.g. "Body - Acappella/"); they should live as files inside
+    the canonical title folder instead — see classify_variant().
+    Remix/Rework already appear inside the title text from the scrape, so
+    they pass through unchanged.
+    """
     base = title or "_untitled"
-    if version_tag and version_tag.lower() not in ("none", ""):
-        base = f"{base} - {version_tag}"
     return sanitize_component(base)
+
+
+# Regex matches trailing acappella/instrumental markers in scraped titles.
+# Anchored at the end with optional whitespace + parens/dash separator.
+_ACAPPELLA_RE = re.compile(r"\s*[\(\[]?\s*acappel?la\s*[\)\]]?\s*$", re.IGNORECASE)
+_INSTRUMENTAL_RE = re.compile(r"\s*[\(\[]?\s*instrumental\s*[\)\]]?\s*$", re.IGNORECASE)
+_DASH_ACAPPELLA_RE = re.compile(r"\s*-\s*acappel?la\s*$", re.IGNORECASE)
+_DASH_INSTRUMENTAL_RE = re.compile(r"\s*-\s*instrumental\s*$", re.IGNORECASE)
+
+
+def classify_variant(title: str | None, version_tag: str | None) -> tuple[str, str]:
+    """Strip trailing acappella/instrumental markers from `title` and
+    return (clean_title, variant_filename_stem).
+
+    variant_filename_stem ∈ {'original', 'acappella', 'instrumental'}.
+    The stem becomes the basename inside the per-track folder, so the
+    corresponding file is `acappella.<ext>` etc.
+
+    Detection priority: version_tag first (DB-enforced), then trailing
+    title pattern. Both are case-insensitive. Remix/Rework/AltVersion
+    are recorded in version_tag too but those denote distinct recordings
+    rather than stems-equivalent variants — they fall through as
+    'original' (the recording IS the original of *that* remix folder).
+    """
+    raw = title or ""
+    tag = (version_tag or "").strip().lower()
+
+    if tag == "acappella":
+        cleaned = _DASH_ACAPPELLA_RE.sub("", raw)
+        cleaned = _ACAPPELLA_RE.sub("", cleaned)
+        return (cleaned.strip(), "acappella")
+
+    # No tag — try title-pattern detection (covers cases where the
+    # 1001tracklists tagger missed the version_tag column).
+    cleaned = _DASH_ACAPPELLA_RE.sub("", raw)
+    cleaned = _ACAPPELLA_RE.sub("", cleaned)
+    if cleaned != raw:
+        return (cleaned.strip(), "acappella")
+
+    cleaned = _DASH_INSTRUMENTAL_RE.sub("", raw)
+    cleaned = _INSTRUMENTAL_RE.sub("", cleaned)
+    if cleaned != raw:
+        return (cleaned.strip(), "instrumental")
+
+    return (raw, "original")
 
 
 def make_symlink(src: str | Path, dst: Path) -> bool:
@@ -174,10 +225,18 @@ def build(db_path: Path, library_root: Path) -> dict[str, int]:
             continue
 
         artist = sanitize_component(join_artists(parse_artists(row["artists_json"])) or "_unknown_artist")
-        title_dir = track_dir_name(row["title"], row["version_tag"])
 
-        # Disambiguate on (artist, title) collision across distinct track_ids
-        key = (artist, title_dir)
+        # Strip acappella/instrumental markers from the folder name and
+        # capture them as a per-file variant indicator (acappella.m4a /
+        # instrumental.m4a / original.m4a).
+        clean_title, variant = classify_variant(row["title"], row["version_tag"])
+        title_dir = track_dir_name(clean_title, None)
+
+        # Disambiguate folder collisions only across distinct track_ids
+        # of the SAME variant. If the same song has both an `original`
+        # track_id and a separate `acappella` track_id, those land in
+        # the same folder as different files — that's by design.
+        key = (artist, title_dir, variant)
         owner = folder_owners.get(key)
         if owner is not None and owner != row["track_id"]:
             title_dir = f"{title_dir} (track_id={row['track_id']})"
@@ -187,8 +246,7 @@ def build(db_path: Path, library_root: Path) -> dict[str, int]:
 
         track_dir = library_root / artist / title_dir
 
-        # original
-        if make_symlink(audio_path, track_dir / f"original.{ext}"):
+        if make_symlink(audio_path, track_dir / f"{variant}.{ext}"):
             counts["matched"] += 1
 
         # stems (forward-compatible: empty index today, populated post-demucs)
