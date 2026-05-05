@@ -74,10 +74,11 @@ def download_one(
     # Snapshot pre-download contents so we can identify spotdl's new file.
     before = set(cfg.out_dir.iterdir())
 
+    # spotdl 4.x: operation arg ('download') first, --format (not --output-format).
     cmd = [
-        bin_path, source.url,
+        bin_path, "download", source.url,
         "--output", str(cfg.out_dir),
-        "--output-format", cfg.audio_format,
+        "--format", cfg.audio_format,
     ]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)
