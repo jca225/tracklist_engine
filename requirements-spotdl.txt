@@ -1,0 +1,8 @@
+# Isolated venv for spotdl — its fastapi 0.103.x pin conflicts with
+# streamlit's starlette>=1.0 and web_crawler's FastAPI version, so
+# spotdl gets its own venv and we shell out to its bin.
+#
+# Setup (one-time):
+#   /usr/bin/python3.13 -m venv venvs/spotdl
+#   venvs/spotdl/bin/pip install -r requirements-spotdl.txt
+spotdl>=4.4

@@ -22,12 +22,20 @@ from .downloader import DownloadConfig
 
 
 def _spotdl_bin() -> str | None:
-    """Find spotdl: prefer the same venv as the running Python (so the
-    pip-installed spotdl in venvs/audio/bin is found even when PATH
-    doesn't include venv bin dirs), fall back to PATH lookup."""
-    candidate = Path(sys.executable).parent / "spotdl"
-    if candidate.is_file():
-        return str(candidate)
+    """Find spotdl. Search order:
+      1. <repo>/venvs/spotdl/bin/spotdl  — dedicated isolated venv (preferred;
+         spotdl's fastapi pin conflicts with streamlit/web_crawler)
+      2. Same venv as the running Python (works on Mac dev where there's
+         only one audio venv)
+      3. PATH fallback
+    """
+    repo_root = Path(__file__).resolve().parents[3]
+    isolated = repo_root / "venvs" / "spotdl" / "bin" / "spotdl"
+    if isolated.is_file():
+        return str(isolated)
+    same_venv = Path(sys.executable).parent / "spotdl"
+    if same_venv.is_file():
+        return str(same_venv)
     return shutil.which("spotdl")
 
 
