@@ -123,66 +123,28 @@ def _strip_first_match(s: str, *patterns: re.Pattern) -> tuple[str, bool]:
     return (s, False)
 
 
-def classify_variant(
-    title: str | None,
-    full_name: str | None,
-    version_tag: str | None,
-) -> tuple[str, str]:
-    """Determine (folder_title, variant_filename_stem) for a track.
+def clean_folder_title(title: str | None) -> str:
+    """Strip trailing acappella/instrumental markers from a title for use
+    as a folder name.
 
-    Three signal sources, in priority order:
-      1. version_tag column ('Acappella' is the only reliable tag value
-         the tokenizer sets).
-      2. trailing acappella/instrumental marker in `title` (the tokenizer
-         usually strips this into version_tag, but not always).
-      3. trailing marker in `full_name` (the raw 1001tracklists
-         "Artist - Title (Instrumental Mix)" string — this is where
-         instrumental markers reliably live, since `tm.title` keeps just
-         the cleaned core title).
+    We DON'T propagate the marker into a "variant" filename — the
+    scraped tags are unreliable (a track tagged 'Acappella' may point at
+    a YouTube video that's actually the full song). Demucs is the
+    authoritative source for vocals.wav and instrumental.wav; the
+    scraped audio is just `original.{ext}` regardless of how the
+    scraper labeled it.
 
-    Returns (folder_title, variant) where variant ∈ {'original',
-    'acappella', 'instrumental'}. folder_title is the cleaned `title`
-    (stripped of any marker if present); when the marker only lived in
-    `full_name`, the original title is already clean so we return it
-    as-is.
+    All this function does: keep the folder name clean so e.g.
+    'Body (Acappella)' and 'Body' don't fan out into separate folders
+    when they're the same underlying song.
     """
-    raw_title = title or ""
-    raw_full = full_name or ""
-    tag = (version_tag or "").strip().lower()
-
-    if tag == "acappella":
-        cleaned, _ = _strip_first_match(
-            raw_title, _ACAPPELLA_PARENS_RE, _ACAPPELLA_DASH_RE, _ACAPPELLA_SUFFIX_RE,
-        )
-        return (cleaned, "acappella")
-
-    # Title-pattern detection — when the marker survives into title.
-    cleaned, hit = _strip_first_match(
-        raw_title, _ACAPPELLA_PARENS_RE, _ACAPPELLA_DASH_RE, _ACAPPELLA_SUFFIX_RE,
-    )
-    if hit:
-        return (cleaned, "acappella")
-    cleaned, hit = _strip_first_match(
-        raw_title, _INSTRUMENTAL_PARENS_RE, _INSTRUMENTAL_DASH_RE, _INSTRUMENTAL_SUFFIX_RE,
-    )
-    if hit:
-        return (cleaned, "instrumental")
-
-    # full_name detection — the marker reliably lives here even when the
-    # tokenizer stripped it from title. Use raw title (already clean) for
-    # the folder name.
-    _, hit = _strip_first_match(
-        raw_full, _ACAPPELLA_PARENS_RE, _ACAPPELLA_DASH_RE, _ACAPPELLA_SUFFIX_RE,
-    )
-    if hit:
-        return (raw_title, "acappella")
-    _, hit = _strip_first_match(
-        raw_full, _INSTRUMENTAL_PARENS_RE, _INSTRUMENTAL_DASH_RE, _INSTRUMENTAL_SUFFIX_RE,
-    )
-    if hit:
-        return (raw_title, "instrumental")
-
-    return (raw_title, "original")
+    raw = title or ""
+    for pat in (_ACAPPELLA_PARENS_RE, _ACAPPELLA_DASH_RE, _ACAPPELLA_SUFFIX_RE,
+                _INSTRUMENTAL_PARENS_RE, _INSTRUMENTAL_DASH_RE, _INSTRUMENTAL_SUFFIX_RE):
+        new = pat.sub("", raw)
+        if new != raw:
+            return new.strip()
+    return raw
 
 
 def make_symlink(src: str | Path, dst: Path) -> bool:
@@ -226,11 +188,8 @@ def build(db_path: Path, library_root: Path) -> dict[str, int]:
             ta.track_id,
             ta.path           AS audio_path,
             ta.codec          AS audio_codec,
-            ta.variant_tag    AS variant_tag,
             tm.title          AS title,
-            tm.full_name      AS full_name,
-            tm.artists_json   AS artists_json,
-            tm.version_tag    AS version_tag
+            tm.artists_json   AS artists_json
         FROM track_audio ta
         LEFT JOIN track_metadata tm USING(track_id)
     """).fetchall()
@@ -275,19 +234,21 @@ def build(db_path: Path, library_root: Path) -> dict[str, int]:
 
         artist = sanitize_component(join_artists(parse_artists(row["artists_json"])) or "_unknown_artist")
 
-        # Strip acappella/instrumental markers from the folder name and
-        # capture them as a per-file variant indicator (acappella.m4a /
-        # instrumental.m4a / original.m4a).
-        clean_title, variant = classify_variant(
-            row["title"], row["full_name"], row["version_tag"],
-        )
-        title_dir = track_dir_name(clean_title, None)
+        # Folder name strips trailing parenthetical version markers so
+        # e.g. 'Body (Acappella)' and 'Body' share the same folder when
+        # they're the same song. Audio file always lands as
+        # `original.{ext}` — we don't claim variant content because the
+        # scraper's tags are unreliable. Demucs (post-Phase-6) writes
+        # vocals.wav and instrumental.wav into the same folder; those
+        # are the authoritative variant outputs.
+        title_dir = sanitize_component(clean_folder_title(row["title"]) or "_untitled")
 
-        # Disambiguate folder collisions only across distinct track_ids
-        # of the SAME variant. If the same song has both an `original`
-        # track_id and a separate `acappella` track_id, those land in
-        # the same folder as different files — that's by design.
-        key = (artist, title_dir, variant)
+        # Disambiguate folder collisions across distinct track_ids that
+        # share the same artist+title (e.g. one canonical track_id and a
+        # separate "Acappella variant" track_id of the same song). The
+        # second track gets a folder suffix; the alternative —
+        # overwriting the symlink — would silently lose audio.
+        key = (artist, title_dir)
         owner = folder_owners.get(key)
         if owner is not None and owner != row["track_id"]:
             title_dir = f"{title_dir} (track_id={row['track_id']})"
@@ -297,7 +258,7 @@ def build(db_path: Path, library_root: Path) -> dict[str, int]:
 
         track_dir = library_root / artist / title_dir
 
-        if make_symlink(audio_path, track_dir / f"{variant}.{ext}"):
+        if make_symlink(audio_path, track_dir / f"original.{ext}"):
             counts["matched"] += 1
 
         # stems (forward-compatible: empty index today, populated post-demucs)
