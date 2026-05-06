@@ -36,6 +36,11 @@ from pathlib import Path
 REPO = Path("/workspace/tracklist_engine")
 sys.path.insert(0, str(REPO))
 
+# Scratch DB has the canonical schema (FKs and all) but no track_audio
+# rows; FK enforcement would block every persist_analysis. Disable it on
+# scratch — canonical re-enforces when we ship rows over.
+os.environ["TRACKLIST_DISABLE_FK"] = "1"
+
 from audio_pipeline.adapters import db as db_adapter
 from audio_pipeline.analysis.pipeline import load_analyzers, analyze_track
 from audio_pipeline.models import AudioAsset

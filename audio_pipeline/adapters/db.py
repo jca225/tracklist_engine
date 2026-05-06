@@ -5,6 +5,7 @@ Domain code never imports sqlite3 directly; it calls these functions.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -31,7 +32,13 @@ def _connect(db_path: Path) -> Iterator[sqlite3.Connection]:
     conn = sqlite3.connect(db_path)
     try:
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON;")
+        # Default: enforce FKs (matches canonical DB invariants). Scratch DB
+        # callers (e.g. Vast worker writing to /workspace/scratch.db before
+        # shipping rows back to canonical) set TRACKLIST_DISABLE_FK=1 because
+        # the scratch DB has no track_audio rows to satisfy the FK; the
+        # actual integrity check happens when those rows hit canonical.
+        if not os.environ.get("TRACKLIST_DISABLE_FK"):
+            conn.execute("PRAGMA foreign_keys = ON;")
         yield conn
     finally:
         conn.close()
