@@ -131,9 +131,22 @@ def init_scratch_db() -> None:
         ["ssh", PI_HOST, f"sqlite3 {CANONICAL_DB} '.schema'"],
         text=True,
     )
+    # SQLite reserves sqlite_sequence for AUTOINCREMENT bookkeeping; can't
+    # CREATE TABLE it manually. Strip its statement out of the dump.
+    cleaned = []
+    skip = False
+    for line in schema.splitlines():
+        if line.startswith("CREATE TABLE sqlite_sequence"):
+            skip = True
+            continue
+        if skip:
+            if line.rstrip().endswith(";"):
+                skip = False
+            continue
+        cleaned.append(line)
     import sqlite3
     conn = sqlite3.connect(SCRATCH_DB)
-    conn.executescript(schema)
+    conn.executescript("\n".join(cleaned))
     conn.close()
     log.info("scratch DB initialized at %s", SCRATCH_DB)
 
