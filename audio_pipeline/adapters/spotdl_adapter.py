@@ -13,6 +13,8 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -136,3 +138,143 @@ def download_one(
         codec=cfg.audio_format,
         bitrate_kbps=None,
     ))
+
+
+@dataclass(frozen=True)
+class BatchItem:
+    """One unit of work for `download_batch` — a canonical track_id paired
+    with the resolved Spotify MediaSource we want spotdl to fetch."""
+    track_id: str
+    source: MediaSource
+
+
+@dataclass(frozen=True)
+class BatchResult:
+    """Per-item outcome of a batched spotdl run.
+
+    `result` is `Ok(AudioAsset)` on success or `Err(DownloadError)` when the
+    item didn't produce a file. Items where spotdl crashed mid-batch are
+    reported as `kind='unavailable'` since we can't tell from outside
+    whether the URL was rejected or simply never reached.
+    """
+    item: BatchItem
+    result: Result[AudioAsset, DownloadError]
+
+
+def download_batch(
+    items: tuple[BatchItem, ...],
+    objects_root: Path,
+    audio_format: str = "m4a",
+    threads: int = 4,
+    timeout_s: float = 600.0,
+    client_id: str | None = None,
+    client_secret: str | None = None,
+) -> tuple[BatchResult, ...]:
+    """Pooled spotdl run: many URLs, one process, internal thread pool.
+
+    Why pooling matters: each spotdl invocation pays ~3s Python startup and
+    ~3-5s spotipy auth. Passing N URLs to one call amortizes both costs and
+    lets spotdl run yt-music searches concurrently across `threads` workers.
+    For the BB-only smoke test we measured ~38s/track sequential; pooled at
+    threads=4 should land closer to ~12-15s/track wall.
+
+    Mapping files back to inputs uses spotdl's `{track-id}` template — a
+    documented variable that resolves to the Spotify track ID. Files land
+    as `{spotify_id}.{ext}` in a temp staging dir; we walk the dir after,
+    match each input by player_id, move to canonical per-track location,
+    and rename to `{track_id}__spotify__{player_id}.{ext}`.
+
+    Failure modes:
+    - File for an item didn't appear  → that item gets Err(unavailable)
+    - spotdl exited non-zero / timed out → items without files get Err(network);
+      items WITH files (spotdl had partial success before dying) still succeed
+    - spotdl binary missing → all items Err(parse)
+    """
+    if not items:
+        return ()
+
+    bin_path = _spotdl_bin()
+    if bin_path is None:
+        err = DownloadError(
+            kind="parse", url="",
+            detail="spotdl not on PATH (install via `pip install spotdl`)",
+        )
+        return tuple(BatchResult(it, Err(err)) for it in items)
+
+    cid = client_id or os.environ.get("SPOTIFY_CLIENT_ID")
+    csec = client_secret or os.environ.get("SPOTIFY_CLIENT_SECRET")
+
+    staging = Path(tempfile.mkdtemp(prefix=f"spotdl_batch_{os.getpid()}_", dir=objects_root.parent))
+    try:
+        # spotdl will write {track-id}.{output-ext} → e.g. 1jUT2mNI...UbY.m4a
+        template = str(staging / "{track-id}.{output-ext}")
+        cmd = [
+            bin_path, "download",
+            *[it.source.url for it in items],
+            "--output", template,
+            "--format", audio_format,
+            "--threads", str(threads),
+        ]
+        if cid and csec:
+            cmd += ["--client-id", cid, "--client-secret", csec]
+
+        batch_err: DownloadError | None = None
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)
+            if proc.returncode != 0:
+                msg = (proc.stderr or proc.stdout or "")[:300]
+                batch_err = DownloadError(
+                    kind="network", url="",
+                    detail=f"spotdl batch exit {proc.returncode}: {msg}",
+                )
+        except subprocess.TimeoutExpired:
+            batch_err = DownloadError(
+                kind="network", url="",
+                detail=f"spotdl batch timeout after {timeout_s}s "
+                       f"(items={len(items)}, threads={threads})",
+            )
+        except OSError as e:
+            batch_err = DownloadError(kind="parse", url="", detail=str(e))
+
+        # Walk staging regardless — partial successes survive batch failure.
+        results: list[BatchResult] = []
+        for it in items:
+            staged = staging / f"{it.source.player_id}.{audio_format}"
+            if not staged.is_file():
+                # File missing → unavailable (or batch died before reaching it).
+                err = batch_err or DownloadError(
+                    kind="unavailable", url=it.source.url,
+                    detail=f"spotdl produced no file for spotify:{it.source.player_id}",
+                )
+                results.append(BatchResult(it, Err(err)))
+                continue
+
+            # Move + rename to canonical per-track convention.
+            track_dir = objects_root / it.track_id
+            track_dir.mkdir(parents=True, exist_ok=True)
+            dst = track_dir / f"{it.track_id}__spotify__{it.source.player_id}.{audio_format}"
+            if dst.exists():
+                dst.unlink()
+            shutil.move(str(staged), str(dst))
+
+            asset = AudioAsset(
+                track_audio_id=None,
+                track_id=it.track_id,
+                platform="spotify",
+                source_url=it.source.url,
+                player_id=it.source.player_id,
+                path=str(dst),
+                sha256=_sha256(dst),
+                duration_s=None,
+                sample_rate=None,
+                codec=audio_format,
+                bitrate_kbps=None,
+            )
+            results.append(BatchResult(it, Ok(asset)))
+        return tuple(results)
+    finally:
+        # Always clean up the staging dir, even on exception.
+        shutil.rmtree(staging, ignore_errors=True)
+        # Time import is still needed somewhere — keep it referenced even if
+        # we trim later. (Used for batch ETA logging in main_retry.)
+        _ = time.time

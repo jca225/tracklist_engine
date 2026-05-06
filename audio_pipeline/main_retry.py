@@ -112,6 +112,17 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="Comma-separated set_ids to restrict the retry to")
     p.add_argument("--timeout", type=float, default=60.0,
                    help="Per-track spotdl timeout (default 60s)")
+    p.add_argument("--batch-size", type=int, default=1,
+                   help="Number of URLs to send to one spotdl invocation. "
+                        "Default 1 = sequential per-track adapter (back-compat). "
+                        ">1 enables pooled mode: spotdl runs N URLs together "
+                        "with internal --threads, amortizing Python startup + "
+                        "spotipy auth across the batch. Right size for tier1 "
+                        "corpus pass: 10-20.")
+    p.add_argument("--threads", type=int, default=4,
+                   help="spotdl --threads, only used when --batch-size > 1. "
+                        "Default 4 matches spotdl's own default. Higher can "
+                        "saturate yt-music search rate-limits.")
     p.add_argument("--client-id", default=os.environ.get("SPOTIFY_CLIENT_ID"),
                    help="Spotify Web API client ID. Falls back to "
                         "$SPOTIFY_CLIENT_ID. Required at production volume — "
@@ -224,6 +235,96 @@ def _attempt(
                     return ("downloaded", asset.path)
 
 
+def _run_batched(
+    args: argparse.Namespace,
+    candidates: tuple[RetryCandidate, ...],
+    objects_root: Path,
+    stats: RunStats,
+) -> RunStats:
+    """Pooled spotdl execution path. Groups candidates into batches of
+    `--batch-size` and dispatches each batch to one spotdl invocation with
+    internal `--threads`. Files come back as `{spotify_id}.{ext}` in a
+    staging dir; the adapter moves them to canonical per-track locations
+    and returns one BatchResult per input.
+
+    Per-batch timeout scales with batch size so a stalled URL can't kill
+    siblings: `(batch_size / threads) * args.timeout * 2`. The 2× safety
+    factor covers spotdl startup + spotipy auth + ffmpeg post-processing.
+    """
+    bs = args.batch_size
+    threads = args.threads
+    batch_timeout = max(args.timeout * 2, (bs / threads) * args.timeout * 2)
+
+    capped = candidates
+    if args.max_tracks is not None:
+        capped = candidates[: args.max_tracks]
+
+    batches = [capped[i : i + bs] for i in range(0, len(capped), bs)]
+    _log.info("pooled mode: %d batches of <=%d (threads=%d, batch_timeout=%.0fs)",
+              len(batches), bs, threads, batch_timeout)
+
+    seen = 0
+    for bi, batch in enumerate(batches, 1):
+        items = tuple(
+            spotdl_adapter.BatchItem(
+                track_id=c.track_id,
+                source=MediaSource(
+                    platform="spotify",
+                    player_id=c.player_id,
+                    url=spotify_track_url(c.player_id),
+                ),
+            )
+            for c in batch
+        )
+        t_batch = time.monotonic()
+        results = spotdl_adapter.download_batch(
+            items, objects_root, args.audio_format,
+            threads=threads, timeout_s=batch_timeout,
+            client_id=args.client_id, client_secret=args.client_secret,
+        )
+        elapsed = time.monotonic() - t_batch
+
+        # Per-result handling: insert AudioAsset on Ok, classify failures.
+        ok_in_batch = 0
+        for r in results:
+            seen += 1
+            tid = r.item.track_id
+            match r.result:
+                case Ok(asset):
+                    ins_r = db_adapter.insert_audio(args.db, asset)
+                    match ins_r:
+                        case Err(e):
+                            stats = replace(stats, db_failed=stats.db_failed + 1)
+                            _log.error("[%d/%d] DB    %s insert_audio: %s",
+                                       seen, len(capped), tid, e.detail)
+                        case Ok(_):
+                            stats = replace(stats, downloaded=stats.downloaded + 1)
+                            ok_in_batch += 1
+                            _log.info("[%d/%d] OK    %s -> %s",
+                                      seen, len(capped), tid, asset.path)
+                case Err(err):
+                    if err.kind == "network" and "timeout" in (err.detail or "").lower():
+                        stats = replace(stats, failed_timeout=stats.failed_timeout + 1)
+                        _log.warning("[%d/%d] TIMEOUT %s (batch)",
+                                     seen, len(capped), tid)
+                    elif err.kind == "unavailable":
+                        stats = replace(stats, failed_unavailable=stats.failed_unavailable + 1)
+                        _log.info("[%d/%d] GONE  %s",
+                                  seen, len(capped), tid)
+                    else:
+                        stats = replace(stats, failed_other=stats.failed_other + 1)
+                        _log.warning("[%d/%d] FAIL  %s %s: %s",
+                                     seen, len(capped), tid,
+                                     err.kind, (err.detail or "")[:120])
+
+        wall_per_track = elapsed / max(len(items), 1)
+        _log.info(
+            "batch %d/%d done: %d/%d ok in %.0fs (%.1fs/track wall)",
+            bi, len(batches), ok_in_batch, len(items), elapsed, wall_per_track,
+        )
+    return stats
+
+
 def _run(args: argparse.Namespace) -> int:
     logging.basicConfig(
         level=getattr(logging, args.log_level),
@@ -272,37 +373,40 @@ def _run(args: argparse.Namespace) -> int:
     stats = RunStats(candidates=len(candidates))
     t0 = time.monotonic()
 
-    for i, c in enumerate(candidates, 1):
-        if args.max_tracks is not None and i > args.max_tracks:
-            _log.info("hit --max-tracks=%d, stopping", args.max_tracks)
-            break
+    if args.batch_size > 1 and not args.dry_run:
+        stats = _run_batched(args, candidates, objects_root, stats)
+    else:
+        for i, c in enumerate(candidates, 1):
+            if args.max_tracks is not None and i > args.max_tracks:
+                _log.info("hit --max-tracks=%d, stopping", args.max_tracks)
+                break
 
-        if args.dry_run:
-            _log.info("[%d/%d] DRY %s spotify:%s sets=%s",
-                      i, len(candidates), c.track_id, c.player_id,
-                      ",".join(c.set_ids[:3]))
-            continue
+            if args.dry_run:
+                _log.info("[%d/%d] DRY %s spotify:%s sets=%s",
+                          i, len(candidates), c.track_id, c.player_id,
+                          ",".join(c.set_ids[:3]))
+                continue
 
-        status, detail = _attempt(
-            c, args.db, objects_root, args.audio_format, args.timeout,
-            args.client_id, args.client_secret,
-        )
-        if status == "downloaded":
-            stats = replace(stats, downloaded=stats.downloaded + 1)
-            _log.info("[%d/%d] OK    %s -> %s", i, len(candidates), c.track_id, detail)
-        elif status == "timeout":
-            stats = replace(stats, failed_timeout=stats.failed_timeout + 1)
-            _log.warning("[%d/%d] TIMEOUT %s", i, len(candidates), c.track_id)
-        elif status == "unavailable":
-            stats = replace(stats, failed_unavailable=stats.failed_unavailable + 1)
-            _log.info("[%d/%d] GONE  %s (no YT match for spotify track)",
-                      i, len(candidates), c.track_id)
-        elif status == "other_fail":
-            stats = replace(stats, failed_other=stats.failed_other + 1)
-            _log.warning("[%d/%d] FAIL  %s %s", i, len(candidates), c.track_id, detail)
-        elif status == "db_failed":
-            stats = replace(stats, db_failed=stats.db_failed + 1)
-            _log.error("[%d/%d] DB    %s %s", i, len(candidates), c.track_id, detail)
+            status, detail = _attempt(
+                c, args.db, objects_root, args.audio_format, args.timeout,
+                args.client_id, args.client_secret,
+            )
+            if status == "downloaded":
+                stats = replace(stats, downloaded=stats.downloaded + 1)
+                _log.info("[%d/%d] OK    %s -> %s", i, len(candidates), c.track_id, detail)
+            elif status == "timeout":
+                stats = replace(stats, failed_timeout=stats.failed_timeout + 1)
+                _log.warning("[%d/%d] TIMEOUT %s", i, len(candidates), c.track_id)
+            elif status == "unavailable":
+                stats = replace(stats, failed_unavailable=stats.failed_unavailable + 1)
+                _log.info("[%d/%d] GONE  %s (no YT match for spotify track)",
+                          i, len(candidates), c.track_id)
+            elif status == "other_fail":
+                stats = replace(stats, failed_other=stats.failed_other + 1)
+                _log.warning("[%d/%d] FAIL  %s %s", i, len(candidates), c.track_id, detail)
+            elif status == "db_failed":
+                stats = replace(stats, db_failed=stats.db_failed + 1)
+                _log.error("[%d/%d] DB    %s %s", i, len(candidates), c.track_id, detail)
 
     elapsed = time.monotonic() - t0
     _log.info(
