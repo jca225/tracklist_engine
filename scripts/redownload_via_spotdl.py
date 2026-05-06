@@ -72,6 +72,16 @@ class Candidate:
     yt_audio_path: str           # /mnt/storage/objects/<tid>/<tid>__youtube__<vid>.m4a
     track_id: str                # 1001tracklists canonical track_id
     spotify_player_id: str       # Spotify track ID for spotdl
+    set_id: str                  # any DJ set this track appears in (used for ordering)
+    is_bb: int                   # 1 if track appears in any BB10-15 set, 0 otherwise
+
+
+# BB10-15 set IDs — tracks appearing in any of these get redownloaded first so
+# Vast can start re-analyzing them quickly instead of waiting for the global
+# queue to roll past.
+_BB_SETS: frozenset[str] = frozenset((
+    "w1mgcjt", "2nvzlh2k", "1fsnxchk", "qj4v0wt", "1yl70ql1", "237tdqmk",
+))
 
 
 @dataclass(frozen=True)
@@ -118,9 +128,19 @@ def _load_candidates(db_path: Path) -> tuple[Candidate, ...]:
     """Tracks where:
       - track_audio.platform = 'youtube'
       - dj_set_track_media_links has a non-empty spotify entry for the track_id
-    Picks ONE spotify player_id per track (first by lex order — deterministic).
+
+    Output ordering: BB tracks first (so Vast can pick up re-analysis quickly),
+    then by set_id grouping (so tracks from the same DJ set tend to land in
+    the same spotdl batch — minor spotipy/metadata locality benefits), then
+    by track_audio_id within a set.
+
+    Picks ONE spotify player_id per track and ONE set_id per track
+    (deterministic, lex-first) — a track that appears in many sets just
+    inherits whichever set comes first alphabetically. This deduplicates
+    the candidate list (one row per unique track_audio_id).
     """
-    query = """
+    bb_csv = ",".join(f"'{s}'" for s in _BB_SETS)
+    query = f"""
         SELECT
           ta.track_audio_id     AS yt_track_audio_id,
           ta.path               AS yt_audio_path,
@@ -132,7 +152,20 @@ def _load_candidates(db_path: Path) -> tuple[Candidate, ...]:
               AND m.platform = 'spotify'
               AND m.player_id IS NOT NULL AND m.player_id != ''
             ORDER BY m.player_id LIMIT 1
-          ) AS spotify_player_id
+          ) AS spotify_player_id,
+          (
+            SELECT m.set_id
+            FROM dj_set_track_media_links m
+            WHERE m.track_id = ta.track_id
+            ORDER BY (CASE WHEN m.set_id IN ({bb_csv}) THEN 0 ELSE 1 END), m.set_id
+            LIMIT 1
+          ) AS set_id,
+          (
+            CASE WHEN EXISTS (
+              SELECT 1 FROM dj_set_track_media_links m
+              WHERE m.track_id = ta.track_id AND m.set_id IN ({bb_csv})
+            ) THEN 1 ELSE 0 END
+          ) AS is_bb
         FROM track_audio ta
         WHERE ta.platform = 'youtube'
           AND EXISTS (
@@ -141,7 +174,7 @@ def _load_candidates(db_path: Path) -> tuple[Candidate, ...]:
               AND m.platform = 'spotify'
               AND m.player_id IS NOT NULL AND m.player_id != ''
           )
-        ORDER BY ta.track_audio_id
+        ORDER BY is_bb DESC, set_id, ta.track_audio_id
     """
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
@@ -152,6 +185,8 @@ def _load_candidates(db_path: Path) -> tuple[Candidate, ...]:
             yt_audio_path=r["yt_audio_path"],
             track_id=r["track_id"],
             spotify_player_id=r["spotify_player_id"],
+            set_id=r["set_id"] or "",
+            is_bb=r["is_bb"],
         )
         for r in rows
     )
@@ -319,10 +354,13 @@ def _run(args: argparse.Namespace) -> int:
               len(candidates), args.db, args.dry_run, args.no_replace)
 
     if args.dry_run:
+        bb_count = sum(1 for c in candidates if c.is_bb)
+        _log.info("DRY  ordering: BB tracks first (count=%d), then by set_id, "
+                  "then by track_audio_id", bb_count)
         for c in candidates[:10]:
-            _log.info("DRY  yt_taid=%d  track=%s  spotify=%s  yt_path=%s",
-                      c.yt_track_audio_id, c.track_id, c.spotify_player_id,
-                      c.yt_audio_path)
+            _log.info("DRY  yt_taid=%d  set=%s  bb=%d  track=%s  spotify=%s",
+                      c.yt_track_audio_id, c.set_id, c.is_bb,
+                      c.track_id, c.spotify_player_id)
         if len(candidates) > 10:
             _log.info("... and %d more", len(candidates) - 10)
         _log.info("DRY total: %d Phase 1 downloads + (if --no-replace not set) "
