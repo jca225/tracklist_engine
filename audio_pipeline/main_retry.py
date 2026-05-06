@@ -67,6 +67,36 @@ class RunStats:
     db_failed: int = 0
 
 
+# spotdl bundles a single default Spotify app and writes it into
+# ~/.config/spotdl/config.json on first run. That client_id is shared by every
+# spotdl install on the planet, so it's perpetually rate-limited.
+_SPOTDL_BUNDLED_DEFAULT_CLIENT_ID = "5f573c9620494bae87890c0f08a60293"
+
+
+def _detect_creds_source(args: argparse.Namespace) -> str:
+    """Best-effort: figure out which credentials spotdl will end up using.
+
+    Returns one of: 'cli', 'env', 'config', 'spotdl_default', 'unknown'.
+    Used only for logging / startup warning — does not affect behavior.
+    """
+    if args.client_id and args.client_secret:
+        # CLI flags or env-var fallback already consolidated by argparse.
+        return "cli_or_env"
+    config_path = Path.home() / ".config" / "spotdl" / "config.json"
+    if config_path.is_file():
+        try:
+            import json
+            cfg = json.loads(config_path.read_text())
+            cid = cfg.get("client_id")
+            if cid and cid != _SPOTDL_BUNDLED_DEFAULT_CLIENT_ID:
+                return "config"
+            if cid == _SPOTDL_BUNDLED_DEFAULT_CLIENT_ID:
+                return "spotdl_default"
+        except (OSError, ValueError):
+            return "unknown"
+    return "spotdl_default"
+
+
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -221,17 +251,21 @@ def _run(args: argparse.Namespace) -> int:
         _log.info("no retry candidates (every spotify-linked track already has audio)")
         return 0
 
+    creds_source = _detect_creds_source(args)
     _log.info(
         "candidates=%d, db=%s, audio_root=%s, timeout=%.0fs, dry_run=%s, set_filter=%s, creds=%s",
         len(candidates), args.db, args.audio_root, args.timeout, args.dry_run,
         ("bb-10-15" if args.bb_only else (args.set_ids or "all")),
-        "user" if (args.client_id and args.client_secret) else "spotdl_default",
+        creds_source,
     )
-    if not (args.client_id and args.client_secret) and not args.dry_run:
+    if creds_source == "spotdl_default" and not args.dry_run:
         _log.warning(
-            "no Spotify creds (--client-id/--client-secret or "
-            "SPOTIFY_CLIENT_ID/SECRET env). spotdl's default creds are "
-            "globally rate-limited and will likely time out on every track."
+            "spotdl appears to be using its bundled default Spotify app creds "
+            "(client_id 5f573c96...). Those are globally shared and rate-"
+            "limited; expect 86400s backoff. Pass --client-id/--client-secret, "
+            "set SPOTIFY_CLIENT_ID/SECRET, or edit ~/.config/spotdl/config.json. "
+            "Also delete ~/.config/spotdl/.spotipy after changing creds — "
+            "spotipy caches the OAuth token and will keep using the old app."
         )
 
     objects_root = args.audio_root / "objects"
