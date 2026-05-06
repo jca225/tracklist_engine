@@ -720,15 +720,16 @@ def _write_essentia_row(conn: sqlite3.Connection, feat: EssentiaFeatures) -> Non
     conn.execute(
         """
         INSERT INTO track_audio_features
-          (track_audio_id, source, key_pc, key_mode, bpm,
+          (track_audio_id, source, key_pc, key_mode, key_strength, bpm,
            time_sig_num, time_sig_den,
            danceability, energy, valence,
            acousticness, instrumentalness, speechiness, liveness,
            confidence_json)
-        VALUES (?, 'essentia_v2', ?, ?, ?, 4, 4, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, 'essentia_v2', ?, ?, ?, ?, 4, 4, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(track_audio_id, source) DO UPDATE SET
             key_pc           = excluded.key_pc,
             key_mode         = excluded.key_mode,
+            key_strength     = excluded.key_strength,
             bpm              = excluded.bpm,
             danceability     = excluded.danceability,
             energy           = excluded.energy,
@@ -744,6 +745,7 @@ def _write_essentia_row(conn: sqlite3.Connection, feat: EssentiaFeatures) -> Non
             feat.track_audio_id,
             _key_pc(feat.key_tonic),
             feat.key_mode,
+            feat.key_strength,
             feat.bpm,
             feat.danceability_tf if feat.danceability_tf is not None
                 else feat.danceability_sp / 3.0,

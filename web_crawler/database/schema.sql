@@ -185,6 +185,7 @@ CREATE TABLE IF NOT EXISTS track_audio_features (
     source            TEXT NOT NULL,
     key_pc            INTEGER,                -- 0..11 pitch class, NULL if unknown
     key_mode          TEXT,                   -- 'major' | 'minor' | NULL
+    key_strength      REAL,                   -- 0..1 KeyExtractor correlation peak vs runner-up
     bpm               REAL,
     time_sig_num      INTEGER,
     time_sig_den      INTEGER,
