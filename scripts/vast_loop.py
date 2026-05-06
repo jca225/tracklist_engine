@@ -69,13 +69,27 @@ def ssh_pi(sql: str) -> str:
     return r.stdout.strip()
 
 
-def next_task() -> tuple[int, str] | None:
+def next_task(skip_tids: frozenset[int] = frozenset()) -> tuple[int, str] | None:
+    """Returns (track_audio_id, audio_path) for the next BB10-15 track that
+    has no track_analysis row yet. `skip_tids` is the in-session "tried and
+    failed" set — without this, a track whose audio fails to decode (or
+    whose analyze_track raises mid-pipeline) re-appears on every poll
+    forever, since persist_analysis is skipped on failure and the
+    `track_analysis IS NULL` filter still matches. Caller maintains the
+    set for the lifetime of the loop; restart re-attempts (good — could be
+    a transient rsync truncation).
+    """
     bb_csv = ",".join(f"'{s}'" for s in BB_SETS)
+    skip_clause = ""
+    if skip_tids:
+        skip_csv = ",".join(str(t) for t in skip_tids)
+        skip_clause = f"AND ta.track_audio_id NOT IN ({skip_csv}) "
     sql = (
         "SELECT ta.track_audio_id, ta.path FROM track_audio ta "
         "LEFT JOIN track_analysis tan ON tan.track_audio_id=ta.track_audio_id "
         f"WHERE tan.track_audio_id IS NULL AND ta.track_id IN "
         f"(SELECT DISTINCT track_id FROM dj_set_track_media_links WHERE set_id IN ({bb_csv})) "
+        f"{skip_clause}"
         "ORDER BY ta.track_audio_id LIMIT 1"
     )
     out = ssh_pi(sql)
@@ -230,8 +244,14 @@ def main() -> int:
 
     n_done = 0
     n_failed = 0
+    # In-session "tried and failed" set. Without this, any track whose audio
+    # fails to decode (or any analyze_track failure mode that doesn't write a
+    # track_analysis row) re-appears on every next_task() poll → infinite
+    # spin on the same track. Hit this on track 149 (corrupt m4a, torchcodec
+    # decode error) — generated 496 failures in 18 min before fix landed.
+    failed_tids: set[int] = set()
     while True:
-        nxt = next_task()
+        nxt = next_task(frozenset(failed_tids))
         if nxt is None:
             log.info("queue drained — analyzed %d, failed %d", n_done, n_failed)
             return 0
@@ -249,6 +269,7 @@ def main() -> int:
             if not r.is_ok():
                 log.warning("[%d] analyze_track failed: %s — %s", tid, r.error.kind, r.error.detail)
                 n_failed += 1
+                failed_tids.add(tid)
                 continue
             log.info("[%d] analyzed in %.1fs", tid, time.time() - t1)
 
@@ -256,6 +277,7 @@ def main() -> int:
             if not p.is_ok():
                 log.warning("[%d] persist failed: %s", tid, p.error.detail)
                 n_failed += 1
+                failed_tids.add(tid)
                 continue
 
             stem_local = LOCAL_STEMS / str(tid)
@@ -271,6 +293,11 @@ def main() -> int:
         except subprocess.CalledProcessError as e:
             log.error("[%d] subprocess failed: %s", tid, e)
             n_failed += 1
+            # Same trap as analyze_track failures — without skip, an rsync
+            # or push_track_rows failure would also make next_task() return
+            # this tid every iteration. If the failure was transient, the
+            # next Vast loop restart re-attempts (failed_tids is in-memory).
+            failed_tids.add(tid)
         finally:
             if local_audio.exists():
                 local_audio.unlink()
