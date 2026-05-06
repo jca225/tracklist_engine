@@ -241,12 +241,38 @@ def _phase2_replace(
     _log.info("Phase 2: replacing %d yt-dlp rows with their spotify replacements",
               len(ok_map))
     stems_root = audio_root / "stems"
+    objects_root = audio_root / "objects"
 
     for c in candidates:
-        if c.track_id not in ok_map:
+        new_taid = ok_map.get(c.track_id)
+        if new_taid is None:
             stats = dc_replace(stats, phase2_skipped=stats.phase2_skipped + 1)
             _log.debug("[skip] %s no spotify replacement (Phase 1 did not insert)",
                        c.track_id)
+            continue
+
+        # Sanity check: the spotify replacement file must actually exist on
+        # disk and be non-trivially sized before we delete the yt-dlp source.
+        # If insert_audio succeeded but the file was somehow missing, blindly
+        # deleting the yt-dlp would leave the track audioless.
+        try:
+            with sqlite3.connect(db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                row = conn.execute(
+                    "SELECT path FROM track_audio WHERE track_audio_id = ?",
+                    (new_taid,),
+                ).fetchone()
+        except sqlite3.DatabaseError as e:
+            stats = dc_replace(stats, phase2_failed=stats.phase2_failed + 1)
+            _log.error("[skip] %s could not look up new spotify row (taid=%d): %s",
+                       c.track_id, new_taid, e)
+            continue
+        new_path = Path(row["path"]) if row and row["path"] else None
+        if new_path is None or not new_path.is_file() or new_path.stat().st_size < 100_000:
+            stats = dc_replace(stats, phase2_skipped=stats.phase2_skipped + 1)
+            _log.warning("[skip-unsafe] %s spotify file missing or tiny (path=%s); "
+                         "leaving yt-dlp row in place",
+                         c.track_id, new_path)
             continue
 
         try:
@@ -269,7 +295,7 @@ def _phase2_replace(
 
             stats = dc_replace(stats, phase2_replaced=stats.phase2_replaced + 1)
             _log.info("replaced track_id=%s yt_taid=%d -> spotify_taid=%d",
-                      c.track_id, c.yt_track_audio_id, ok_map[c.track_id])
+                      c.track_id, c.yt_track_audio_id, new_taid)
         except (sqlite3.DatabaseError, OSError) as e:
             stats = dc_replace(stats, phase2_failed=stats.phase2_failed + 1)
             _log.error("replace failed for %s (taid=%d): %s",
