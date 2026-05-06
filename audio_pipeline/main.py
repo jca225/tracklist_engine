@@ -60,16 +60,20 @@ _BIG_BOOTIE_10_15: frozenset[str] = frozenset((
 
 # Platform fallback order for per-track downloads. We walk these in order
 # and stop at the first one that successfully produces audio for a given
-# track_id. Rationale:
-# - YouTube has 88% coverage in our scrape and `download_one` (yt-dlp) is
-#   the most reliable primary path.
-# - Spotify is preferred OVER SoundCloud as the secondary because spotdl
-#   uses Spotify's canonical metadata to seed a YouTube Music search,
-#   which finds the official mastered release. SoundCloud uploads are
-#   often DJ rips of varying quality.
-# - SoundCloud is the last-resort fallback for tracks that have no YT
-#   and no Spotify scraped link.
-_PLATFORM_PREFERENCE: tuple[str, ...] = ("youtube", "spotify", "soundcloud")
+# track_id.
+#
+# spotify (via spotdl) was originally in this chain as the second step,
+# intended as a recovery path for tracks where YouTube is gone but a
+# Spotify URL was scraped. After 14 hours of corpus run we observed
+# zero successful spotdl downloads while accumulating 174 spotdl
+# timeouts (~14.5 hours of wall-clock waste). spotdl's anonymous YT
+# Music search is too slow / rate-limited to be net-positive without
+# proper Spotify API credentials and a tighter timeout.
+#
+# It's been removed from the active chain. Re-enable later as a
+# targeted retry pass over `no_source` failures, ideally with
+# SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET set and timeout ≤30s.
+_PLATFORM_PREFERENCE: tuple[str, ...] = ("youtube", "soundcloud")
 
 # Mix-side preferences include Mixcloud since DJ sets often live there.
 _MIX_PLATFORM_PREFERENCE: tuple[str, ...] = ("youtube", "soundcloud", "mixcloud")
