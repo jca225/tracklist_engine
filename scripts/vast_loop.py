@@ -243,6 +243,19 @@ def main() -> int:
     LOCAL_AUDIO.mkdir(parents=True, exist_ok=True)
     LOCAL_STEMS.mkdir(parents=True, exist_ok=True)
 
+    # Wipe orphan stems left behind by a previous run that was killed mid-
+    # rsync. The cleanup `finally` block doesn't fire on SIGKILL/tmux-kill,
+    # so files can pile up in /workspace/stems/<tid>/ and the next bg rsync
+    # ends up shipping them again — slowing the first iteration after every
+    # restart by ~2x. Also wipe LOCAL_AUDIO for the same reason.
+    for orphan in LOCAL_STEMS.iterdir():
+        if orphan.is_dir():
+            shutil.rmtree(orphan, ignore_errors=True)
+    for orphan in LOCAL_AUDIO.iterdir():
+        if orphan.is_file():
+            orphan.unlink(missing_ok=True)
+    log.info("cleared orphan local stems/audio from prior run")
+
     n_done = 0
     n_failed = 0
     # In-session "tried and failed" set. Without this, any track whose audio
