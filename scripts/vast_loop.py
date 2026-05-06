@@ -160,6 +160,21 @@ def push_track_rows(track_audio_id: int) -> None:
     """For each analysis table populated by persist_analysis, dump scratch
     rows for this track_audio_id and apply to canonical via SSH-piped SQL.
     Wraps in a transaction with DELETEs first so re-runs are idempotent."""
+    # persist_analysis records track_stems.path as the local Vast scratch
+    # path (/workspace/stems/<tid>/...). The actual file ends up at
+    # pi-storage:/mnt/storage/stems/<tid>/... after rsync_stems_out, so the
+    # row we ship to canonical needs the canonical path. Rewrite in scratch
+    # before the dump so the .mode insert output already has it baked in.
+    import sqlite3 as _sqlite3
+    _conn = _sqlite3.connect(SCRATCH_DB)
+    _conn.execute(
+        "UPDATE track_stems SET path = REPLACE(path, ?, ?) "
+        "WHERE track_audio_id = ?",
+        (f"{LOCAL_STEMS}/", f"{PI_STEMS_ROOT}/", track_audio_id),
+    )
+    _conn.commit()
+    _conn.close()
+
     tables = (
         "track_stems",
         "track_analysis",
