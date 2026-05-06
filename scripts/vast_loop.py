@@ -29,6 +29,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import replace as dc_replace
 from pathlib import Path
@@ -250,13 +251,49 @@ def main() -> int:
     # spin on the same track. Hit this on track 149 (corrupt m4a, torchcodec
     # decode error) — generated 496 failures in 18 min before fix landed.
     failed_tids: set[int] = set()
+
+    # Single-slot background thread for the rsync_stems_out + push_track_rows
+    # tail of each track. With a current per-track wall budget of ~135 s and
+    # ~50 s of that in stems-rsync, hiding the rsync behind the next track's
+    # ~80 s analyze step gives us ~30% throughput improvement. We block at
+    # the top of each iteration on the previous bg thread — that's safe
+    # since analyze always > rsync (otherwise wall time degrades to
+    # max(analyze, rsync) which is still fine, just not improved).
+    bg: threading.Thread | None = None
+
+    def _persist_in_bg(tid: int, stem_local: Path) -> None:
+        """Owns the cleanup of stem_local once handed off."""
+        try:
+            if stem_local.exists():
+                log.info("[%d] (bg) pushing stems", tid)
+                rsync_stems_out(stem_local, tid)
+            log.info("[%d] (bg) pushing DB rows to canonical", tid)
+            push_track_rows(tid)
+            log.info("[%d] (bg) DONE", tid)
+        except subprocess.CalledProcessError as e:
+            # We can't add to failed_tids from here (main thread owns it),
+            # but it doesn't matter: canonical never received track_analysis,
+            # so on the NEXT main-thread iteration `next_task` will re-pick
+            # this tid and we'll re-run the GPU work. Annoying, but safe.
+            log.error("[%d] (bg) push failed: %s", tid, e)
+        finally:
+            if stem_local.exists():
+                shutil.rmtree(stem_local, ignore_errors=True)
+
     while True:
+        # Block on previous track's tail before starting a new one. If the
+        # bg thread is already done, this returns immediately.
+        if bg is not None:
+            bg.join()
+            bg = None
+
         nxt = next_task(frozenset(failed_tids))
         if nxt is None:
             log.info("queue drained — analyzed %d, failed %d", n_done, n_failed)
             return 0
         tid, remote_path = nxt
         local_audio = LOCAL_AUDIO / f"{tid}.m4a"
+        handed_off = False
 
         try:
             log.info("[%d] pulling %s", tid, remote_path)
@@ -280,30 +317,29 @@ def main() -> int:
                 failed_tids.add(tid)
                 continue
 
+            # Hand off rsync + push_track_rows to bg thread. Main loop
+            # immediately starts the next track's audio rsync + GPU work.
             stem_local = LOCAL_STEMS / str(tid)
-            if stem_local.exists():
-                log.info("[%d] pushing stems", tid)
-                rsync_stems_out(stem_local, tid)
-
-            log.info("[%d] pushing DB rows to canonical", tid)
-            push_track_rows(tid)
-
+            bg = threading.Thread(
+                target=_persist_in_bg, args=(tid, stem_local), daemon=False,
+            )
+            bg.start()
+            handed_off = True
             n_done += 1
-            log.info("[%d] DONE  (total: %d ok, %d failed)", tid, n_done, n_failed)
+            log.info("[%d] handed off (n_done=%d, n_failed=%d)", tid, n_done, n_failed)
         except subprocess.CalledProcessError as e:
             log.error("[%d] subprocess failed: %s", tid, e)
             n_failed += 1
-            # Same trap as analyze_track failures — without skip, an rsync
-            # or push_track_rows failure would also make next_task() return
-            # this tid every iteration. If the failure was transient, the
-            # next Vast loop restart re-attempts (failed_tids is in-memory).
             failed_tids.add(tid)
         finally:
             if local_audio.exists():
                 local_audio.unlink()
-            stem_local = LOCAL_STEMS / str(tid)
-            if stem_local.exists():
-                shutil.rmtree(stem_local, ignore_errors=True)
+            # If hand-off succeeded, the bg thread owns stem_local cleanup.
+            # Otherwise (failed before hand-off) clean up here.
+            if not handed_off:
+                stem_local = LOCAL_STEMS / str(tid)
+                if stem_local.exists():
+                    shutil.rmtree(stem_local, ignore_errors=True)
 
 
 if __name__ == "__main__":

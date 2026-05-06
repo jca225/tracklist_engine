@@ -2,10 +2,16 @@
 
 The model still internally computes 4 sources (vocals/drums/bass/other) —
 that's how htdemucs_ft works, no faster way to get just two. We just
-persist only `vocals.wav` (direct) and `instrumental.wav` (drums + bass +
+persist only `vocals.flac` (direct) and `instrumental.flac` (drums + bass +
 other summed sample-accurately). DJs split on this axis and there's no
 use case in the rest of the pipeline for keeping the individual
 non-vocal stems.
+
+Stems are written as 16-bit FLAC (was WAV until 2026-05-06). On Vast →
+pi-storage rsync this saves ~50% bandwidth (~25 s/track wall) without
+quality loss — Demucs internally outputs float32, but downstream
+consumers (MERT resampled to 24 kHz mono, browser_daw playback) don't
+benefit from 24-bit, and lossless FLAC at 16-bit fits the use case.
 """
 from __future__ import annotations
 
@@ -82,13 +88,19 @@ def separate(
             mix = raw_sources[recipe[0]].clone()
             for s in recipe[1:]:
                 mix = mix + raw_sources[s]
-            path = dest / f"{stem_name}.wav"
-            torchaudio.save(str(path), mix, h._model.samplerate)
+            path = dest / f"{stem_name}.flac"
+            # 16-bit FLAC: ~50% smaller than 16-bit WAV (PCM) for music,
+            # lossless. Demucs outputs float32 internally; torchaudio.save
+            # without `bits_per_sample` defaults to 16 for FLAC, which
+            # downstream (MERT @ 24 kHz mono, browser playback) doesn't
+            # exceed. Encoding adds ~3-5s CPU per stem on Vast — still
+            # net-faster wall-clock than shipping uncompressed WAV.
+            torchaudio.save(str(path), mix, h._model.samplerate, format="flac")
             assets.append(StemAsset(
                 track_audio_id=track_audio_id,
                 stem_name=stem_name,
                 path=str(path),
-                codec="wav",
+                codec="flac",
             ))
     except (OSError, RuntimeError) as e:
         return Err(StemError(kind="disk", detail=str(e)))
