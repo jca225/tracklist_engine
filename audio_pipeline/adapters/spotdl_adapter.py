@@ -9,6 +9,7 @@ isn't a clean library boundary — its argument parsing eats sys.argv.
 from __future__ import annotations
 
 import hashlib
+import os
 import shutil
 import subprocess
 import sys
@@ -50,12 +51,19 @@ def _sha256(path: Path) -> str:
 
 def download_one(
     track_id: str, source: MediaSource, cfg: DownloadConfig, timeout_s: float = 120.0,
+    client_id: str | None = None, client_secret: str | None = None,
 ) -> Result[AudioAsset, DownloadError]:
     """Download a Spotify track via spotdl + yt-music search.
 
     spotdl writes one file with a metadata-derived name (e.g.
     "Artist - Title.m4a"). We rename to our `<track_id>__spotify__<player_id>.<ext>`
     convention so the file is consistent with the yt-dlp downloader.
+
+    `client_id` / `client_secret` (optional): Spotify Web API app credentials.
+    spotdl ships with default shared creds, but they're globally rate-limited
+    (24h backoff per "Your application has reached a rate/request limit"). Pass
+    real app creds for any production-volume run; fall back to env vars
+    SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET when args are None.
     """
     if source.platform != "spotify":
         return Err(DownloadError(
@@ -70,6 +78,9 @@ def download_one(
             detail="spotdl not on PATH (install via `pip install spotdl` in venvs/audio)",
         ))
 
+    cid = client_id or os.environ.get("SPOTIFY_CLIENT_ID")
+    csec = client_secret or os.environ.get("SPOTIFY_CLIENT_SECRET")
+
     cfg.out_dir.mkdir(parents=True, exist_ok=True)
     # Snapshot pre-download contents so we can identify spotdl's new file.
     before = set(cfg.out_dir.iterdir())
@@ -80,6 +91,8 @@ def download_one(
         "--output", str(cfg.out_dir),
         "--format", cfg.audio_format,
     ]
+    if cid and csec:
+        cmd += ["--client-id", cid, "--client-secret", csec]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)
     except subprocess.TimeoutExpired:

@@ -82,6 +82,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="Comma-separated set_ids to restrict the retry to")
     p.add_argument("--timeout", type=float, default=60.0,
                    help="Per-track spotdl timeout (default 60s)")
+    p.add_argument("--client-id", default=os.environ.get("SPOTIFY_CLIENT_ID"),
+                   help="Spotify Web API client ID. Falls back to "
+                        "$SPOTIFY_CLIENT_ID. Required at production volume — "
+                        "spotdl's built-in default creds are globally rate-"
+                        "limited (24h backoff once tripped).")
+    p.add_argument("--client-secret", default=os.environ.get("SPOTIFY_CLIENT_SECRET"),
+                   help="Spotify Web API client secret. Falls back to "
+                        "$SPOTIFY_CLIENT_SECRET.")
     p.add_argument("--max-tracks", type=int, default=None,
                    help="Stop after attempting N tracks (smoke testing)")
     p.add_argument("--dry-run", action="store_true",
@@ -150,6 +158,8 @@ def _attempt(
     objects_root: Path,
     audio_format: str,
     timeout_s: float,
+    client_id: str | None,
+    client_secret: str | None,
 ) -> tuple[str, str | None]:
     """Returns (status, detail). Status:
       'downloaded' | 'unavailable' | 'timeout' | 'other_fail' | 'db_failed'
@@ -166,6 +176,7 @@ def _attempt(
 
     dl_r = spotdl_adapter.download_one(
         candidate.track_id, source, cfg, timeout_s=timeout_s,
+        client_id=client_id, client_secret=client_secret,
     )
     match dl_r:
         case Err(err):
@@ -211,10 +222,17 @@ def _run(args: argparse.Namespace) -> int:
         return 0
 
     _log.info(
-        "candidates=%d, db=%s, audio_root=%s, timeout=%.0fs, dry_run=%s, set_filter=%s",
+        "candidates=%d, db=%s, audio_root=%s, timeout=%.0fs, dry_run=%s, set_filter=%s, creds=%s",
         len(candidates), args.db, args.audio_root, args.timeout, args.dry_run,
         ("bb-10-15" if args.bb_only else (args.set_ids or "all")),
+        "user" if (args.client_id and args.client_secret) else "spotdl_default",
     )
+    if not (args.client_id and args.client_secret) and not args.dry_run:
+        _log.warning(
+            "no Spotify creds (--client-id/--client-secret or "
+            "SPOTIFY_CLIENT_ID/SECRET env). spotdl's default creds are "
+            "globally rate-limited and will likely time out on every track."
+        )
 
     objects_root = args.audio_root / "objects"
     stats = RunStats(candidates=len(candidates))
@@ -233,6 +251,7 @@ def _run(args: argparse.Namespace) -> int:
 
         status, detail = _attempt(
             c, args.db, objects_root, args.audio_format, args.timeout,
+            args.client_id, args.client_secret,
         )
         if status == "downloaded":
             stats = replace(stats, downloaded=stats.downloaded + 1)
