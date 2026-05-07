@@ -66,9 +66,18 @@ _BB_SETS: frozenset[str] = frozenset((
 
 @dataclass(frozen=True)
 class Candidate:
-    """A yt-dlp-sourced track that has artist+title metadata available."""
-    yt_track_audio_id: int
-    yt_audio_path: str
+    """A track to feed through YT Music. Two flavors:
+
+    - REPLACE: track already has a `track_audio` row sourced from raw
+      yt-dlp (1001tracklists scrape, often noisy). `yt_track_audio_id`
+      and `yt_audio_path` are the existing row + file. Phase 2 deletes
+      them after the new YT Music row inserts.
+    - ACQUIRE: no `track_audio` row exists yet. `yt_track_audio_id` is
+      None. Phase 1 inserts the YT Music row; Phase 2 is a no-op for
+      this candidate.
+    """
+    yt_track_audio_id: int | None  # None = acquire mode (no row to replace)
+    yt_audio_path: str | None      # None = acquire mode
     track_id: str
     title: str
     artists_csv: str               # 'Daft Punk' or 'Artist1, Artist2'
@@ -80,6 +89,10 @@ class Candidate:
         if self.artists_csv:
             return f"{self.artists_csv} - {self.title}"
         return self.title
+
+    @property
+    def needs_replace(self) -> bool:
+        return self.yt_track_audio_id is not None
 
 
 @dataclass(frozen=True)
@@ -112,6 +125,17 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--no-replace", action="store_true",
                    help="Skip Phase 2 destructive cleanup; both rows coexist.")
+    p.add_argument("--mode", choices=("replace", "acquire", "all"),
+                   default="all",
+                   help="replace=only existing yt-dlp rows (the original "
+                        "redownload behavior); acquire=only tracks with no "
+                        "track_audio row yet; all=both, replace candidates "
+                        "first then acquire (default).")
+    p.add_argument("--job-file", type=Path, default=None,
+                   help="Optional JSON job file (e.g. data/djs/tier1_plus_bb.json) "
+                        "to restrict candidates to tracks that appear in any of "
+                        "those sets. Without this flag, the script considers "
+                        "the entire corpus.")
     p.add_argument("--audio-format", default="m4a")
     p.add_argument("--cookies", type=Path,
                    default=Path(os.environ["TRACKLIST_YT_COOKIES"])
@@ -122,59 +146,124 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-def _load_candidates(db_path: Path) -> tuple[Candidate, ...]:
-    """Tracks where:
-      - track_audio.platform = 'youtube' (the noisy scraped version)
-      - track_metadata has a non-empty title (so we have something to search)
-    Order: BB-first, then by set_id grouping (so Vast can re-analyze BB
-    quickly).
+def _row_to_candidate(r: sqlite3.Row) -> Candidate:
+    try:
+        artists = json.loads(r["artists_json"]) if r["artists_json"] else []
+    except (json.JSONDecodeError, TypeError):
+        artists = []
+    artists_csv = ", ".join(a for a in artists if a)
+    # yt_track_audio_id and yt_audio_path are NULL for ACQUIRE candidates.
+    yt_taid = r["yt_track_audio_id"] if "yt_track_audio_id" in r.keys() else None
+    yt_path = r["yt_audio_path"] if "yt_audio_path" in r.keys() else None
+    return Candidate(
+        yt_track_audio_id=yt_taid,
+        yt_audio_path=yt_path,
+        track_id=r["track_id"],
+        title=r["title"],
+        artists_csv=artists_csv,
+        set_id=r["set_id"] or "",
+        is_bb=r["is_bb"],
+    )
+
+
+def _load_candidates(
+    db_path: Path,
+    mode: str,                            # 'replace' | 'acquire' | 'all'
+    job_set_ids: frozenset[str] | None,   # None = whole corpus
+) -> tuple[Candidate, ...]:
+    """Loads candidates per `mode`:
+      - 'replace': existing track_audio rows where platform='youtube'
+      - 'acquire': tracks with no track_audio row yet
+      - 'all': both, replace-first then acquire (Phase 2 only fires on
+        replace candidates).
+
+    `job_set_ids`, if provided, restricts to tracks appearing in any of
+    those sets (e.g. tier1_plus_bb).
+
+    Ordering: BB-first, then by set_id, then track_audio_id (or track_id
+    for acquire candidates with no audio_id).
     """
     bb_csv = ",".join(f"'{s}'" for s in _BB_SETS)
-    query = f"""
-        SELECT
-          ta.track_audio_id   AS yt_track_audio_id,
-          ta.path             AS yt_audio_path,
-          ta.track_id         AS track_id,
-          tm.title            AS title,
-          tm.artists_json     AS artists_json,
-          (
-            SELECT m.set_id
-            FROM dj_set_track_media_links m
-            WHERE m.track_id = ta.track_id
-            ORDER BY (CASE WHEN m.set_id IN ({bb_csv}) THEN 0 ELSE 1 END), m.set_id
-            LIMIT 1
-          ) AS set_id,
-          (
-            CASE WHEN EXISTS (
-              SELECT 1 FROM dj_set_track_media_links m
-              WHERE m.track_id = ta.track_id AND m.set_id IN ({bb_csv})
-            ) THEN 1 ELSE 0 END
-          ) AS is_bb
-        FROM track_audio ta
-        JOIN track_metadata tm ON tm.track_id = ta.track_id
-        WHERE ta.platform = 'youtube'
-          AND tm.title IS NOT NULL AND tm.title != ''
-        ORDER BY is_bb DESC, set_id, ta.track_audio_id
-    """
+    job_filter = ""
+    if job_set_ids is not None and job_set_ids:
+        job_csv = ",".join(f"'{s}'" for s in job_set_ids)
+        job_filter = (
+            "AND EXISTS ("
+            "SELECT 1 FROM dj_set_track_media_links jm "
+            f"WHERE jm.track_id = base.track_id AND jm.set_id IN ({job_csv})"
+            ")"
+        )
+
+    out: list[Candidate] = []
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
-        rows = conn.execute(query).fetchall()
-    out: list[Candidate] = []
-    for r in rows:
-        try:
-            artists = json.loads(r["artists_json"]) if r["artists_json"] else []
-        except (json.JSONDecodeError, TypeError):
-            artists = []
-        artists_csv = ", ".join(a for a in artists if a)
-        out.append(Candidate(
-            yt_track_audio_id=r["yt_track_audio_id"],
-            yt_audio_path=r["yt_audio_path"],
-            track_id=r["track_id"],
-            title=r["title"],
-            artists_csv=artists_csv,
-            set_id=r["set_id"] or "",
-            is_bb=r["is_bb"],
-        ))
+
+        if mode in ("replace", "all"):
+            replace_q = f"""
+                WITH base AS (
+                    SELECT ta.track_audio_id, ta.path, ta.track_id
+                    FROM track_audio ta
+                    WHERE ta.platform = 'youtube'
+                )
+                SELECT
+                  base.track_audio_id   AS yt_track_audio_id,
+                  base.path             AS yt_audio_path,
+                  base.track_id         AS track_id,
+                  tm.title              AS title,
+                  tm.artists_json       AS artists_json,
+                  (
+                    SELECT m.set_id FROM dj_set_track_media_links m
+                    WHERE m.track_id = base.track_id
+                    ORDER BY (CASE WHEN m.set_id IN ({bb_csv}) THEN 0 ELSE 1 END), m.set_id
+                    LIMIT 1
+                  ) AS set_id,
+                  (CASE WHEN EXISTS (
+                    SELECT 1 FROM dj_set_track_media_links m
+                    WHERE m.track_id = base.track_id AND m.set_id IN ({bb_csv})
+                  ) THEN 1 ELSE 0 END) AS is_bb
+                FROM base
+                JOIN track_metadata tm ON tm.track_id = base.track_id
+                WHERE tm.title IS NOT NULL AND tm.title != ''
+                  {job_filter}
+                ORDER BY is_bb DESC, set_id, base.track_audio_id
+            """
+            for r in conn.execute(replace_q).fetchall():
+                out.append(_row_to_candidate(r))
+
+        if mode in ("acquire", "all"):
+            acquire_q = f"""
+                WITH base AS (
+                    SELECT tm.track_id
+                    FROM track_metadata tm
+                    LEFT JOIN track_audio ta ON ta.track_id = tm.track_id
+                    WHERE ta.track_audio_id IS NULL
+                      AND tm.title IS NOT NULL AND tm.title != ''
+                )
+                SELECT
+                  NULL                  AS yt_track_audio_id,
+                  NULL                  AS yt_audio_path,
+                  base.track_id         AS track_id,
+                  tm.title              AS title,
+                  tm.artists_json       AS artists_json,
+                  (
+                    SELECT m.set_id FROM dj_set_track_media_links m
+                    WHERE m.track_id = base.track_id
+                    ORDER BY (CASE WHEN m.set_id IN ({bb_csv}) THEN 0 ELSE 1 END), m.set_id
+                    LIMIT 1
+                  ) AS set_id,
+                  (CASE WHEN EXISTS (
+                    SELECT 1 FROM dj_set_track_media_links m
+                    WHERE m.track_id = base.track_id AND m.set_id IN ({bb_csv})
+                  ) THEN 1 ELSE 0 END) AS is_bb
+                FROM base
+                JOIN track_metadata tm ON tm.track_id = base.track_id
+                WHERE 1=1
+                  {job_filter}
+                ORDER BY is_bb DESC, set_id, base.track_id
+            """
+            for r in conn.execute(acquire_q).fetchall():
+                out.append(_row_to_candidate(r))
+
     return tuple(out)
 
 
@@ -260,6 +349,12 @@ def _phase2_replace(
     stems_root = audio_root / "stems"
 
     for c in candidates:
+        if not c.needs_replace:
+            # ACQUIRE candidate — Phase 1 inserted a fresh row, nothing to
+            # delete in Phase 2. (Counted in phase2_skipped to avoid
+            # over-reporting "actual" failures.)
+            stats = dc_replace(stats, phase2_skipped=stats.phase2_skipped + 1)
+            continue
         new_taid = ok_map.get(c.track_id)
         if new_taid is None:
             stats = dc_replace(stats, phase2_skipped=stats.phase2_skipped + 1)
@@ -314,7 +409,20 @@ def _run(args: argparse.Namespace) -> int:
         level=getattr(logging, args.log_level),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-    candidates = _load_candidates(args.db)
+
+    job_set_ids: frozenset[str] | None = None
+    if args.job_file is not None:
+        try:
+            rows = json.loads(args.job_file.read_text())
+            ids = [r["tracklist_id"] for r in rows
+                   if isinstance(r, dict) and r.get("tracklist_id")]
+            job_set_ids = frozenset(ids)
+            _log.info("job-file %s: %d set_ids", args.job_file, len(job_set_ids))
+        except (OSError, json.JSONDecodeError, KeyError) as e:
+            _log.error("failed to read job file %s: %s", args.job_file, e)
+            return 1
+
+    candidates = _load_candidates(args.db, args.mode, job_set_ids)
     if args.max_tracks is not None:
         candidates = candidates[: args.max_tracks]
     if not candidates:
@@ -322,13 +430,19 @@ def _run(args: argparse.Namespace) -> int:
         return 0
 
     bb_count = sum(1 for c in candidates if c.is_bb)
-    _log.info("loaded %d candidates (BB-first count=%d, dry_run=%s, no_replace=%s)",
-              len(candidates), bb_count, args.dry_run, args.no_replace)
+    replace_count = sum(1 for c in candidates if c.needs_replace)
+    acquire_count = len(candidates) - replace_count
+    _log.info("loaded %d candidates (mode=%s, replace=%d, acquire=%d, BB-first=%d, "
+              "dry_run=%s, no_replace=%s)",
+              len(candidates), args.mode, replace_count, acquire_count,
+              bb_count, args.dry_run, args.no_replace)
 
     if args.dry_run:
         for c in candidates[:10]:
-            _log.info("DRY  yt_taid=%d  set=%s  bb=%d  query=%r",
-                      c.yt_track_audio_id, c.set_id, c.is_bb, c.query)
+            kind = "REPL" if c.needs_replace else "ACQU"
+            taid = str(c.yt_track_audio_id) if c.needs_replace else "—"
+            _log.info("DRY  %s  yt_taid=%s  set=%s  bb=%d  query=%r",
+                      kind, taid, c.set_id, c.is_bb, c.query)
         if len(candidates) > 10:
             _log.info("... and %d more", len(candidates) - 10)
         return 0
