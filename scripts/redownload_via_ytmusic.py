@@ -313,9 +313,11 @@ def _phase1_download(
                             stats = dc_replace(stats, phase1_ok=stats.phase1_ok + 1)
                             ok_map[c.track_id] = new_taid
                             ok_in_shard += 1
-                            _log.info("OK    %s -> %s (taid=%d, supersedes %d)",
-                                      c.track_id, asset.path, new_taid,
-                                      c.yt_track_audio_id)
+                            supersedes = (str(c.yt_track_audio_id)
+                                          if c.yt_track_audio_id is not None
+                                          else "—")
+                            _log.info("OK    %s -> %s (taid=%d, supersedes %s)",
+                                      c.track_id, asset.path, new_taid, supersedes)
                         case Err(e):
                             stats = dc_replace(stats, phase1_failed_insert=stats.phase1_failed_insert + 1)
                             _log.error("DB    %s insert: %s", c.track_id, e.detail)
