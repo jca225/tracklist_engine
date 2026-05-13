@@ -38,7 +38,7 @@ def analyze_set(
     stems_dir: Path,
 ) -> Result[SetAnalysisResult, AnalysisError]:
     """Run beat_this + Demucs on the full mix. `stems_dir` is the parent;
-    output goes into `stems_dir/set/<set_audio_id>/{vocals,drums,bass,other}.wav`
+    output goes into `stems_dir/set/<set_audio_id>/{vocals,instrumental}.flac`
     to keep set stems clearly separated from track stems on disk."""
     assert asset.set_audio_id is not None, "SetAudioAsset must be persisted before analysis"
     mix_path = Path(asset.path)

@@ -64,6 +64,14 @@ _BB_SETS: frozenset[str] = frozenset((
 ))
 
 
+# Variant tags whose remixer/edit info we must preserve in the YT Music
+# query — the bare "Artist - Title" loses the parenthetical and returns
+# the original studio cut instead of the remix. Acappella is deliberately
+# excluded: Demucs extracts vocals from the original cleanly enough, and
+# isolated-vocal uploads on YT Music are sparse + noisy.
+_VARIANT_QUERY_TAGS: frozenset[str] = frozenset(("Remix", "Rework", "AltVersion"))
+
+
 @dataclass(frozen=True)
 class Candidate:
     """A track to feed through YT Music. Two flavors:
@@ -83,9 +91,16 @@ class Candidate:
     artists_csv: str               # 'Daft Punk' or 'Artist1, Artist2'
     set_id: str
     is_bb: int
+    version_tag: str | None        # Remix | Rework | Acappella | AltVersion | None
+    full_name: str | None          # canonical scraped 'Artist - Title (Remixer Remix)'
 
     @property
     def query(self) -> str:
+        # For Remix/Rework/AltVersion, prefer full_name — title has the
+        # trailing parens stripped by the tokenizer, so "iSpy" loses
+        # "(Two Friends Remix)" and we'd resolve to the original.
+        if self.version_tag in _VARIANT_QUERY_TAGS and self.full_name:
+            return self.full_name
         if self.artists_csv:
             return f"{self.artists_csv} - {self.title}"
         return self.title
@@ -163,6 +178,8 @@ def _row_to_candidate(r: sqlite3.Row) -> Candidate:
         artists_csv=artists_csv,
         set_id=r["set_id"] or "",
         is_bb=r["is_bb"],
+        version_tag=r["version_tag"] if "version_tag" in r.keys() else None,
+        full_name=r["full_name"] if "full_name" in r.keys() else None,
     )
 
 
@@ -211,6 +228,8 @@ def _load_candidates(
                   base.track_id         AS track_id,
                   tm.title              AS title,
                   tm.artists_json       AS artists_json,
+                  tm.version_tag        AS version_tag,
+                  tm.full_name          AS full_name,
                   (
                     SELECT m.set_id FROM dj_set_track_media_links m
                     WHERE m.track_id = base.track_id
@@ -245,6 +264,8 @@ def _load_candidates(
                   base.track_id         AS track_id,
                   tm.title              AS title,
                   tm.artists_json       AS artists_json,
+                  tm.version_tag        AS version_tag,
+                  tm.full_name          AS full_name,
                   (
                     SELECT m.set_id FROM dj_set_track_media_links m
                     WHERE m.track_id = base.track_id
@@ -443,8 +464,9 @@ def _run(args: argparse.Namespace) -> int:
         for c in candidates[:10]:
             kind = "REPL" if c.needs_replace else "ACQU"
             taid = str(c.yt_track_audio_id) if c.needs_replace else "—"
-            _log.info("DRY  %s  yt_taid=%s  set=%s  bb=%d  query=%r",
-                      kind, taid, c.set_id, c.is_bb, c.query)
+            _log.info("DRY  %s  yt_taid=%s  set=%s  bb=%d  vtag=%s  query=%r",
+                      kind, taid, c.set_id, c.is_bb,
+                      c.version_tag or "—", c.query)
         if len(candidates) > 10:
             _log.info("... and %d more", len(candidates) - 10)
         return 0
