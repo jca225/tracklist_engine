@@ -58,7 +58,7 @@ LOCAL_AUDIO = SCRATCH_DIR / "audio"
 LOCAL_STEMS = SCRATCH_DIR / "stems"
 SCRATCH_DB = SCRATCH_DIR / "scratch.db"
 
-BB_SETS = ("w1mgcjt", "2nvzlh2k", "1fsnxchk", "qj4v0wt", "1yl70ql1", "237tdqmk")
+BB_SETS = ("w1mgcjt",)  # BB10 only; revert to all six to drain BB10-15
 
 # MPS = Apple Silicon GPU. analyze_track uses this for Demucs / MERT /
 # cue-detr. beat_this is CPU-light. Essentia runs in its own venv subprocess.
@@ -182,18 +182,51 @@ def push_track_rows(track_audio_id: int) -> None:
     _conn.commit()
     _conn.close()
 
-    tables = (
-        "track_stems",
+    # track_stems has an AUTOINCREMENT PK (track_stem_id) that collides
+    # across DBs — scratch's local counter assigns the same value as some
+    # unrelated row already on canonical. Build the INSERTs explicitly with
+    # a column list that omits track_stem_id so canonical's autoincrement
+    # assigns a fresh one. The other three tables key off track_audio_id
+    # (globally unique) and don't have this problem, so .mode insert is OK.
+    tables_keyed = (
         "track_analysis",
         "track_audio_features",
         "track_mert_measures",
     )
-    sql_lines = ["BEGIN;"]
-    for t in tables:
+    _conn = _sqlite3.connect(SCRATCH_DB)
+    _conn.row_factory = _sqlite3.Row
+    stems_rows = _conn.execute(
+        "SELECT track_audio_id, stem_name, path, codec, created_at "
+        "FROM track_stems WHERE track_audio_id = ?",
+        (track_audio_id,),
+    ).fetchall()
+    _conn.close()
+
+    def _sql_lit(v: object) -> str:
+        if v is None:
+            return "NULL"
+        if isinstance(v, (int, float)):
+            return str(v)
+        return "'" + str(v).replace("'", "''") + "'"
+
+    stems_inserts = "\n".join(
+        "INSERT INTO track_stems (track_audio_id, stem_name, path, codec, created_at) "
+        f"VALUES ({', '.join(_sql_lit(r[c]) for c in ('track_audio_id','stem_name','path','codec','created_at'))});"
+        for r in stems_rows
+    )
+
+    # .bail on so the CLI aborts the transaction on the first error instead
+    # of pushing through and leaving partial state (which is what bit us
+    # before — track_stems INSERT failed but the rest of the rows still
+    # landed because sqlite3 kept executing).
+    sql_lines = [".bail on", "BEGIN;"]
+    sql_lines.append(f"DELETE FROM track_stems WHERE track_audio_id={track_audio_id};")
+    for t in tables_keyed:
         sql_lines.append(f"DELETE FROM {t} WHERE track_audio_id={track_audio_id};")
+    sql_lines.append(stems_inserts)
     dump_script = "\n".join(
         f".mode insert {t}\nSELECT * FROM {t} WHERE track_audio_id={track_audio_id};"
-        for t in tables
+        for t in tables_keyed
     )
     dumped = subprocess.check_output(
         ["sqlite3", str(SCRATCH_DB)], input=dump_script, text=True,
@@ -203,6 +236,7 @@ def push_track_rows(track_audio_id: int) -> None:
     full_sql = "\n".join(sql_lines)
     subprocess.run(["ssh", PI_HOST, f"sqlite3 {CANONICAL_DB}"],
                    input=full_sql, text=True, check=True)
+    tables = ("track_stems",) + tables_keyed
     # Clear scratch rows for this track
     conn = _sqlite3.connect(SCRATCH_DB)
     for t in tables:
