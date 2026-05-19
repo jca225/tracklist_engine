@@ -619,26 +619,50 @@ Schema lives in [web_crawler/database/schema.sql](web_crawler/database/schema.sq
 
 ## Storage & cluster
 
-The project runs across three machines (see [Makefile](Makefile) for cluster ops):
+The project runs across four machines (see [Makefile](Makefile) for cluster ops):
 
 - **pi-storage** (Linux aarch64) — canonical state (DB + audio + stems) + scraper services + **CPU-side analysis** (yt-dlp downloads, beat_this, cue-detr, librosa, pyloudnorm). Long-running services live here. Reachable via Tailscale MagicDNS.
 - **pi-worker** (Linux aarch64) — AJAX retry drain (`tracklist-ajax-retry.service`). Spare CPU available for batch CPU analysis when idle.
 - **Vast.ai spot GPU** (rented, ephemeral) — **GPU-bound analysis** (Demucs, MERT) and **Essentia** (no aarch64 wheels — must run on x86_64). Job pulls audio from pi-storage over Tailscale, runs inference, writes results back, terminates. Cost target ≤$5–10 for the whole 16k-track corpus on a 3090/4090 spot.
-- **Mac** — development driver only. Code edits, EDA, manual queries, ad-hoc test runs of the analysis stack. Not part of the production data path.
+- **Mac** (Apple Silicon) — dev driver *and* a second analysis worker. The full Demucs/beat_this/cue-detr/MERT/Essentia pipeline runs locally on the MPS backend via [scripts/mac_analyze_loop.py](scripts/mac_analyze_loop.py) (sibling of `vast_loop.py`); pulls audio from pi-storage over Tailscale, writes results back. Expect ~200–250 s/track vs ~85 s on a 4090 — useful when no Vast box is rented or for the long tail. Also drives the **alignment** workflow (see below).
 
 **Analysis split (which dep runs where):**
 
 | Component | Runs on | Why |
 |---|---|---|
 | yt-dlp / spotdl downloads | pi-storage | CPU-only; cross-arch wheels work |
-| beat_this (beats/downbeats) | pi-storage CPU | PyTorch has aarch64 wheels; small model |
-| cue-detr (EDM cues) | pi-storage CPU | DETR transformer; small model |
-| librosa, pyloudnorm | pi-storage | pure Python |
-| **Essentia** (key/BPM/valence/mood/etc.) | **Vast.ai** | no aarch64 wheels — Essentia ships only x86_64 manylinux + macOS arm64 |
-| **Demucs** stems | **Vast.ai** | GPU-bound; ~30s/track on Pi CPU vs ~1s/track on 4090 |
-| **MERT** embeddings | **Vast.ai** | same |
+| beat_this (beats/downbeats) | pi-storage CPU **or** Mac MPS | PyTorch has aarch64 + MPS wheels; small model |
+| cue-detr (EDM cues) | pi-storage CPU **or** Mac MPS | DETR transformer; small model |
+| librosa, pyloudnorm | pi-storage **or** Mac | pure Python |
+| **Essentia** (key/BPM/valence/mood/etc.) | **Vast.ai** *or* **Mac** | no aarch64 wheels — Essentia ships only x86_64 manylinux + macOS arm64, so the Mac has a `venvs/essentia/` Py3.13 sandbox and runs Essentia as a subprocess |
+| **Demucs** stems | **Vast.ai** *or* **Mac MPS** | GPU-bound; ~30s/track on Pi CPU vs ~1s/track on 4090 vs ~3–5s/track on M-series MPS |
+| **MERT** embeddings | **Vast.ai** *or* **Mac MPS** | same; [audio_pipeline/analysis/adapters/mert_adapter.py](audio_pipeline/analysis/adapters/mert_adapter.py) auto-selects `cuda` → `mps` → `cpu` |
 
-The Mac mirrors most of the pi-storage stack (`venvs/audio/`) plus an extra `venvs/essentia/` Py3.13 sandbox so all of analysis can be exercised locally during development. Production runs do not touch the Mac.
+The Mac mirrors the pi-storage CPU stack (`venvs/audio/`) plus the `venvs/essentia/` Py3.13 sandbox, so the **entire production analysis pipeline** is exercisable locally — not just for development, but as an actual production worker for batches that don't justify spinning up Vast.
+
+**Alignment workflow (Mac-driven):**
+
+Ground-truth alignment work happens in `~/aligning/` on the Mac:
+
+- [scripts/pull_set_for_alignment.py](scripts/pull_set_for_alignment.py) — queries pi-storage's canonical DB over SSH, rsyncs the mix recording + per-track stems into `~/aligning/<set_id>__<sanitized-title>/{mix.<ext>, tracks/, manifest.json, stems/}`, ready to drag into Ableton.
+- [scripts/tag_aligning_folder.py](scripts/tag_aligning_folder.py) — reads `manifest.json`, queries pi-storage `track_audio_features`, injects BPM + Camelot key + feature comment into each M4A's iTunes tags so Ableton shows them in the browser.
+- `~/aligning/phase-cancel/` — phase-cancellation instrumental extraction (see the `project_phase_cancel` memory; winner config is `adaptive --smooth 0.5 --fft 4096 --cap 4`).
+
+**Consistency model.** The `~/aligning/<set>/` folder is a **read-replica of pi-storage**: the pull script is the only writer, and pi-storage's DB is the source of truth for what should be there. Two operations keep them consistent:
+
+1. **Re-run the pull = delta refresh.** Rsync runs in archive mode (`-aL --partial --inplace`), so re-invoking `pull_set_for_alignment.py <set_id>` only transfers files that changed on pi-storage (regenerated stems, replaced audio). Unchanged files are skipped.
+2. **`--prune` removes orphans.** When pi-storage's view diverges by *removal* — a track gets re-resolved to a different `track_audio_id`, a stem subdir-name changes, an audio file gets replaced with a different codec — old local files are stale. `--prune` walks `tracks/` and the plan's stem subdirs and deletes audio-extension files not in the freshly-rebuilt manifest. Combine with `--dry-run` to preview deletions without touching anything. Gated behind the flag so a fat-finger can't wipe in-flight work.
+
+**Annotator rename convention (one-sided, Mac-only).** The human annotator renames track files and stem subdirs to expose tempo + key inline, e.g. `tracks/030__Going Deeper - Little Big Adventure [126bpm 8B].m4a` and `stems/001__Carmen Twillie - Circle Of Life [84bpm 6B]/`. This makes Ableton's clip browser show tempo/key at a glance during alignment, dramatically speeding the workflow. Two known tags:
+
+- `[NNNbpm KK]` — tempo + Camelot key, e.g. `[126bpm 8B]`, `[84bpm 6B]`
+- `[no-features]` — flags tracks without Essentia rows on pi-storage so the annotator knows to skip them
+
+These renames are **never written back to pi-storage** — the canonical names there stay `{Artist} - {Title}.{ext}`. `--prune` recognizes these tag patterns (`_USER_TAG_PATTERN` in [pull_set_for_alignment.py](scripts/pull_set_for_alignment.py)) and treats tagged files/subdirs as user territory: never deleted. Likewise, anything inside a user-renamed stem subdir (e.g. `phase_cancel_v*.wav` artifacts) is left alone because the parent subdir isn't in the prune's plan-owned set.
+
+Consequence: re-pulling a set will deposit *fresh un-tagged copies* of files the annotator previously renamed. That's expected — the annotator either re-runs the rename pass or ignores the duplicates. There's no automatic re-tag-on-refresh today.
+
+**Folder lifecycle.** The folder is ephemeral — delete a set once alignment data has been written back to the canonical DB. (Write-back of Ableton-session alignment results to pi-storage is not implemented yet; that's the next missing piece.)
 
 **Canonical paths on pi-storage:**
 
@@ -654,7 +678,11 @@ The repo's `data/db/music_database.db` is **a stale local copy for development �
 
 **Pi-storage venvs:**
 - `venvs/web_crawler/` — scraper, materializer, FastAPI jobqueue (BeautifulSoup, lxml, ddddocr, FastAPI).
-- `venvs/audio/` — yt-dlp + spotdl for downloads, plus the CPU analysis stack (PyTorch CPU, beat_this, cue-detr, librosa, pyloudnorm). **Does not include Essentia / Demucs / MERT** — those run on Vast.ai.
+- `venvs/audio/` — yt-dlp + spotdl for downloads, plus the CPU analysis stack (PyTorch CPU, beat_this, cue-detr, librosa, pyloudnorm). **Does not include Essentia / Demucs / MERT** — those run on Vast.ai or the Mac.
+
+**Mac venvs (same names, different role):**
+- `venvs/audio/` — same stack as pi-storage but with MPS-backed PyTorch, so beat_this / cue-detr / Demucs / MERT all run on Apple Silicon GPU.
+- `venvs/essentia/` — Py3.13 sandbox holding the `essentia-tensorflow` wheel (macOS arm64 wheel exists; pi-storage's aarch64 Linux does not). Invoked as a subprocess from `venvs/audio/` whenever the analysis pipeline needs Essentia.
 
 Use [Makefile](Makefile) for cluster ops (`make deploy`, `make status`, `make ssh-storage`).
 
