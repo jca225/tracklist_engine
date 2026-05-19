@@ -10,12 +10,7 @@ top-level module:
 
 1. **scrape** — `web_crawler/` extracts DJ set metadata, track listings, and
    streaming links from 1001Tracklists.com.
-2. **align** — `audio_pipeline/` downloads each scraped track, runs Demucs
-   stems + MIR + MERT analysis, and aligns the recorded mix audio against the
-   tracklist via Viterbi (see [docs/SOTA.md](docs/SOTA.md)).
-3. **view** — `browser_daw/` is the canonical viewer (frontend + backend) for
-   browsing aligned sets and clipping segments.
-
+   
 Everything outside this chain is one of:
 - A vendored dependency: `cue-detr/` (DETR-based cue-point detection model,
   consumed only by `audio_pipeline/analysis/canonical_cues.py`).
@@ -69,6 +64,300 @@ DETR-based model for cue point detection in EDM tracks. Uses a custom COCO-like 
 ### Data Analysis (`data_analysis/`)
 - `eda.ipynb`, `error_analysis.ipynb`, `tokenizer.ipynb` — Exploratory analysis notebooks.
 - `common.py` — Shared utilities for DB queries and pydantic_ai agent integration.
+
+### MERT embedding choice
+
+We use `m-a-p/MERT-v1-95M` at **hidden layer 6** (not the final layer) for
+both analysis and alignment paths. The MERT paper shows mid-layers transfer
+best to music-ID / structural-matching tasks; the top of the stack is more
+tagging-oriented and the bottom too acoustic. Constant lives in
+[audio_pipeline/analysis/adapters/mert_adapter.py](audio_pipeline/analysis/adapters/mert_adapter.py)
+as `MERT_DEFAULT_LAYER` and in [audio_pipeline/alignment/mert_align.py](audio_pipeline/alignment/mert_align.py)
+as `DEFAULT_LAYER`. Keep them in sync — the alignment cache hashes the
+layer into its key, so a divergence silently doubles the embedding cost.
+When a learnable scoring head is added on top (post-ground-truth labeling),
+replace the single-layer pick with a 13-channel learnable weighted sum
+over all hidden states (SUPERB pattern) co-trained with the head.
+
+## Corpus empirics
+
+Empirical facts about the source corpus that constrain downstream modeling.
+
+### Acapella/instrumental era choice is orthogonal in Big Bootie
+
+Across Big Bootie Vols. 1–26 (Two Friends), the release year of the layered
+acapella is statistically **independent** of the release year of the
+instrumental host:
+
+- n = 2,763 (instrumental_year, acapella_year) pairs (rows resolved to Spotify
+  release dates)
+- Pearson r = **−0.016**; Spearman r = 0.082
+- Partial Pearson controlling for BB volume year: r = −0.032
+- Shuffle-null 95% CI for Pearson: [−0.035, 0.037] — observed inside, two-sided
+  p ≈ 0.40
+- Gap (acap − instr year): mean = −4.25y, SD = 12.7y, median |gap| = 5y
+- Era buckets: 24% have acapella >10y older than instrumental, 21% are same
+  year (±1), the rest spread across all other gaps
+
+**Within a mashup slot, year is independent — but the marginal distributions
+of the two roles are very different:**
+
+- corr(instrumental_year, BB_volume_year) = **0.357** — instrumentals are
+  picked *fresh* (median instrumental ≈ within 0–2y of the volume's release)
+- corr(acapella_year, BB_volume_year) = **0.101** — acapellas are pulled from
+  a much wider historical window; per-volume SD is 9–12y vs. 3–7y for
+  instrumentals
+- Median per-volume gap (acap behind instr) grew from 1y (BB Vol. 5, 2014) to
+  8y (BB24, 2024) — the "fresh beat, deep-catalog vocal" signature has
+  intensified as the series aged
+- This explains the −4.25y mean gap in the paired analysis: the *marginals*
+  drift apart even though the *per-slot* pairing is independent
+
+**Implication for modeling**: the mashup-sequence model (and any pair-scoring
+head built from the aligned corpus) **must not condition on release-year
+proximity** as a compatibility feature. Two Friends' aesthetic explicitly
+mixes eras — classic vocals over modern beats and vice versa. Date-based
+priors would learn an artifact, not the signal. Aesthetic / key / BPM / genre
+alignment are the features that actually carry compatibility. If a date
+prior is added later, model the two roles with **separate marginals**
+(instrumental ≈ current year, acapella ≈ uniform over recent decades) rather
+than a joint year-proximity term.
+
+Reproduction: [scripts/bb_era_orthogonality.py](scripts/bb_era_orthogonality.py).
+Cached release years: `data/analysis/spotify_release_dates.csv` (2902/2903
+Spotify IDs resolved via unauthenticated `open.spotify.com/embed/track/{id}`).
+Results: `data/analysis/bb_era_orthogonality.json`.
+
+### Acapella choice IS driven by popularity (at-release + durable)
+
+Era is a free parameter; popularity is the binding constraint on the acapella
+side. Measured via two signals chosen specifically to avoid Spotify
+popularity's "look-back bias" (recent streaming activity inflating long-tail
+catalog):
+
+- **Billboard Year-End Hot 100** (Wikipedia tables, 1958-2024) — was the track
+  a US chart hit in its release year. Pure at-time-of-release signal.
+- **Last.fm `track.getInfo`** (listeners + playcount) — cumulative scrobble
+  footprint since ~2002. Community-skewed older/indie, so it captures cult /
+  staying-power independent of streaming-era recency bias.
+
+Headline numbers:
+
+| | tracks resolved | Hot 100 year-end hit-rate | median Last.fm listeners |
+|---|---|---|---|
+| BB acapellas | 2,258 / 938 | **38.5%** | **261,134** |
+| BB instrumentals | 759 / 310 | 12.9% | 1,254 |
+
+Acapellas are **3× more likely to have charted Hot 100 year-end** in their
+release year, and have **~200× more Last.fm listeners** than the
+instrumentals. Effect-size on Last.fm listeners (Mann–Whitney rank-biserial)
+= +0.43, a large effect with acapellas higher.
+
+Four-quadrant split (chart hit × Last.fm ≥ 100k listeners):
+
+| | hit+remembered | hit+forgotten | deepcut+remembered | deepcut+obscure |
+|---|---|---|---|---|
+| acapellas | 29% | 9% | **29%** | 32% |
+| instrumentals | 7% | 4% | 10% | **79%** |
+
+Two Friends pick **recognizable vocals from any era** (chart hit OR durable
+listenership — both qualify) to layer over **EDM-world instrumentals** that
+do not need to be famous outside dance music. 79% of BB instrumentals are
+deep-cut + obscure to Last.fm users; 58% of BB acapellas are "remembered"
+(≥100k Last.fm listeners) vs 17% of instrumentals.
+
+**Implication for modeling**: the mashup-pair-scoring head should expect
+a strong popularity asymmetry between the two roles. Treat the *vocal* side
+as drawn from a high-popularity prior (chart hits + durable cult favorites
+across decades); treat the *instrumental* side as drawn from a near-uniform
+prior over EDM-genre-relevant tracks regardless of popularity. Don't use a
+shared popularity feature; use role-conditional ones. Combined with the
+era-orthogonality finding: era and popularity are the two independent axes
+of acapella selection, while the instrumental is constrained on neither
+popularity nor era-match.
+
+Reproduction: [scripts/bb_popularity.py](scripts/bb_popularity.py).
+Results: `data/analysis/bb_popularity.json`.
+
+### Set popularity is driven by chart-hit-vocal *density*, NOT instrumental popularity
+
+Per-volume YouTube view counts (n=23 BB volumes) correlated against
+per-volume aggregates of track-level signals from aux.db.
+
+**Music-only features** (no calendar-time leakage), univariate vs views:
+
+| feature | r | r² | what it captures |
+|---|---|---|---|
+| `n_aca_charted` (raw count of Hot 100 hits in the vocal layer) | +0.47 | 0.22 | how many recognizable-hit vocals are stacked into the volume |
+| `acap_chart_rate` (fraction of vocals charting Hot 100 year-end) | +0.51 | 0.26 | density of recognizable-hit vocals |
+| `n_acapellas` (total count of vocals) | +0.47 | 0.22 | format maturity / vocal-layer density |
+| `pct_aca_recent_3y` (vocals released within 3y of set) | −0.43 | 0.19 | freshness — but mostly collinear with format maturity |
+| `mean_aca_lastfm_listeners` | ~+0.07 | ~0.00 | cumulative scrobble footprint — doesn't transfer |
+| any instrumental feature (popularity or count) | ≤ \|0.18\| | ≤ 0.03 | instrumental popularity is neutral-to-negative |
+
+**Best music-only multivariate fit**:
+
+```
+views ~ chart_rate + n_acapellas + n_aca_charted              R² = 0.39
++ pct_aca_recent_3y                                           R² ≈ 0.33–0.40 (marginal lift)
+```
+
+**~39% of set-views variance is explained by music-only features**, all
+on the acapella side — specifically the *count* and *density* of charting
+vocals in the volume, plus how many vocals are stacked in total (format
+maturity).
+
+**Instrumental popularity is uncorrelated** (mildly negative on some
+signals) with set views. Pop-radio instrumentals dilute the BB formula
+(unfamiliar EDM beat × familiar pop vocal); mainstream instrumentals
+don't fit. Median instrumental Last.fm listeners is r ≈ −0.15 vs views.
+
+**Cumulative Last.fm listeners on the vocal side doesn't transfer to
+set views** (r ≈ +0.07). The signal that matters is **at-release-time
+chart hit**, not durable scrobble footprint — listeners click for
+immediate recognition ("oh, that's [current pop song]"), not for
+"I know this from somewhere."
+
+**What `set_year` does NOT do**:
+
+`set_year` alone gives only **R² = 0.08**, and `chart_rate + set_year`
+gives **R² = 0.26** — identical to `chart_rate` alone. What looked like
+calendar-time / channel-growth signal is actually `n_acapellas` and
+`n_aca_charted` in disguise: both correlate with set_year at **r ≥ 0.92**
+because Two Friends added more vocals per slot as the format evolved.
+Once those are named directly, `set_year` adds nothing. Same goes for
+`pct_aca_recent_3y` (r = −0.81 with set_year): its univariate negative
+correlation with views is mostly the same format-maturity confound.
+
+**Implication for modeling**: if the downstream personalized-mix model
+includes a "predicted listener engagement" head, the input features that
+matter are (1) how many charting-hit vocals are stacked in (raw count),
+(2) what fraction of vocals are charting hits (density), and (3) how
+dense the vocal layer is overall. Instrumental popularity is
+neutral-to-negative — the EDM-host should be optimized for compatibility
+(key/BPM/genre/structure), not for popularity priors. Combined with the
+prior two findings, the selection axes are:
+
+- **Acapella**: high-popularity prior (chart hits drive engagement) ×
+  era-uniform (no proximity term) × density matters (more is better)
+- **Instrumental**: compatibility-driven (key/BPM/genre/structure) ×
+  freshness-skewed (median 0-2y from set release) × popularity-neutral
+
+**Unmeasured ~60% of variance**: NOT linear "channel growth" or "fandom
+era" — those stories don't hold up once format-maturity is named
+directly. Top residuals (Vol 11 +11.7M, Vol 15 +9.6M, Vol 17 +5.4M
+over-perform) point at something **humped and time-specific** — a fandom
+peak around 2017-2020 — but the shape is non-linear and outside our
+current feature set. Plausible unmeasured drivers: production quality
+(mashup transition smoothness — eventually measurable from the alignment
+pipeline), viral moments (single mashup clipped on TikTok), tour
+proximity (BB Land tour timing siphoning or boosting streams), YouTube
+algorithm shifts. None are in aux.db today.
+
+**Sample-size caveat**: n=23 volumes; all r values have wide CIs (e.g.
+r = +0.51 has 95% CI roughly [+0.13, +0.76]). Signs are solid, magnitudes
+approximate. Tightening would need Spotify/SoundCloud per-set play counts
+as additional observations.
+
+Reproduction: [scripts/bb_set_views_analysis.py](scripts/bb_set_views_analysis.py).
+View counts persisted in `aux.set_views`; headline metrics in
+`aux.analysis_results` under `analysis_name='bb_set_views_v1'`.
+
+### Broadening the chart definition: peak position matters, breadth doesn't
+
+The Hot 100 year-end finding above used a *narrow* popularity signal (a
+song needs sustained chart presence over a calendar year to qualify).
+Re-running with weekly Hot 100 history (1958-present, ~32k unique songs,
+keyed on per-song all-time peak position and weeks-on-chart) shows:
+
+**Two Friends DO draw from a wider pool than year-end captures:**
+
+- 52.4% of BB acapellas (1,344 of 2,535) charted on weekly Hot 100 at any
+  peak — vs. 37.9% on year-end. The +14pp gap is **384 acapellas** that
+  appeared on Hot 100 weekly but never made year-end.
+- **75% of those 384 have ≥100k Last.fm listeners** — confirming they're
+  genuinely recognizable vocals, not obscure flukes. Most are brief #1-#10
+  peaks (54 tracks) or top-40 hits (126 tracks) that didn't sustain a
+  year-end run.
+
+**But broadening the definition does NOT strengthen views prediction —
+narrowing it does:**
+
+| feature (acapella side) | r vs views | r² |
+|---|---|---|
+| **top-10 ever rate** (new, narrowest) | **+0.571** | **0.327** |
+| year-end rate (original) | +0.533 | 0.284 |
+| top-40 ever rate | +0.431 | 0.186 |
+| weekly ever rate (broadest) | +0.458 | 0.210 |
+| mean acapella peak position (continuous) | −0.145 | 0.021 |
+| mean acapella weeks-on-chart (continuous) | −0.035 | 0.001 |
+
+The predictive signal sharpens as the chart cut narrows toward "biggest
+at-release-time hits." The 384-track "missed by year-end" expansion adds
+recognizable songs but **dilutes** the engagement signal rather than
+strengthening it.
+
+**Refined interpretation**: the predictive variable isn't *popularity*
+broadly or even *chart presence* — it's **peak-tier mass-culture intensity
+at release time**. Two Friends *select* from a wider pool (52% weekly-charted),
+but engagement is driven specifically by the top-tier subset within that
+pool. Sustained chart presence (`mean_aca_woc` ≈ 0 correlation) and
+average chart position (`mean_aca_peak` ≈ 0) don't add explanatory power
+on top of "did this song peak in the top 10."
+
+**Implication for modeling** (refining the prior section): the popularity
+prior for the acapella role should weight **top-10 cultural-moment hits
+most heavily**, not chart-presence breadth. Two Friends' *selection*
+function admits a wider pool, but a *predicted-engagement* head should
+key on the narrow top-tier subset.
+
+**Sample-size caveat (still binding)**: n=20 volumes for the set-views
+regression. All r values have wide CIs (top-10 r = +0.571 has 95% CI
+roughly [+0.20, +0.80]). Differences in r below ~0.10 are within noise —
+the directional pattern (narrower > broader) is the load-bearing finding,
+not the specific R² values. Tightening would need additional per-set
+play-count observations (e.g. Spotify per-track plays from charts.spotify.com
+2017+, which would cover the modern half of the corpus).
+
+**What's still missing on the popularity side**: at-release-time *Spotify*
+and *SoundCloud* play counts. Spotify Charts (charts.spotify.com / kworb.net
+mirror) has daily Top 200 by country going back only to **2017**, so it
+could cover ~40-50% of BB acapellas (the modern half) but not the pre-2017
+catalog acapellas. SoundCloud has no historical chart-archive equivalent
+and only exposes current cumulative play counts. Neither service offers
+the equivalent of Billboard's 67-year weekly Hot 100 history.
+
+Reproduction: [scripts/bb_weekly_chart_analysis.py](scripts/bb_weekly_chart_analysis.py).
+Source data: [scripts/aux_db_sync.py](scripts/aux_db_sync.py) ingests
+`data/analysis/billboard_weekly_current.csv` (utdata/rwd-billboard-data
+public mirror, 700k weekly chart-rows → 32,561 unique songs with peak/woc
+aggregates) into `aux.chart_song_history`. Headline metrics in
+`aux.analysis_results` under `analysis_name='bb_weekly_chart_v1'`.
+
+### Auxiliary research database
+
+Research signals (release years, Last.fm, Billboard, chart matches) are
+persisted in **`data/analysis/aux.db`** (SQLite, gitignored, ~1.8 MB,
+rebuildable from cache files + main DB):
+
+| table | rows | what it holds |
+|---|---|---|
+| `track_meta` | 3,342 | `track_id` (1001tl), artist, title, spotify_id, release_year (+ source) |
+| `track_lastfm` | 3,342 | per-track Last.fm info: lfm_artist, lfm_title, mbid, listeners, playcount, error_code |
+| `chart_yearend` | 6,621 | Billboard Hot 100 year-end 1958-2024 (chart_name + year + rank + title + artist) |
+| `chart_song_history` | 32,561 | per-song all-time aggregates from weekly Hot 100 1958-2026 (peak_position, weeks_on_chart, debut_date, last_chart_date) |
+| `track_chart_match` | 2,300 | resolved BB-track → chart-entry pairings (year-end + weekly all-time), with `rank` for year-end matches and `peak_position`/`weeks_on_chart` for weekly matches |
+| `set_views` | 24 | per-set platform view counts (BB YouTube counts to date) |
+| `analysis_results` | ~95 | flattened headline metrics from corpus-empirics analyses (queryable by `analysis_name`/`metric`/`group_key`) |
+
+All keyed on `track_id` (same identifier as `dj_set_rows.data-trackid` in the
+main DB) so cross-DB joins are straightforward — `ATTACH DATABASE` aux.db
+and join, or query through the script.
+
+This is a holding pen, not production schema. Signals graduate to the main
+DB only after they prove useful for downstream modeling. Rebuild any time
+via [scripts/aux_db_sync.py](scripts/aux_db_sync.py), which is idempotent
+and reads the existing CSV/JSON caches.
 
 ## Configuration
 
@@ -161,495 +450,3 @@ The guiding philosophies are:
 - **Rust**: explicit over implicit, errors as values, ownership awareness
 - **Lambda calculus**: pure functions, immutability, composition over mutation
 - **Linear type theory**: resources are consumed, not shared; use-once semantics enforced structurally
-
----
-
-## Core Principle: Errors Are Values
-
-In **domain code** — parsing, validation, transformation, business logic — never
-raise exceptions for expected failure cases. These functions return `Result[T, E]`
-so that the call site is forced to handle both branches.
-
-This rule does **not** apply at I/O boundaries. The stdlib and every third-party
-library speaks exceptions, not `Result`. Do not wrap every `requests.get` or
-`pathlib.read_text` call in a bare `try/except` to produce a `Result` — that
-creates wrapping noise without structural benefit. Instead, write a thin adapter
-at the seam between your domain and the library. See the
-[Library Boundary Adapters](#library-boundary-adapters) section.
-
-```python
-from __future__ import annotations
-from dataclasses import dataclass
-from typing import TypeVar, Generic, Callable
-
-T = TypeVar("T")
-U = TypeVar("U")
-E = TypeVar("E")
-F = TypeVar("F")
-
-
-@dataclass(frozen=True)
-class Ok(Generic[T]):
-    value: T
-
-    def map(self, f: Callable[[T], U]) -> "Ok[U]":
-        return Ok(f(self.value))
-
-    def flat_map(self, f: Callable[[T], "Result[U, E]"]) -> "Result[U, E]":
-        return f(self.value)
-
-    def map_err(self, f: Callable[[E], F]) -> "Ok[T]":
-        return self
-
-    def unwrap_or(self, default: T) -> T:
-        return self.value
-
-    def is_ok(self) -> bool:
-        return True
-
-
-@dataclass(frozen=True)
-class Err(Generic[E]):
-    error: E
-
-    def map(self, f: Callable) -> "Err[E]":
-        return self
-
-    def flat_map(self, f: Callable) -> "Err[E]":
-        return self
-
-    def map_err(self, f: Callable[[E], F]) -> "Err[F]":
-        return Err(f(self.error))
-
-    def unwrap_or(self, default: T) -> T:
-        return default
-
-    def is_ok(self) -> bool:
-        return False
-
-
-type Result[T, E] = Ok[T] | Err[E]
-```
-
-### Usage Pattern
-
-```python
-# WRONG — a domain function that raises instead of returning failure
-def parse_int(s: str) -> int:
-    return int(s)  # caller has no idea this can explode
-
-# RIGHT — failure is explicit in the return type
-def parse_int(s: str) -> Result[int, str]:
-    try:
-        return Ok(int(s))
-    except ValueError:
-        return Err(f"cannot parse {s!r} as integer")
-
-# Chain operations without nested if-checks
-result = (
-    parse_int(raw)
-    .map(lambda n: n * 2)
-    .flat_map(validate_range)
-    .unwrap_or(0)
-)
-```
-
----
-
-## Option for Nullable Values
-
-`None` is not used as a sentinel for missing values. Use `Option[T]`.
-
-```python
-type Option[T] = Ok[T] | Err[None]
-
-def Some(value: T) -> Ok[T]:
-    return Ok(value)
-
-def Nothing() -> Err[None]:
-    return Err(None)
-
-
-# WRONG
-def find_user(user_id: int) -> User | None:
-    ...
-
-# RIGHT
-def find_user(user_id: int) -> Option[User]:
-    user = db.get(user_id)
-    return Some(user) if user else Nothing()
-```
-
----
-
-## Immutability by Default
-
-All data structures are immutable unless mutation is explicitly required and
-justified. Prefer `frozen=True` dataclasses and tuples over dicts and lists.
-
-```python
-# WRONG — mutable dataclass
-@dataclass
-class Config:
-    host: str
-    port: int
-
-# RIGHT — frozen
-@dataclass(frozen=True)
-class Config:
-    host: str
-    port: int
-
-# "Updating" a record produces a new one — Rust's struct update syntax
-updated = replace(config, port=8080)  # from dataclasses import replace
-```
-
-For collections, prefer `tuple[T, ...]` over `list[T]` when the contents are
-fixed after construction. Use `frozenset` over `set`.
-
-```python
-# Transformation returns new collection, never mutates in-place
-def double_all(xs: tuple[int, ...]) -> tuple[int, ...]:
-    return tuple(x * 2 for x in xs)
-```
-
----
-
-## Pure Functions
-
-A function should have no observable side effects unless it lives in an explicitly
-designated I/O layer. Side effects include: writing to globals, mutating arguments,
-printing, logging, network calls, and file I/O.
-
-```python
-# WRONG — mutates its argument
-def normalize(record: dict) -> None:
-    record["name"] = record["name"].strip()
-
-# RIGHT — returns a new value
-def normalize(record: Record) -> Record:
-    return replace(record, name=record.name.strip())
-```
-
-I/O functions are explicitly named and typed to signal their impurity. They
-live in a dedicated `effects` or `io` module and are called only from entry points.
-
-```python
-# effects.py — impure boundary
-def write_record(path: Path, record: Record) -> Result[None, IOError]:
-    try:
-        path.write_text(record.to_json())
-        return Ok(None)
-    except IOError as e:
-        return Err(e)
-```
-
----
-
-## Library Boundary Adapters
-
-The boundary between domain code and external libraries (stdlib, HTTP clients,
-ORMs, etc.) is the one place where `try/except → Result` conversion belongs.
-Write a single adapter function per library concern. Domain code calls the adapter,
-never the library directly.
-
-The adapter's job is to:
-1. Call the library (which may raise)
-2. Catch the specific exceptions that library documents as expected
-3. Convert them to a typed domain error
-4. Let unexpected exceptions propagate — they are programmer errors, not recoverable cases
-
-```python
-# adapters/http.py — owns the requests import and its failure modes
-
-import requests
-from result import Ok, Err, Result  # or your local Result type
-from domain.errors import HttpError
-
-def get(url: str, timeout: float = 10.0) -> Result[bytes, HttpError]:
-    """Adapter: converts requests exceptions into domain Result."""
-    try:
-        response = requests.get(url, timeout=timeout)
-        response.raise_for_status()
-        return Ok(response.content)
-    except requests.Timeout:
-        return Err(HttpError(kind="timeout", url=url, status=None))
-    except requests.HTTPError as e:
-        return Err(HttpError(kind="http", url=url, status=e.response.status_code))
-    except requests.ConnectionError:
-        return Err(HttpError(kind="connection", url=url, status=None))
-    # requests.RequestException and other unexpected errors propagate uncaught
-```
-
-Domain code then chains cleanly, never touching `requests` directly:
-
-```python
-# domain/pipeline.py — no try/except, no import of requests
-
-from adapters.http import get as http_get
-
-def fetch_schema(endpoint: str) -> Result[Schema, PipelineError]:
-    return (
-        http_get(endpoint)
-        .flat_map(parse_json)
-        .flat_map(validate_schema)
-    )
-```
-
-The same pattern applies to database adapters, file I/O, and any other I/O
-boundary. One adapter per library concern, one place where exceptions are caught
-and named.
-
-```python
-# adapters/fs.py
-
-from pathlib import Path
-from domain.errors import FsError
-
-def read_text(path: Path) -> Result[str, FsError]:
-    try:
-        return Ok(path.read_text())
-    except FileNotFoundError:
-        return Err(FsError(kind="not_found", path=path))
-    except PermissionError:
-        return Err(FsError(kind="permission", path=path))
-```
-
-### What NOT to do
-
-```python
-# WRONG — wrapping every call site individually, not at the boundary
-def process(url: str) -> Result[Schema, str]:
-    try:
-        raw = requests.get(url).content   # library leaks into domain
-    except Exception as e:
-        return Err(str(e))                # bare Exception catch, string error
-    return parse_json(raw)
-
-# WRONG — domain function imports requests directly
-from requests import get
-def fetch(url: str) -> Result[bytes, str]:
-    ...
-```
-
----
-
-## Function Composition
-
-Prefer composing small, single-purpose functions over writing large procedures.
-Use a `pipe` utility to express data pipelines left-to-right.
-
-```python
-from functools import reduce
-from typing import Callable
-
-def pipe(value: T, *fns: Callable) -> object:
-    """Apply a sequence of functions left-to-right."""
-    return reduce(lambda acc, f: f(acc), fns, value)
-
-
-# Instead of deeply nested calls:
-result = pipe(
-    raw_input,
-    parse_csv_line,
-    lambda row: row.map(validate_fields),
-    lambda row: row.flat_map(enrich_with_metadata),
-    lambda row: row.map(to_domain_object),
-)
-```
-
-Partial application is preferred over helper lambdas with repeated logic.
-
-```python
-from functools import partial
-
-clamp_to_byte = partial(max, 0) | partial(min, 255)  # pseudocode pattern
-# or more explicitly:
-def clamp(lo: int, hi: int) -> Callable[[int], int]:
-    return lambda x: max(lo, min(hi, x))
-
-normalize_byte = clamp(0, 255)
-```
-
----
-
-## Linear Resource Management: Consume, Don't Share
-
-Resources that carry state (file handles, DB connections, HTTP sessions) follow
-linear-style discipline: they are opened once, passed through a pipeline, and
-consumed at the end. They are **never** stored in globals or class attributes
-that outlive their acquisition scope.
-
-Use the `with` statement as the structural enforcement of single-use semantics.
-No resource leaves its `with` block alive.
-
-```python
-# WRONG — resource escapes its scope
-conn = acquire_connection()
-do_work(conn)
-conn.close()  # easy to forget, error paths skip this
-
-# RIGHT — linear scope enforced by context manager
-def process(query: str) -> Result[Rows, DbError]:
-    with acquire_connection() as conn:   # acquired here
-        return execute(conn, query)      # consumed here
-    # conn is closed — no escape
-
-
-# WRONG — storing a resource on self for "convenience"
-class Service:
-    def __init__(self):
-        self.conn = acquire_connection()  # lives forever, leaks
-
-# RIGHT — acquire at call time, release at return
-class Service:
-    def query(self, sql: str) -> Result[Rows, DbError]:
-        with acquire_connection() as conn:
-            return execute(conn, sql)
-```
-
-For resources that must be threaded through multiple steps, model them as an
-explicit parameter — like Rust's owned values passed by move.
-
-```python
-# The resource is a parameter, not ambient state
-def step_one(conn: Connection, data: Data) -> tuple[Connection, Processed]:
-    result = conn.fetch(data.query)
-    return conn, Processed(result)
-
-def step_two(conn: Connection, processed: Processed) -> Result[None, DbError]:
-    return conn.write(processed.output)
-
-# At the call site: conn flows through, never duplicated
-with acquire_connection() as conn:
-    conn, processed = step_one(conn, data)
-    result = step_two(conn, processed)
-```
-
----
-
-## Pattern Matching Over isinstance Chains
-
-Use Python 3.10+ `match` for exhaustive handling of sum types. The goal is that
-adding a new variant to a union forces compiler-visible (or at least grep-visible)
-update sites.
-
-```python
-# WRONG
-if isinstance(result, Ok):
-    handle_ok(result.value)
-elif isinstance(result, Err):
-    handle_err(result.error)
-
-# RIGHT
-match result:
-    case Ok(value):
-        handle_ok(value)
-    case Err(error):
-        handle_err(error)
-```
-
-Always include an exhaustive branch or intentionally omit it to signal that
-unmatched cases are programmer error.
-
----
-
-## Type Annotations Are Mandatory
-
-Every function signature is fully annotated. `Any` is banned except when
-wrapping third-party code at an explicit boundary. `# type: ignore` requires
-a comment explaining why.
-
-```python
-# WRONG
-def process(data, config):
-    ...
-
-# RIGHT
-def process(data: RawData, config: Config) -> Result[ProcessedData, ProcessingError]:
-    ...
-```
-
-Use `TypeAlias` and `type` statements (Python 3.12+) to name complex types
-rather than inlining them.
-
-```python
-type UserId = int
-type Lookup[T] = Callable[[UserId], Option[T]]
-```
-
----
-
-## No Mutable Global State
-
-Module-level mutable state is forbidden. Constants (truly constant) are typed
-with `Final`.
-
-```python
-from typing import Final
-
-MAX_RETRIES: Final = 3
-DEFAULT_TIMEOUT: Final[float] = 30.0
-
-# WRONG
-_cache: dict = {}  # mutable global
-
-# RIGHT — pass state explicitly, or use a frozen structure
-@dataclass(frozen=True)
-class AppState:
-    cache: tuple[CacheEntry, ...]
-    config: Config
-```
-
----
-
-## Error Type Design
-
-Errors are domain types, not strings. Define a sealed error hierarchy per
-module using `dataclass` + union.
-
-```python
-@dataclass(frozen=True)
-class ParseError:
-    raw: str
-    reason: str
-
-@dataclass(frozen=True)
-class ValidationError:
-    field: str
-    constraint: str
-
-@dataclass(frozen=True)
-class NetworkError:
-    status_code: int
-    body: str
-
-type PipelineError = ParseError | ValidationError | NetworkError
-
-def describe_error(e: PipelineError) -> str:
-    match e:
-        case ParseError(raw, reason):
-            return f"parse failed on {raw!r}: {reason}"
-        case ValidationError(field, constraint):
-            return f"field {field!r} violates {constraint!r}"
-        case NetworkError(code, _):
-            return f"upstream returned HTTP {code}"
-```
-
----
-
-## Summary Checklist
-
-Before submitting any Python code, verify:
-
-- [ ] Domain functions (parsing, validation, business logic) return `Result[T, E]`, not bare values or exceptions
-- [ ] Library calls are wrapped in a dedicated adapter in `adapters/`; domain code never imports third-party libraries directly
-- [ ] Adapters catch only the specific documented exceptions for a library — bare `except Exception` is forbidden
-- [ ] `None` is never used as a sentinel; `Option[T]` is used instead
-- [ ] No dataclass is mutable without explicit justification
-- [ ] Pure functions are isolated from I/O; impure code lives in `effects/` or `adapters/`
-- [ ] Resources are acquired and consumed within a single `with` block
-- [ ] All signatures are fully type-annotated — no `Any`, no bare `dict` or `list`
-- [ ] Pattern matching is used for union type dispatch
-- [ ] No module-level mutable state
-
