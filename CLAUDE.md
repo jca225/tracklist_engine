@@ -446,6 +446,120 @@ Reproduction: [scripts/bb_spotify_charts.py](scripts/bb_spotify_charts.py)
 (comparison + regressions). Headline metrics in `aux.analysis_results`
 under `analysis_name='bb_spotify_chart_v1'`.
 
+### Union coverage of popularity proxies across BB tracks
+
+A natural follow-up to "which proxy is most predictive" is "how many BB
+tracks does the union of proxies *cover at all*". Computed across the
+combined Hot 100 year-end / Hot 100 weekly / Spotify Top 200 / Last.fm
+(≥100k listeners) signals:
+
+| signal | acapellas (n=2,536) | instrumentals (n=1,058) |
+|---|---|---|
+| Hot 100 year-end | 896 (35.3%) | 143 (13.5%) |
+| Hot 100 weekly ever | 1,240 (48.9%) | 216 (20.4%) |
+| Spotify Top 200 (any country) | 615 (24.3%) | 115 (10.9%) |
+| Last.fm ≥100k listeners | 572 (22.6%) | 101 (9.5%) |
+| **union: any chart** | **1,415 (55.8%)** | **265 (25.0%)** |
+| **union: chart OR ≥100k Last.fm** | **1,557 (61.4%)** | **287 (27.1%)** |
+| any chart top-10 ever (peak tier) | 760 (30.0%) | 130 (12.3%) |
+| **truly obscure (no signal)** | **979 (38.6%)** | **771 (72.9%)** |
+
+The acap/instr asymmetry persists across the union: ~61% of acapellas
+are caught by at least one signal, but only ~27% of instrumentals are.
+Almost three-quarters of BB instrumentals are obscure by every metric
+we have — they're picked for compatibility (key/BPM/genre/structure),
+not popularity, full stop.
+
+The 38.6% "truly obscure" acapella tier (979 tracks) has two plausible
+contributors that our current proxies can't separate:
+
+1. **Real coverage gaps in our signals**: international hits never on
+   US Hot 100 (UK / Latin / K-pop charts not yet in aux.db), pre-2017
+   tracks Spotify never indexed, regional radio darlings. Adding UK
+   Official Chart and Latin charts would likely shrink this tier.
+2. **Genuinely non-popularity-driven picks**: chosen for vocal quality,
+   melodic compatibility, or Two Friends' personal taste rather than
+   recognizability.
+
+Computed via the ad-hoc query in `/tmp/coverage.py` (not committed —
+re-run by joining `aux.track_chart_match` + `aux.track_spotify_charts` +
+`aux.track_lastfm` on track_id, role-tagged via the BB scrape).
+
+### Hypothesis: user-history is the right feature for the *per-user* model, not the aggregate
+
+A natural read of the ~55% unexplained variance in aggregate set-views
+is "audience taste — what listeners actually want to hear." A sharper
+read separates two distinct prediction problems:
+
+**Aggregate views variance (~55% unexplained) is NOT primarily individual
+taste.** Aggregate views sum across millions of distinct listeners, so
+any individual-listener taste term cancels out — it gets captured in
+population-average chart popularity (the chart_rate features already
+predict 40-44% of variance precisely because they aggregate that). What's
+left over is *volume-level idiosyncrasies* that no per-user feature can
+explain: production / mashup-transition quality, viral TikTok clips of
+specific mashups, YouTube algorithm shifts, BB Land tour timing.
+Per-user listening data — no matter how rich — cannot push aggregate-views
+R² up because it has the wrong cardinality.
+
+**Per-user engagement prediction is a different problem entirely**, and
+*there* user listening history is the dominant feature. The aligned BB
+corpus this pipeline produces becomes the *training data* for a sequence
+model that learns mashup compatibility. The personalized inference step
+conditions on a user's SoundCloud (and/or Spotify) likes + playlists +
+demographics as a few-shot prompt: "given this user's taste distribution
+overlaps with the corpus like this, score these candidate mashups."
+That model's variance budget *is* dominated by individual-listener
+history — the population-level chart-rate findings would map to its
+*priors over candidate tracks*, not its per-user discrimination.
+
+**Practical translation**:
+
+- Aggregate corpus modeling (what we're doing now): chart-rate features
+  carry ~40-44% of variance; remaining ~55% is unmeasured production /
+  viral / algorithmic factors and won't be improved by user-history data.
+- Per-user personalization (the project endpoint): user listening history
+  is the load-bearing feature. Two natural input sources are SoundCloud
+  (likes + playlists + reposts) and Spotify (Top Tracks + saved tracks +
+  playlists). SoundCloud is the more interesting target because its
+  user-curated playlists tend to encode dance-music taste more densely
+  than Spotify's; Two Friends' BB audience overlaps heavily with
+  SoundCloud's EDM/mashup community.
+
+**Feasibility of SoundCloud user-history access**:
+
+- **OAuth (preferred for any user-facing path)**: SoundCloud's API
+  supports OAuth 2.0 with `me/likes`, `me/playlists`, `me/tracks`
+  endpoints. User consents, you act on their behalf, no ToS or scraping
+  ambiguity. The practical bottleneck is API key approval — SoundCloud
+  stopped accepting new app registrations broadly around 2023; an
+  existing key or partnership is needed. Validate this is unblocked
+  before depending on it.
+- **Public-profile scraping (gray zone, only for corpus-side research)**:
+  user profiles set to public expose likes / reposts / playlists at
+  public URLs. *HiQ v. LinkedIn* (9th Cir. 2022) established that
+  scraping public data isn't a CFAA violation, so federal-law exposure
+  is low — but SoundCloud's ToS prohibits automated collection
+  regardless of intent (civil-law exposure: account bans, possible
+  C&D for high-volume use). Non-commercial use does not exempt; only
+  authorization does. Honest cost-benefit: low risk for a one-time
+  research scrape of N profiles to bootstrap a taste-cluster prior;
+  meaningful risk for productionized continuous use. Robots.txt should
+  be respected as courtesy but isn't a legal shield in either direction.
+- **Spotify alternative**: Spotify's API is more permissive about new
+  app registrations and has richer playlist/track-features endpoints.
+  Worse genre fit (less dance-music taste density) but lower
+  feasibility risk. Use as the primary signal for cold-start; fold in
+  SoundCloud where users have it linked.
+
+**Implication for the project plan**: the corpus-side popularity
+investigation has plateaued near R² ≈ 0.44 for aggregate views, and
+further chart proxies (UK, Latin, K-pop) would improve *coverage of the
+"truly obscure" acapella tier* more than they'd improve aggregate-views
+R². The next-meaningful-gain is per-user data — and the API access path
+(OAuth on at least one of SoundCloud / Spotify) is the load-bearing
+dependency to validate before designing the personalized inference head.
+
 ### Auxiliary research database
 
 Research signals (release years, Last.fm, Billboard, chart matches) are
