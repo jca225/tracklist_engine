@@ -79,6 +79,33 @@ When a learnable scoring head is added on top (post-ground-truth labeling),
 replace the single-layer pick with a 13-channel learnable weighted sum
 over all hidden states (SUPERB pattern) co-trained with the head.
 
+**Backlog: upgrade to `m-a-p/MERT-v1-330M`.** The 330M variant has 24
+transformer layers (vs 12 in 95M), and the deeper stack carries
+task-specialized representations at well-defined depths:
+
+| layer band | what it encodes | best for |
+|---|---|---|
+| 4–7   | low-level acoustic features | beat / tempo, onset detection |
+| 8–13  | pitch + harmonic content    | key detection, chord recognition |
+| 14–19 | timbre + instrumentation    | acapella-vs-instrumental discrimination, source-separation cues |
+| 20–24 | high-level semantic         | genre, mood, structural segmentation |
+
+For this pipeline, **don't pick a single layer** — use a learned
+weighted sum across all 25 hidden states (the standard SSL probing
+approach, SUPERB / s3prl pattern), co-trained with the scoring head.
+That lets each downstream task pull from whichever band is most
+informative, instead of forcing one mid-layer compromise across
+beat/key/timbre/structure all at once.
+
+Tradeoffs to plan for before flipping the constant:
+- ~3.5× parameter count → ~3× inference time on MPS/CUDA. Vast cost
+  is still bounded; Pi CPU becomes impractical (re-route 330M jobs to
+  Mac MPS or Vast only).
+- Cache key changes (layer-pick → weights identifier). The alignment
+  cache must be flushed or namespaced when migrating.
+- Frame rate (~75 Hz at 24 kHz) is unchanged; downstream measure-pooling
+  code stays the same.
+
 ## Corpus empirics
 
 Empirical facts about the source corpus that constrain downstream modeling.
