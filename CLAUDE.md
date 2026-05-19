@@ -630,7 +630,7 @@ The project runs across four machines (see [Makefile](Makefile) for cluster ops)
 
 | Component | Runs on | Why |
 |---|---|---|
-| yt-dlp / spotdl downloads | pi-storage | CPU-only; cross-arch wheels work |
+| yt-dlp downloads (production chain) | pi-storage | CPU-only; cross-arch wheels work. See "Audio downloading" below for the full topology — spotdl was removed from the main chain |
 | beat_this (beats/downbeats) | pi-storage CPU **or** Mac MPS | PyTorch has aarch64 + MPS wheels; small model |
 | cue-detr (EDM cues) | pi-storage CPU **or** Mac MPS | DETR transformer; small model |
 | librosa, pyloudnorm | pi-storage **or** Mac | pure Python |
@@ -639,6 +639,41 @@ The project runs across four machines (see [Makefile](Makefile) for cluster ops)
 | **MERT** embeddings | **Vast.ai** *or* **Mac MPS** | same; [audio_pipeline/analysis/adapters/mert_adapter.py](audio_pipeline/analysis/adapters/mert_adapter.py) auto-selects `cuda` → `mps` → `cpu` |
 
 The Mac mirrors the pi-storage CPU stack (`venvs/audio/`) plus the `venvs/essentia/` Py3.13 sandbox, so the **entire production analysis pipeline** is exercisable locally — not just for development, but as an actual production worker for batches that don't justify spinning up Vast.
+
+**Audio downloading:**
+
+The download topology is *not* "yt-dlp + spotdl in one chain" — it's a yt-dlp main path, a spotdl retry pass, and a YT Music rescue path. Three distinct entrypoints:
+
+| Tool | Source for URLs | Fallback chain | When to use |
+|---|---|---|---|
+| [audio_pipeline/main.py](audio_pipeline/main.py) | scraped `dj_set_track_media_links` | `youtube → soundcloud` (see [main.py:76](audio_pipeline/main.py#L76)) | Production. Idempotent over `track_audio`, lands files at `{audio_root}/objects/{track_id}/{track_id}__{platform}__{player_id}.{ext}` |
+| [audio_pipeline/main_retry.py](audio_pipeline/main_retry.py) | scraped Spotify URLs | spotdl only | Targeted retry on tracks with a Spotify URL but no `track_audio` row. Slow; needs real `SPOTIFY_CLIENT_ID`/`SECRET` (bundled spotdl creds are globally rate-limited) |
+| [scripts/redownload_via_ytmusic.py](scripts/redownload_via_ytmusic.py) | metadata search (`full_name`) | YT Music → yt-dlp | Two-phase rescue: Phase 1 inserts `platform='youtube_music'` rows alongside existing yt-dlp ones; Phase 2 (gated by `--no-replace` default-off) deletes the noisy yt-dlp rows + cascades + unlinks files. Use after a corpus run to upgrade noisy 1001tracklists scrape URLs to clean Topic-channel masters |
+
+Why spotdl is not in the main chain: a 14h production run produced **zero** successes and 174 timeouts ([main.py:65-75](audio_pipeline/main.py#L65)) — spotdl's anonymous YT Music search is rate-limited and slow without real Spotify creds. Inline comment explains the move.
+
+yt-dlp specifics worth knowing: needs Netscape `cookies.txt` for ~5–15% age-gated YouTube ([downloader.py:61](audio_pipeline/adapters/downloader.py#L61)); needs a JS runtime (`node` or `nodejs` in PATH) to deobfuscate YouTube's n-parameter, otherwise stream URLs return only image formats ([downloader.py:35-43](audio_pipeline/adapters/downloader.py#L35)). The `feedback_ytdlp_bot_detection_recipe` memory has the recovery steps when these break.
+
+One-off surgery: [scripts/replace_track_audio.py](scripts/replace_track_audio.py) — swap one track's audio by URL or local file. Destructive (deletes old row + cascades).
+
+**Remix and version-qualifier handling (design rule, not a bug):**
+
+A 1001tracklists track row like `Martin Garrix & Troye Sivan - There For You (Madison Mars Remix) (Instrumental) EPIC AMSTERDAM/STMPD` stores in `track_metadata` as:
+
+```
+title:        "There For You"
+full_name:    "Martin Garrix & Troye Sivan - There For You (Madison Mars Remix)"
+version_tag:  "Remix"
+```
+
+The `full_name` field comes from 1001tracklists' `<meta itemprop="name">` ([tokenizer/track_tokenizer.py:258](tokenizer/track_tokenizer.py#L258)) and **carries the remixer qualifier but never the vocal/instrumental qualifier or the label tag**. The tokenizer's `version_tag` enum is `Acappella | Rework | Remix | AltVersion | None` ([tokenizer/track_tokenizer.py:179-205](tokenizer/track_tokenizer.py#L179)) — there is intentionally no `Instrumental` category. The `(Instrumental)` qualifier and label tag are dropped at scrape time.
+
+This is the **intended design**, on two axes:
+
+1. **Remixer qualifier IS preserved in search**: [redownload_via_ytmusic.py:113](scripts/redownload_via_ytmusic.py#L113) sends `full_name` verbatim to YT Music, so the search hits the *Madison Mars Remix* release rather than the original Martin Garrix track. A bare `"Artist - Title"` search would silently resolve to the original — root cause of the corpus's variant-bleed bug, now fixed.
+2. **Vocal/instrumental qualifier is deliberately NOT preserved**: YT Music's `filter='songs'` index doesn't reliably carry `(Instrumental)` variants as separate releases, and isolated-vocal/instrumental uploads are sparse and noisy. The system instead resolves to the canonical (vocal) master and lets Demucs extract stems downstream — `version_tag` tells the alignment-side code which stem to use without needing a separately-downloaded instrumental.
+
+Carve-out for unknowns: when `full_name` contains 1001tracklists' "(ID Remix)" / "(ID Bootleg)" placeholders (meaning the remixer is unknown), the script strips back to `"Artist - Title"` since a literal "ID" in the YT Music query corrupts results ([redownload_via_ytmusic.py:70-76](scripts/redownload_via_ytmusic.py#L70)).
 
 **Alignment workflow (Mac-driven):**
 
