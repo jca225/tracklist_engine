@@ -11,6 +11,12 @@ Idempotent — safe to re-run any time the underlying caches grow. Reads:
                                               weekly Hot 100 1958–present, one row
                                               per unique song with peak_position and
                                               weeks_on_chart aggregated)
+  data/analysis/spotify_kworb.json         -> track_spotify_charts (per-track Spotify
+                                              Top 200 history via kworb.net mirror —
+                                              Global+US+per-country peak positions,
+                                              lifetime streams, weeks on chart;
+                                              charts.spotify.com data starts ~Dec 2017
+                                              so pre-2017 catalog tracks have no signal)
 
 After the popularity run finishes, also rebuilds track_chart_match by re-running
 the fuzzy artist+title matcher against both the year-end chart and the weekly
@@ -42,6 +48,7 @@ BB_META_CSV = CACHE_DIR / "bb_track_meta.csv"
 LASTFM_JSON = CACHE_DIR / "lastfm_track_info.json"
 BILLBOARD_JSON = CACHE_DIR / "billboard_yearend.json"
 BILLBOARD_WEEKLY_CSV = CACHE_DIR / "billboard_weekly_current.csv"
+SPOTIFY_KWORB_JSON = CACHE_DIR / "spotify_kworb.json"
 
 SCHEMA = """
 -- track_chart_match is fully rebuilt on every run, so drop+recreate is safe and
@@ -82,6 +89,34 @@ CREATE TABLE IF NOT EXISTS chart_yearend (
   PRIMARY KEY (chart_name, year, rank)
 );
 CREATE INDEX IF NOT EXISTS idx_chart_yearend_year ON chart_yearend(chart_name, year);
+
+-- Per-BB-track Spotify Top 200 history (keyed on spotify_id, joined to BB
+-- tracks via track_meta.spotify_id). status: 'charted' = song appeared on at
+-- least one country's Spotify Top 200; 'uncharted' = song exists in catalog
+-- but kworb returns 404 (never made any country's Top 200); 'error' = fetch
+-- failed (rare).
+CREATE TABLE IF NOT EXISTS track_spotify_charts (
+  spotify_id              TEXT PRIMARY KEY,
+  status                  TEXT NOT NULL,   -- charted | uncharted | error
+  peak_global             INTEGER,
+  peak_us                 INTEGER,
+  peak_gb                 INTEGER,
+  peak_de                 INTEGER,
+  peak_br                 INTEGER,
+  peak_mx                 INTEGER,
+  peak_fr                 INTEGER,
+  peak_au                 INTEGER,
+  peak_ca                 INTEGER,
+  peak_es                 INTEGER,
+  streams_global          INTEGER,
+  streams_us              INTEGER,
+  n_countries_charted     INTEGER,
+  weeks_on_chart_global   INTEGER,
+  debut_date              TEXT,
+  fetched_at              DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_track_spotify_charts_peak_global
+  ON track_spotify_charts(peak_global);
 
 CREATE TABLE IF NOT EXISTS chart_song_history (
   chart_name      TEXT    NOT NULL,
@@ -297,6 +332,44 @@ def main() -> int:
     else:
         print("chart_yearend: billboard cache not yet present, skipping")
 
+    # --- Spotify Top 200 (per-track history via kworb.net) ---
+    if SPOTIFY_KWORB_JSON.exists():
+        sp = json.loads(SPOTIFY_KWORB_JSON.read_text())
+        cur.execute("DELETE FROM track_spotify_charts")
+        loaded = 0
+        for sid, d in sp.items():
+            if d is None:
+                continue
+            if d.get("charted") is True:
+                status = "charted"
+            elif d.get("charted") is False:
+                status = "uncharted"
+            else:
+                status = "error"
+            cur.execute("""
+                INSERT INTO track_spotify_charts
+                  (spotify_id, status,
+                   peak_global, peak_us, peak_gb, peak_de, peak_br,
+                   peak_mx, peak_fr, peak_au, peak_ca, peak_es,
+                   streams_global, streams_us,
+                   n_countries_charted, weeks_on_chart_global, debut_date)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, (sid, status,
+                  d.get("peak_global"), d.get("peak_us"), d.get("peak_gb"),
+                  d.get("peak_de"), d.get("peak_br"),
+                  d.get("peak_mx"), d.get("peak_fr"), d.get("peak_au"),
+                  d.get("peak_ca"), d.get("peak_es"),
+                  d.get("streams_global"), d.get("streams_us"),
+                  d.get("n_countries_charted"), d.get("weeks_on_chart_global"),
+                  d.get("debut_date")))
+            loaded += 1
+        n_ch = cur.execute(
+            "SELECT COUNT(*) FROM track_spotify_charts WHERE status='charted'"
+        ).fetchone()[0]
+        print(f"track_spotify_charts: {loaded} rows ({n_ch} charted)")
+    else:
+        print("track_spotify_charts: spotify_kworb.json not yet present, skipping")
+
     # --- Billboard weekly Hot 100 (all-time per-song aggregates) ---
     # Source has one row per (chart_week, current_position); collapse to one row
     # per (title, performer) keeping the best peak, max weeks-on-chart, and chart
@@ -458,7 +531,7 @@ def main() -> int:
     # Summary
     conn = sqlite3.connect(AUX_DB)
     for tbl in ("track_meta", "track_lastfm", "chart_yearend", "chart_song_history",
-                "track_chart_match", "analysis_results"):
+                "track_spotify_charts", "track_chart_match", "analysis_results"):
         (n,) = conn.execute(f"SELECT COUNT(*) FROM {tbl}").fetchone()
         print(f"  {tbl}: {n} rows")
     print(f"\naux DB: {AUX_DB} ({AUX_DB.stat().st_size/1024:.1f} KB)")

@@ -319,20 +319,132 @@ not the specific R² values. Tightening would need additional per-set
 play-count observations (e.g. Spotify per-track plays from charts.spotify.com
 2017+, which would cover the modern half of the corpus).
 
-**What's still missing on the popularity side**: at-release-time *Spotify*
-and *SoundCloud* play counts. Spotify Charts (charts.spotify.com / kworb.net
-mirror) has daily Top 200 by country going back only to **2017**, so it
-could cover ~40-50% of BB acapellas (the modern half) but not the pre-2017
-catalog acapellas. SoundCloud has no historical chart-archive equivalent
-and only exposes current cumulative play counts. Neither service offers
-the equivalent of Billboard's 67-year weekly Hot 100 history.
-
 Reproduction: [scripts/bb_weekly_chart_analysis.py](scripts/bb_weekly_chart_analysis.py).
 Source data: [scripts/aux_db_sync.py](scripts/aux_db_sync.py) ingests
 `data/analysis/billboard_weekly_current.csv` (utdata/rwd-billboard-data
 public mirror, 700k weekly chart-rows → 32,561 unique songs with peak/woc
 aggregates) into `aux.chart_song_history`. Headline metrics in
 `aux.analysis_results` under `analysis_name='bb_weekly_chart_v1'`.
+
+### Spotify Top 200 confirms the top-10 pattern with a different proxy
+
+Adding **Spotify Daily Top 200 chart history** (via the kworb.net mirror
+of charts.spotify.com) for tracks released after 2015 — a *streaming-era*
+popularity signal independent of Billboard's radio + sales weighting —
+tests whether the "top-10 peak intensity drives engagement" finding holds
+when the proxy changes.
+
+**Coverage**: 996 of 3,021 BB tracks (33%) appeared on at least one country's
+Spotify Top 200. In the modern-window subset (release year ≥ 2015 where
+the Spotify Charts archive applies), 539 of 1,238 acapellas (43.5%) charted.
+Spotify Charts data starts ~Dec 2017, so pre-2017 acapellas — most of BB's
+catalog vocals — get no signal here.
+
+**Spotify peaks and Billboard peaks measure related but distinct things.**
+Cross-validating the 465 BB tracks that appear on both charts:
+
+- Pearson(spotify_peak_global, hot100_weekly_peak) = **+0.093** (linear is weak)
+- Spearman = **+0.405** (rank-ordering moderately preserved)
+- Top-10 overlap: 162 in both, 38 Spotify-only, 96 Billboard-only
+
+The huge Pearson-Spearman gap means outliers dominate the linear fit while
+the rank-ordering is genuinely correlated. Billboard top-10 catches a
+strict superset of "US radio + chart" hits; Spotify Global top-10 picks
+up international streaming hits and viral moments that Hot 100 misses,
+and vice versa.
+
+**Modern-window hit rates (release_year ≥ 2015):**
+
+| chart cut | acap rate | instr rate | acap/instr ratio |
+|---|---|---|---|
+| billboard year-end | 27.8% | 7.2% | 3.87× |
+| billboard weekly | 41.0% | 11.8% | 3.46× |
+| billboard top-40 | 32.1% | 7.6% | 4.23× |
+| billboard top-10 | 20.4% | 5.6% | 3.63× |
+| **spotify global ever** | 34.2% | 13.8% | 2.48× |
+| **spotify US ever** | 34.2% | 12.2% | 2.79× |
+| spotify global top-40 | 24.3% | 7.6% | 3.21× |
+| spotify global top-10 | 13.6% | 4.3% | 3.18× |
+
+The acap/instr ratio is **lower for Spotify than Billboard** (2.5–3.2× vs
+3.5–4.2×). Spotify's user base streams dance/EDM heavily, so the
+instrumental side (which is mostly EDM-genre) gets disproportionately more
+representation on Spotify charts than on Hot 100. **Spotify alone is a
+less discriminating signal for the acap/instr selection asymmetry.** This
+matters: when designing a "predicted listener engagement" head, a
+Spotify-only popularity prior would underweight the asymmetry that
+Billboard captures more cleanly.
+
+**Set-views regression (n=20 volumes — wide CIs, directional only):**
+
+| feature (acapella-side) | r vs views | r² |
+|---|---|---|
+| **sp_global_top10_rate** | **+0.586** | **0.343** |
+| billboard weekly top-10 rate | +0.571 | 0.327 |
+| billboard year-end rate | +0.533 | 0.284 |
+| sp_global_top40_rate | +0.434 | 0.188 |
+| sp_us_top40_rate | +0.435 | 0.189 |
+| sp_charted (any Spotify Top 200) | +0.285 | 0.081 |
+
+Multivariate fits:
+
+| model | R² |
+|---|---|
+| billboard top-10 alone | 0.327 |
+| spotify global top-10 alone | 0.343 |
+| **billboard top-10 + spotify global top-10** | **0.432** |
+| spotify top-10 + billboard year-end | 0.432 |
+| all three top-tier signals | 0.444 |
+
+**Combining Billboard and Spotify top-10 signals improves R² by ~+0.10 over
+either alone** — meaningful given they catch partly disjoint culturally-peak
+moments. The R² ceiling at ~0.44 with three correlated signals confirms
+the prior conclusion: more popularity variance won't be unlocked by adding
+more chart proxies; the remaining ~55% of variance is non-popularity (mix
+quality, viral moments, channel-growth artifacts).
+
+**Spotify-only acapellas (charted on Spotify but missed by both Billboard
+signals): 112 tracks.** Median Spotify global peak = 59.5, only 40% with
+≥100k Last.fm listeners (vs. 75% for the Billboard-weekly-but-not-yearend
+bucket of 384 tracks). The Spotify-only group is weaker on the
+recognizability axis — these are mid-tier streaming entries, not headline
+cultural hits. Two Friends do reach into this pool, but the per-track
+engagement contribution is smaller than the Billboard-charted subset.
+
+**Refined picture across three popularity proxies:**
+
+1. **Hot 100 year-end** (n=956 BB matches): narrowest, US-radio + sales,
+   highest acap/instr ratio (2.4× on full corpus)
+2. **Hot 100 weekly all-time** (n=1,344): broader, includes brief peaks
+   without sustained chart runs
+3. **Spotify Global Top 200** (n=996, modern half only): streaming-era,
+   captures international/viral hits, less discriminating for acap/instr
+
+All three converge on the same headline: **the strongest single predictor
+of BB set engagement is the rate of top-10 culturally-peak acapellas in
+the volume.** Spotify and Billboard top-10 are best used as *complementary*
+signals (combined R² gain ≈ +0.10) rather than substitutes for each other.
+
+**Implication for modeling (refined again)**: a predicted-engagement head
+should combine top-10 culture-moment flags from multiple chart systems
+(weighted toward at-release-time peak signals like Hot 100 weekly + Spotify
+Daily, downweighted on cumulative streaming proxies like raw Last.fm
+listeners which empirically don't transfer). For pre-2017 catalog
+acapellas where Spotify gives no signal, the Billboard signals carry the
+prediction. For modern acapellas (post-2017), use both.
+
+**Still unmeasured**: SoundCloud popularity has no historical chart-archive
+equivalent (only cumulative play counts, look-back-biased) and is the only
+remaining major streaming platform without a usable at-release-time signal
+for this corpus.
+
+Reproduction: [scripts/bb_spotify_charts.py](scripts/bb_spotify_charts.py)
+(scrapes kworb.net per-track) →
+[scripts/aux_db_sync.py](scripts/aux_db_sync.py) (ingests into
+`aux.track_spotify_charts`) →
+[scripts/bb_spotify_chart_analysis.py](scripts/bb_spotify_chart_analysis.py)
+(comparison + regressions). Headline metrics in `aux.analysis_results`
+under `analysis_name='bb_spotify_chart_v1'`.
 
 ### Auxiliary research database
 
@@ -346,9 +458,10 @@ rebuildable from cache files + main DB):
 | `track_lastfm` | 3,342 | per-track Last.fm info: lfm_artist, lfm_title, mbid, listeners, playcount, error_code |
 | `chart_yearend` | 6,621 | Billboard Hot 100 year-end 1958-2024 (chart_name + year + rank + title + artist) |
 | `chart_song_history` | 32,561 | per-song all-time aggregates from weekly Hot 100 1958-2026 (peak_position, weeks_on_chart, debut_date, last_chart_date) |
+| `track_spotify_charts` | 2,862 | per-track Spotify Top 200 history via kworb.net mirror — Global+US+per-country peak positions, lifetime streams, weeks on chart; charts.spotify.com data starts ~Dec 2017 so pre-2017 catalog tracks return `status='uncharted'` |
 | `track_chart_match` | 2,300 | resolved BB-track → chart-entry pairings (year-end + weekly all-time), with `rank` for year-end matches and `peak_position`/`weeks_on_chart` for weekly matches |
 | `set_views` | 24 | per-set platform view counts (BB YouTube counts to date) |
-| `analysis_results` | ~95 | flattened headline metrics from corpus-empirics analyses (queryable by `analysis_name`/`metric`/`group_key`) |
+| `analysis_results` | ~125 | flattened headline metrics from corpus-empirics analyses (queryable by `analysis_name`/`metric`/`group_key`) |
 
 All keyed on `track_id` (same identifier as `dj_set_rows.data-trackid` in the
 main DB) so cross-DB joins are straightforward — `ATTACH DATABASE` aux.db
