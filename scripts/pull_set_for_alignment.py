@@ -13,6 +13,14 @@ audio files under `tracks/` and `stems/` that pi-storage no longer
 considers part of the set (re-resolved track ids, regenerated stems,
 replaced audio). Without `--prune`, those orphans accumulate silently.
 
+When the same track_id appears at more than one slot in the set (e.g.
+a vocal looped under two different beats), each slot gets its own
+filename (`001w2__Artist - Title.m4a`, `023w1__Artist - Title.m4a`)
+but only the first occurrence triggers an rsync — subsequent slots
+are hard-linked to the cached file, so the duplicates cost zero extra
+disk and edits to one (re-tagging, warp markers) propagate to the
+others. Ableton sees each linked filename as a distinct clip.
+
 Usage:
     python scripts/pull_set_for_alignment.py <set_id> [--dest ~/aligning]
     python scripts/pull_set_for_alignment.py <set_id> --dry-run
@@ -81,6 +89,12 @@ class StemRow:
 
 @dataclass(frozen=True)
 class TrackRow:
+    """One *appearance* of a track in the set. The same track_id can
+    appear in multiple TrackRows when Two Friends play the same track at
+    more than one slot (e.g. a vocal looped under two different beats).
+    Each appearance gets its own label and local filename; in the pull
+    loop, the first appearance triggers an rsync and subsequent
+    appearances are hard-linked to the cached file."""
     track_id: str
     track_audio_id: int
     artist: str
@@ -90,6 +104,13 @@ class TrackRow:
     codec: str | None
     duration_s: float | None
     stems: tuple[StemRow, ...]
+    row_index: int  # original 1001tracklists row order, used for sorting
+    # Label derived from 1001tracklists row prefix: primary rows
+    # ("NN ..." or "NN HH:MM ...") become "NNN"; "w/" rows layered
+    # under a primary become "NNNw1", "NNNw2", ... The numeric part
+    # follows the published section_no (or, if the set has no section
+    # prefixes at all, a fall-back per-row counter).
+    label: str
 
 
 @dataclass(frozen=True)
@@ -136,10 +157,71 @@ def fetch_mix(set_id: str) -> MixRow | None:
     )
 
 
+_PRIMARY_PREFIX_RE = re.compile(r"^\s*(\d+)\b")
+_W_PREFIX_RE = re.compile(r"^\s*w/")
+
+
+def _label_rows(
+    rows: list[dict],
+) -> list[tuple[str, int, str]]:
+    """Given dj_set_rows in row_index order with text_excerpt + track_id,
+    return one (label, row_index, track_id) tuple per row.
+
+    Labels follow the 1001tracklists row prefix:
+      - "01 ..." / "06 08:29 ..." → primary; emit "NNN" using the
+        published section_no (or 1-up from the previous primary when
+        section_no isn't parseable).
+      - "w/ ..." → layered; emit "NNNwK" where NNN is the current
+        primary's number and K is the per-section w counter.
+      - Anything else (rare) is treated as primary.
+
+    Tracks played at multiple slots in the set (same track_id appearing
+    at multiple row_indexes) get a separate (label, row_index) entry per
+    appearance — the caller is responsible for de-duplicating the rsync
+    transfer if it wants to (e.g. by hard-linking siblings)."""
+    labeled: list[tuple[str, int, str]] = []
+    primary_seq = 0  # 1-up counter, used when section_no isn't parseable
+    cur_primary_label: str | None = None
+    w_counter = 0
+
+    for r in rows:
+        track_id = r["track_id"]
+        text = r.get("text_excerpt") or ""
+        if _W_PREFIX_RE.match(text) and cur_primary_label is not None:
+            w_counter += 1
+            label = f"{cur_primary_label}w{w_counter}"
+        else:
+            primary_seq += 1
+            m = _PRIMARY_PREFIX_RE.match(text)
+            section_no = int(m.group(1)) if m else primary_seq
+            cur_primary_label = f"{section_no:03d}"
+            w_counter = 0
+            label = cur_primary_label
+
+        labeled.append((label, r["row_index"], track_id))
+    return labeled
+
+
 def fetch_tracks(set_id: str) -> list[TrackRow]:
-    # is_reference is rarely set, so pick the "best" track_audio row per
-    # track_id: prefer is_reference=1, then youtube_music (cleanest source),
-    # then spotify, then any other platform, breaking ties by most recent.
+    # First pass: pull ordered dj_set_rows to compute per-track labels
+    # that mirror 1001tracklists' published section / "w/" layering.
+    row_rows = ssh_sqlite(f"""
+        SELECT row_index,
+               text_excerpt,
+               json_extract(data_attrs_json, '$."data-trackid"') AS track_id
+        FROM dj_set_rows
+        WHERE set_id = '{set_id}'
+          AND data_attrs_json LIKE '%trackid%'
+        ORDER BY row_index;
+    """)
+    # Drop rows without a usable track_id (rare but possible).
+    row_rows = [r for r in row_rows if r.get("track_id")]
+    if not row_rows:
+        return []
+    labeled = _label_rows(row_rows)
+
+    # Second pass: resolve each unique track_id to its best track_audio
+    # row + metadata. Platform ordering prefers cleanest sources.
     rows = ssh_sqlite(f"""
         WITH ranked AS (
             SELECT
@@ -151,7 +233,6 @@ def fetch_tracks(set_id: str) -> list[TrackRow]:
                 tm.artists_json,
                 tm.title           AS meta_title,
                 tm.version_tag,
-                MIN(l.track_media_id) OVER (PARTITION BY ta.track_id) AS first_seen,
                 ROW_NUMBER() OVER (
                     PARTITION BY ta.track_id
                     ORDER BY ta.is_reference DESC,
@@ -172,11 +253,11 @@ def fetch_tracks(set_id: str) -> list[TrackRow]:
         SELECT track_id, track_audio_id, artists_json, meta_title AS title,
                version_tag, path, codec, duration_s
         FROM ranked
-        WHERE pick = 1
-        ORDER BY first_seen;
+        WHERE pick = 1;
     """)
     if not rows:
         return []
+    audio_by_tid: dict[str, dict] = {r["track_id"]: r for r in rows}
 
     # Bulk-fetch stems for all picked track_audio_ids in one query.
     audio_ids = [r["track_audio_id"] for r in rows]
@@ -193,14 +274,17 @@ def fetch_tracks(set_id: str) -> list[TrackRow]:
         )
 
     out: list[TrackRow] = []
-    for r in rows:
+    for label, row_index, tid in labeled:
+        r = audio_by_tid.get(tid)
+        if r is None:
+            continue  # in dj_set_rows but no track_audio yet; skip
         try:
             artists = json.loads(r["artists_json"]) if r.get("artists_json") else []
         except (json.JSONDecodeError, TypeError):
             artists = []
         artist = " & ".join(a for a in artists if a) or "Unknown"
         out.append(TrackRow(
-            track_id=r["track_id"],
+            track_id=tid,
             track_audio_id=r["track_audio_id"],
             artist=artist,
             title=r.get("title") or "Unknown",
@@ -209,7 +293,11 @@ def fetch_tracks(set_id: str) -> list[TrackRow]:
             codec=r.get("codec"),
             duration_s=r.get("duration_s"),
             stems=tuple(stems_by_audio.get(r["track_audio_id"], [])),
+            row_index=row_index,
+            label=label,
         ))
+    # Preserve dj_set_rows order (the published 1001tl ordering).
+    out.sort(key=lambda t: t.row_index)
     return out
 
 
@@ -360,6 +448,46 @@ def rsync(src_remote: str, dst_local: Path, dry_run: bool) -> bool:
     return True
 
 
+def pull_or_link(
+    pi_path: str,
+    dst: Path,
+    pulled: dict[str, Path],
+    dry_run: bool,
+) -> bool:
+    """First time we see a pi_path in this run, rsync from pi-storage to
+    `dst` and register it. On subsequent appearances (same audio used at
+    multiple slots in the set), hard-link `dst` to the already-pulled
+    sibling so both filenames share one inode — zero extra disk, and
+    Ableton sees each as a distinct clip.
+
+    Returns True on success. dry_run treats both paths as no-ops but
+    still registers the planned dst so siblings know they have a parent."""
+    sibling = pulled.get(pi_path)
+    if sibling is None:
+        if dry_run:
+            pulled[pi_path] = dst
+            return True
+        ok = rsync(pi_path, dst, dry_run=False)
+        if ok:
+            pulled[pi_path] = dst
+        return ok
+    if dst == sibling:
+        return True
+    if dry_run:
+        return True
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        if dst.exists():
+            if dst.stat().st_ino == sibling.stat().st_ino:
+                return True  # already linked from a prior run
+            dst.unlink()
+        dst.hardlink_to(sibling)
+        return True
+    except OSError as e:
+        print(f"  ! hardlink failed ({e}); falling back to rsync", file=sys.stderr)
+        return rsync(pi_path, dst, dry_run=False)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("set_id", nargs="?", help="dj_sets.set_id (e.g. 2vpur281)")
@@ -427,19 +555,25 @@ def main() -> int:
     keep_paths: set[Path] = {mix_dst}
 
     succeeded: list[dict] = []
+    # First-pull cache so re-played tracks (and their stems) become hard
+    # links into the first appearance's file instead of duplicate rsyncs.
+    pulled_tracks: dict[str, Path] = {}
+    pulled_stems: dict[str, Path] = {}
     for i, t in enumerate(tracks, start=1):
         ext = Path(t.pi_path).suffix or ".m4a"
         suffix = f" ({t.version_tag})" if t.version_tag else ""
-        name = f"{i:03d}__{sanitize(t.artist)} - {sanitize(t.title)}{suffix}{ext}"
+        name = f"{t.label}__{sanitize(t.artist)} - {sanitize(t.title)}{suffix}{ext}"
         dst = tracks_dir / name
         keep_paths.add(dst)
         n_stems = len(t.stems) if not args.no_stems else 0
         stems_note = f"  +{n_stems} stems" if n_stems else ""
-        print(f"[{i:03d}/{len(tracks)}] {t.artist} - {t.title}{stems_note}")
+        replay_note = "  (replay → hardlink)" if t.pi_path in pulled_tracks else ""
+        print(f"[{i:03d}/{len(tracks)}] {t.label}  {t.artist} - {t.title}{stems_note}{replay_note}")
 
         track_entry: dict = {
             "track_id": t.track_id,
             "track_audio_id": t.track_audio_id,
+            "label": t.label,
             "artist": t.artist,
             "title": t.title,
             "version_tag": t.version_tag,
@@ -455,15 +589,17 @@ def main() -> int:
 
         if args.dry_run:
             print(f"    -> {dst}")
+            pulled_tracks.setdefault(t.pi_path, dst)
             for s in (t.stems if not args.no_stems else ()):
                 stem_dst = stems_dir / stem_subdir_name / f"{s.stem_name}{Path(s.pi_path).suffix or '.m4a'}"
                 keep_paths.add(stem_dst)
+                pulled_stems.setdefault(s.pi_path, stem_dst)
                 print(f"    -> {stem_dst}")
                 track_entry["stems"][s.stem_name] = str(stem_dst)
             succeeded.append(track_entry)
             continue
 
-        if not rsync(t.pi_path, dst, dry_run=False):
+        if not pull_or_link(t.pi_path, dst, pulled_tracks, dry_run=False):
             continue
 
         if not args.no_stems:
@@ -471,7 +607,7 @@ def main() -> int:
                 stem_ext = Path(s.pi_path).suffix or ".m4a"
                 stem_dst = stems_dir / stem_subdir_name / f"{s.stem_name}{stem_ext}"
                 keep_paths.add(stem_dst)
-                if rsync(s.pi_path, stem_dst, dry_run=False):
+                if pull_or_link(s.pi_path, stem_dst, pulled_stems, dry_run=False):
                     track_entry["stems"][s.stem_name] = str(stem_dst)
 
         succeeded.append(track_entry)
