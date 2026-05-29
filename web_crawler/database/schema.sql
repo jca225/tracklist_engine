@@ -155,6 +155,10 @@ CREATE TABLE IF NOT EXISTS track_audio (
     -- mashup source), 'instrumental' (instrumental-only), 'remix' (remixed
     -- variant). Assigned by parsing the scraped tracklist row text.
     variant_tag    TEXT NOT NULL DEFAULT 'original',
+    -- Edit length (Variant axis): 'regular' (radio/album cut) | 'extended'
+    -- (extended mix, typically the DJ club edit). Independent of variant_tag
+    -- (which is the Stem axis). See [[audio-identity-taxonomy]].
+    edit_tag       TEXT NOT NULL DEFAULT 'regular',
     downloaded_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
 
     UNIQUE(track_id, platform, player_id)
@@ -544,6 +548,37 @@ CREATE TABLE IF NOT EXISTS track_metadata (
 CREATE INDEX IF NOT EXISTS idx_track_metadata_title ON track_metadata(title);
 
 
+-- Per-set ordered slot spine — the symbolic X for the alignment model (the
+-- per-track sibling track_metadata is the download view; this is the aligner
+-- view). One row per played slot, in 1001tracklists order, preserving the
+-- distinctions the aligner conditions on: version-as-played, instrumental
+-- qualifier, cue claim, and w/ adjacency. track_id is the data-trackid when
+-- present, else a synthetic 'tlp{tlp_id}' (source='synthetic') so sided rows
+-- with no global track id (the "Rvmor gap") still appear. full_name is verbatim
+-- (carries the (Instrumental)/(Acappella) qualifier the download query strips).
+CREATE TABLE IF NOT EXISTS set_track_slots (
+    set_id           TEXT NOT NULL,
+    row_index        INTEGER NOT NULL,     -- order within the set (from dj_set_rows)
+    tlp_id           INTEGER,              -- data-id on the row
+    track_id         TEXT,                 -- data-trackid OR synthetic 'tlp{tlp_id}'
+    source           TEXT DEFAULT 'scraped', -- 'scraped' | 'synthetic'
+    slot_label       TEXT,                 -- '030', '030w1' (section + w/ layering)
+    is_concurrent    INTEGER DEFAULT 0,    -- w/ adjacency (layered under a primary)
+    cue_seconds      INTEGER,              -- hidden-input cue offset
+    cue_time_seconds INTEGER,              -- parsed from the displayed timecode
+    version_tag      TEXT,                 -- Remix | Rework | Acappella | AltVersion | NULL
+    is_instrumental  INTEGER DEFAULT 0,    -- (Instrumental) qualifier seen as-played
+    full_name        TEXT,                 -- verbatim "Artist - Title (Remixer Remix) (Instrumental)"
+    title            TEXT,
+    artists_json     TEXT,
+    duration_seconds INTEGER,
+    parsed_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (set_id, row_index),
+    FOREIGN KEY (set_id) REFERENCES dj_sets(set_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_set_track_slots_track ON set_track_slots(track_id);
+
+
 -- User-contributed track identity guesses from suggestion_tokenizer.SuggestionRow.
 -- Many suggestions can target the same track slot (set_id, tlp_id).
 CREATE TABLE IF NOT EXISTS track_suggestions (
@@ -583,3 +618,39 @@ CREATE TABLE IF NOT EXISTS track_id_links (
     PRIMARY KEY (set_id, tlp_id, linker_user_name, linked_tracklist_href)
 );
 CREATE INDEX IF NOT EXISTS idx_track_id_links_target ON track_id_links(linked_tracklist_href);
+
+
+-- Append-only correction ledger. One row each time a track's downloaded audio
+-- is replaced or a variant added because the auto-acquired version was the
+-- wrong identity along one of the three axes:
+--   axis='version'  wrong arrangement (got the original, wanted the remix)
+--   axis='variant'  wrong edit length (got radio/regular, wanted extended)
+--   axis='stem'     wrong/poor component (acappella vs instrumental vs full)
+-- These rows are the training signal for the future acquisition gates. NO
+-- foreign keys on purpose: a correction must OUTLIVE the track_audio rows it
+-- references (a 'replace' deletes the old row), so it snapshots the old/new
+-- identity inline rather than pointing at rows that may vanish.
+CREATE TABLE IF NOT EXISTS track_audio_correction (
+    correction_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    set_id              TEXT,              -- set where the mistake was noticed (nullable)
+    position            TEXT,              -- published section no. / slot label (free text)
+    track_id            TEXT NOT NULL,     -- 1001tracklists data-trackid being corrected
+    axis                TEXT NOT NULL,     -- version | variant | stem
+    action              TEXT NOT NULL,     -- replace (destructive) | add (additive)
+    old_track_audio_id  INTEGER,           -- retired row id (NULL for a pure add)
+    old_platform        TEXT,
+    old_player_id       TEXT,
+    old_url             TEXT,
+    new_track_audio_id  INTEGER,           -- inserted row id
+    new_platform        TEXT,
+    new_player_id       TEXT,
+    new_url             TEXT,
+    variant_tag         TEXT,              -- stem-axis value (acappella|instrumental|original)
+    reason              TEXT,              -- free-text why it was wrong
+    source              TEXT,              -- replace_track_audio | acquire_variant | manual
+    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CHECK (axis IN ('version','variant','stem')),
+    CHECK (action IN ('replace','add'))
+);
+CREATE INDEX IF NOT EXISTS idx_track_audio_correction_track ON track_audio_correction(track_id);
+CREATE INDEX IF NOT EXISTS idx_track_audio_correction_set   ON track_audio_correction(set_id);
