@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..errors import DownloadError
-from ..models import AudioAsset, MediaSource
+from core.models import AudioAsset, MediaSource
 from core.result import Err, Ok, Result
 from .downloader import DownloadConfig
 

@@ -19,7 +19,7 @@ from ..errors import DbError
 # the call site (persist_set_analysis below).
 if TYPE_CHECKING:
     from ..analysis.set_analysis import SetAnalysisResult
-from ..models import (
+from core.models import (
     AudioAsset, MediaSource, SetAudioAsset, SetMediaLink, SetTimeline,
     TimelineSegment, Track,
     normalize_set_media_url, soundcloud_api_url, spotify_track_url, youtube_url,

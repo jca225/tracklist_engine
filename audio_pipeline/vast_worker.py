@@ -41,7 +41,7 @@ from pathlib import Path
 
 from .adapters import db as db_adapter
 from .analysis.pipeline import Analyzers, analyze_track, load_analyzers
-from .models import AudioAsset
+from core.models import AudioAsset
 from core.result import Err, Ok, Result
 
 _log = logging.getLogger("audio_pipeline.vast_worker")

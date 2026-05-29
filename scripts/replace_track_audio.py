@@ -70,7 +70,7 @@ from audio_pipeline.adapters import db as db_adapter
 from audio_pipeline.adapters import spotdl_adapter, ytmusic_adapter
 from audio_pipeline.adapters.downloader import DownloadConfig
 from audio_pipeline.errors import DownloadError
-from audio_pipeline.models import AudioAsset, MediaSource
+from core.models import AudioAsset, MediaSource
 from core.result import Err, Ok
 
 _log = logging.getLogger("replace_track_audio")

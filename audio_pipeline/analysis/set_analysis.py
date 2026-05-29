@@ -16,7 +16,7 @@ from pathlib import Path
 
 from .adapters import beat_this_adapter
 
-from ..models import SetAudioAsset
+from core.models import SetAudioAsset
 from core.result import Err, Ok, Result
 from .adapters import demucs_adapter
 from .errors import AnalysisError

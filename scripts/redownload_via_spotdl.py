@@ -59,7 +59,7 @@ sys.path.insert(0, str(REPO))
 from audio_pipeline.adapters import db as db_adapter
 from audio_pipeline.adapters import spotdl_adapter
 from audio_pipeline.errors import DownloadError
-from audio_pipeline.models import MediaSource, spotify_track_url
+from core.models import MediaSource, spotify_track_url
 from core.result import Err, Ok
 
 _log = logging.getLogger("redownload_via_spotdl")

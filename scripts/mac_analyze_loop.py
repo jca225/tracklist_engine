@@ -42,7 +42,7 @@ os.environ["TRACKLIST_DISABLE_FK"] = "1"
 
 from audio_pipeline.adapters import db as db_adapter
 from audio_pipeline.analysis.pipeline import load_analyzers, analyze_track
-from audio_pipeline.models import AudioAsset
+from core.models import AudioAsset
 
 # Pi-storage configuration (same Tailscale alias as vast_loop, just no
 # SOCKS proxy since Mac runs Tailscale natively).
@@ -58,7 +58,7 @@ LOCAL_AUDIO = SCRATCH_DIR / "audio"
 LOCAL_STEMS = SCRATCH_DIR / "stems"
 SCRATCH_DB = SCRATCH_DIR / "scratch.db"
 
-BB_SETS = ("w1mgcjt",)  # BB10 only; revert to all six to drain BB10-15
+BB_SETS = ("1rfb0yl9", "pwgrrb1")  # Disco Lines @ Mammoth Mountain + it's murph @ Club Space
 
 # MPS = Apple Silicon GPU. analyze_track uses this for Demucs / MERT /
 # cue-detr. beat_this is CPU-light. Essentia runs in its own venv subprocess.

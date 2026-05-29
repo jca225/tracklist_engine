@@ -1,9 +1,9 @@
-"""Tests for the pure-function parts of audio_pipeline.models."""
+"""Tests for the pure-function parts of core.models."""
 from __future__ import annotations
 
 import pytest
 
-from audio_pipeline.models import (
+from core.models import (
     MediaSource, Track,
     youtube_url, soundcloud_api_url, spotify_track_url,
     DOWNLOAD_PLATFORM_PRIORITY,

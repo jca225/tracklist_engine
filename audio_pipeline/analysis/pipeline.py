@@ -18,7 +18,7 @@ from .adapters import (
     essentia_adapter, loudness,
 )
 
-from ..models import AudioAsset
+from core.models import AudioAsset
 from core.result import Err, Ok, Result
 from .adapters import mert_adapter
 from .errors import AnalysisError

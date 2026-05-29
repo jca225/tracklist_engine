@@ -48,7 +48,7 @@ from .adapters import db as db_adapter
 from .adapters import spotdl_adapter
 from .adapters.downloader import DownloadConfig, download_one, download_set_mix
 from .errors import DbError, DownloadError
-from .models import AudioAsset, MediaSource, SetMediaLink, Track
+from core.models import AudioAsset, MediaSource, SetMediaLink, Track
 from core.result import Err, Ok, Result
 
 _log = logging.getLogger("audio_pipeline.main")

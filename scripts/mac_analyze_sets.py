@@ -27,7 +27,7 @@ os.environ["TRACKLIST_DISABLE_FK"] = "1"
 
 from audio_pipeline.analysis.pipeline import load_analyzers
 from audio_pipeline.analysis.set_analysis import analyze_set
-from audio_pipeline.models import SetAudioAsset
+from core.models import SetAudioAsset
 from core.result import Err, Ok
 
 PI_HOST = "pi-storage"

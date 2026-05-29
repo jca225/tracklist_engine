@@ -15,7 +15,7 @@ from yt_dlp import YoutubeDL
 from yt_dlp.utils import DownloadError as YtDlpDownloadError, ExtractorError
 
 from ..errors import DownloadError
-from ..models import AudioAsset, MediaSource, SetAudioAsset
+from core.models import AudioAsset, MediaSource, SetAudioAsset
 from core.result import Err, Ok, Result
 
 

@@ -44,7 +44,7 @@ os.environ["TRACKLIST_DISABLE_FK"] = "1"
 
 from audio_pipeline.adapters import db as db_adapter
 from audio_pipeline.analysis.pipeline import load_analyzers, analyze_track
-from audio_pipeline.models import AudioAsset
+from core.models import AudioAsset
 
 PI_HOST = "pi-storage"             # ~/.ssh/config alias on Vast (Tailscale SOCKS5 proxy)
 PI_USER = "johncabrahams"
