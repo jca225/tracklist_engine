@@ -4,7 +4,6 @@ Domain code never imports sqlite3 directly; it calls these functions.
 """
 from __future__ import annotations
 
-import json
 import os
 import sqlite3
 from contextlib import contextmanager
@@ -229,31 +228,6 @@ def insert_track_media_link(
     return Ok(None)
 
 
-def load_set_measure_grid(db_path: Path, set_id: str) -> Result[list[float] | None, DbError]:
-    """Return the set-mix downbeat-derived measure grid (seconds), or None
-    if this set hasn't had `analyze_set` run on it yet."""
-    try:
-        with _connect(db_path) as conn:
-            row = conn.execute(
-                """
-                SELECT san.measure_times_json
-                FROM set_analysis san
-                JOIN set_audio sa ON sa.set_audio_id = san.set_audio_id
-                WHERE sa.set_id = ?
-                ORDER BY sa.is_reference DESC, sa.downloaded_at DESC LIMIT 1
-                """,
-                (set_id,),
-            ).fetchone()
-    except sqlite3.DatabaseError as e:
-        return Err(DbError(kind="query_failed", detail=str(e)))
-    if row is None or row["measure_times_json"] is None:
-        return Ok(None)
-    try:
-        return Ok(list(json.loads(row["measure_times_json"])))
-    except (json.JSONDecodeError, TypeError) as e:
-        return Err(DbError(kind="query_failed", detail=f"measure_times parse: {e}"))
-
-
 def load_ref_section_grids(
     db_path: Path, track_ids: tuple[str, ...]
 ) -> Result[dict[str, tuple[tuple[int, float, float], ...]], DbError]:
@@ -288,38 +262,6 @@ def load_ref_section_grids(
             (int(r["section_idx"]), float(r["start_s"]), float(r["end_s"]))
         )
     return Ok({k: tuple(v) for k, v in out.items()})
-
-
-def load_ref_measure_grids(db_path: Path, track_ids: tuple[str, ...]) -> Result[dict[str, list[float]], DbError]:
-    """Map each canonical track_id to its measure grid (seconds). Tracks that
-    haven't been analyzed are simply absent from the returned dict."""
-    if not track_ids:
-        return Ok({})
-    placeholders = ",".join("?" for _ in track_ids)
-    try:
-        with _connect(db_path) as conn:
-            rows = conn.execute(
-                f"""
-                SELECT ta.track_id, tan.measure_times_json
-                FROM track_analysis tan
-                JOIN track_audio ta ON ta.track_audio_id = tan.track_audio_id
-                WHERE ta.track_id IN ({placeholders})
-                  AND tan.measure_times_json IS NOT NULL
-                ORDER BY ta.is_reference DESC, ta.downloaded_at DESC
-                """,
-                track_ids,
-            ).fetchall()
-    except sqlite3.DatabaseError as e:
-        return Err(DbError(kind="query_failed", detail=str(e)))
-    out: dict[str, list[float]] = {}
-    for r in rows:
-        if r["track_id"] in out:
-            continue        # first (preferred) row per track wins
-        try:
-            out[r["track_id"]] = list(json.loads(r["measure_times_json"]))
-        except (json.JSONDecodeError, TypeError):
-            continue
-    return Ok(out)
 
 
 def load_set_audio_path(db_path: Path, set_id: str) -> Result[Path, DbError]:
@@ -422,105 +364,6 @@ def load_ref_audio_paths(db_path: Path, track_ids: tuple[str, ...]) -> Result[di
     for r in rows:
         out.setdefault(r["track_id"], Path(r["path"]))    # first row per track wins
     return Ok(out)
-
-
-def load_set_fingerprint_hits(
-    db_path: Path, set_id: str, *, min_score: float = 0.6,
-) -> Result[dict[str, list[tuple[float, float, float]]], DbError]:
-    """Load per-track fingerprint hits for one set: {track_id → [(start, end, score), ...]}.
-
-    Used by Stage-3's Viterbi window-narrowing to replace the
-    cue-anchored heuristic window with a data-driven "where chroma
-    fingerprint says this track actually plays" window. The threshold
-    `min_score` gates out low-confidence hits up-front so the caller
-    doesn't have to re-filter.
-    """
-    try:
-        with _connect(db_path) as conn:
-            rows = conn.execute(
-                """
-                SELECT matched_track_id, mix_start_s, mix_end_s, score
-                FROM set_fingerprint_hits
-                WHERE set_id = ? AND score >= ?
-                ORDER BY matched_track_id, mix_start_s
-                """,
-                (set_id, float(min_score)),
-            ).fetchall()
-    except sqlite3.DatabaseError as e:
-        return Err(DbError(kind="query_failed", detail=str(e)))
-    out: dict[str, list[tuple[float, float, float]]] = {}
-    for r in rows:
-        out.setdefault(r["matched_track_id"], []).append(
-            (float(r["mix_start_s"]), float(r["mix_end_s"]), float(r["score"])),
-        )
-    return Ok(out)
-
-
-def load_track_measure_grid(
-    db_path: Path, track_id: str,
-) -> Result[list[tuple[int, float, float, float | None]], DbError]:
-    """Return (measure_idx, start_s, end_s, bpm) for the preferred audio
-    asset of `track_id`. Empty list if no measures persisted."""
-    try:
-        with _connect(db_path) as conn:
-            row = conn.execute(
-                """
-                SELECT track_audio_id FROM track_audio
-                WHERE track_id = ?
-                ORDER BY is_reference DESC, downloaded_at DESC LIMIT 1
-                """,
-                (track_id,),
-            ).fetchone()
-            if row is None:
-                return Ok([])
-            measures = conn.execute(
-                """
-                SELECT measure_idx, start_s, end_s, bpm
-                FROM track_measures
-                WHERE track_audio_id = ?
-                ORDER BY measure_idx
-                """,
-                (int(row[0]),),
-            ).fetchall()
-    except sqlite3.DatabaseError as e:
-        return Err(DbError(kind="query_failed", detail=str(e)))
-    return Ok([
-        (int(r["measure_idx"]), float(r["start_s"]), float(r["end_s"]),
-         None if r["bpm"] is None else float(r["bpm"]))
-        for r in measures
-    ])
-
-
-def load_set_measure_grid_full(
-    db_path: Path, set_id: str,
-) -> Result[list[tuple[int, float, float, float | None]], DbError]:
-    try:
-        with _connect(db_path) as conn:
-            row = conn.execute(
-                """
-                SELECT set_audio_id FROM set_audio WHERE set_id = ?
-                ORDER BY is_reference DESC, downloaded_at DESC LIMIT 1
-                """,
-                (set_id,),
-            ).fetchone()
-            if row is None:
-                return Ok([])
-            measures = conn.execute(
-                """
-                SELECT measure_idx, start_s, end_s, bpm
-                FROM set_measures
-                WHERE set_audio_id = ?
-                ORDER BY measure_idx
-                """,
-                (int(row[0]),),
-            ).fetchall()
-    except sqlite3.DatabaseError as e:
-        return Err(DbError(kind="query_failed", detail=str(e)))
-    return Ok([
-        (int(r["measure_idx"]), float(r["start_s"]), float(r["end_s"]),
-         None if r["bpm"] is None else float(r["bpm"]))
-        for r in measures
-    ])
 
 
 def load_track_section_starts(

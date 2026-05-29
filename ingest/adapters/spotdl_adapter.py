@@ -32,7 +32,7 @@ def _spotdl_bin() -> str | None:
          only one audio venv)
       3. PATH fallback
     """
-    # __file__ = <repo>/audio_pipeline/adapters/spotdl_adapter.py → parents[2]
+    # __file__ = <repo>/ingest/adapters/spotdl_adapter.py → parents[2]
     repo_root = Path(__file__).resolve().parents[2]
     isolated = repo_root / "venvs" / "spotdl" / "bin" / "spotdl"
     if isolated.is_file():

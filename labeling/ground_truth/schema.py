@@ -213,7 +213,7 @@ def dump(gt: GroundTruthSet, *, title: str | None = None) -> str:
     if title:
         out.append(f"# Hand-annotated ground-truth for {title}")
         out.append("#")
-    out.append("# Schema: see audio_pipeline/ground_truth/ (DSL).")
+    out.append("# Schema: see labeling/ground_truth/ (DSL).")
     out.append(f"set_id: {gt.set_id}")
     out.append(f"source: {gt.source}")
     out.append(f"annotated_by: {gt.annotated_by}")
