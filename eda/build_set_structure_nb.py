@@ -3,7 +3,7 @@
 The notebook is the deliverable; this script lets us regenerate it without
 hand-editing JSON. Run with any python that has `nbformat` installed:
 
-    python data_analysis/build_set_structure_nb.py
+    python eda/build_set_structure_nb.py
 """
 from __future__ import annotations
 

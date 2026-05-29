@@ -302,7 +302,7 @@ def cue_section_durations_for_set(conn: sqlite3.Connection,
     Computed off the tokenized track rows so suggestions/concurrent sub-rows
     are filtered out. Useful for sizing the typical mix-section length —
     a generator needs to know how long each played segment lasts."""
-    from data_analysis.big_bootie import tokenize_rows  # local import to avoid cycle
+    from eda.big_bootie import tokenize_rows  # local import to avoid cycle
     rows = pd.read_sql_query(
         "SELECT * FROM dj_set_rows WHERE set_id = ? ORDER BY row_index",
         conn, params=(set_id,),

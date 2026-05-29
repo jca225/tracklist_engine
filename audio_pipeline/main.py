@@ -1,7 +1,7 @@
 """Top-level downloader entrypoint.
 
 Reads a JSON job file (data/djs/*.json — produced by e.g.
-data_analysis/queries/tier1_plus_bb.sql) and downloads every track in
+eda/queries/tier1_plus_bb.sql) and downloads every track in
 every listed set. For each canonical track_id, joins
 dj_set_track_media_links to find the YT/SC media URLs, runs yt-dlp via
 the existing `download_one` adapter, and writes a `track_audio` row.
