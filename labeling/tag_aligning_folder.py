@@ -9,7 +9,7 @@ What gets written (for each track that has features):
   - ©too / ©day     : left alone
 
 Usage:
-    ./venvs/audio/bin/python scripts/tag_aligning_folder.py \\
+    ./venvs/audio/bin/python labeling/tag_aligning_folder.py \\
         ~/aligning/1fsnxchk__Two\\ Friends\\ -\\ Big\\ Bootie\\ Mix\\ Volume\\ 12
 """
 from __future__ import annotations

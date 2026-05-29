@@ -22,11 +22,11 @@ disk and edits to one (re-tagging, warp markers) propagate to the
 others. Ableton sees each linked filename as a distinct clip.
 
 Usage:
-    python scripts/pull_set_for_alignment.py <set_id> [--dest ~/aligning]
-    python scripts/pull_set_for_alignment.py <set_id> --dry-run
-    python scripts/pull_set_for_alignment.py <set_id> --prune           # refresh + delete orphans
-    python scripts/pull_set_for_alignment.py <set_id> --prune --dry-run # check mode
-    python scripts/pull_set_for_alignment.py --list-recent              # browse candidates
+    python labeling/pull_set_for_alignment.py <set_id> [--dest ~/aligning]
+    python labeling/pull_set_for_alignment.py <set_id> --dry-run
+    python labeling/pull_set_for_alignment.py <set_id> --prune           # refresh + delete orphans
+    python labeling/pull_set_for_alignment.py <set_id> --prune --dry-run # check mode
+    python labeling/pull_set_for_alignment.py --list-recent              # browse candidates
 
 Output layout:
     ~/aligning/<set_id>__<sanitized-title>/
