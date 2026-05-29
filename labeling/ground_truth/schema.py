@@ -20,7 +20,7 @@ from typing import Any
 
 import yaml
 
-from ..result import Err, Ok, Result
+from audio_pipeline.result import Err, Ok, Result
 
 
 @dataclass(frozen=True)

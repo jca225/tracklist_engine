@@ -1,9 +1,9 @@
 """Hand-annotated ground-truth fixtures — the DSL.
 
-Canonical home for reading, writing, and validating
-`tests/fixtures/*_ground_truth.yaml`. Both the alignment evaluator
-(`audio_pipeline.alignment.eval`) and the Streamlit ground-truth
-editor import from here so the schema has exactly one owner.
+Canonical home for reading, writing, and validating ground-truth labels
+(`tests/fixtures/*_ground_truth.yaml`). This is the schema the manual
+labeling workflow produces and the future algorithmic aligner will train
+against — the seam between `labeling/` and `alignment/`. One schema owner.
 
 Schema (v2, 2026-04-22):
 
