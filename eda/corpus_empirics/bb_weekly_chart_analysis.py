@@ -1,6 +1,6 @@
 """Re-runs the BB popularity findings using the weekly Hot 100 (all-time) signals.
 
-The original [scripts/bb_popularity.py](bb_popularity.py) only used Billboard
+The original [bb_popularity.py](bb_popularity.py) only used Billboard
 Year-End Hot 100 — a narrow definition of "chart hit" that requires sustained
 chart presence over a calendar year. This script also looks at:
 
@@ -18,7 +18,7 @@ Re-does two analyses with these features:
   (2) Set-level (per-BB-volume) views regression: do these broader / continuous
       chart features predict YouTube views better than year-end-binary alone?
 
-Reads aux.db (must already be populated by `scripts/aux_db_sync.py`).
+Reads aux.db (must already be populated by `eda/corpus_empirics/aux_db_sync.py`).
 """
 
 from __future__ import annotations

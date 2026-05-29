@@ -35,7 +35,7 @@ from pathlib import Path
 
 # Source the (track_id → spotify_id) mapping from the cached BB metadata CSV
 # rather than re-querying the 11GB main DB. The CSV is produced by
-# scripts/bb_popularity.py:pull_bb_meta() (which runs a one-time SQL extract,
+# eda/corpus_empirics/bb_popularity.py:pull_bb_meta() (which runs a one-time SQL extract,
 # bypasses raw_html each row, and caches as flat columns) — far faster than
 # re-running that query for our purposes.
 BB_META_CSV = Path("data/analysis/bb_track_meta.csv")
@@ -54,7 +54,7 @@ def pull_bb_spotify_ids() -> dict[str, str]:
     sourced from the bb_track_meta.csv cache (much faster than re-querying
     the main DB)."""
     if not BB_META_CSV.exists():
-        print(f"ERROR: {BB_META_CSV} not found. Run scripts/bb_popularity.py first "
+        print(f"ERROR: {BB_META_CSV} not found. Run eda/corpus_empirics/bb_popularity.py first "
               "to populate the BB metadata cache.", file=sys.stderr)
         sys.exit(1)
     out: dict[str, str] = {}
