@@ -41,8 +41,8 @@ sys.path.insert(0, str(REPO))
 os.environ["TRACKLIST_DISABLE_FK"] = "1"
 
 from core import db as db_adapter
-from audio_pipeline.analysis.pipeline import load_analyzers, analyze_track
-from audio_pipeline.analysis import persistence
+from analysis.pipeline import load_analyzers, analyze_track
+from analysis import persistence
 from core.models import AudioAsset
 
 # Pi-storage configuration (same Tailscale alias as vast_loop, just no

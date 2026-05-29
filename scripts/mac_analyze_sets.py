@@ -25,8 +25,8 @@ sys.path.insert(0, str(REPO))
 # TRACKLIST_DISABLE_FK because we're going to write rows via raw INSERTs.
 os.environ["TRACKLIST_DISABLE_FK"] = "1"
 
-from audio_pipeline.analysis.pipeline import load_analyzers
-from audio_pipeline.analysis.set_analysis import analyze_set
+from analysis.pipeline import load_analyzers
+from analysis.set_analysis import analyze_set
 from core.models import SetAudioAsset
 from core.result import Err, Ok
 

@@ -53,8 +53,8 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
 from core import db as db_adapter
-from audio_pipeline.adapters import ytmusic_adapter
-from audio_pipeline.errors import DownloadError
+from ingest.adapters import ytmusic_adapter
+from ingest.errors import DownloadError
 from core.result import Err, Ok
 
 _log = logging.getLogger("redownload_via_ytmusic")

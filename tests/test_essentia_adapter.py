@@ -14,9 +14,9 @@ from unittest.mock import patch
 
 import pytest
 
-from audio_pipeline.analysis.adapters import essentia_adapter
-from audio_pipeline.analysis.errors import EssentiaError
-from audio_pipeline.analysis.models import EssentiaFeatures
+from analysis.adapters import essentia_adapter
+from analysis.errors import EssentiaError
+from analysis.models import EssentiaFeatures
 from core.result import Err, Ok
 
 

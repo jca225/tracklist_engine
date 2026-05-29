@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from audio_pipeline.analysis.stem_mask import classify
+from analysis.stem_mask import classify
 
 
 # ---- category boundaries ---------------------------------------------------
@@ -89,27 +89,27 @@ def test_margin_guard_does_not_fire_on_clear_wins() -> None:
 # ---- tracklist version parser ----------------------------------------------
 
 def test_parse_version_tag_instrumental_mix() -> None:
-    from audio_pipeline.analysis.stem_mask import parse_version_tag
+    from analysis.stem_mask import parse_version_tag
     assert parse_version_tag(
         "Bastille - Good Grief (Don Diablo Remix) (Instrumental Mix) VIRGIN"
     ) == "instrumental"
 
 
 def test_parse_version_tag_acappella() -> None:
-    from audio_pipeline.analysis.stem_mask import parse_version_tag
+    from analysis.stem_mask import parse_version_tag
     assert parse_version_tag("Track Name (Acapella)")   == "acappella"
     assert parse_version_tag("Track Name (Acappella)")  == "acappella"
     assert parse_version_tag("Track Name - Vocal Mix")  == "acappella"
 
 
 def test_parse_version_tag_dub_and_karaoke() -> None:
-    from audio_pipeline.analysis.stem_mask import parse_version_tag
+    from analysis.stem_mask import parse_version_tag
     assert parse_version_tag("Track (Dub Mix)") == "instrumental"
     assert parse_version_tag("Track (Karaoke Version)") == "instrumental"
 
 
 def test_parse_version_tag_none_for_regular_tracks() -> None:
-    from audio_pipeline.analysis.stem_mask import parse_version_tag
+    from analysis.stem_mask import parse_version_tag
     assert parse_version_tag("Artist - Title (Extended Mix)") is None
     assert parse_version_tag("Artist - Title") is None
     assert parse_version_tag("") is None

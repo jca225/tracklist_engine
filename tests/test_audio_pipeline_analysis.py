@@ -14,10 +14,10 @@ import numpy as np
 import pytest
 
 from core import db as db_adapter
-from audio_pipeline.analysis import pipeline
-from audio_pipeline.analysis import persistence
-from audio_pipeline.analysis.adapters import beat_this_adapter
-from audio_pipeline.analysis.models import (
+from analysis import pipeline
+from analysis import persistence
+from analysis.adapters import beat_this_adapter
+from analysis.models import (
     BeatGrid,
     CuePoints,
     EssentiaFeatures,
