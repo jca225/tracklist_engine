@@ -16,7 +16,7 @@ from tempfile import TemporaryDirectory
 from core.result import Err, Ok, Result
 from ..errors import CueError
 
-_CUE_DETR_DIR: Path = Path(__file__).resolve().parents[3] / "cue-detr"
+_CUE_DETR_DIR: Path = Path(__file__).resolve().parents[2] / "cue-detr"
 
 
 @dataclass(frozen=True)
