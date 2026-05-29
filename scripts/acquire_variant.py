@@ -137,17 +137,67 @@ def canonical_ingest(args: argparse.Namespace) -> int:
     if args.url and args.file:
         sys.exit("--url and --file are mutually exclusive")
     if args.url:
-        return rta._replace_via_url(
+        rc = rta._replace_via_url(
             args.db, args.audio_root, track_id, args.url,
             track_audio_id=None, variant_tag=variant_tag,
         )
-    if args.file:
+    elif args.file:
         pid = args.player_id or args.file.stem
-        return rta._replace_via_file(
+        rc = rta._replace_via_file(
             args.db, args.audio_root, track_id, args.file, pid,
             track_audio_id=None, variant_tag=variant_tag,
         )
-    sys.exit("canonical ingest needs --url or --file")
+    else:
+        sys.exit("canonical ingest needs --url or --file")
+
+    if rc == 0:
+        _identity_check(args.db, track_id, variant_tag)
+    return rc
+
+
+def _lookup_audio_path(db_path: Path, track_id: str, variant_tag: str) -> tuple[int, str] | None:
+    import sqlite3
+    with sqlite3.connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT track_audio_id, path FROM track_audio "
+            "WHERE track_id = ? AND variant_tag = ? "
+            "ORDER BY is_reference DESC, downloaded_at DESC LIMIT 1",
+            (track_id, variant_tag),
+        ).fetchone()
+    return (int(row[0]), row[1]) if row else None
+
+
+def _identity_check(db_path: Path, track_id: str, variant_tag: str) -> None:
+    """Advisory: compare the just-acquired variant against the track's
+    'original' via chromaprint and print a verdict. Never blocks the insert —
+    this is a manual annotator aid; calibrate thresholds before hard-gating.
+    """
+    from core.result import Ok, Err
+    from ingest.adapters import fingerprint as fp
+
+    var = _lookup_audio_path(db_path, track_id, variant_tag)
+    orig = _lookup_audio_path(db_path, track_id, "original")
+    if var is None:
+        print("identity-check: variant row not found post-insert — skipping")
+        return
+    if orig is None:
+        print(f"identity-check: WARNING — no 'original' present for track {track_id}.")
+        print("  · the variant has no Essentia-feature source (variants don't get their own BPM/key),")
+        print("  · and the chromaprint identity check can't run.")
+        print("  -> download the regular version first (normal ingest) so the variant can inherit its features.")
+        return
+
+    fa = fp.fingerprint_file(orig[1])
+    fb = fp.fingerprint_file(var[1])
+    match (fa, fb):
+        case (Ok(a), Ok(b)):
+            sim = fp.similarity(a.raw, b.raw)
+            dur_ratio = (b.duration_s / a.duration_s) if a.duration_s else 0.0
+            verdict, detail = fp.classify(variant_tag, sim, dur_ratio)
+            print(f"identity-check [{verdict}]: {detail}")
+            print(f"  similarity={sim:.3f}  variant={b.duration_s:.1f}s  original={a.duration_s:.1f}s  ratio={dur_ratio:.2f}")
+        case (Err(e), _) | (_, Err(e)):
+            print(f"identity-check: skipped (fingerprint failed: {e.kind} — {e.detail})")
 
 
 def main() -> int:
