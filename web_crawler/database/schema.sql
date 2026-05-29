@@ -497,7 +497,7 @@ CREATE TABLE IF NOT EXISTS set_section_alignment (
     cutup_plan_json         TEXT,              -- list[Segment] as JSON
     confidence              REAL,
     stem_match_rates_json   TEXT,              -- {'full': r, 'vocals': r, 'drums': r, 'bass': r, 'other': r}
-    confidence_source       TEXT DEFAULT 'legacy',  -- 'legacy' | 'indicators_sota_v1' | ... — provenance tag
+    confidence_source       TEXT DEFAULT 'legacy',  -- provenance tag (e.g. 'legacy', 'human_label')
     aligned_at              DATETIME DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (set_id, section_idx),

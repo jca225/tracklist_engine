@@ -19,10 +19,9 @@ top-level module:
   `tag_aligning_folder.py`. Note many *existing* names use "align" for this
   (`~/aligning/`, the `set_section_alignment` table) — legacy, not renamed.
 - **alignment** = *algorithmic* labeling — a model that learns to align
-  automatically from the ground truth that manual labeling produces. The old
-  `audio_pipeline/alignment/sota.py` (Viterbi) was the suboptimal incumbent —
-  now removed (recoverable from git); the ML replacement is not built yet
-  (incubates in `workspaces/`).
+  automatically from the ground truth that manual labeling produces. There is
+  no working aligner yet — the ML model is not built; it will incubate in
+  `workspaces/`.
 
 Target pipeline DAG (modularization in progress):
 `core · scrape → ingest → analysis → labeling ⟶ (GT) ⟶ alignment`, with `eda/`
@@ -193,7 +192,7 @@ grid), `track_audio` / `track_stems` / `track_measures` (ref-track equivalents),
 `track_sections` (per-ref analysis outputs), `canonical_track_cue_points`
 (cue-detr cues keyed by track_id, full-song @ sensitivity=0.5), `track_fingerprints` /
 `set_fingerprint_hits` (chromaprint ingestion + mix scan), `set_section_alignment`
-(legacy algorithmic-alignment output; its producer `sota.py` was removed), `measure_alignment`,
+(legacy alignment-output table, currently unused), `measure_alignment`,
 `set_playback_score`, `set_timeline`, `set_analysis`.
 
 Schema lives in [web_crawler/database/schema.sql](web_crawler/database/schema.sql).
