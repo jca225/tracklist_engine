@@ -198,6 +198,46 @@ def test_persist_analysis_replaces_prior_measures(db_with_audio: tuple[Path, int
     assert [r[0] for r in rows] == [0]
 
 
+# ---------- MERT all-layer per-measure pooling (pure core) ------------------
+
+def test_accumulate_chunk_bins_frames_per_measure_and_layer() -> None:
+    """_accumulate_chunk sums frames into the right measure, per layer, using
+    frame-centre times — the pure core of all-layer per-measure pooling."""
+    from analysis.adapters import mert_adapter
+
+    # 2 layers, 4 frames, 2 dims. frames_per_s=2, chunk_start=0 →
+    # frame-centre times = 0.25, 0.75, 1.25, 1.75.
+    chunk = np.zeros((2, 4, 2), dtype=np.float16)
+    for k in range(4):
+        chunk[0, k, :] = k          # layer 0 frame value = k
+        chunk[1, k, :] = 10 + k     # layer 1 frame value = 10 + k
+    boundaries = np.array([0.0, 1.0, 2.0])   # measures [0,1) and [1,2)
+    sums = np.zeros((2, 2, 2), dtype=np.float32)
+    counts = np.zeros(2, dtype=np.int64)
+
+    mert_adapter._accumulate_chunk(sums, counts, chunk, 0.0, 2.0, boundaries)
+
+    assert counts.tolist() == [2, 2]
+    assert np.allclose(sums[0, 0], [1.0, 1.0])    # frames 0,1 → 0+1
+    assert np.allclose(sums[0, 1], [21.0, 21.0])  # 10+11
+    assert np.allclose(sums[1, 0], [5.0, 5.0])    # frames 2,3 → 2+3
+    assert np.allclose(sums[1, 1], [25.0, 25.0])  # 12+13
+
+
+def test_accumulate_chunk_drops_frames_outside_measures() -> None:
+    """Frame centres outside every measure interval are ignored."""
+    from analysis.adapters import mert_adapter
+
+    chunk = np.ones((1, 4, 2), dtype=np.float16)
+    boundaries = np.array([0.5, 1.0])   # single measure [0.5, 1.0)
+    sums = np.zeros((1, 1, 2), dtype=np.float32)
+    counts = np.zeros(1, dtype=np.int64)
+    # frames_per_s=2, start=0 → times 0.25(drop), 0.75(in), 1.25(drop), 1.75(drop)
+    mert_adapter._accumulate_chunk(sums, counts, chunk, 0.0, 2.0, boundaries)
+    assert counts.tolist() == [1]
+    assert np.allclose(sums[0, 0], [1.0, 1.0])
+
+
 def _fake_essentia(tid: int) -> EssentiaFeatures:
     return EssentiaFeatures(
         track_audio_id=tid,

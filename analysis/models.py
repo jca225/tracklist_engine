@@ -100,13 +100,18 @@ class MeasureEmbedding:
     `SectionEmbedding`s without needing a MERT rerun — so the per-measure
     cache pays for itself many times over during algorithm dev.
 
-    Shape of `embedding_bytes`: (dim,), float16. ~1.5 KB per measure.
+    Shape of `embedding_bytes`: (n_layers, dim) float16, row-major — every MERT
+    hidden state mean-pooled within the measure (the production path keeps all
+    layers, not a single mid-layer pick). `dim` is the per-layer dimension
+    (1024 for MERT-v1-330M); n_layers is recoverable as
+    `len(embedding_bytes) // (2 * dim)` (~25 layers → ~50 KB per measure), so no
+    schema column is needed to describe the stack.
     """
     track_audio_id: int
     measure_idx: int
     start_s: float
     end_s: float
-    dim: int
+    dim: int                       # per-layer embedding dim (e.g. 1024)
     dtype: str                     # 'float16'
     embedding_bytes: bytes
 
