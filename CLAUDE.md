@@ -33,10 +33,8 @@ Everything outside this chain is one of:
   consumed only by `audio_pipeline/analysis/canonical_cues.py`).
 - Exploration / scratch: `eda/` notebooks.
 - Experimental forks of chain modules: `workspaces/` (e.g.
-  `workspaces/alignment_workbench` is a fork of `browser_daw/`). Promote a
-  fork out of `workspaces/` when it stabilizes (same pattern used for
-  `ui/` → `browser_daw/`).
-- Archive: `archive/` (e.g. the legacy Streamlit alignment-review app).
+  `workspaces/alignment_workbench`). Promote a fork out of `workspaces/`
+  when it stabilizes.
 
 New features land inside one of the three chain modules. New top-level folders
 require explicit justification.
@@ -283,7 +281,6 @@ See [[project-tlp-gap]] memory and the field-evidence list in [[project-external
 | DB | `/mnt/storage/data/db/music_database.db` |
 | Track audio | `/mnt/storage/objects/{track_id}/{track_id}__{platform}__{player_id}.{ext}` |
 | Demucs stems | `/mnt/storage/stems/{track_audio_id}/{vocals,drums,bass,other,instrumental}.{ext}` |
-| Human-readable library | `/mnt/storage/library/{Artist}/{Title}/...` (symlinks built by [library/builder.py](library/builder.py)) |
 | Essentia TF model cache | `/mnt/storage/data/essentia_models/*.pb` (synced from Vast.ai or fetched on first use) |
 
 The repo's `data/db/music_database.db` is **a stale local copy for development — never the source of truth.** Services on pi-storage write to the canonical DB continuously; the local copy diverges quickly. To inspect canonical state, query pi-storage directly: `ssh pi-storage 'sqlite3 /mnt/storage/data/db/music_database.db "..."'` or via the FastAPI jobqueue.

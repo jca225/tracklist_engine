@@ -10,7 +10,7 @@ non-vocal stems.
 Stems are written as 16-bit FLAC (was WAV until 2026-05-06). On Vast →
 pi-storage rsync this saves ~50% bandwidth (~25 s/track wall) without
 quality loss — Demucs internally outputs float32, but downstream
-consumers (MERT resampled to 24 kHz mono, browser_daw playback) don't
+consumers (MERT resampled to 24 kHz mono, audio playback) don't
 benefit from 24-bit, and lossless FLAC at 16-bit fits the use case.
 """
 from __future__ import annotations
