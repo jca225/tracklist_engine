@@ -2,11 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
-@dataclass(frozen=True)
-class DbError:
-    kind: str  # 'not_found' | 'query_failed' | 'integrity'
-    detail: str
+from core.errors import DbError  # canonical home is core.errors; re-exported here for the PipelineError union and ingest callers
 
 
 @dataclass(frozen=True)

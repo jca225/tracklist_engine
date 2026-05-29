@@ -44,7 +44,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from .adapters import db as db_adapter
+from core import db as db_adapter
 from .adapters import spotdl_adapter
 from .adapters.downloader import DownloadConfig, download_one, download_set_mix
 from .errors import DbError, DownloadError

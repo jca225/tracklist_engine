@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from audio_pipeline.adapters import db as db_adapter
+from core import db as db_adapter
 from core.models import AudioAsset
 from core.result import Ok, Err
 

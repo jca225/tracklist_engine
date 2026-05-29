@@ -13,8 +13,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from audio_pipeline.adapters import db as db_adapter
+from core import db as db_adapter
 from audio_pipeline.analysis import pipeline
+from audio_pipeline.analysis import persistence
 from audio_pipeline.analysis.adapters import beat_this_adapter
 from audio_pipeline.analysis.models import (
     BeatGrid,
@@ -137,7 +138,7 @@ def _fake_result(tid: int) -> TrackAnalysisResult:
 
 def test_persist_analysis_writes_all_four_tables(db_with_audio: tuple[Path, int]) -> None:
     path, tid = db_with_audio
-    r = db_adapter.persist_analysis(path, _fake_result(tid))
+    r = persistence.persist_analysis(path, _fake_result(tid))
     assert isinstance(r, Ok)
 
     conn = sqlite3.connect(path)
@@ -173,7 +174,7 @@ def test_persist_analysis_replaces_prior_measures(db_with_audio: tuple[Path, int
     """Re-running analysis should not leave stale per-measure MERT rows."""
     path, tid = db_with_audio
     first = _fake_result(tid)
-    assert isinstance(db_adapter.persist_analysis(path, first), Ok)
+    assert isinstance(persistence.persist_analysis(path, first), Ok)
 
     # Re-run with a single-measure result — the prior two rows must be gone.
     emb = np.zeros(12, dtype=np.float16).tobytes()
@@ -186,7 +187,7 @@ def test_persist_analysis_replaces_prior_measures(db_with_audio: tuple[Path, int
         measures=(MeasureEmbedding(tid, 0, 0.0, 2.0, 12, "float16", emb),),
         analyzer_versions=first.analyzer_versions,
     )
-    assert isinstance(db_adapter.persist_analysis(path, replay), Ok)
+    assert isinstance(persistence.persist_analysis(path, replay), Ok)
 
     conn = sqlite3.connect(path)
     rows = conn.execute(
@@ -220,7 +221,7 @@ def test_persist_analysis_writes_essentia_row(db_with_audio: tuple[Path, int]) -
     enriched = TrackAnalysisResult(
         **{**base.__dict__, "essentia": _fake_essentia(tid)},
     )
-    assert isinstance(db_adapter.persist_analysis(path, enriched), Ok)
+    assert isinstance(persistence.persist_analysis(path, enriched), Ok)
 
     conn = sqlite3.connect(path)
     rows = conn.execute(
@@ -246,7 +247,7 @@ def test_persist_analysis_writes_essentia_row(db_with_audio: tuple[Path, int]) -
 def test_persist_analysis_skips_essentia_row_when_none(db_with_audio: tuple[Path, int]) -> None:
     """The default essentia=None path must not write an essentia_v2 row."""
     path, tid = db_with_audio
-    assert isinstance(db_adapter.persist_analysis(path, _fake_result(tid)), Ok)
+    assert isinstance(persistence.persist_analysis(path, _fake_result(tid)), Ok)
     conn = sqlite3.connect(path)
     sources = [
         r[0] for r in conn.execute(

@@ -39,8 +39,9 @@ import sys
 import time
 from pathlib import Path
 
-from .adapters import db as db_adapter
+from core import db as db_adapter
 from .analysis.pipeline import Analyzers, analyze_track, load_analyzers
+from .analysis import persistence
 from core.models import AudioAsset
 from core.result import Err, Ok, Result
 
@@ -192,7 +193,7 @@ def _process_one(
     if not r.is_ok():
         return Err(f"analyze_track failed: {r.error.kind} — {r.error.detail}")
 
-    p = db_adapter.persist_analysis(db_path, r.value)
+    p = persistence.persist_analysis(db_path, r.value)
     if not p.is_ok():
         return Err(f"persist_analysis failed: {p.error.kind} — {p.error.detail}")
     return Ok(time.time() - t0)
