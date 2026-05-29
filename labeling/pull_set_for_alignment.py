@@ -100,6 +100,10 @@ class TrackRow:
     artist: str
     title: str
     version_tag: str | None
+    # Raw "Artist - Title (Qualifier)" from track_metadata. Carries the full
+    # remixer qualifier ("(Syn Cole Remix)") that the version_tag bucket
+    # collapses to "Remix". Used to build the filename suffix.
+    full_name: str | None
     pi_path: str
     codec: str | None
     duration_s: float | None
@@ -159,6 +163,28 @@ def fetch_mix(set_id: str) -> MixRow | None:
 
 _PRIMARY_PREFIX_RE = re.compile(r"^\s*(\d+)\b")
 _W_PREFIX_RE = re.compile(r"^\s*w/")
+
+# Trailing parenthetical on a track_metadata.full_name like
+# "Artist - Title (Syn Cole Remix)". We want the *last* such parens because
+# titles occasionally embed inner ones, e.g. "Title (feat. X) (Syn Cole Remix)".
+_TRAILING_PAREN_RE = re.compile(r"\(([^()]+)\)\s*$")
+
+
+def _qualifier_suffix(full_name: str | None, version_tag: str | None) -> str:
+    """Build the version/remix suffix for a track filename.
+
+    Prefers the trailing parenthetical of `full_name` ("(Syn Cole Remix)") so
+    the annotator can tell which remix a slot is at a glance. Falls back to
+    the version_tag bucket ("Remix" / "Acappella" / "Rework" / ...) only when
+    full_name carries no parens — better than nothing, but lossy. Empty
+    string when there is no qualifier at all (a plain original)."""
+    if full_name:
+        m = _TRAILING_PAREN_RE.search(full_name)
+        if m:
+            return f" ({m.group(1).strip()})"
+    if version_tag:
+        return f" ({version_tag})"
+    return ""
 
 
 def _label_rows(
@@ -233,6 +259,7 @@ def fetch_tracks(set_id: str) -> list[TrackRow]:
                 tm.artists_json,
                 tm.title           AS meta_title,
                 tm.version_tag,
+                tm.full_name,
                 ROW_NUMBER() OVER (
                     PARTITION BY ta.track_id
                     ORDER BY ta.is_reference DESC,
@@ -251,7 +278,7 @@ def fetch_tracks(set_id: str) -> list[TrackRow]:
             WHERE l.set_id = '{set_id}'
         )
         SELECT track_id, track_audio_id, artists_json, meta_title AS title,
-               version_tag, path, codec, duration_s
+               version_tag, full_name, path, codec, duration_s
         FROM ranked
         WHERE pick = 1;
     """)
@@ -289,6 +316,7 @@ def fetch_tracks(set_id: str) -> list[TrackRow]:
             artist=artist,
             title=r.get("title") or "Unknown",
             version_tag=r.get("version_tag"),
+            full_name=r.get("full_name"),
             pi_path=r["path"],
             codec=r.get("codec"),
             duration_s=r.get("duration_s"),
@@ -561,7 +589,7 @@ def main() -> int:
     pulled_stems: dict[str, Path] = {}
     for i, t in enumerate(tracks, start=1):
         ext = Path(t.pi_path).suffix or ".m4a"
-        suffix = f" ({t.version_tag})" if t.version_tag else ""
+        suffix = _qualifier_suffix(t.full_name, t.version_tag)
         name = f"{t.label}__{sanitize(t.artist)} - {sanitize(t.title)}{suffix}{ext}"
         dst = tracks_dir / name
         keep_paths.add(dst)
