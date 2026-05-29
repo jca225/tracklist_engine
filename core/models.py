@@ -44,6 +44,9 @@ class AudioAsset:
     # 'remix' (maps to track_audio.variant_tag). Defaulted so the download
     # pipeline keeps emitting 'original'; variant sourcing sets it explicitly.
     variant_tag: str = "original"
+    # Edit length (Variant axis): 'regular' (radio/album cut) | 'extended'.
+    # Independent of variant_tag (Stem axis).
+    edit_tag: str = "regular"
 
 
 @dataclass(frozen=True)
