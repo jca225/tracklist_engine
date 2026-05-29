@@ -13,8 +13,13 @@ Two modes:
     a ``track_audio`` row carrying ``variant_tag`` (acappella | instrumental)
     alongside the existing 'original' row (this ADDS a variant, it does NOT
     replace). Reuses the canonical-write path from the sibling
-    ``replace_track_audio.py`` rather than duplicating it. Essentia is left to
-    the analysis loop, which skips BPM/key on non-'original' variants.
+    ``replace_track_audio.py`` rather than duplicating it.
+
+    Downstream gating on variant_tag is partial: cue-detr already runs only on
+    variant_tag='original' (analysis/canonical_cues.py), so variants get no
+    canonical cues. Essentia BPM/key does NOT yet gate on variant_tag, so an
+    acappella variant would currently receive meaningless features — gating
+    Essentia on variant_tag is a TODO (see the no-essentia-on-acapellas rule).
 
 Works with any yt-dlp-supported URL (YouTube, SoundCloud, ...). Spotify URLs
 route through spotdl in canonical mode.
