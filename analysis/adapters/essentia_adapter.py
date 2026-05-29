@@ -21,9 +21,9 @@ from ..errors import EssentiaError
 from ..models import EssentiaFeatures
 from . import essentia_models as em
 
-_REPO_ROOT: Path = Path(__file__).resolve().parents[3]
+_REPO_ROOT: Path = Path(__file__).resolve().parents[2]
 _ESSENTIA_PYTHON: Path = _REPO_ROOT / "venvs" / "essentia" / "bin" / "python"
-_WORKER_MODULE: str = "audio_pipeline.analysis.adapters.essentia_worker"
+_WORKER_MODULE: str = "analysis.adapters.essentia_worker"
 _DEFAULT_EXPAT_LIB: str = "/opt/homebrew/opt/expat/lib"
 
 
