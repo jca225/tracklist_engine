@@ -152,7 +152,33 @@ def canonical_ingest(args: argparse.Namespace) -> int:
 
     if rc == 0:
         _identity_check(args.db, track_id, variant_tag)
+        if not args.no_log:
+            _log_to_ledger(args, track_id, variant_tag)
     return rc
+
+
+def _log_to_ledger(args: argparse.Namespace, track_id: str, variant_tag: str) -> None:
+    """Append an additive (stem-axis) correction row (non-fatal)."""
+    from core.result import Err, Ok
+    from ingest.corrections import Correction, latest_row, log_correction
+
+    new = latest_row(args.db, track_id, variant_tag)
+    position = None if args.slot is None else str(args.slot)
+    c = Correction(
+        track_id=track_id, axis="stem", action="add",
+        set_id=args.set_id, position=position,
+        new_track_audio_id=(new or {}).get("track_audio_id"),
+        new_platform=(new or {}).get("platform"),
+        new_player_id=(new or {}).get("player_id"),
+        new_url=(new or {}).get("source_url"),
+        variant_tag=variant_tag,
+        reason=args.reason, source="acquire_variant",
+    )
+    match log_correction(args.db, c):
+        case Ok(cid):
+            print(f"logged correction_id={cid} (stem/add)")
+        case Err(e):
+            print(f"correction log failed (non-fatal): {e.kind} — {e.detail}")
 
 
 def _lookup_audio_path(db_path: Path, track_id: str, variant_tag: str) -> tuple[int, str] | None:
@@ -225,6 +251,10 @@ def main() -> int:
                                                 "/mnt/storage/data/db/music_database.db")))
     ap.add_argument("--audio-root", type=Path,
                     default=Path(os.environ.get("TRACKLIST_AUDIO_ROOT", "/mnt/storage")))
+    # Correction-ledger fields (canonical mode)
+    ap.add_argument("--set-id", default=None, help="set where noticed (correction ledger)")
+    ap.add_argument("--reason", default=None, help="free-text why (correction ledger)")
+    ap.add_argument("--no-log", action="store_true", help="skip the correction-ledger row")
     args = ap.parse_args()
 
     if args.track_id is not None or args.track_audio_id is not None:

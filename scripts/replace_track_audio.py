@@ -72,6 +72,7 @@ from ingest.adapters.downloader import DownloadConfig
 from ingest.errors import DownloadError
 from core.models import AudioAsset, MediaSource
 from core.result import Err, Ok
+from ingest.corrections import Correction, latest_row, log_correction, snapshot_row
 
 _log = logging.getLogger("replace_track_audio")
 
@@ -376,6 +377,18 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="Identifier for the new row (defaults to filename stem "
                         "for --file mode; auto-extracted from --url).")
 
+    p.add_argument("--axis", default="version",
+                   choices=("version", "variant", "stem"),
+                   help="Which identity axis was wrong (correction ledger).")
+    p.add_argument("--reason", default=None,
+                   help="Free-text why the old audio was wrong (correction ledger).")
+    p.add_argument("--set-id", default=None,
+                   help="Set where the mistake was noticed (correction ledger).")
+    p.add_argument("--position", default=None,
+                   help="Published section no. / slot label (correction ledger).")
+    p.add_argument("--no-log", action="store_true",
+                   help="Skip writing the correction-ledger row.")
+
     p.add_argument("--log-level", default="INFO",
                    choices=("DEBUG", "INFO", "WARNING", "ERROR"))
     return p.parse_args(argv)
@@ -419,15 +432,51 @@ def _run(args: argparse.Namespace) -> int:
         _log.error("must provide --track-id or --track-audio-id")
         return 2
 
+    # Snapshot the row we're about to retire BEFORE the destructive delete,
+    # so the correction ledger keeps the old identity even after cascade.
+    old = (snapshot_row(args.db, args.track_audio_id)
+           if args.track_audio_id is not None else None)
+
     if args.url:
-        return _replace_via_url(args.db, args.audio_root, track_id,
-                                args.url, args.track_audio_id)
-    # File mode
-    pid = args.player_id or args.file.stem
-    return _replace_via_file(
-        args.db, args.audio_root, track_id, args.file, pid,
-        args.track_audio_id,
+        rc = _replace_via_url(args.db, args.audio_root, track_id,
+                              args.url, args.track_audio_id)
+    else:  # File mode
+        pid = args.player_id or args.file.stem
+        rc = _replace_via_file(
+            args.db, args.audio_root, track_id, args.file, pid,
+            args.track_audio_id,
+        )
+
+    if rc == 0 and not args.no_log:
+        _log_to_ledger(args, track_id, old)
+    return rc
+
+
+def _log_to_ledger(args: argparse.Namespace, track_id: str,
+                   old: dict | None) -> None:
+    """Append a correction row for a successful replace/add (non-fatal)."""
+    new = latest_row(args.db, track_id)
+    action = "replace" if args.track_audio_id is not None else "add"
+    c = Correction(
+        track_id=track_id, axis=args.axis, action=action,
+        set_id=args.set_id, position=args.position,
+        old_track_audio_id=args.track_audio_id,
+        old_platform=(old or {}).get("platform"),
+        old_player_id=(old or {}).get("player_id"),
+        old_url=(old or {}).get("source_url"),
+        new_track_audio_id=(new or {}).get("track_audio_id"),
+        new_platform=(new or {}).get("platform"),
+        new_player_id=(new or {}).get("player_id"),
+        new_url=(new or {}).get("source_url"),
+        variant_tag=(new or {}).get("variant_tag"),
+        reason=args.reason, source="replace_track_audio",
     )
+    match log_correction(args.db, c):
+        case Ok(cid):
+            _log.info("logged correction_id=%d (%s/%s)", cid, args.axis, action)
+        case Err(e):
+            _log.warning("correction log failed (non-fatal): %s — %s",
+                         e.kind, e.detail)
 
 
 def main(argv: list[str] | None = None) -> int:
