@@ -97,3 +97,36 @@ def test_insert_then_already_downloaded_round_trip(db_path: Path):
     # Re-insert is idempotent — returns Ok with the same row id, doesn't raise.
     second = db_adapter.insert_audio(db_path, asset)
     assert isinstance(second, Ok) and second.value == first.value
+
+
+def test_insert_audio_persists_variant_tag(db_path: Path):
+    """A variant asset persists its variant_tag; the default stays 'original'."""
+    original = AudioAsset(
+        track_audio_id=None,
+        track_id="T1", platform="youtube",
+        source_url="https://www.youtube.com/watch?v=orig",
+        player_id="orig",
+        path="/tmp/orig.m4a", sha256="aa",
+        duration_s=200.0, sample_rate=44100, codec="m4a", bitrate_kbps=128,
+    )
+    variant = AudioAsset(
+        track_audio_id=None,
+        track_id="T1", platform="youtube_music",
+        source_url="https://www.youtube.com/watch?v=inst",
+        player_id="inst",
+        path="/tmp/inst.m4a", sha256="bb",
+        duration_s=200.0, sample_rate=44100, codec="m4a", bitrate_kbps=128,
+        variant_tag="instrumental",
+    )
+    ro = db_adapter.insert_audio(db_path, original)
+    rv = db_adapter.insert_audio(db_path, variant)
+    assert isinstance(ro, Ok) and isinstance(rv, Ok) and ro.value != rv.value
+
+    with sqlite3.connect(db_path) as conn:
+        tags = dict(conn.execute(
+            "SELECT track_audio_id, variant_tag FROM track_audio "
+            "WHERE track_audio_id IN (?, ?)",
+            (ro.value, rv.value),
+        ).fetchall())
+    assert tags[ro.value] == "original"      # default preserved
+    assert tags[rv.value] == "instrumental"  # variant persisted

@@ -40,6 +40,10 @@ class AudioAsset:
     sample_rate: int | None
     codec: str | None
     bitrate_kbps: int | None
+    # Which version this audio is: 'original' | 'acappella' | 'instrumental' |
+    # 'remix' (maps to track_audio.variant_tag). Defaulted so the download
+    # pipeline keeps emitting 'original'; variant sourcing sets it explicitly.
+    variant_tag: str = "original"
 
 
 @dataclass(frozen=True)

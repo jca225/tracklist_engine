@@ -587,13 +587,14 @@ def insert_audio(db_path: Path, asset: AudioAsset) -> Result[int, DbError]:
                 """
                 INSERT OR IGNORE INTO track_audio
                 (track_id, platform, source_url, player_id, path, sha256,
-                 duration_s, sample_rate, codec, bitrate_kbps, is_reference)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                 duration_s, sample_rate, codec, bitrate_kbps, is_reference,
+                 variant_tag)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
                 """,
                 (
                     asset.track_id, asset.platform, asset.source_url, asset.player_id,
                     asset.path, asset.sha256, asset.duration_s, asset.sample_rate,
-                    asset.codec, asset.bitrate_kbps,
+                    asset.codec, asset.bitrate_kbps, asset.variant_tag,
                 ),
             )
             conn.commit()

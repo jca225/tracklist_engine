@@ -60,7 +60,7 @@ import sqlite3
 import subprocess
 import sys
 import urllib.parse
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -222,7 +222,7 @@ def _place_file_in_canonical(
 
 def _replace_via_url(
     db_path: Path, audio_root: Path, track_id: str, url: str,
-    track_audio_id: int | None,
+    track_audio_id: int | None, variant_tag: str = "original",
 ) -> int:
     """Acquire by URL and insert. Returns the new track_audio_id."""
     kind = _detect_url_kind(url)
@@ -231,20 +231,20 @@ def _replace_via_url(
         if not spid:
             _log.error("could not extract spotify track id from %s", url)
             return 1
-        return _replace_via_spotdl(db_path, audio_root, track_id, spid, track_audio_id)
+        return _replace_via_spotdl(db_path, audio_root, track_id, spid, track_audio_id, variant_tag)
     if kind == "youtube":
         vid = _yt_video_id(url)
         if not vid:
             _log.error("could not extract youtube video id from %s", url)
             return 1
-        return _replace_via_ytdlp(db_path, audio_root, track_id, vid, track_audio_id)
+        return _replace_via_ytdlp(db_path, audio_root, track_id, vid, track_audio_id, variant_tag)
     _log.error("unrecognized URL kind for %s", url)
     return 1
 
 
 def _replace_via_spotdl(
     db_path: Path, audio_root: Path, track_id: str, spotify_id: str,
-    track_audio_id: int | None,
+    track_audio_id: int | None, variant_tag: str = "original",
 ) -> int:
     objects_root = audio_root / "objects"
     out_dir = objects_root / track_id
@@ -263,6 +263,7 @@ def _replace_via_spotdl(
             return 1
         case Ok(asset):
             pass
+    asset = replace(asset, variant_tag=variant_tag)
     if track_audio_id is not None:
         _delete_old_row_if_exists(db_path, audio_root, track_audio_id)
     return _insert_and_report(db_path, asset)
@@ -270,7 +271,7 @@ def _replace_via_spotdl(
 
 def _replace_via_ytdlp(
     db_path: Path, audio_root: Path, track_id: str, video_id: str,
-    track_audio_id: int | None,
+    track_audio_id: int | None, variant_tag: str = "original",
 ) -> int:
     objects_root = audio_root / "objects"
     out_dir = objects_root / track_id
@@ -298,6 +299,7 @@ def _replace_via_ytdlp(
         sample_rate=None,
         codec="m4a",
         bitrate_kbps=None,
+        variant_tag=variant_tag,
     )
     if track_audio_id is not None:
         _delete_old_row_if_exists(db_path, audio_root, track_audio_id)
@@ -306,7 +308,7 @@ def _replace_via_ytdlp(
 
 def _replace_via_file(
     db_path: Path, audio_root: Path, track_id: str, file_path: Path,
-    player_id: str, track_audio_id: int | None,
+    player_id: str, track_audio_id: int | None, variant_tag: str = "original",
 ) -> int:
     if not file_path.is_file():
         _log.error("file does not exist: %s", file_path)
@@ -326,6 +328,7 @@ def _replace_via_file(
         sample_rate=None,
         codec=dst.suffix.lstrip("."),
         bitrate_kbps=None,
+        variant_tag=variant_tag,
     )
     if track_audio_id is not None:
         _delete_old_row_if_exists(db_path, audio_root, track_audio_id)
