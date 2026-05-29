@@ -17,7 +17,7 @@ from pathlib import Path
 from .adapters import beat_this_adapter
 
 from ..models import SetAudioAsset
-from ..result import Err, Ok, Result
+from core.result import Err, Ok, Result
 from .adapters import demucs_adapter
 from .errors import AnalysisError
 from .models import BeatGrid, StemSet

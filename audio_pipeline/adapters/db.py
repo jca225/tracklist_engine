@@ -24,7 +24,7 @@ from ..models import (
     TimelineSegment, Track,
     normalize_set_media_url, soundcloud_api_url, spotify_track_url, youtube_url,
 )
-from ..result import Err, Ok, Result
+from core.result import Err, Ok, Result
 
 
 @contextmanager

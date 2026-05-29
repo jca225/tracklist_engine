@@ -17,13 +17,20 @@ from pathlib import Path
 
 import numpy as np
 
-from ...result import Err, Ok, Result
+from core.result import Err, Ok, Result
 from ..errors import MertError
 from ..models import MeasureEmbedding, SectionEmbedding
 
 MERT_SR: int = 24000
 MERT_MODEL: str = "m-a-p/MERT-v1-95M"
 MERT_CHUNK_S: float = 10.0     # MERT-v1 was trained on 5s clips; 10s is a safe batch size.
+
+# Mid-layer (6 of 12). The MERT paper shows mid-layers transfer best to
+# music-ID / structural matching tasks — low layers are too acoustic,
+# top layers too tagging-oriented. Matches `DEFAULT_LAYER` in
+# `audio_pipeline/alignment/mert_align.py` so the analysis-side cache
+# is reusable by alignment without re-embedding.
+MERT_DEFAULT_LAYER: int = 6
 
 
 @dataclass(frozen=True)
@@ -59,7 +66,7 @@ def embed_section(
     section_idx: int,
     start_s: float,
     end_s: float,
-    layer: int = -1,
+    layer: int = MERT_DEFAULT_LAYER,
     chunk_s: float = MERT_CHUNK_S,
 ) -> Result[SectionEmbedding, MertError]:
     """Embed one section by chunking at `chunk_s` seconds.
@@ -113,7 +120,7 @@ def embed_section(
 def _embed_full_track_frames(
     h: MertHandle,
     samples_24k: np.ndarray,
-    layer: int = -1,
+    layer: int = MERT_DEFAULT_LAYER,
     chunk_s: float = MERT_CHUNK_S,
 ) -> Result[np.ndarray, MertError]:
     """Run MERT over the full track in 10s chunks, return concatenated
@@ -157,7 +164,7 @@ def embed_track_per_measure(
     samples_24k: np.ndarray,
     track_audio_id: int,
     measure_times: tuple[float, ...],
-    layer: int = -1,
+    layer: int = MERT_DEFAULT_LAYER,
     chunk_s: float = MERT_CHUNK_S,
 ) -> Result[tuple[MeasureEmbedding, ...], MertError]:
     """Run MERT once over the full track, then mean-pool per measure.

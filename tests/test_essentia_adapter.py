@@ -17,7 +17,7 @@ import pytest
 from audio_pipeline.analysis.adapters import essentia_adapter
 from audio_pipeline.analysis.errors import EssentiaError
 from audio_pipeline.analysis.models import EssentiaFeatures
-from audio_pipeline.result import Err, Ok
+from core.result import Err, Ok
 
 
 def _completed(stdout: str, returncode: int = 0, stderr: str = "") -> subprocess.CompletedProcess:

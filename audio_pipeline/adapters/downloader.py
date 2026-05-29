@@ -16,7 +16,7 @@ from yt_dlp.utils import DownloadError as YtDlpDownloadError, ExtractorError
 
 from ..errors import DownloadError
 from ..models import AudioAsset, MediaSource, SetAudioAsset
-from ..result import Err, Ok, Result
+from core.result import Err, Ok, Result
 
 
 @dataclass(frozen=True)

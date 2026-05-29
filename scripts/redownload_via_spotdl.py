@@ -60,7 +60,7 @@ from audio_pipeline.adapters import db as db_adapter
 from audio_pipeline.adapters import spotdl_adapter
 from audio_pipeline.errors import DownloadError
 from audio_pipeline.models import MediaSource, spotify_track_url
-from audio_pipeline.result import Err, Ok
+from core.result import Err, Ok
 
 _log = logging.getLogger("redownload_via_spotdl")
 

@@ -41,6 +41,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import shutil
 import sqlite3
 import sys
@@ -54,7 +55,7 @@ sys.path.insert(0, str(REPO))
 from audio_pipeline.adapters import db as db_adapter
 from audio_pipeline.adapters import ytmusic_adapter
 from audio_pipeline.errors import DownloadError
-from audio_pipeline.result import Err, Ok
+from core.result import Err, Ok
 
 _log = logging.getLogger("redownload_via_ytmusic")
 
@@ -64,12 +65,15 @@ _BB_SETS: frozenset[str] = frozenset((
 ))
 
 
-# Variant tags whose remixer/edit info we must preserve in the YT Music
-# query — the bare "Artist - Title" loses the parenthetical and returns
-# the original studio cut instead of the remix. Acappella is deliberately
-# excluded: Demucs extracts vocals from the original cleanly enough, and
-# isolated-vocal uploads on YT Music are sparse + noisy.
-_VARIANT_QUERY_TAGS: frozenset[str] = frozenset(("Remix", "Rework", "AltVersion"))
+# 1001tracklists uses "ID" as a placeholder when the remixer/track is
+# unknown — "(ID Remix)", "(ID Bootleg)", "(ID)", "ID - ID", etc. The
+# literal word "ID" inside a YT Music query derails search to random
+# uploads, so we strip the parenthetical and fall back to the bare
+# "Artist - Title" form for these.
+_ID_PLACEHOLDER_RE: re.Pattern[str] = re.compile(
+    r"\bID\b\s*(?:Remix|Bootleg|Edit|Mashup|VIP|Rework|Mix|Flip)?\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -96,10 +100,17 @@ class Candidate:
 
     @property
     def query(self) -> str:
-        # For Remix/Rework/AltVersion, prefer full_name — title has the
-        # trailing parens stripped by the tokenizer, so "iSpy" loses
-        # "(Two Friends Remix)" and we'd resolve to the original.
-        if self.version_tag in _VARIANT_QUERY_TAGS and self.full_name:
+        # Always use the canonical scraped full_name when available — it
+        # carries the remix qualifier ("(Madison Mars Remix)") and any
+        # (Acappella)/(Instrumental Mix) marker that the tokenizer-split
+        # `title` field drops. YT Music search tolerates these qualifiers
+        # gracefully (returns the studio variant), while a bare
+        # "Artist - Title" silently resolves to the original cut and is
+        # the root cause of the variant-bleed bug observed in the corpus.
+        # Exception: skip full_name when it carries 1001tracklists' "ID"
+        # placeholder (e.g. "(ID Remix)") — the literal word "ID" in the
+        # search corrupts results.
+        if self.full_name and not _ID_PLACEHOLDER_RE.search(self.full_name):
             return self.full_name
         if self.artists_csv:
             return f"{self.artists_csv} - {self.title}"

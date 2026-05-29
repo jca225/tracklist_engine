@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from ...result import Err, Ok, Result
+from core.result import Err, Ok, Result
 from ..errors import BeatError
 
 

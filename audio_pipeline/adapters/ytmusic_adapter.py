@@ -29,7 +29,7 @@ from pathlib import Path
 
 from ..errors import DownloadError
 from ..models import AudioAsset, MediaSource
-from ..result import Err, Ok, Result
+from core.result import Err, Ok, Result
 from .downloader import DownloadConfig
 
 

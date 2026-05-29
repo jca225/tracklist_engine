@@ -27,7 +27,7 @@ from audio_pipeline.analysis.models import (
     TrackAnalysisResult,
 )
 from audio_pipeline.models import AudioAsset
-from audio_pipeline.result import Ok
+from core.result import Ok
 
 _SCHEMA_PATH = Path(__file__).resolve().parent.parent / "web_crawler" / "database" / "schema.sql"
 

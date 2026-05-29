@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from ...result import Err, Ok, Result
+from core.result import Err, Ok, Result
 from ..errors import CueError
 
 _CUE_DETR_DIR: Path = Path(__file__).resolve().parents[3] / "cue-detr"

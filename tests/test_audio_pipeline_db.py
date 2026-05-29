@@ -8,7 +8,7 @@ import pytest
 
 from audio_pipeline.adapters import db as db_adapter
 from audio_pipeline.models import AudioAsset
-from audio_pipeline.result import Ok, Err
+from core.result import Ok, Err
 
 
 _SCHEMA_PATH = Path(__file__).resolve().parent.parent / "web_crawler" / "database" / "schema.sql"

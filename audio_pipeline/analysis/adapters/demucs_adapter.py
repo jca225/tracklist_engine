@@ -18,7 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from ...result import Err, Ok, Result
+from core.result import Err, Ok, Result
 from ..errors import StemError
 from ..models import STEM_NAMES, _STEM_RECIPES, StemAsset, StemSet
 

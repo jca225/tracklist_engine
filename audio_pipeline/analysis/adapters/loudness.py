@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ...result import Err, Ok, Result
+from core.result import Err, Ok, Result
 from ..errors import LoudnessError
 
 

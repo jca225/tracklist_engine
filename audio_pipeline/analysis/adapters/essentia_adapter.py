@@ -16,7 +16,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from ...result import Err, Ok, Result
+from core.result import Err, Ok, Result
 from ..errors import EssentiaError
 from ..models import EssentiaFeatures
 from . import essentia_models as em

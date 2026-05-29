@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ...result import Err, Ok, Result
+from core.result import Err, Ok, Result
 from ..errors import AudioIoError
 
 

@@ -19,7 +19,7 @@ from .adapters import (
 )
 
 from ..models import AudioAsset
-from ..result import Err, Ok, Result
+from core.result import Err, Ok, Result
 from .adapters import mert_adapter
 from .errors import AnalysisError
 from .models import (

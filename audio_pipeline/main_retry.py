@@ -39,7 +39,7 @@ from .adapters import spotdl_adapter
 from .adapters.downloader import DownloadConfig
 from .errors import DbError, DownloadError
 from .models import AudioAsset, MediaSource, spotify_track_url
-from .result import Err, Ok, Result
+from core.result import Err, Ok, Result
 
 _log = logging.getLogger("audio_pipeline.main_retry")
 
