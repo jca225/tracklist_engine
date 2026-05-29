@@ -13,8 +13,7 @@ from typing import Iterator
 
 from core.errors import DbError
 from core.models import (
-    AudioAsset, MediaSource, SetAudioAsset, SetMediaLink, SetTimeline,
-    TimelineSegment, Track,
+    AudioAsset, MediaSource, SetAudioAsset, SetMediaLink, Track,
     normalize_set_media_url, soundcloud_api_url, spotify_track_url, youtube_url,
 )
 from core.result import Err, Ok, Result
@@ -195,26 +194,6 @@ def insert_set_audio(db_path: Path, asset: SetAudioAsset) -> Result[int, DbError
         return Err(DbError(kind="integrity", detail=str(e)))
 
 
-def upsert_timeline(db_path: Path, set_id: str, set_audio_id: int | None, payload_json: str) -> Result[None, DbError]:
-    try:
-        with _connect(db_path) as conn:
-            conn.execute(
-                """
-                INSERT INTO set_timeline (set_id, set_audio_id, payload_json)
-                VALUES (?, ?, ?)
-                ON CONFLICT(set_id) DO UPDATE SET
-                    set_audio_id = excluded.set_audio_id,
-                    payload_json = excluded.payload_json,
-                    built_at     = CURRENT_TIMESTAMP
-                """,
-                (set_id, set_audio_id, payload_json),
-            )
-            conn.commit()
-    except sqlite3.DatabaseError as e:
-        return Err(DbError(kind="integrity", detail=str(e)))
-    return Ok(None)
-
-
 def insert_track_media_link(
     db_path: Path, *, set_id: str, track_id: str, platform: str,
     player_id: str, url: str | None = None, tlp_id: str | None = None,
@@ -248,42 +227,6 @@ def insert_track_media_link(
     except sqlite3.DatabaseError as e:
         return Err(DbError(kind="integrity", detail=str(e)))
     return Ok(None)
-
-
-def load_set_timeline(db_path: Path, set_id: str) -> Result[SetTimeline, DbError]:
-    """Read back the persisted timeline sidecar for a set."""
-    try:
-        with _connect(db_path) as conn:
-            row = conn.execute(
-                "SELECT set_audio_id, payload_json FROM set_timeline WHERE set_id = ?",
-                (set_id,),
-            ).fetchone()
-    except sqlite3.DatabaseError as e:
-        return Err(DbError(kind="query_failed", detail=str(e)))
-    if row is None:
-        return Err(DbError(kind="not_found", detail=f"no set_timeline for {set_id!r}"))
-    try:
-        payload = json.loads(row["payload_json"])
-    except (json.JSONDecodeError, TypeError) as e:
-        return Err(DbError(kind="query_failed", detail=f"payload parse: {e}"))
-    segments = tuple(
-        TimelineSegment(
-            row_index=int(s["row_index"]),
-            track_id=s.get("track_id"),
-            tlp_id=s.get("tlp_id"),
-            title=s.get("title"),
-            artists=tuple(s.get("artists") or ()),
-            cue_seconds_section=s.get("cue_seconds_section"),
-            is_ided=bool(s.get("is_ided")),
-            is_concurrent=bool(s.get("is_concurrent")),
-            is_remixish=bool(s.get("is_remixish")),
-            has_yt=bool(s.get("has_yt")),
-            has_sc=bool(s.get("has_sc")),
-            has_sp=bool(s.get("has_sp")),
-        )
-        for s in payload.get("segments", ())
-    )
-    return Ok(SetTimeline(set_id=set_id, set_audio_id=row["set_audio_id"], segments=segments))
 
 
 def load_set_measure_grid(db_path: Path, set_id: str) -> Result[list[float] | None, DbError]:
@@ -481,67 +424,6 @@ def load_ref_audio_paths(db_path: Path, track_ids: tuple[str, ...]) -> Result[di
     return Ok(out)
 
 
-def upsert_section_alignment(
-    db_path: Path,
-    *,
-    set_id: str,
-    section_idx: int,
-    set_start_s: float,
-    set_end_s: float,
-    ref_track_id: str | None,
-    transposition_semitones: int | None,
-    bpm_ratio: float | None,
-    cutup_plan_json: str | None,
-    confidence: float | None,
-    stem_match_rates_json: str | None = None,
-    ref_start_s: float | None = None,
-    ref_end_s: float | None = None,
-    ref_section_idx: int | None = None,
-) -> Result[None, DbError]:
-    """Insert or replace one set_section_alignment row.
-
-    `ref_start_s` / `ref_end_s` / `ref_section_idx` are CCC-aligner
-    outputs (which bars/section of the reference were played). DTW
-    leaves them NULL — its warping-path output doesn't answer the
-    "which part of the ref" question cleanly enough to persist.
-    """
-    try:
-        with _connect(db_path) as conn:
-            conn.execute(
-                """
-                INSERT INTO set_section_alignment
-                  (set_id, section_idx, set_start_s, set_end_s, ref_track_id,
-                   transposition_semitones, bpm_ratio, cutup_plan_json, confidence,
-                   stem_match_rates_json,
-                   ref_start_s, ref_end_s, ref_section_idx)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(set_id, section_idx) DO UPDATE SET
-                    set_start_s             = excluded.set_start_s,
-                    set_end_s               = excluded.set_end_s,
-                    ref_track_id            = excluded.ref_track_id,
-                    transposition_semitones = excluded.transposition_semitones,
-                    bpm_ratio               = excluded.bpm_ratio,
-                    cutup_plan_json         = excluded.cutup_plan_json,
-                    confidence              = excluded.confidence,
-                    stem_match_rates_json   = excluded.stem_match_rates_json,
-                    ref_start_s             = excluded.ref_start_s,
-                    ref_end_s               = excluded.ref_end_s,
-                    ref_section_idx         = excluded.ref_section_idx,
-                    aligned_at              = CURRENT_TIMESTAMP
-                """,
-                (
-                    set_id, section_idx, set_start_s, set_end_s, ref_track_id,
-                    transposition_semitones, bpm_ratio, cutup_plan_json, confidence,
-                    stem_match_rates_json,
-                    ref_start_s, ref_end_s, ref_section_idx,
-                ),
-            )
-            conn.commit()
-    except sqlite3.DatabaseError as e:
-        return Err(DbError(kind="integrity", detail=str(e)))
-    return Ok(None)
-
-
 def load_set_fingerprint_hits(
     db_path: Path, set_id: str, *, min_score: float = 0.6,
 ) -> Result[dict[str, list[tuple[float, float, float]]], DbError]:
@@ -572,66 +454,6 @@ def load_set_fingerprint_hits(
             (float(r["mix_start_s"]), float(r["mix_end_s"]), float(r["score"])),
         )
     return Ok(out)
-
-
-def upsert_measure_alignment_rows(
-    db_path: Path,
-    set_id: str,
-    rows: list[dict],
-) -> Result[int, DbError]:
-    """Bulk-upsert measure-level alignment decisions.
-
-    Each `rows` entry is a dict with keys:
-      set_measure_idx, ref_track_id, ref_measure_idx,
-      pitch_shift_semi, tempo_ratio, stem_mask (list[str]),
-      gain_db (optional), confidence (optional).
-
-    Replaces the whole per-set set of rows; callers re-compute the
-    alignment for a set end-to-end and write once.
-    """
-    import json as _json
-    try:
-        with _connect(db_path) as conn:
-            conn.execute("BEGIN")
-            conn.execute(
-                "DELETE FROM measure_alignment WHERE set_id = ?",
-                (set_id,),
-            )
-            conn.executemany(
-                """
-                INSERT INTO measure_alignment
-                  (set_id, set_measure_idx, ref_track_id, ref_measure_idx,
-                   pitch_shift_semi, tempo_ratio, stem_mask_json,
-                   gain_db, confidence)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(set_id, set_measure_idx, ref_track_id) DO UPDATE SET
-                    ref_measure_idx   = excluded.ref_measure_idx,
-                    pitch_shift_semi  = excluded.pitch_shift_semi,
-                    tempo_ratio       = excluded.tempo_ratio,
-                    stem_mask_json    = excluded.stem_mask_json,
-                    gain_db           = excluded.gain_db,
-                    confidence        = excluded.confidence,
-                    aligned_at        = CURRENT_TIMESTAMP
-                """,
-                [
-                    (
-                        set_id,
-                        int(r["set_measure_idx"]),
-                        r["ref_track_id"],
-                        int(r["ref_measure_idx"]),
-                        int(r.get("pitch_shift_semi", 0)),
-                        float(r.get("tempo_ratio", 1.0)),
-                        _json.dumps(list(r.get("stem_mask", ()))),
-                        r.get("gain_db"),
-                        r.get("confidence"),
-                    )
-                    for r in rows
-                ],
-            )
-            conn.commit()
-    except sqlite3.DatabaseError as e:
-        return Err(DbError(kind="integrity", detail=str(e)))
-    return Ok(len(rows))
 
 
 def load_track_measure_grid(

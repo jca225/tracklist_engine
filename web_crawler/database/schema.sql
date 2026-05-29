@@ -303,6 +303,9 @@ CREATE INDEX IF NOT EXISTS idx_set_audio_set_id ON set_audio(set_id);
 -- persisted alongside set_audio so analysts / the UI can open one JSON and see
 -- "which track is supposed to be playing at T seconds". Schema is {set_id,
 -- set_audio_id, payload} where payload is the serialized list of segments.
+-- RESERVED — no live writer: the upsert_timeline/load_set_timeline accessors
+-- (and the SetTimeline model) were removed with the Viterbi aligner (2026-05).
+-- Table kept for the future alignment write-back; see core/CLAUDE.md.
 CREATE TABLE IF NOT EXISTS set_timeline (
     set_id         TEXT PRIMARY KEY,
     set_audio_id   INTEGER,
@@ -379,6 +382,8 @@ CREATE TABLE IF NOT EXISTS set_measures (
 -- of which track is sounding (multiple rows per mix measure for mashups),
 -- at what pitch shift, tempo ratio, and stem mask. This is the atomic
 -- "playback script" — rendering the ref stems per row reconstructs the mix.
+-- RESERVED — no live writer: upsert_measure_alignment_rows was removed with the
+-- Viterbi aligner (2026-05). Table kept for the future alignment write-back.
 CREATE TABLE IF NOT EXISTS measure_alignment (
     set_id            TEXT NOT NULL,
     set_measure_idx   INTEGER NOT NULL,
@@ -400,6 +405,8 @@ CREATE INDEX IF NOT EXISTS idx_measure_alignment_ref ON measure_alignment(ref_tr
 
 -- One-per-set rendered playback score (measure_alignment rolled up as JSON)
 -- + self-consistency metric against the actual mix audio.
+-- RESERVED — no live writer (never had one): output target for the future
+-- alignment write-back, kept alongside measure_alignment.
 CREATE TABLE IF NOT EXISTS set_playback_score (
     set_id                         TEXT PRIMARY KEY,
     score_json                     TEXT NOT NULL,
@@ -483,6 +490,8 @@ CREATE TABLE IF NOT EXISTS track_sections (
 
 -- DJ-set section alignment: maps each played section back onto a reference track
 -- with an optional "cutup plan" describing measure-level rearrangements.
+-- RESERVED — no live writer: upsert_section_alignment was removed with the
+-- Viterbi aligner (2026-05). Table kept for the future alignment write-back.
 CREATE TABLE IF NOT EXISTS set_section_alignment (
     set_id                  TEXT NOT NULL,
     section_idx             INTEGER NOT NULL, -- section ordinal within the set

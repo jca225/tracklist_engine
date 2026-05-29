@@ -65,35 +65,6 @@ class SetAudioAsset:
     bitrate_kbps: int | None
 
 
-@dataclass(frozen=True)
-class TimelineSegment:
-    """One tokenized row on the set's timeline.
-
-    `cue_seconds_section` is the resolved audio-section anchor (ffilled from
-    the parent of any `w/` layer group); it defines *when* this token should
-    be audible in the full-mix audio.
-    """
-    row_index: int
-    track_id: str | None
-    tlp_id: str | None
-    title: str | None
-    artists: tuple[str, ...]
-    cue_seconds_section: float | None
-    is_ided: bool
-    is_concurrent: bool
-    is_remixish: bool
-    has_yt: bool
-    has_sc: bool
-    has_sp: bool
-
-
-@dataclass(frozen=True)
-class SetTimeline:
-    set_id: str
-    set_audio_id: int | None
-    segments: tuple[TimelineSegment, ...]
-
-
 # URL builders — pure, no I/O.
 def youtube_url(video_id: str) -> str:
     return f"https://www.youtube.com/watch?v={video_id}"
