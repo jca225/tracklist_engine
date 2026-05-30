@@ -251,15 +251,17 @@ def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--max-tracks", type=int, default=None,
                    help="Stop after N successful tracks (smoke testing).")
+    p.add_argument("--separator", choices=["demucs", "uvr"], default="demucs",
+                   help="Stem-separation backend (default: demucs).")
     args = p.parse_args()
 
-    log.info("starting BB10-15 analyze loop on Mac (device=%s, max_tracks=%s)",
-             DEVICE, args.max_tracks)
+    log.info("starting BB10-15 analyze loop on Mac (device=%s, separator=%s, max_tracks=%s)",
+             DEVICE, args.separator, args.max_tracks)
     init_scratch_db()
 
-    log.info("loading analyzers (%s)…", DEVICE)
+    log.info("loading analyzers (%s, %s)…", DEVICE, args.separator)
     t0 = time.time()
-    ar = load_analyzers(device=DEVICE)
+    ar = load_analyzers(device=DEVICE, separator=args.separator)
     if not ar.is_ok():
         log.error("load_analyzers failed: %s", ar.error)
         return 1

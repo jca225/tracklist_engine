@@ -151,6 +151,8 @@ def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--set-audio-ids", type=str, default=None,
                    help="Comma-separated list to scope (default: all pending)")
+    p.add_argument("--separator", choices=["demucs", "uvr"], default="demucs",
+                   help="Stem-separation backend (default: demucs).")
     args = p.parse_args()
     only_ids = None
     if args.set_audio_ids:
@@ -160,8 +162,8 @@ def main() -> int:
     LOCAL_SETS.mkdir(parents=True, exist_ok=True)
     LOCAL_SET_STEMS.mkdir(parents=True, exist_ok=True)
 
-    log.info("loading analyzers (device=%s)…", DEVICE)
-    ar = load_analyzers(device=DEVICE)
+    log.info("loading analyzers (device=%s, separator=%s)…", DEVICE, args.separator)
+    ar = load_analyzers(device=DEVICE, separator=args.separator)
     if not ar.is_ok():
         log.error("load_analyzers failed: %s", ar.error)
         return 1

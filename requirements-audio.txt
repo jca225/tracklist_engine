@@ -16,3 +16,8 @@ soundfile>=0.13
 torchcodec>=0.11
 timm>=1.0
 plotly>=5.20
+
+# UVR stem-separation backend (alternative to Demucs). The onnxruntime variant
+# (CPU vs GPU) is host-specific and installed by scripts/setup_separation.sh —
+# Mac uses the bundled CPU onnxruntime, CUDA hosts need onnxruntime-gpu.
+audio-separator>=0.44.1

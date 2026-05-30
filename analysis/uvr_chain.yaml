@@ -1,0 +1,71 @@
+# UVR vocal-cleanup chain (consumed by analysis/separation_config.py).
+#
+# Each stage forwards its `keep_match` stem to the next stage. The final
+# stage's kept stem is the cleaned lead vocal; the persisted instrumental is
+# taken from `instrumental_from` (the isolate stage's Instrumental output).
+#
+# Reorder / disable / retune stages here with no code changes:
+#   - drop a stage to skip that cleanup step
+#   - set enable_ensemble: false to collapse ensemble stages to their first model
+#   - tune params.aggression (VR) or params.segment_size / params.overlap (MDX)
+#
+# Model filenames verified against `audio-separator --list_models` (0.44.1).
+
+model_dir: "~/uvr-models"
+output_format: "FLAC"
+enable_ensemble: true
+
+instrumental_from: "isolate"
+instrumental_match: "Instrumental"
+# Cascade the branched-off instrumental through Demucs (re-sum drums+bass+other,
+# drop the near-empty vocal) for a cleaner, vocal-bleed-free instrumental.
+# false → persist Kim Vocals 2's instrumental directly.
+instrumental_cascade: true
+
+stages:
+  # 1. Full song → lead+backing vocals / instrumental. Instrumental persisted.
+  - name: "isolate"
+    models: ["Kim_Vocal_2.onnx"]
+    arch: "mdx"
+    keep_match: "Vocals"
+    byproduct_match: "Instrumental"
+    params:
+      segment_size: 256
+      overlap: 0.25
+
+  # 2. Lead-vocal isolation: ensemble two karaoke models (spectral avg) to
+  #    strip backing vocals/harmonies. Byproduct (input - lead) ≈ chorus.
+  - name: "lead"
+    models: ["UVR_MDXNET_KARA_2.onnx", "5_HP-Karaoke-UVR.pth"]
+    arch: "mdx"
+    keep_match: "Vocals"
+    byproduct_match: "Instrumental"
+    ensemble_algorithm: "avg_fft"
+
+  # 3. Strip reverb.
+  - name: "dereverb"
+    models: ["Reverb_HQ_By_FoxJoy.onnx"]
+    arch: "mdx"
+    keep_match: "No Reverb"
+    byproduct_match: "Reverb"
+    params:
+      segment_size: 256
+      overlap: 0.25
+
+  # 4. Strip echo/delay.
+  - name: "deecho"
+    models: ["UVR-De-Echo-Aggressive.pth"]
+    arch: "vr"
+    keep_match: "No Echo"
+    byproduct_match: "Echo"
+    params:
+      aggression: 5
+
+  # 5. Strip residual noise → final dry lead vocal.
+  - name: "denoise"
+    models: ["UVR-DeNoise.pth"]
+    arch: "vr"
+    keep_match: "No Noise"
+    byproduct_match: "Noise"
+    params:
+      aggression: 5

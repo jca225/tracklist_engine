@@ -16,14 +16,14 @@ caller is responsible for keeping the stems-dir reachable to consumers
 (mount pi-storage there, or rsync after each track).
 
 CLI:
-    python -m audio_pipeline.vast_worker \\
+    python -m analysis.vast_worker \\
         --audio /mnt/audio/X.m4a \\
         --track-audio-id 999 \\
         --db /mnt/pi-storage/data/db/music_database.db \\
         --stems-dir /mnt/pi-storage/stems
 
 For batch / loop mode (poll DB for next unanalyzed track until empty):
-    python -m audio_pipeline.vast_worker \\
+    python -m analysis.vast_worker \\
         --db /mnt/pi-storage/data/db/music_database.db \\
         --audio-root /mnt/pi-storage \\
         --stems-dir /mnt/pi-storage/stems \\
@@ -40,12 +40,12 @@ import time
 from pathlib import Path
 
 from core import db as db_adapter
-from .analysis.pipeline import Analyzers, analyze_track, load_analyzers
-from .analysis import persistence
+from .pipeline import Analyzers, analyze_track, load_analyzers
+from . import persistence
 from core.models import AudioAsset
 from core.result import Err, Ok, Result
 
-_log = logging.getLogger("audio_pipeline.vast_worker")
+_log = logging.getLogger("analysis.vast_worker")
 
 _BIG_BOOTIE_10_15: tuple[str, ...] = (
     "w1mgcjt", "2nvzlh2k", "1fsnxchk", "qj4v0wt", "1yl70ql1", "237tdqmk",
@@ -79,6 +79,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="Shortcut for --set-ids matching the 6 Big Bootie "
                         "10-15 set_ids.")
     p.add_argument("--device", default="auto", choices=("auto", "cuda", "mps", "cpu"))
+    p.add_argument("--separator", default="demucs", choices=("demucs", "uvr"),
+                   help="Stem-separation backend (default: demucs).")
     p.add_argument("--log-level", default="INFO",
                    choices=("DEBUG", "INFO", "WARNING", "ERROR"))
     return p.parse_args(argv)
@@ -210,9 +212,9 @@ def _run(args: argparse.Namespace) -> int:
             _log.error("non-loop mode requires --audio and --track-audio-id")
             return 2
 
-    _log.info("loading analyzers (device=%s)…", args.device)
+    _log.info("loading analyzers (device=%s, separator=%s)…", args.device, args.separator)
     t0 = time.time()
-    ar = load_analyzers(device=args.device)
+    ar = load_analyzers(device=args.device, separator=args.separator)
     if not ar.is_ok():
         _log.error("load_analyzers failed: %s", ar.error)
         return 1
