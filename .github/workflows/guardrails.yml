@@ -15,7 +15,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install pytest
+      - name: Install test dependencies
         run: pip install -q pytest
 
       - name: Mechanical guardrails

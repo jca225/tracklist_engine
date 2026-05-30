@@ -3,10 +3,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from analysis.adapters import cue_detr_adapter, essentia_adapter, essentia_models
-from ingest.adapters import spotdl_adapter, ytmusic_adapter
 
 REPO = Path(__file__).resolve().parents[1]
+
+INGEST_ADAPTERS = ("spotdl_adapter.py", "ytmusic_adapter.py")
 
 
 def test_cue_detr_dir_under_repo() -> None:
@@ -23,11 +26,9 @@ def test_essentia_models_repo_root() -> None:
     assert essentia_models.models_dir() == REPO / "data" / "essentia_models"
 
 
-def test_ytmusic_adapter_repo_root() -> None:
-    repo_root = Path(ytmusic_adapter.__file__).resolve().parents[2]
-    assert repo_root == REPO
-
-
-def test_spotdl_adapter_repo_root() -> None:
-    repo_root = Path(spotdl_adapter.__file__).resolve().parents[2]
-    assert repo_root == REPO
+@pytest.mark.parametrize("filename", INGEST_ADAPTERS)
+def test_ingest_adapter_repo_depth(filename: str) -> None:
+    """Ingest adapters pull yt-dlp at import — verify depth statically."""
+    text = (REPO / "ingest" / "adapters" / filename).read_text(encoding="utf-8")
+    assert "parents[2]" in text
+    assert "parents[3]" not in text

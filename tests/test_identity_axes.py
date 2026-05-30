@@ -1,7 +1,20 @@
 """Tests for tokenizer/identity_axes.py — version vs stem split."""
 from __future__ import annotations
 
-from tokenizer.identity_axes import derive_claimed_stem, derive_version_flags
+import importlib.util
+from pathlib import Path
+
+# Load identity_axes directly — tokenizer/__init__.py pulls bs4/pydantic we
+# don't need for these unit tests (and aren't installed in CI guardrails job).
+_spec = importlib.util.spec_from_file_location(
+    "tokenizer.identity_axes",
+    Path(__file__).resolve().parents[1] / "tokenizer" / "identity_axes.py",
+)
+assert _spec and _spec.loader
+_identity_axes = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_identity_axes)
+derive_claimed_stem = _identity_axes.derive_claimed_stem
+derive_version_flags = _identity_axes.derive_version_flags
 
 
 def test_acappella_is_stem_not_version() -> None:
