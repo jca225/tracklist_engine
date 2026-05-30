@@ -26,9 +26,8 @@ CREATE TABLE IF NOT EXISTS recording (
     UNIQUE (work_id, version, version_artist, stem, variant)
 );
 
--- track_fingerprints: align column name with recording layer (if still track_id)
--- Ignore error if already recording_id.
-ALTER TABLE track_fingerprints RENAME COLUMN track_id TO recording_id;
+-- track_fingerprints: normalize stem axis (recording_id already on newer DBs)
+UPDATE track_fingerprints SET stem = 'regular' WHERE stem IN ('original', 'full');
 
 -- track_audio: backfill recording_id + normalize stem (column added in partial runs)
 UPDATE track_audio SET recording_id = track_id WHERE recording_id IS NULL;
