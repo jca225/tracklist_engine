@@ -125,7 +125,7 @@ class RegRow:
     platform: str
     player_id: str | None
     duration_s: float | None
-    variant_tag: str
+    stem: str
     is_reference: int
 
 
@@ -137,12 +137,12 @@ def _load_registered(db: Path) -> tuple[set[str], dict[str, list[RegRow]]]:
         conn.row_factory = sqlite3.Row
         for r in conn.execute(
             "SELECT track_audio_id, track_id, path, platform, player_id, "
-            "duration_s, variant_tag, is_reference FROM track_audio"
+            "duration_s, stem, is_reference FROM track_audio"
         ):
             paths.add(r["path"])
             by_tid[r["track_id"]].append(RegRow(
                 r["track_audio_id"], r["track_id"], r["path"], r["platform"],
-                r["player_id"], r["duration_s"], r["variant_tag"], r["is_reference"],
+                r["player_id"], r["duration_s"], r["stem"], r["is_reference"],
             ))
     return paths, by_tid
 
@@ -155,17 +155,17 @@ def _reference_row(rows: list[RegRow]) -> RegRow | None:
 
 
 def _acappella_smell(db: Path, track_id: str, ref: RegRow) -> bool:
-    if ref.variant_tag and ref.variant_tag.lower() == "acappella":
+    if ref.stem and ref.stem.lower() == "acappella":
         return True
     with sqlite3.connect(db) as conn:
         conn.row_factory = sqlite3.Row
         r = conn.execute(
-            "SELECT full_name, version_tag FROM track_metadata WHERE track_id=?",
+            "SELECT full_name, version FROM track_metadata WHERE track_id=?",
             (track_id,),
         ).fetchone()
     if not r:
         return False
-    blob = f"{r['full_name'] or ''} {r['version_tag'] or ''}".lower()
+    blob = f"{r['full_name'] or ''} {r['version'] or ''}".lower()
     return "acappella" in blob or "acapella" in blob
 
 
@@ -302,7 +302,7 @@ def _do_register(db: Path, o: Orphan, *, as_reference: bool) -> int | None:
     log_correction(db, Correction(
         track_id=o.track_id, axis="version", action="add",
         new_track_audio_id=taid, new_platform=platform, new_player_id=player_id,
-        new_url=asset.source_url, variant_tag="original",
+        new_url=asset.source_url, stem_value="regular",
         reason=o.reason, source="reconcile_orphans",
     ))
     return taid
@@ -318,7 +318,7 @@ def _do_promote(db: Path, o: Orphan, by_tid: dict[str, list[RegRow]]) -> int | N
     # Demote the old reference IN PLACE — keep its stems/analysis (no cascade).
     with sqlite3.connect(db) as conn:
         conn.execute(
-            "UPDATE track_audio SET is_reference=0, variant_tag='acappella' "
+            "UPDATE track_audio SET is_reference=0, stem='acappella' "
             "WHERE track_audio_id=?", (ref.track_audio_id,))
         conn.commit()
     log_correction(db, Correction(
@@ -326,7 +326,7 @@ def _do_promote(db: Path, o: Orphan, by_tid: dict[str, list[RegRow]]) -> int | N
         old_track_audio_id=ref.track_audio_id, old_platform=ref.platform,
         old_player_id=ref.player_id,
         new_track_audio_id=new_taid, new_platform=o.platform,
-        new_player_id=o.player_id, variant_tag="acappella",
+        new_player_id=o.player_id, stem_value="acappella",
         reason=o.reason, source="reconcile_orphans",
     ))
     return new_taid
@@ -371,7 +371,7 @@ def _run(args: argparse.Namespace) -> int:
         print(f"\nREVIEW worklist -> {args.review_tsv}")
 
     if not args.apply:
-        print("\n(dry-run — nothing changed. Re-run with --apply to act.)")
+        print("\n(dry-run - nothing changed. Re-run with --apply to act.)")
         return 0
 
     # APPLY: deletes + registers (promotions gated separately).
@@ -387,7 +387,7 @@ def _run(args: argparse.Namespace) -> int:
             if _do_promote(args.db, o, by_tid) is not None:
                 n_prom += 1
     print(f"\nAPPLIED: deleted={n_del}  registered={n_reg}  promoted={n_prom}"
-          f"{'' if args.apply_promotions else '  (promotions skipped — pass --apply-promotions)'}")
+          f"{'' if args.apply_promotions else '  (promotions skipped - pass --apply-promotions)'}")
     return 0
 
 

@@ -1,12 +1,13 @@
 """Stream `dj_set_rows.raw_html`, tokenize each row, and materialize the
-parsed structure into three tables:
+parsed structure into four tables:
 
   - track_metadata      (1 row per track_id, aggregated across sets)
+  - set_track_slots     (1 row per played slot — aligner / claim view)
   - track_suggestions   (1 row per sug_id)
   - track_id_links      (linked-tracklist hints from IDTrack.linked_items)
 
 Idempotent — re-running clears and rebuilds. Safe to run on the live DB
-because we only DELETE FROM the three derived tables we own.
+because we only DELETE FROM the derived tables we own.
 
 Run on pi-storage (the DB is local — no RPC needed):
 
@@ -32,6 +33,11 @@ from bs4 import BeautifulSoup
 
 from tokenizer._parser import BS_PARSER
 from tokenizer.tokenizer import classify_row
+from tokenizer.identity_axes import (
+    derive_claimed_variant,
+    scrape_claimed_stem,
+    scrape_claimed_version,
+)
 from tokenizer.track_tokenizer import parse_track_row as parse_track_main
 from tokenizer.track_tokenizer import TrackRow
 from tokenizer.suggestion_tokenizer import parse_suggestion_row
@@ -64,7 +70,7 @@ class _MetadataAccumulator:
                 "genre": None,
                 "duration_seconds": None,
                 "is_remixish": 0,
-                "version_tag": None,
+                "version": None,
                 "has_youtube": 0,
                 "has_soundcloud": 0,
                 "has_spotify": 0,
@@ -86,8 +92,8 @@ class _MetadataAccumulator:
             cur["genre"] = tr.genre
         if cur["duration_seconds"] is None and tr.duration_seconds:
             cur["duration_seconds"] = tr.duration_seconds
-        if cur["version_tag"] is None and tr.version_tag:
-            cur["version_tag"] = tr.version_tag
+        if cur["version"] is None and tr.version_tag:
+            cur["version"] = scrape_claimed_version(tr.version_tag)
         if cur["artwork_url"] is None and tr.artwork_url:
             cur["artwork_url"] = tr.artwork_url
 
@@ -145,6 +151,30 @@ def _flush_metadata(conn: sqlite3.Connection, rows: list[dict[str, Any]]) -> Non
     conn.commit()
 
 
+def _slot_label(tr: TrackRow) -> str | None:
+    """Mirror pull_set_for_alignment's published section / w/ label."""
+    raw = tr.track_number_raw
+    if raw == "w/":
+        return None  # layered rows get labels at flush time from primary
+    if raw and raw.strip().isdigit():
+        return raw.strip().zfill(3)
+    return None
+
+
+def _flush_slots(conn: sqlite3.Connection, buf: list[tuple]) -> None:
+    if not buf:
+        return
+    conn.executemany(
+        "INSERT OR REPLACE INTO set_track_slots ("
+        "set_id, row_index, tlp_id, recording_id, track_id, source, slot_label, "
+        "is_concurrent, cue_seconds, cue_time_seconds, claimed_version, "
+        "claimed_stem, claimed_variant, full_name, title, artists_json, duration_seconds"
+        ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        buf,
+    )
+    conn.commit()
+
+
 # -----------------------------------------------------------------------------
 # Main pipeline
 # -----------------------------------------------------------------------------
@@ -165,6 +195,7 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
     # (`tokenizer.id_links` — to be written), so we leave its rows intact here.
     conn.executescript("""
         DELETE FROM track_metadata;
+        DELETE FROM set_track_slots;
         DELETE FROM track_suggestions;
     """)
     conn.commit()
@@ -175,14 +206,17 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
     log.info("streaming %s rows from dj_set_rows", f"{total:,}")
 
     metadata = _MetadataAccumulator()
+    slot_buf: list[tuple] = []
     sug_buf: list[tuple] = []
-    counts = {"track": 0, "suggestion": 0, "text": 0, "errors": 0}
+    counts = {"track": 0, "slot": 0, "suggestion": 0, "text": 0, "errors": 0}
+    # Per-set w/ layering: primary label + w/ counter (matches pull_set_for_alignment).
+    slot_state: dict[str, tuple[str | None, int]] = {}
 
     offset = 0
     last_log_pct = -10
     while True:
         cur.execute(
-            "SELECT row_id, set_id, raw_html FROM dj_set_rows "
+            "SELECT row_id, set_id, row_index, raw_html FROM dj_set_rows "
             "ORDER BY row_id LIMIT ? OFFSET ?",
             (batch_size, offset),
         )
@@ -208,8 +242,51 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
                 if "tlpItem" in outer_classes:
                     tr = parse_track_main(raw)  # internally parses once with BS_PARSER too
                     if tr.track_key:
-                        metadata.update(tr, row["set_id"])
-                        counts["track"] += 1
+                        if tr.is_ided:
+                            metadata.update(tr, row["set_id"])
+                            counts["track"] += 1
+
+                        sid = row["set_id"]
+                        primary, w_ctr = slot_state.get(sid, (None, 0))
+                        base = _slot_label(tr)
+                        if base is not None:
+                            primary, w_ctr = base, 0
+                            label = base
+                        elif tr.is_concurrent and primary is not None:
+                            w_ctr += 1
+                            label = f"{primary}w{w_ctr}"
+                        else:
+                            label = None
+                        slot_state[sid] = (primary, w_ctr)
+
+                        source = "synthetic" if tr.track_key.startswith("tlp") else "scraped"
+
+                        claimed_stem = scrape_claimed_stem(tr.full_name)
+                        slot_buf.append((
+                            sid,
+                            int(row["row_index"]),
+                            tr.data_id,
+                            tr.track_key,
+                            tr.track_key,
+                            source,
+                            label,
+                            int(tr.is_concurrent),
+                            tr.cue_seconds,
+                            tr.cue_time_seconds,
+                            scrape_claimed_version(tr.version_tag),
+                            claimed_stem,
+                            derive_claimed_variant(tr.full_name),
+                            tr.full_name,
+                            tr.title,
+                            json.dumps(list(tr.artists), ensure_ascii=False)
+                            if tr.artists else None,
+                            tr.duration_seconds,
+                        ))
+                        counts["slot"] += 1
+
+                        if len(slot_buf) >= _BATCH_INSERT:
+                            _flush_slots(conn, slot_buf)
+                            slot_buf.clear()
 
                 elif "sugTog" in outer_classes:
                     sug = parse_suggestion_row(outer)
@@ -240,13 +317,14 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
         pct = int(100 * offset / max(total, 1))
         if pct - last_log_pct >= 5:
             log.info(
-                "%d/%s (%d%%) — track=%d sug=%d errors=%d",
+                "%d/%s (%d%%) — track=%d slot=%d sug=%d errors=%d",
                 offset, f"{total:,}", pct,
-                counts["track"], counts["suggestion"], counts["errors"],
+                counts["track"], counts["slot"], counts["suggestion"], counts["errors"],
             )
             last_log_pct = pct
 
     # Final tail flushes
+    _flush_slots(conn, slot_buf)
     _flush_suggestions(conn, sug_buf)
 
     # Upsert track_metadata (single big batch — ~50k rows expected)
@@ -258,6 +336,7 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
 
     result = {
         "track_metadata": len(md_rows),
+        "set_track_slots": counts["slot"],
         "track_suggestions": counts["suggestion"],
         "errors": counts["errors"],
     }

@@ -15,19 +15,20 @@ import logging
 
 from .adapters import (
     audio_io, beat_this_adapter, cue_detr_adapter, demucs_adapter,
-    essentia_adapter, loudness,
+    essentia_adapter, loudness, uvr_chain_adapter,
 )
 
 from core.models import AudioAsset
 from core.result import Err, Ok, Result
 from .adapters import mert_adapter
-from .errors import AnalysisError
+from .errors import AnalysisError, StemError
 from .models import (
     BeatGrid,
     CuePoints,
     EssentiaFeatures,
     LoudnessReading,
     MeasureEmbedding,
+    StemSet,
     TrackAnalysisResult,
 )
 
@@ -38,22 +39,34 @@ _log = logging.getLogger(__name__)
 class Analyzers:
     """All model handles bundled so they load once per process.
 
-    `with_essentia` flips automatically based on whether the
-    venvs/essentia/ sandbox exists on disk — Essentia is best-effort,
-    not required.
+    Exactly one stem-separation backend is loaded per `separator`: the default
+    `demucs` (`htdemucs_ft`) or `uvr` (the audio-separator cleanup chain). Both
+    produce the same `StemSet(vocals, instrumental)`; the unselected one stays
+    `None`. `with_essentia` flips automatically based on whether the
+    venvs/essentia/ sandbox exists on disk — Essentia is best-effort.
     """
-    demucs: demucs_adapter.DemucsHandle
     beats: beat_this_adapter.BeatThisHandle
     cues: cue_detr_adapter.CueDetrHandle
     mert: mert_adapter.MertHandle
+    demucs: demucs_adapter.DemucsHandle | None = None
+    uvr: uvr_chain_adapter.UvrChainHandle | None = None
+    separator: str = "demucs"
     with_essentia: bool = False
 
+    @property
+    def stems_version(self) -> str:
+        backend = self.uvr if self.separator == "uvr" else self.demucs
+        return backend.version if backend is not None else "?"
 
-def load_analyzers(device: str = "auto") -> Result[Analyzers, AnalysisError]:
-    """Load every model once. Fails fast on the first load error."""
-    d = demucs_adapter.load(device=device)
-    if not d.is_ok():
-        return d
+
+def load_analyzers(
+    device: str = "auto", separator: str = "demucs"
+) -> Result[Analyzers, AnalysisError]:
+    """Load every model once. Fails fast on the first load error.
+
+    `separator` picks the stem backend ('demucs' | 'uvr'); only the selected
+    one is loaded.
+    """
     b = beat_this_adapter.load(device=device)
     if not b.is_ok():
         return b
@@ -63,10 +76,38 @@ def load_analyzers(device: str = "auto") -> Result[Analyzers, AnalysisError]:
     m = mert_adapter.load(device=device)
     if not m.is_ok():
         return m
+
+    demucs_h = uvr_h = None
+    if separator == "uvr":
+        u = uvr_chain_adapter.load(device=device)
+        if not u.is_ok():
+            return u
+        uvr_h = u.value
+    else:
+        d = demucs_adapter.load(device=device)
+        if not d.is_ok():
+            return d
+        demucs_h = d.value
+
     return Ok(Analyzers(
-        demucs=d.value, beats=b.value, cues=c.value, mert=m.value,
+        beats=b.value, cues=c.value, mert=m.value,
+        demucs=demucs_h, uvr=uvr_h, separator=separator,
         with_essentia=essentia_adapter.is_available(),
     ))
+
+
+def run_separation(
+    a: Analyzers, audio_path: Path, out_dir: Path, audio_id: int
+) -> Result["StemSet", StemError]:
+    """Dispatch stem separation to the loaded backend. Used by both the
+    per-track and per-set pipelines so backend selection lives in one place."""
+    if a.separator == "uvr":
+        if a.uvr is None:
+            return Err(StemError(kind="model_load", detail="uvr backend not loaded"))
+        return uvr_chain_adapter.separate(a.uvr, audio_path, out_dir, audio_id)
+    if a.demucs is None:
+        return Err(StemError(kind="model_load", detail="demucs backend not loaded"))
+    return demucs_adapter.separate(a.demucs, audio_path, out_dir, audio_id)
 
 
 def _section_bounds(
@@ -104,8 +145,9 @@ def analyze_track(
     assert asset.track_audio_id is not None, "AudioAsset must be persisted before analysis"
     audio_path = Path(asset.path)   # original full audio — single source of truth for all analysis
 
-    # Demucs writes stems to disk; its output is not fed back into the analyzers below.
-    stems_r = demucs_adapter.separate(a.demucs, audio_path, stems_dir, asset.track_audio_id)
+    # The stem backend (demucs or uvr) writes stems to disk; its output is not
+    # fed back into the analyzers below.
+    stems_r = run_separation(a, audio_path, stems_dir, asset.track_audio_id)
     if not stems_r.is_ok():
         return stems_r
 
@@ -145,7 +187,7 @@ def analyze_track(
     measure_embeddings = measures_r.value
 
     versions = {
-        "demucs": a.demucs.version,
+        a.separator: a.stems_version,   # keyed by backend so demucs/uvr runs are self-describing
         "beat_this": a.beats.version,
         "cue_detr": a.cues.checkpoint,
         "mert": a.mert.version,
@@ -156,7 +198,9 @@ def analyze_track(
     # worker fails, we log and continue — stems/beats/MERT are the contract,
     # Essentia features are a bonus layer.
     essentia_features: EssentiaFeatures | None = None
-    if a.with_essentia:
+    # Vocals-only / instrumental releases have no meaningful BPM/key — use the
+    # parent full song's features (see labeling/CLAUDE.md).
+    if a.with_essentia and asset.stem == "regular":
         ess_r = essentia_adapter.analyze(audio_path, asset.track_audio_id)
         match ess_r:
             case Ok(feat):

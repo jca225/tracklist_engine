@@ -35,6 +35,59 @@ Everything outside this chain is one of:
 New features land inside one of the chain modules. New top-level folders
 require explicit justification.
 
+## Track identity (three axes)
+
+Recorded music in this repo is keyed on **three orthogonal axes** (plus optional
+remixer name). Do not conflate them with Demucs stem names (`vocals`, `drums`, …)
+or with scrape-only field names from older docs.
+
+| Axis | DB / code values | Meaning |
+|------|------------------|---------|
+| **version** | `original`, `remix`, `rework`, `altversion`, `edit`, `bootleg`, `mashup` | Creative version (remix vs original) — `track_metadata.version` |
+| **stem** | `regular`, `acappella`, `instrumental` | Vocal/instrumental form — `track_audio.stem` (canonical default: **`regular`**, not `full` / `original`) |
+| **variant** | `regular`, `extended` | Edit length — `track_audio.variant` |
+
+**Concatenated lookup key:** `version__stem__variant` (e.g. `remix__acappella__extended`)
+via `RecordingAxes.key()` in [core/identity.py](core/identity.py). Remix **artist**
+lives on `recording.version_artist`, not in the key.
+
+**Layers (do not merge):**
+
+- **Work / recording** — `work` + `recording` tables; `recording_id` ≈ legacy
+  `track_id`. Sibling recordings under one work (not stem-children).
+- **Set claim** — `set_track_slots` (`claimed_version`, `claimed_stem`,
+  `claimed_variant`) = what the DJ *played*; view `identity_mismatch` flags
+  scrape claim vs canonical recording.
+- **Download** — `track_audio` row per platform rip; `is_reference` picks the
+  analysis/alignment reference.
+- **Demucs** — `track_stems.stem_name` = separated components, unrelated to the
+  identity `stem` axis.
+
+**Baby rule (labeling + ingest):** one full mix file in `~/aligning/.../tracks/`;
+when the tracklist says acappella/instrumental, use Demucs `stems/vocals` or
+`stems/instrumental` — do not download a second full file unless it is truly a
+different recording.
+
+**Tokenizer scrape field:** `TrackRow.version_tag` remains Title Case (`Remix`,
+`Rework`, …) until [tokenizer/materialize.py](tokenizer/materialize.py) writes
+lowercase DB columns. Acappella/instrumental are **`claimed_stem`**, not
+`version_tag` — see [tokenizer/CLAUDE.md](tokenizer/CLAUDE.md).
+
+**Ground truth YAML:** prefer `claimed_stem:`; legacy `version_tag:` still parses.
+Write-back: [labeling/write_back_ground_truth.py](labeling/write_back_ground_truth.py)
+→ `set_ground_truth`.
+
+**Pi-storage rollout** (code may be ahead of canonical DB — deploy + migrate together):
+
+1. Backup `music_database.db`
+2. `make deploy`
+3. `scripts/migrate_identity_axes.sql` then `scripts/migrate_phase4_recording.sql`
+4. `python -m tokenizer.materialize`
+5. `scripts/reconcile_orphans.py` — **dry-run only** if pass-1/apply already ran
+
+Full phase checklist: [docs/identity_and_inventory_plan.md](docs/identity_and_inventory_plan.md).
+Recent reconcile state (2026-05-30): [docs/agent_handoff_reconcile_20260530.md](docs/agent_handoff_reconcile_20260530.md) — do not re-run `--apply` without a fresh dry-run.
+
 ## Per-module guides
 
 Each module carries its own `CLAUDE.md`, loaded on demand when you touch that
@@ -44,8 +97,8 @@ subtree — keep stage-specific detail there, not here. Index:
   stage): architecture, `config.yaml`, run command, captcha. *(Pending rename to
   `scrape/`.)*
 - **[tokenizer/CLAUDE.md](tokenizer/CLAUDE.md)** — scrape-row → `track_metadata`
-  materialization. **Authoring home** for the remix/version-qualifier rule and
-  the "Rvmor gap" (sided rows with no `data-trackid`).
+  + `set_track_slots`. **Authoring home** for version vs stem vs variant parsing
+  (`identity_axes.py`) and the "Rvmor gap" (sided rows with no `data-trackid`).
 - **[ingest/CLAUDE.md](ingest/CLAUDE.md)** — audio download topology (yt-dlp main
   / spotdl retry / YT Music rescue), yt-dlp bot-detection + JS-runtime recipe.
 - **[analysis/CLAUDE.md](analysis/CLAUDE.md)** — per-track/set MIR; MERT layer-6
@@ -57,8 +110,8 @@ subtree — keep stage-specific detail there, not here. Index:
 - **[eda/CLAUDE.md](eda/CLAUDE.md)** — exploratory analysis; corpus-empirics
   findings + `aux.db`. Full write-ups in
   [eda/corpus_empirics/findings.md](eda/corpus_empirics/findings.md).
-- **[core/CLAUDE.md](core/CLAUDE.md)** — shared substrate; the rule that `core`
-  imports nothing upward.
+- **[core/CLAUDE.md](core/CLAUDE.md)** — shared substrate; `core/identity.py`
+  (three axes); the rule that `core` imports nothing upward.
 
 ## Database
 
@@ -69,12 +122,16 @@ SQLite with ~25 tables split into two groups, all with cascade-deleting FKs.
 `dj_set_media_links`, `dj_set_rows`, `dj_set_track_media_links`, `scrape_failures`.
 
 **Audio-pipeline tables** (populated downstream of the scraper):
+`work` / `recording` (canonical identity; `recording_id` ≈ `track_id`),
 `set_audio` / `set_stems` / `set_measures` (mix-side audio + demucs stems + beat
-grid), `track_audio` / `track_stems` / `track_measures` (ref-track equivalents),
-`track_analysis` / `track_identity` / `track_audio_features` / `track_mert_sections` /
-`track_sections` (per-ref analysis outputs), `canonical_track_cue_points`
-(cue-detr cues keyed by track_id, full-song @ sensitivity=0.5), `track_fingerprints` /
-`set_fingerprint_hits` (chromaprint ingestion + mix scan), `set_section_alignment`
+grid), `track_audio` (`stem`, `variant`, `recording_id`) / `track_stems` /
+`track_measures` (ref-track equivalents), `track_metadata` (`version`),
+`set_track_slots` (per-set spine + `claimed_*` axes), `set_ground_truth` (manual GT
+from labeling write-back), `track_analysis` / `track_identity` /
+`track_audio_features` / `track_mert_sections` / `track_sections` (per-ref analysis),
+`canonical_track_cue_points` (cue-detr on `stem='regular'` only),
+`track_fingerprints` (`recording_id`, `stem`) / `set_fingerprint_hits`,
+`track_audio_correction` (replace/add ledger by axis), `set_section_alignment`
 (legacy alignment-output table, currently unused), `measure_alignment`,
 `set_playback_score`, `set_timeline`, `set_analysis`.
 

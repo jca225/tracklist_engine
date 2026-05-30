@@ -206,6 +206,39 @@ def _delete_old_row_if_exists(
         _log.info("deleted old stems dir %s", stems_dir)
 
 
+def _promote_reference(db_path: Path, track_id: str, track_audio_id: int) -> None:
+    """Mark one row the reference for this track_id; demote all others."""
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("PRAGMA foreign_keys = ON;")
+        conn.execute(
+            "UPDATE track_audio SET is_reference = 0 WHERE track_id = ?",
+            (track_id,),
+        )
+        conn.execute(
+            "UPDATE track_audio SET is_reference = 1 WHERE track_audio_id = ?",
+            (track_audio_id,),
+        )
+        conn.commit()
+    _log.info("promoted taid=%d to is_reference for track_id=%s",
+              track_audio_id, track_id)
+
+
+def _purge_sibling_rows(
+    db_path: Path, audio_root: Path, track_id: str, keep_taid: int,
+) -> None:
+    """Delete every other track_audio row for this track_id (+ on-disk files)."""
+    with sqlite3.connect(db_path) as conn:
+        siblings = conn.execute(
+            "SELECT track_audio_id FROM track_audio "
+            "WHERE track_id = ? AND track_audio_id != ?",
+            (track_id, keep_taid),
+        ).fetchall()
+    for (taid,) in siblings:
+        _delete_old_row_if_exists(db_path, audio_root, int(taid))
+    if siblings:
+        _log.info("purged %d sibling row(s) for track_id=%s", len(siblings), track_id)
+
+
 def _place_file_in_canonical(
     src: Path, audio_root: Path, track_id: str, platform: str, player_id: str,
 ) -> Path:
@@ -223,8 +256,9 @@ def _place_file_in_canonical(
 
 def _replace_via_url(
     db_path: Path, audio_root: Path, track_id: str, url: str,
-    track_audio_id: int | None, variant_tag: str = "original",
-    edit_tag: str = "regular",
+    track_audio_id: int | None, stem: str = "regular",
+    variant: str = "regular",
+    *, promote_reference: bool = True, purge_siblings: bool = False,
 ) -> int:
     """Acquire by URL and insert. Returns the new track_audio_id."""
     kind = _detect_url_kind(url)
@@ -233,21 +267,28 @@ def _replace_via_url(
         if not spid:
             _log.error("could not extract spotify track id from %s", url)
             return 1
-        return _replace_via_spotdl(db_path, audio_root, track_id, spid, track_audio_id, variant_tag, edit_tag)
+        return _replace_via_spotdl(
+            db_path, audio_root, track_id, spid, track_audio_id, stem, variant,
+            promote_reference=promote_reference, purge_siblings=purge_siblings,
+        )
     if kind == "youtube":
         vid = _yt_video_id(url)
         if not vid:
             _log.error("could not extract youtube video id from %s", url)
             return 1
-        return _replace_via_ytdlp(db_path, audio_root, track_id, vid, track_audio_id, variant_tag, edit_tag)
+        return _replace_via_ytdlp(
+            db_path, audio_root, track_id, vid, track_audio_id, stem, variant,
+            promote_reference=promote_reference, purge_siblings=purge_siblings,
+        )
     _log.error("unrecognized URL kind for %s", url)
     return 1
 
 
 def _replace_via_spotdl(
     db_path: Path, audio_root: Path, track_id: str, spotify_id: str,
-    track_audio_id: int | None, variant_tag: str = "original",
-    edit_tag: str = "regular",
+    track_audio_id: int | None, stem: str = "regular",
+    variant: str = "regular",
+    *, promote_reference: bool = True, purge_siblings: bool = False,
 ) -> int:
     objects_root = audio_root / "objects"
     out_dir = objects_root / track_id
@@ -266,16 +307,20 @@ def _replace_via_spotdl(
             return 1
         case Ok(asset):
             pass
-    asset = replace(asset, variant_tag=variant_tag, edit_tag=edit_tag)
+    asset = replace(asset, stem=stem, variant=variant)
     if track_audio_id is not None:
         _delete_old_row_if_exists(db_path, audio_root, track_audio_id)
-    return _insert_and_report(db_path, asset)
+    return _insert_and_report(
+        db_path, audio_root, asset,
+        promote_reference=promote_reference, purge_siblings=purge_siblings,
+    )
 
 
 def _replace_via_ytdlp(
     db_path: Path, audio_root: Path, track_id: str, video_id: str,
-    track_audio_id: int | None, variant_tag: str = "original",
-    edit_tag: str = "regular",
+    track_audio_id: int | None, stem: str = "regular",
+    variant: str = "regular",
+    *, promote_reference: bool = True, purge_siblings: bool = False,
 ) -> int:
     objects_root = audio_root / "objects"
     out_dir = objects_root / track_id
@@ -303,18 +348,22 @@ def _replace_via_ytdlp(
         sample_rate=None,
         codec="m4a",
         bitrate_kbps=None,
-        variant_tag=variant_tag,
-        edit_tag=edit_tag,
+        stem=stem,
+        variant=variant,
     )
     if track_audio_id is not None:
         _delete_old_row_if_exists(db_path, audio_root, track_audio_id)
-    return _insert_and_report(db_path, asset)
+    return _insert_and_report(
+        db_path, audio_root, asset,
+        promote_reference=promote_reference, purge_siblings=purge_siblings,
+    )
 
 
 def _replace_via_file(
     db_path: Path, audio_root: Path, track_id: str, file_path: Path,
-    player_id: str, track_audio_id: int | None, variant_tag: str = "original",
-    edit_tag: str = "regular",
+    player_id: str, track_audio_id: int | None, stem: str = "regular",
+    variant: str = "regular",
+    *, promote_reference: bool = True, purge_siblings: bool = False,
 ) -> int:
     if not file_path.is_file():
         _log.error("file does not exist: %s", file_path)
@@ -334,15 +383,25 @@ def _replace_via_file(
         sample_rate=None,
         codec=dst.suffix.lstrip("."),
         bitrate_kbps=None,
-        variant_tag=variant_tag,
-        edit_tag=edit_tag,
+        stem=stem,
+        variant=variant,
     )
     if track_audio_id is not None:
         _delete_old_row_if_exists(db_path, audio_root, track_audio_id)
-    return _insert_and_report(db_path, asset)
+    return _insert_and_report(
+        db_path, audio_root, asset,
+        promote_reference=promote_reference, purge_siblings=purge_siblings,
+    )
 
 
-def _insert_and_report(db_path: Path, asset: AudioAsset) -> int:
+def _insert_and_report(
+    db_path: Path,
+    audio_root: Path,
+    asset: AudioAsset,
+    *,
+    promote_reference: bool,
+    purge_siblings: bool,
+) -> int:
     r = db_adapter.insert_audio_or_reap(db_path, asset)
     match r:
         case Err(e):
@@ -351,6 +410,10 @@ def _insert_and_report(db_path: Path, asset: AudioAsset) -> int:
         case Ok(new_taid):
             _log.info("inserted new track_audio row taid=%d  path=%s",
                       new_taid, asset.path)
+            if promote_reference:
+                _promote_reference(db_path, asset.track_id, new_taid)
+            if purge_siblings:
+                _purge_sibling_rows(db_path, audio_root, asset.track_id, new_taid)
             return 0
 
 
@@ -397,6 +460,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="Published section no. / slot label (correction ledger).")
     p.add_argument("--no-log", action="store_true",
                    help="Skip writing the correction-ledger row.")
+    p.add_argument("--no-promote-reference", action="store_true",
+                   help="Do not set is_reference=1 on the new row (default: promote).")
+    p.add_argument("--purge-siblings", action="store_true",
+                   help="Delete all other track_audio rows for this track_id "
+                        "(and their on-disk files/stems).")
 
     p.add_argument("--log-level", default="INFO",
                    choices=("DEBUG", "INFO", "WARNING", "ERROR"))
@@ -446,14 +514,19 @@ def _run(args: argparse.Namespace) -> int:
     old = (snapshot_row(args.db, args.track_audio_id)
            if args.track_audio_id is not None else None)
 
+    promote = not args.no_promote_reference
     if args.url:
-        rc = _replace_via_url(args.db, args.audio_root, track_id,
-                              args.url, args.track_audio_id, edit_tag=args.edit)
+        rc = _replace_via_url(
+            args.db, args.audio_root, track_id,
+            args.url, args.track_audio_id, variant=args.edit,
+            promote_reference=promote, purge_siblings=args.purge_siblings,
+        )
     else:  # File mode
         pid = args.player_id or args.file.stem
         rc = _replace_via_file(
             args.db, args.audio_root, track_id, args.file, pid,
-            args.track_audio_id, edit_tag=args.edit,
+            args.track_audio_id, variant=args.edit,
+            promote_reference=promote, purge_siblings=args.purge_siblings,
         )
 
     if rc == 0 and not args.no_log:
@@ -477,7 +550,7 @@ def _log_to_ledger(args: argparse.Namespace, track_id: str,
         new_platform=(new or {}).get("platform"),
         new_player_id=(new or {}).get("player_id"),
         new_url=(new or {}).get("source_url"),
-        variant_tag=(new or {}).get("variant_tag"),
+        stem_value=(new or {}).get("stem"),
         reason=args.reason, source="replace_track_audio",
     )
     match log_correction(args.db, c):

@@ -1,8 +1,10 @@
 # ingest/ — audio acquisition (download stage)
 
 Downloads the audio behind each scraped track into the canonical store. Keyed
-on `track_id` (minted by [tokenizer/](../tokenizer/CLAUDE.md)); idempotent over
-`track_audio`. Lands files at
+on `track_id` / `recording_id` (minted by [tokenizer/](../tokenizer/CLAUDE.md));
+idempotent over `track_audio` (`stem`, `variant` on each row). Inserts go through
+`core.db.insert_audio_or_reap()` so a failed DB write does not strand files on
+disk. Lands files at
 `{audio_root}/objects/{track_id}/{track_id}__{platform}__{player_id}.{ext}`.
 
 > Consumes the tokenizer's remix/version-qualifier rule — the remixer qualifier
@@ -40,7 +42,19 @@ memory (and the `audio-pipeline-debug` skill) have the exact 3-step recovery.
 ## One-off surgery
 
 [scripts/replace_track_audio.py](../scripts/replace_track_audio.py) — swap one
-track's audio by URL or local file. Destructive (deletes old row + cascades).
+track's audio by URL or local file. Destructive when replacing an existing row
+(deletes old row + cascades); `--promote-reference` / `--purge-siblings` for
+inventory hygiene. [scripts/acquire_variant.py](../scripts/acquire_variant.py)
+**adds** a sibling row with `stem=acappella|instrumental` (does not replace the
+`regular` reference). Corrections log to `track_audio_correction` by axis
+(`version` | `variant` | `stem`) via [corrections.py](corrections.py).
+
+[scripts/reconcile_orphans.py](../scripts/reconcile_orphans.py) — disk↔DB
+orphan routing (dry-run default). See
+[docs/identity_and_inventory_plan.md](../docs/identity_and_inventory_plan.md) and
+[docs/agent_handoff_reconcile_20260530.md](../docs/agent_handoff_reconcile_20260530.md)
+before re-running `--apply` on pi-storage.
+
 See the `replace-track-audio` skill for the full coordinated workflow.
 
 ## Deploy caveat

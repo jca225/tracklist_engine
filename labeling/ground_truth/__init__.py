@@ -14,7 +14,7 @@ Schema (v2, 2026-04-22):
     track:          human-readable label
     track_id:       1001tracklists data-trackid (DB FK). Optional for
                     DJ-added tracks missing from the tracklist.
-    version_tag:    'instrumental' | 'acappella' | 'full'
+    claimed_stem:   regular | acappella | instrumental
     set_start_s:    mix-side start, seconds
     set_end_s:      mix-side end, seconds
     ref_start_s:    MANDATORY — seconds into the reference where the

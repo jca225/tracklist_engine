@@ -133,39 +133,81 @@ CREATE TABLE IF NOT EXISTS dj_set_track_media_links (
 
 
 -- =============================================================================
+-- IDENTITY (work → recording → track_audio)
+-- =============================================================================
+-- Song family (no version/stem/variant). "DJ Snake ft. Bipolar Sunshine – Middle".
+CREATE TABLE IF NOT EXISTS work (
+    work_id        TEXT PRIMARY KEY,
+    title          TEXT,
+    artists_json   TEXT,                 -- JSON array
+    full_name      TEXT,                 -- family label without remix parens
+    updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Canonical realization: version + stem + variant. recording_id ≈ legacy track_id.
+CREATE TABLE IF NOT EXISTS recording (
+    recording_id    TEXT PRIMARY KEY,
+    work_id         TEXT NOT NULL,
+    version         TEXT NOT NULL DEFAULT 'original',  -- original|remix|rework|...
+    version_artist  TEXT,                              -- remixer when version=remix
+    stem            TEXT NOT NULL DEFAULT 'regular',     -- regular|acappella|instrumental
+    variant         TEXT NOT NULL DEFAULT 'regular',   -- regular|extended
+    title           TEXT,
+    full_name       TEXT,
+    duration_seconds INTEGER,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (work_id) REFERENCES work(work_id) ON DELETE CASCADE,
+    UNIQUE (work_id, version, version_artist, stem, variant)
+);
+CREATE INDEX IF NOT EXISTS idx_recording_work ON recording(work_id);
+
+-- Claim vs canonical mismatch (for QA / acquisition gates).
+CREATE VIEW IF NOT EXISTS identity_mismatch AS
+SELECT
+    s.set_id,
+    s.row_index,
+    s.full_name,
+    s.claimed_stem,
+    r.stem AS canonical_stem,
+    s.claimed_version,
+    r.version AS canonical_version,
+    s.recording_id
+FROM set_track_slots s
+JOIN recording r ON r.recording_id = s.recording_id
+WHERE (s.claimed_stem IS NOT NULL AND s.claimed_stem != r.stem)
+   OR (s.claimed_version IS NOT NULL AND s.claimed_version != r.version);
+
+
+-- =============================================================================
 -- AUDIO PIPELINE
 -- =============================================================================
--- Downloaded audio per (canonical track_id, platform). A track may have
--- multiple rips; one is promoted to "reference" for MERT/analysis.
+-- Downloaded audio per (recording_id, platform). Multiple rips per recording;
+-- one is promoted to "reference" for MERT/analysis.
 CREATE TABLE IF NOT EXISTS track_audio (
     track_audio_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    track_id       TEXT NOT NULL,            -- 1001tracklists data-trackid
-    platform       TEXT NOT NULL,            -- youtube | soundcloud
+    recording_id   TEXT NOT NULL,            -- FK → recording (legacy name: track_id)
+    track_id       TEXT NOT NULL,            -- DEPRECATED alias of recording_id; kept for transition
+    platform       TEXT NOT NULL,            -- youtube | soundcloud | manual | ...
     source_url     TEXT NOT NULL,
-    player_id      TEXT,                     -- platform-specific id used for fetch
-    path           TEXT NOT NULL,            -- absolute or repo-relative path
+    player_id      TEXT,
+    path           TEXT NOT NULL,
     sha256         TEXT,
     duration_s     REAL,
     sample_rate    INTEGER,
     codec          TEXT,
     bitrate_kbps   INTEGER,
-    is_reference   INTEGER DEFAULT 0,        -- 1 = chosen reference for this track
-    -- Which version of the song this audio is: 'original' (full song, the
-    -- canonical cue-detr target), 'acappella' (vocals-only from the
-    -- mashup source), 'instrumental' (instrumental-only), 'remix' (remixed
-    -- variant). Assigned by parsing the scraped tracklist row text.
-    variant_tag    TEXT NOT NULL DEFAULT 'original',
-    -- Edit length (Variant axis): 'regular' (radio/album cut) | 'extended'
-    -- (extended mix, typically the DJ club edit). Independent of variant_tag
-    -- (which is the Stem axis). See [[audio-identity-taxonomy]].
-    edit_tag       TEXT NOT NULL DEFAULT 'regular',
+    is_reference   INTEGER DEFAULT 0,
+    stem           TEXT NOT NULL DEFAULT 'regular',    -- regular|acappella|instrumental
+    variant        TEXT NOT NULL DEFAULT 'regular',    -- regular|extended
     downloaded_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
 
-    UNIQUE(track_id, platform, player_id)
+    UNIQUE(recording_id, platform, player_id),
+    FOREIGN KEY (recording_id) REFERENCES recording(recording_id) ON DELETE CASCADE
 );
 
+CREATE INDEX IF NOT EXISTS idx_track_audio_recording ON track_audio(recording_id);
 CREATE INDEX IF NOT EXISTS idx_track_audio_track_id ON track_audio(track_id);
-CREATE INDEX IF NOT EXISTS idx_track_audio_reference ON track_audio(track_id, is_reference);
+CREATE INDEX IF NOT EXISTS idx_track_audio_reference ON track_audio(recording_id, is_reference);
 
 
 -- Demucs-separated stems for a specific audio asset.
@@ -424,19 +466,20 @@ CREATE TABLE IF NOT EXISTS set_playback_score (
 -- =============================================================================
 -- IDENTITY (chromaprint / acoustid)
 -- =============================================================================
--- Chromaprint raw fingerprint per (track, variant). 'variant_tag' supports
+-- Chromaprint raw fingerprint per (recording, stem). stem supports
 -- storing fingerprints for derived audio too (vocals-only, instrumental
 -- sum) so stage-1b identity can distinguish acappella from full plays.
 CREATE TABLE IF NOT EXISTS track_fingerprints (
-    track_id      TEXT NOT NULL,
-    variant_tag   TEXT NOT NULL DEFAULT 'original',
+    recording_id  TEXT NOT NULL,
+    stem          TEXT NOT NULL DEFAULT 'regular',
     fingerprint   BLOB NOT NULL,
     duration_s    REAL NOT NULL,
     created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (track_id, variant_tag)
+    PRIMARY KEY (recording_id, stem),
+    FOREIGN KEY (recording_id) REFERENCES recording(recording_id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_track_fingerprints_track ON track_fingerprints(track_id);
+CREATE INDEX IF NOT EXISTS idx_track_fingerprints_recording ON track_fingerprints(recording_id);
 
 
 -- =============================================================================
@@ -449,7 +492,7 @@ CREATE TABLE IF NOT EXISTS canonical_track_cue_points (
     track_id               TEXT PRIMARY KEY,
     cue_points_json        TEXT NOT NULL,    -- list[float] in seconds on the source variant's timeline
     source_track_audio_id  INTEGER,          -- which track_audio row's audio was analysed
-    source_variant_tag     TEXT,             -- 'original' / 'instrumental' / ... whichever was used
+    source_stem            TEXT,             -- regular / instrumental / ... source timeline
     cue_detr_sensitivity   REAL,             -- cue-detr threshold used at inference
     computed_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (source_track_audio_id) REFERENCES track_audio(track_audio_id) ON DELETE SET NULL
@@ -465,10 +508,10 @@ CREATE TABLE IF NOT EXISTS set_fingerprint_hits (
     mix_start_s       REAL NOT NULL,
     mix_end_s         REAL NOT NULL,
     matched_track_id  TEXT NOT NULL,
-    matched_variant   TEXT NOT NULL DEFAULT 'original',
+    matched_stem      TEXT NOT NULL DEFAULT 'regular',
     score             REAL NOT NULL,         -- 0..1 chromaprint similarity
     detected_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (set_id, mix_start_s, matched_track_id, matched_variant),
+    PRIMARY KEY (set_id, mix_start_s, matched_track_id, matched_stem),
     FOREIGN KEY (set_id) REFERENCES dj_sets(set_id) ON DELETE CASCADE
 );
 
@@ -535,7 +578,7 @@ CREATE TABLE IF NOT EXISTS track_metadata (
     genre             TEXT,
     duration_seconds  INTEGER,
     is_remixish       INTEGER DEFAULT 0,
-    version_tag       TEXT,                 -- Remix | Rework | Acappella | AltVersion | NULL
+    version             TEXT,                 -- original | remix | rework | altversion | NULL
     has_youtube       INTEGER DEFAULT 0,
     has_soundcloud    INTEGER DEFAULT 0,
     has_spotify       INTEGER DEFAULT 0,
@@ -557,26 +600,52 @@ CREATE INDEX IF NOT EXISTS idx_track_metadata_title ON track_metadata(title);
 -- with no global track id (the "Rvmor gap") still appear. full_name is verbatim
 -- (carries the (Instrumental)/(Acappella) qualifier the download query strips).
 CREATE TABLE IF NOT EXISTS set_track_slots (
-    set_id           TEXT NOT NULL,
-    row_index        INTEGER NOT NULL,     -- order within the set (from dj_set_rows)
-    tlp_id           INTEGER,              -- data-id on the row
-    track_id         TEXT,                 -- data-trackid OR synthetic 'tlp{tlp_id}'
-    source           TEXT DEFAULT 'scraped', -- 'scraped' | 'synthetic'
-    slot_label       TEXT,                 -- '030', '030w1' (section + w/ layering)
-    is_concurrent    INTEGER DEFAULT 0,    -- w/ adjacency (layered under a primary)
-    cue_seconds      INTEGER,              -- hidden-input cue offset
-    cue_time_seconds INTEGER,              -- parsed from the displayed timecode
-    version_tag      TEXT,                 -- Remix | Rework | Acappella | AltVersion | NULL
-    is_instrumental  INTEGER DEFAULT 0,    -- (Instrumental) qualifier seen as-played
-    full_name        TEXT,                 -- verbatim "Artist - Title (Remixer Remix) (Instrumental)"
-    title            TEXT,
-    artists_json     TEXT,
-    duration_seconds INTEGER,
-    parsed_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+    set_id            TEXT NOT NULL,
+    row_index         INTEGER NOT NULL,
+    tlp_id            INTEGER,
+    recording_id      TEXT,                -- truth FK → recording (≈ legacy track_id)
+    track_id          TEXT NOT NULL,         -- DEPRECATED alias; kept in sync with recording_id
+    source            TEXT DEFAULT 'scraped',
+    slot_label        TEXT,
+    is_concurrent     INTEGER DEFAULT 0,
+    cue_seconds       INTEGER,
+    cue_time_seconds  INTEGER,
+    claimed_version   TEXT,                  -- scrape claim: remix | rework | original | ...
+    claimed_stem      TEXT NOT NULL DEFAULT 'regular',
+    claimed_variant   TEXT NOT NULL DEFAULT 'regular',
+    full_name         TEXT,
+    title             TEXT,
+    artists_json      TEXT,
+    duration_seconds  INTEGER,
+    parsed_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (set_id, row_index),
-    FOREIGN KEY (set_id) REFERENCES dj_sets(set_id) ON DELETE CASCADE
+    FOREIGN KEY (set_id) REFERENCES dj_sets(set_id) ON DELETE CASCADE,
+    FOREIGN KEY (recording_id) REFERENCES recording(recording_id) ON DELETE SET NULL
 );
+CREATE INDEX IF NOT EXISTS idx_set_track_slots_recording ON set_track_slots(recording_id);
 CREATE INDEX IF NOT EXISTS idx_set_track_slots_track ON set_track_slots(track_id);
+
+
+-- Manual ground-truth write-back (Phase 5): one row per annotated play span.
+CREATE TABLE IF NOT EXISTS set_ground_truth (
+    set_id          TEXT NOT NULL,
+    label           TEXT NOT NULL,           -- slot label e.g. '030', '030w1'
+    recording_id    TEXT,
+    claimed_stem    TEXT,                    -- what the DJ played (aligner prior)
+    set_start_s     REAL NOT NULL,
+    set_end_s       REAL NOT NULL,
+    ref_start_s     REAL NOT NULL,
+    ref_end_s       REAL,
+    is_loop         INTEGER DEFAULT 0,
+    ref_segments_json TEXT,                  -- JSON list of {ref_start_s, ref_end_s, mix_start_s}
+    media_links_json  TEXT,
+    source          TEXT DEFAULT 'yaml',
+    annotated_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (set_id, label),
+    FOREIGN KEY (set_id) REFERENCES dj_sets(set_id) ON DELETE CASCADE,
+    FOREIGN KEY (recording_id) REFERENCES recording(recording_id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_set_ground_truth_set ON set_ground_truth(set_id);
 
 
 -- User-contributed track identity guesses from suggestion_tokenizer.SuggestionRow.
@@ -645,7 +714,7 @@ CREATE TABLE IF NOT EXISTS track_audio_correction (
     new_platform        TEXT,
     new_player_id       TEXT,
     new_url             TEXT,
-    variant_tag         TEXT,              -- stem-axis value (acappella|instrumental|original)
+    stem_value          TEXT,              -- stem-axis value (regular|acappella|instrumental)
     reason              TEXT,              -- free-text why it was wrong
     source              TEXT,              -- replace_track_audio | acquire_variant | manual
     created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,

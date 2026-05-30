@@ -20,6 +20,7 @@ from typing import Any
 
 import yaml
 
+from core.identity import normalize_stem
 from core.result import Err, Ok, Result
 
 
@@ -62,7 +63,7 @@ class GroundTruthTrack:
     """One annotated play-span from a DJ set."""
     label: str                              # human-readable track name
     track_id: str | None                    # 1001tracklists data-trackid
-    version_tag: str                        # 'instrumental' | 'acappella' | 'full' | ''
+    claimed_stem: str                       # regular | acappella | instrumental
     set_start_s: float
     set_end_s: float
     ref_start_s: float                      # MANDATORY — see schema doc
@@ -128,7 +129,9 @@ def _parse_track(idx: int, t: dict[str, Any], path: Path) -> Result[GroundTruthT
     return Ok(GroundTruthTrack(
         label=label,
         track_id=track_id,
-        version_tag=str(t.get("version_tag") or "").strip(),
+        claimed_stem=normalize_stem(
+            str(t.get("claimed_stem") or t.get("version_tag") or "").strip() or None
+        ),
         set_start_s=float(t["set_start_s"]),
         set_end_s=float(t["set_end_s"]),
         ref_start_s=float(t["ref_start_s"]),
@@ -207,7 +210,7 @@ def dump(gt: GroundTruthSet, *, title: str | None = None) -> str:
 
     We hand-render rather than `yaml.safe_dump` so the file stays
     diff-friendly and preserves the human-readable field order seen
-    in the existing fixtures (track → track_id → version_tag → ...).
+    in the existing fixtures (track → track_id → claimed_stem → ...).
     """
     out: list[str] = []
     if title:
@@ -223,8 +226,8 @@ def dump(gt: GroundTruthSet, *, title: str | None = None) -> str:
         out.append(f'  - track:       "{label}"')
         if t.track_id:
             out.append(f"    track_id:    {t.track_id}")
-        if t.version_tag:
-            out.append(f"    version_tag: {t.version_tag}")
+        if t.claimed_stem and t.claimed_stem != "regular":
+            out.append(f"    claimed_stem: {t.claimed_stem}")
         out.append(f"    set_start_s: {_fmt_num(t.set_start_s)}")
         out.append(f"    set_end_s:   {_fmt_num(t.set_end_s)}")
         out.append(f"    ref_start_s: {_fmt_num(t.ref_start_s)}")

@@ -28,9 +28,9 @@ class Track:
 
 @dataclass(frozen=True)
 class AudioAsset:
-    """A downloaded audio file on disk, linked to a canonical track."""
+    """A downloaded audio file on disk, linked to a canonical recording."""
     track_audio_id: int | None  # None pre-insert
-    track_id: str
+    track_id: str               # recording_id alias (1001tracklists data-trackid)
     platform: str
     source_url: str
     player_id: str
@@ -40,13 +40,13 @@ class AudioAsset:
     sample_rate: int | None
     codec: str | None
     bitrate_kbps: int | None
-    # Which version this audio is: 'original' | 'acappella' | 'instrumental' |
-    # 'remix' (maps to track_audio.variant_tag). Defaulted so the download
-    # pipeline keeps emitting 'original'; variant sourcing sets it explicitly.
-    variant_tag: str = "original"
-    # Edit length (Variant axis): 'regular' (radio/album cut) | 'extended'.
-    # Independent of variant_tag (Stem axis).
-    edit_tag: str = "regular"
+    # Three identity axes on track_audio / recording (see core/identity.py).
+    stem: str = "regular"       # regular | acappella | instrumental
+    variant: str = "regular"    # regular | extended
+
+    @property
+    def recording_id(self) -> str:
+        return self.track_id
 
 
 @dataclass(frozen=True)

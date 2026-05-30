@@ -229,12 +229,18 @@ def push_track_rows(track_audio_id: int) -> None:
 
 
 def main() -> int:
-    log.info("starting BB10-15 analyze loop on Vast")
+    import argparse
+    p = argparse.ArgumentParser()
+    p.add_argument("--separator", choices=["demucs", "uvr"], default="demucs",
+                   help="Stem-separation backend (default: demucs).")
+    args = p.parse_args()
+
+    log.info("starting BB10-15 analyze loop on Vast (separator=%s)", args.separator)
     init_scratch_db()
 
-    log.info("loading analyzers (cuda)…")
+    log.info("loading analyzers (cuda, %s)…", args.separator)
     t0 = time.time()
-    ar = load_analyzers(device="cuda")
+    ar = load_analyzers(device="cuda", separator=args.separator)
     if not ar.is_ok():
         log.error("load_analyzers failed: %s", ar.error)
         return 1

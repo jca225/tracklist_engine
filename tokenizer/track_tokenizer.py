@@ -7,6 +7,7 @@ from typing import List, Optional
 from bs4 import BeautifulSoup, Tag
 
 from ._parser import BS_PARSER
+from .identity_axes import derive_claimed_stem, derive_version_flags
 
 
 # -----------------------------
@@ -46,7 +47,9 @@ class TrackRow:
     is_ided: bool = False                       # data-isided="true"
     is_concurrent: bool = False                 # class contains "con" or track number shows "w/"
     is_remixish: bool = False                   # remix/rework/acappella/alt version flag
-    version_tag: Optional[str] = None           # "Remix" | "Rework" | "Acappella" | "AltVersion" | None
+    version_tag: Optional[str] = None           # "Remix" | "Rework" | "AltVersion" | None
+    claimed_stem: str = "regular"               # regular | acappella | instrumental
+    is_instrumental: bool = False               # mirrors claimed_stem == instrumental
 
     # ordering / timing
     track_number_raw: Optional[str] = None      # "01", "w/", etc (as shown)
@@ -88,6 +91,14 @@ class TrackRow:
 # -----------------------------
 
 _INT_RE = re.compile(r"[-+]?\d+")
+
+# Detect-only: does full_name carry an (Instrumental) qualifier? The canonical
+# record keeps full_name verbatim; the search-query collapsing (stripping vocal
+# qualifiers) is a download-side projection living in ingest/search_query.py.
+_INSTRUMENTAL_QUALIFIER_RE = re.compile(
+    r"\(\s*(instrumental|inst\.?|instr\.?)\s*\)",
+    re.IGNORECASE,
+)
 
 
 def _as_int(s: Optional[str]) -> Optional[int]:
@@ -151,6 +162,12 @@ def _extract_track_key(row: Tag) -> Optional[str]:
     if v:
         return str(v)
 
+    # Rvmor gap: sided row with per-set media but no global trackid.
+    if row.get("data-isided") == "true":
+        data_id = _as_int(row.get("data-id"))
+        if data_id is not None:
+            return f"tlp{data_id}"
+
     # Fallback: span id="tr_<key>"
     tr = row.find(id=re.compile(r"^tr_"))
     if tr and tr.has_attr("id"):
@@ -175,33 +192,19 @@ def _extract_artist_names(track_value_span: Optional[Tag]) -> List[str]:
 
 
 def _derive_version_flags(row: Tag, media_row: Optional[Tag]) -> tuple[bool, Optional[str]]:
-    """
-    Returns (is_remixish, version_tag)
-    version_tag: "Acappella" | "Rework" | "Remix" | "AltVersion" | None
-    """
+    """Returns (is_remixish, version_tag). Stem axis is `derive_claimed_stem`."""
     remix_flag = bool(media_row is not None and (media_row.get("data-remix") or "") == "1")
-
-    # Strong explicit rework marker (recycle icon link)
     has_recycle_rework = bool(row.select_one("a[title^='rework of track']"))
-
-    # Text scan (cheap + robust)
-    text_blob = row.get_text(" ", strip=True).lower()
-    has_acappella = "acappella" in text_blob
-    has_rework = " rework" in text_blob
-    has_remix = " remix" in text_blob
-
-    is_remixish = remix_flag or has_acappella or has_rework or has_recycle_rework or has_remix
-
-    version_tag: Optional[str] = None
-    if has_acappella:
-        version_tag = "Acappella"
-    elif has_rework or has_recycle_rework:
-        version_tag = "Rework"
-    elif has_remix:
-        version_tag = "Remix"
-    elif remix_flag:
-        version_tag = "AltVersion"
-
+    text_blob = row.get_text(" ", strip=True)
+    is_remixish, version_tag = derive_version_flags(
+        text_blob,
+        remix_flag=remix_flag,
+        has_recycle_rework=has_recycle_rework,
+    )
+    # Acappella rows are still "remixish" for aggregate flags even though
+    # acappella is no longer a version_tag value.
+    if derive_claimed_stem(None, text_blob) == "acappella":
+        is_remixish = True
     return is_remixish, version_tag
 
 
@@ -256,6 +259,9 @@ def parse_track_row(row_html: str) -> TrackRow:
     content = row.find("div", itemtype=re.compile(r"schema\.org/MusicRecording"))
     if content:
         tr.full_name = _meta_content(content, "name")
+        if tr.full_name:
+            tr.full_name = tr.full_name.strip()
+            tr.is_instrumental = bool(_INSTRUMENTAL_QUALIFIER_RE.search(tr.full_name))
         tr.genre = _meta_content(content, "genre")
         tr.duration_iso = _meta_content(content, "duration")
         tr.duration_seconds = parse_iso8601_duration_to_seconds(tr.duration_iso)
@@ -338,8 +344,11 @@ def parse_track_row(row_html: str) -> TrackRow:
         if g and g.has_attr("href"):
             tr.google_query_href = g["href"]
 
-    # deterministic: remix/rework/acappella flags
+    # deterministic: version axis + stem claim
     tr.is_remixish, tr.version_tag = _derive_version_flags(row, media_row)
+    row_text = row.get_text(" ", strip=True)
+    tr.claimed_stem = derive_claimed_stem(tr.full_name, row_text)
+    tr.is_instrumental = tr.claimed_stem == "instrumental"
 
     # artwork: real URL is usually in data-src (src is a lazy-load placeholder)
     art = row.find("img", class_=re.compile(r"\bartwork\b"))

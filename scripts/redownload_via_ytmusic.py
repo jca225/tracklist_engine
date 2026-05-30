@@ -41,7 +41,6 @@ import argparse
 import json
 import logging
 import os
-import re
 import shutil
 import sqlite3
 import sys
@@ -55,6 +54,7 @@ sys.path.insert(0, str(REPO))
 from core import db as db_adapter
 from ingest.adapters import ytmusic_adapter
 from ingest.errors import DownloadError
+from ingest.search_query import to_search_query
 from core.result import Err, Ok
 
 _log = logging.getLogger("redownload_via_ytmusic")
@@ -63,17 +63,6 @@ _log = logging.getLogger("redownload_via_ytmusic")
 _BB_SETS: frozenset[str] = frozenset((
     "w1mgcjt", "2nvzlh2k", "1fsnxchk", "qj4v0wt", "1yl70ql1", "237tdqmk",
 ))
-
-
-# 1001tracklists uses "ID" as a placeholder when the remixer/track is
-# unknown — "(ID Remix)", "(ID Bootleg)", "(ID)", "ID - ID", etc. The
-# literal word "ID" inside a YT Music query derails search to random
-# uploads, so we strip the parenthetical and fall back to the bare
-# "Artist - Title" form for these.
-_ID_PLACEHOLDER_RE: re.Pattern[str] = re.compile(
-    r"\bID\b\s*(?:Remix|Bootleg|Edit|Mashup|VIP|Rework|Mix|Flip)?\b",
-    re.IGNORECASE,
-)
 
 
 @dataclass(frozen=True)
@@ -95,26 +84,16 @@ class Candidate:
     artists_csv: str               # 'Daft Punk' or 'Artist1, Artist2'
     set_id: str
     is_bb: int
-    version_tag: str | None        # Remix | Rework | Acappella | AltVersion | None
+    version: str | None            # original | remix | rework | … (track_metadata)
     full_name: str | None          # canonical scraped 'Artist - Title (Remixer Remix)'
 
     @property
     def query(self) -> str:
-        # Always use the canonical scraped full_name when available — it
-        # carries the remix qualifier ("(Madison Mars Remix)") and any
-        # (Acappella)/(Instrumental Mix) marker that the tokenizer-split
-        # `title` field drops. YT Music search tolerates these qualifiers
-        # gracefully (returns the studio variant), while a bare
-        # "Artist - Title" silently resolves to the original cut and is
-        # the root cause of the variant-bleed bug observed in the corpus.
-        # Exception: skip full_name when it carries 1001tracklists' "ID"
-        # placeholder (e.g. "(ID Remix)") — the literal word "ID" in the
-        # search corrupts results.
-        if self.full_name and not _ID_PLACEHOLDER_RE.search(self.full_name):
-            return self.full_name
-        if self.artists_csv:
-            return f"{self.artists_csv} - {self.title}"
-        return self.title
+        # Download projection over the tokenizer's lossless full_name: keep the
+        # remixer qualifier ("(Madison Mars Remix)") so search hits the right
+        # release, but strip vocal/instrumental qualifiers and fall back to a
+        # bare "Artist - Title" on "ID" placeholders. See ingest/search_query.py.
+        return to_search_query(self.full_name, self.artists_csv, self.title)
 
     @property
     def needs_replace(self) -> bool:
@@ -189,7 +168,7 @@ def _row_to_candidate(r: sqlite3.Row) -> Candidate:
         artists_csv=artists_csv,
         set_id=r["set_id"] or "",
         is_bb=r["is_bb"],
-        version_tag=r["version_tag"] if "version_tag" in r.keys() else None,
+        version=r["version"] if "version" in r.keys() else None,
         full_name=r["full_name"] if "full_name" in r.keys() else None,
     )
 
@@ -239,7 +218,7 @@ def _load_candidates(
                   base.track_id         AS track_id,
                   tm.title              AS title,
                   tm.artists_json       AS artists_json,
-                  tm.version_tag        AS version_tag,
+                  tm.version            AS version,
                   tm.full_name          AS full_name,
                   (
                     SELECT m.set_id FROM dj_set_track_media_links m
@@ -275,7 +254,7 @@ def _load_candidates(
                   base.track_id         AS track_id,
                   tm.title              AS title,
                   tm.artists_json       AS artists_json,
-                  tm.version_tag        AS version_tag,
+                  tm.version            AS version,
                   tm.full_name          AS full_name,
                   (
                     SELECT m.set_id FROM dj_set_track_media_links m
@@ -477,7 +456,7 @@ def _run(args: argparse.Namespace) -> int:
             taid = str(c.yt_track_audio_id) if c.needs_replace else "—"
             _log.info("DRY  %s  yt_taid=%s  set=%s  bb=%d  vtag=%s  query=%r",
                       kind, taid, c.set_id, c.is_bb,
-                      c.version_tag or "—", c.query)
+                      c.version or "—", c.query)
         if len(candidates) > 10:
             _log.info("... and %d more", len(candidates) - 10)
         return 0

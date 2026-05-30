@@ -1,7 +1,7 @@
 """Download canonical original audio and compute shared cue points.
 
 For each canonical track_id, ensure a `track_audio` row exists with
-`variant_tag='original'`. If the DJ scraped an acapella or instrumental
+`stem='regular'`. If the DJ scraped an acapella or instrumental
 variant (cue-detr performs poorly on those — trained on EDM with full
 spectral content), we additionally fetch the full-song version so cue
 points can be computed on dense audio. Those cue points are stored in
@@ -9,7 +9,7 @@ points can be computed on dense audio. Those cue points are stored in
 variants of the same song.
 
 Run:
-    venvs/audio/bin/python -m audio_pipeline.analysis.canonical_cues \\
+    venvs/audio/bin/python -m analysis.canonical_cues \\
         --set-id 2nvzlh2k
 """
 from __future__ import annotations
@@ -108,7 +108,7 @@ def _download(query: str, out_path: Path) -> bool:
 
 def _find_original_audio(conn: sqlite3.Connection, track_id: str) -> tuple[int, str] | None:
     r = conn.execute(
-        "SELECT track_audio_id, path FROM track_audio WHERE track_id=? AND variant_tag='original'",
+        "SELECT track_audio_id, path FROM track_audio WHERE recording_id=? AND stem='regular'",
         (track_id,),
     ).fetchone()
     return (int(r["track_audio_id"]), str(r["path"])) if r else None
@@ -117,17 +117,17 @@ def _find_original_audio(conn: sqlite3.Connection, track_id: str) -> tuple[int, 
 def _insert_original_audio(
     conn: sqlite3.Connection, *, track_id: str, path: str, yt_id: str, yt_url: str,
 ) -> int:
-    """Insert a new track_audio row with variant_tag='original'. Returns
+    """Insert a new track_audio row with stem='regular'. Returns
     the track_audio_id. If the row already exists (same platform/player_id)
     returns the existing id."""
     conn.execute(
         """
         INSERT OR IGNORE INTO track_audio
-            (track_id, platform, source_url, player_id, path, codec,
-             is_reference, variant_tag)
-        VALUES (?, 'youtube', ?, ?, ?, 'm4a', 0, 'original')
+            (recording_id, track_id, platform, source_url, player_id, path, codec,
+             is_reference, stem, variant)
+        VALUES (?, ?, 'youtube', ?, ?, ?, 'm4a', 0, 'regular', 'regular')
         """,
-        (track_id, yt_url, yt_id, path),
+        (track_id, track_id, yt_url, yt_id, path),
     )
     conn.commit()
     r = conn.execute(
@@ -146,16 +146,16 @@ def _has_canonical_cues(conn: sqlite3.Connection, track_id: str) -> bool:
 
 def _write_canonical_cues(
     conn: sqlite3.Connection, *, track_id: str, cues: list[float],
-    source_track_audio_id: int, source_variant_tag: str, sensitivity: float,
+    source_track_audio_id: int, source_stem: str, sensitivity: float,
 ) -> None:
     conn.execute(
         """
         INSERT OR REPLACE INTO canonical_track_cue_points
             (track_id, cue_points_json, source_track_audio_id,
-             source_variant_tag, cue_detr_sensitivity)
+             source_stem, cue_detr_sensitivity)
         VALUES (?, ?, ?, ?, ?)
         """,
-        (track_id, json.dumps(cues), source_track_audio_id, source_variant_tag, sensitivity),
+        (track_id, json.dumps(cues), source_track_audio_id, source_stem, sensitivity),
     )
     conn.commit()
 
@@ -239,7 +239,7 @@ def process(spec: OriginalSpec, conn: sqlite3.Connection) -> None:
     print(f"  → {len(cues)} cues: {[round(c, 1) for c in cues[:8]]}{'…' if len(cues) > 8 else ''}")
     _write_canonical_cues(
         conn, track_id=spec.track_id, cues=cues,
-        source_track_audio_id=ta_id, source_variant_tag="original",
+        source_track_audio_id=ta_id, source_stem="regular",
         sensitivity=CUE_DETR_SENSITIVITY,
     )
     print("  stored canonical_track_cue_points")
@@ -247,29 +247,37 @@ def process(spec: OriginalSpec, conn: sqlite3.Connection) -> None:
 
 def backfill_existing_originals(conn: sqlite3.Connection) -> None:
     """Populate canonical_track_cue_points for tracks that already have an
-    'original' variant (e.g. Antoine on BB11) — reuse existing
-    track_analysis.cue_points_json at its original sensitivity rather than
-    re-running cue-detr."""
+    'original' variant by running cue-detr at CUE_DETR_SENSITIVITY on the
+    audio. Rows whose stored sensitivity already matches are skipped; rows
+    with a different stored sensitivity (e.g. legacy 0.9 backfills reusing
+    track_analysis.cue_points_json) are re-run so the table is uniform."""
     rows = conn.execute(
         """
-        SELECT ta.track_id, ta.track_audio_id, ta.variant_tag,
-               ta_analysis.cue_points_json
+        SELECT ta.track_id, ta.track_audio_id, ta.path,
+               cp.cue_detr_sensitivity AS stored_sensitivity
         FROM track_audio ta
-        JOIN track_analysis ta_analysis ON ta_analysis.track_audio_id = ta.track_audio_id
-        WHERE ta.variant_tag = 'original'
-          AND NOT EXISTS (
-              SELECT 1 FROM canonical_track_cue_points cp WHERE cp.track_id = ta.track_id
-          )
-        """
+        LEFT JOIN canonical_track_cue_points cp ON cp.track_id = ta.track_id
+        WHERE ta.stem = 'regular'
+          AND (cp.track_id IS NULL OR cp.cue_detr_sensitivity != ?)
+        """,
+        (CUE_DETR_SENSITIVITY,),
     ).fetchall()
     for r in rows:
-        cues = json.loads(r["cue_points_json"]) if r["cue_points_json"] else []
+        audio_path = Path(r["path"])
+        if not audio_path.exists():
+            print(f"  SKIP {r['track_id']}: audio missing at {audio_path}")
+            continue
+        prior = r["stored_sensitivity"]
+        action = "re-running" if prior is not None else "running"
+        print(f"  {action} cue-detr (sens={CUE_DETR_SENSITIVITY}) on {r['track_id']}"
+              + (f" [was sens={prior}]" if prior is not None else ""))
+        cues = _run_cue_detr(audio_path, CUE_DETR_SENSITIVITY)
         _write_canonical_cues(
             conn, track_id=r["track_id"], cues=cues,
             source_track_audio_id=r["track_audio_id"],
-            source_variant_tag="original", sensitivity=0.9,
+            source_stem="regular", sensitivity=CUE_DETR_SENSITIVITY,
         )
-        print(f"  backfilled canonical cues for {r['track_id']} ({len(cues)} cues)")
+        print(f"  → {len(cues)} cues stored")
 
 
 def main() -> int:

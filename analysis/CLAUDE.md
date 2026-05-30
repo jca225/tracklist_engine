@@ -9,6 +9,55 @@ section embeddings. Writes the *audio-pipeline tables* (`track_analysis`,
 `pipeline.py` / `set_analysis.py` orchestrate; `adapters/` wrap each model;
 `vast_worker.py` is the GPU-side batch worker; `persistence.py` writes results.
 
+## Stem-separation backends (demucs | uvr)
+
+Stem separation is a **selectable backend** behind one contract —
+`StemSet(vocals, instrumental)`. Both backends produce exactly those two stems,
+so nothing downstream (schema, alignment, library) changes when you switch.
+
+| Backend | What | Speed | When |
+|---|---|---|---|
+| `demucs` *(default)* | `htdemucs_ft`, 2-stem ([adapters/demucs_adapter.py](adapters/demucs_adapter.py)) | ~1 model pass | the corpus default |
+| `uvr` | audio-separator cleanup **chain** ([adapters/uvr_chain_adapter.py](adapters/uvr_chain_adapter.py)): Kim Vocals 2 → karaoke ensemble → dereverb → de-echo → denoise | ~5 sequential passes (much slower) | when a *clean dry lead vocal* matters more than throughput |
+
+- `pipeline.run_separation()` dispatches on `Analyzers.separator`; select via
+  `load_analyzers(device, separator="uvr")` or the `--separator {demucs,uvr}`
+  flag on every loop (`mac_analyze_loop.py`, `mac_analyze_sets.py`,
+  `vast_loop.py`, `vast_worker.py`).
+- The chain is **data-driven** by [uvr_chain.yaml](uvr_chain.yaml) (parsed in
+  [separation_config.py](separation_config.py)) — reorder/disable/retune stages,
+  or set `enable_ensemble: false`, with no code change. Stage stem-selection
+  matches the parenthesised label audio-separator writes into output filenames,
+  via the Python API's returned file list (never globbing).
+- The ensemble is **native** to audio-separator (`load_model([m1, m2])` +
+  `ensemble_algorithm: avg_fft` = magnitude-spectrogram average) — no hand-rolled
+  spectral math.
+- One-off / A-B a single file: `scripts/separate.py --input X --separator both`.
+- Setup per host (ffmpeg + correct onnxruntime variant + model pre-download +
+  provider check): `scripts/setup_separation.sh`. **CUDA hosts need
+  `onnxruntime-gpu`** — the `uvr` backend loud-fails if `device=cuda` was asked
+  for but audio-separator fell back to CPU; on Mac/CPU a CPU/CoreML provider is
+  expected and only warns.
+
+## Full-set separation: use `render_set_stems.py`, not `mac_analyze_sets.py`
+
+To produce a **continuous acappella + instrumental of a whole mix**
+(`set_stems` for one `set_audio_id`), use
+[scripts/render_set_stems.py](../scripts/render_set_stems.py) — **not**
+`mac_analyze_sets.py`. The latter runs `beat_this` on the full mix *first*, and
+beat_this is a transformer with no internal chunking: a 60-min mix OOMs MPS
+(~26 GiB) before separation even starts. `render_set_stems.py` skips beat_this
+(stems are all the full-set acappella goal needs), slices the mix into
+fixed-length chunks (default 360s), runs the selected backend per chunk, and
+concatenates — so MPS memory stays bounded regardless of mix length. The chunk
+loop is **resumable** (a chunk whose part files exist is skipped) and writes the
+two `set_stems` rows + rsyncs `{vocals,instrumental}.flac` to
+`/mnt/storage/stems/set/<id>/` on completion. Caveats: hard-cut chunk
+boundaries (no crossfade → faint seams at joins); on a Mac, run on **AC power
+with the lid open** — `caffeinate -i` does not stop battery maintenance sleep,
+which suspends the process for hours. (Validated on BB12 `set_audio_id=5`,
+3729s, uvr backend, ~1.5h.)
+
 ## Which dependency runs where
 
 | Component | Runs on | Why |
@@ -73,7 +122,10 @@ DETR-based model for cue point detection in EDM tracks. Custom COCO-like format
 with `position` instead of bounding boxes. Pretrained model `disco-eth/cue-detr`
 on HuggingFace; downloaded by default. Consumed here only by
 [canonical_cues.py](canonical_cues.py) (full-song @ sensitivity=0.5, keyed by
-`track_id` into `canonical_track_cue_points`).
+`track_id` into `canonical_track_cue_points`). Runs only on reference audio with
+**identity `stem='regular'`** — not on acappella/instrumental `track_audio` rows
+(see root CLAUDE.md "Track identity"). [pipeline.py](pipeline.py) gates Essentia
+the same way.
 
 ```bash
 pip install -r ../cue-detr/requirements.txt

@@ -69,12 +69,31 @@ pass or ignores the duplicates. There's no automatic re-tag-on-refresh today.
 
 Do not Essentia-tag acapellas: vocals-only audio has no intrinsic BPM/key — use
 the parent full song's features (see the `feedback_no_essentia_on_acapellas`
-memory). Remix filenames must carry the full remixer qualifier from `full_name`
-(`(SAVI Remix)`, not bare `(Remix)`) — see `feedback_remix_filename_qualifier`.
+memory). Analysis skips Essentia when `track_audio.stem != 'regular'`
+([analysis/pipeline.py](../analysis/pipeline.py)). Pull ranks `manual` platform
+first after `is_reference`. Remix filenames must carry the full remixer qualifier
+from `full_name` (`(SAVI Remix)`, not bare `(Remix)`).
+
+**Manifest identity fields** (per track in `manifest.json`): `version`, `stem`,
+`variant`, `axes_key` (`version__stem__variant`). These mirror pi-storage after
+identity-axis migration; see root CLAUDE.md.
+
+**Baby rule:** one file under `tracks/` per slot; acappella/instrumental plays
+use `stems/vocals` or `stems/instrumental` from the sibling subdir — do not
+expect a separate downloaded acappella master unless you explicitly acquired one
+(`scripts/acquire_variant.py`).
+
+## Ground-truth write-back (Phase 5 v1)
+
+- Schema: [ground_truth/schema.py](ground_truth/schema.py) — YAML field
+  **`claimed_stem`** (`regular` | `acappella` | `instrumental`); legacy
+  `version_tag:` in fixtures still loads.
+- CLI: `venvs/audio/bin/python -m labeling.write_back_ground_truth --db ... --yaml ...`
+  upserts [set_ground_truth](../web_crawler/database/schema.sql). Dry-run with
+  `--dry-run`. Algorithmic aligner still in `workspaces/`.
 
 ## Folder lifecycle
 
-The folder is ephemeral — delete a set once alignment data has been written back
-to the canonical DB. (Write-back of Ableton-session results to pi-storage is
-**not implemented yet** — that's the next missing piece, and the seam where this
-module hands ground truth to `alignment/`.)
+The folder is ephemeral — delete a set once ground truth is written back to
+pi-storage via `write_back_ground_truth.py` (or archived YAML is enough for your
+workflow). Ableton-session → YAML export is still manual outside this repo.

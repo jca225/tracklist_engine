@@ -99,10 +99,12 @@ class TrackRow:
     track_audio_id: int
     artist: str
     title: str
-    version_tag: str | None
+    version: str | None          # original | remix | rework | … (track_metadata)
+    stem: str                    # regular | acappella | instrumental (track_audio)
+    variant: str                 # regular | extended (track_audio)
     # Raw "Artist - Title (Qualifier)" from track_metadata. Carries the full
-    # remixer qualifier ("(Syn Cole Remix)") that the version_tag bucket
-    # collapses to "Remix". Used to build the filename suffix.
+    # remixer qualifier ("(Syn Cole Remix)") that the version column
+    # collapses to "remix". Used to build the filename suffix.
     full_name: str | None
     pi_path: str
     codec: str | None
@@ -170,20 +172,42 @@ _W_PREFIX_RE = re.compile(r"^\s*w/")
 _TRAILING_PAREN_RE = re.compile(r"\(([^()]+)\)\s*$")
 
 
-def _qualifier_suffix(full_name: str | None, version_tag: str | None) -> str:
+_VERSION_DISPLAY: dict[str, str] = {
+    "remix": "Remix",
+    "rework": "Rework",
+    "altversion": "AltVersion",
+    "edit": "Edit",
+    "bootleg": "Bootleg",
+    "mashup": "Mashup",
+}
+
+
+def _qualifier_suffix(
+    full_name: str | None,
+    version: str | None,
+    *,
+    stem: str = "regular",
+    variant: str = "regular",
+) -> str:
     """Build the version/remix suffix for a track filename.
 
     Prefers the trailing parenthetical of `full_name` ("(Syn Cole Remix)") so
     the annotator can tell which remix a slot is at a glance. Falls back to
-    the version_tag bucket ("Remix" / "Acappella" / "Rework" / ...) only when
-    full_name carries no parens — better than nothing, but lossy. Empty
-    string when there is no qualifier at all (a plain original)."""
+    the version axis ("remix" → "(Remix)") only when full_name carries no
+    parens. Appends stem/variant qualifiers when not regular."""
     if full_name:
         m = _TRAILING_PAREN_RE.search(full_name)
         if m:
             return f" ({m.group(1).strip()})"
-    if version_tag:
-        return f" ({version_tag})"
+    if version and version != "original":
+        label = _VERSION_DISPLAY.get(version, version.title())
+        return f" ({label})"
+    if stem == "acappella":
+        return " (Acappella)"
+    if stem == "instrumental":
+        return " (Instrumental)"
+    if variant == "extended":
+        return " (Extended Mix)"
     return ""
 
 
@@ -234,10 +258,15 @@ def fetch_tracks(set_id: str) -> list[TrackRow]:
     row_rows = ssh_sqlite(f"""
         SELECT row_index,
                text_excerpt,
-               json_extract(data_attrs_json, '$."data-trackid"') AS track_id
+               COALESCE(
+                   json_extract(data_attrs_json, '$."data-trackid"'),
+                   CASE WHEN json_extract(data_attrs_json, '$."data-isided"') = 'true'
+                             AND json_extract(data_attrs_json, '$."data-id"') IS NOT NULL
+                        THEN 'tlp' || CAST(json_extract(data_attrs_json, '$."data-id"') AS TEXT)
+                   END
+               ) AS track_id
         FROM dj_set_rows
         WHERE set_id = '{set_id}'
-          AND data_attrs_json LIKE '%trackid%'
         ORDER BY row_index;
     """)
     # Drop rows without a usable track_id (rare but possible).
@@ -258,17 +287,20 @@ def fetch_tracks(set_id: str) -> list[TrackRow]:
                 ta.duration_s,
                 tm.artists_json,
                 tm.title           AS meta_title,
-                tm.version_tag,
+                tm.version,
                 tm.full_name,
+                ta.stem,
+                ta.variant,
                 ROW_NUMBER() OVER (
                     PARTITION BY ta.track_id
                     ORDER BY ta.is_reference DESC,
                              CASE ta.platform
-                                 WHEN 'youtube_music' THEN 0
-                                 WHEN 'spotify' THEN 1
-                                 WHEN 'soundcloud' THEN 2
-                                 WHEN 'youtube' THEN 3
-                                 ELSE 4
+                                 WHEN 'manual' THEN 0
+                                 WHEN 'youtube_music' THEN 1
+                                 WHEN 'spotify' THEN 2
+                                 WHEN 'soundcloud' THEN 3
+                                 WHEN 'youtube' THEN 4
+                                 ELSE 5
                              END,
                              ta.downloaded_at DESC
                 ) AS pick
@@ -278,7 +310,7 @@ def fetch_tracks(set_id: str) -> list[TrackRow]:
             WHERE l.set_id = '{set_id}'
         )
         SELECT track_id, track_audio_id, artists_json, meta_title AS title,
-               version_tag, full_name, path, codec, duration_s
+               version, full_name, stem, variant, path, codec, duration_s
         FROM ranked
         WHERE pick = 1;
     """)
@@ -315,7 +347,9 @@ def fetch_tracks(set_id: str) -> list[TrackRow]:
             track_audio_id=r["track_audio_id"],
             artist=artist,
             title=r.get("title") or "Unknown",
-            version_tag=r.get("version_tag"),
+            version=r.get("version"),
+            stem=r.get("stem") or "regular",
+            variant=r.get("variant") or "regular",
             full_name=r.get("full_name"),
             pi_path=r["path"],
             codec=r.get("codec"),
@@ -589,7 +623,9 @@ def main() -> int:
     pulled_stems: dict[str, Path] = {}
     for i, t in enumerate(tracks, start=1):
         ext = Path(t.pi_path).suffix or ".m4a"
-        suffix = _qualifier_suffix(t.full_name, t.version_tag)
+        suffix = _qualifier_suffix(
+            t.full_name, t.version, stem=t.stem, variant=t.variant,
+        )
         name = f"{t.label}__{sanitize(t.artist)} - {sanitize(t.title)}{suffix}{ext}"
         dst = tracks_dir / name
         keep_paths.add(dst)
@@ -604,7 +640,10 @@ def main() -> int:
             "label": t.label,
             "artist": t.artist,
             "title": t.title,
-            "version_tag": t.version_tag,
+            "version": t.version,
+            "stem": t.stem,
+            "variant": t.variant,
+            "axes_key": f"{t.version or 'original'}__{t.stem}__{t.variant}",
             "local_path": str(dst),
             "pi_path": t.pi_path,
             "duration_s": t.duration_s,

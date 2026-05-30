@@ -99,8 +99,8 @@ def test_insert_then_already_downloaded_round_trip(db_path: Path):
     assert isinstance(second, Ok) and second.value == first.value
 
 
-def test_insert_audio_persists_variant_tag(db_path: Path):
-    """A variant asset persists its variant_tag; the default stays 'original'."""
+def test_insert_audio_persists_stem_axis(db_path: Path):
+    """A variant asset persists its stem; the default stays 'regular'."""
     original = AudioAsset(
         track_audio_id=None,
         track_id="T1", platform="youtube",
@@ -116,7 +116,7 @@ def test_insert_audio_persists_variant_tag(db_path: Path):
         player_id="inst",
         path="/tmp/inst.m4a", sha256="bb",
         duration_s=200.0, sample_rate=44100, codec="m4a", bitrate_kbps=128,
-        variant_tag="instrumental",
+        stem="instrumental",
     )
     ro = db_adapter.insert_audio(db_path, original)
     rv = db_adapter.insert_audio(db_path, variant)
@@ -124,9 +124,40 @@ def test_insert_audio_persists_variant_tag(db_path: Path):
 
     with sqlite3.connect(db_path) as conn:
         tags = dict(conn.execute(
-            "SELECT track_audio_id, variant_tag FROM track_audio "
+            "SELECT track_audio_id, stem FROM track_audio "
             "WHERE track_audio_id IN (?, ?)",
             (ro.value, rv.value),
         ).fetchall())
-    assert tags[ro.value] == "original"      # default preserved
-    assert tags[rv.value] == "instrumental"  # variant persisted
+    assert tags[ro.value] == "regular"
+    assert tags[rv.value] == "instrumental"
+
+
+def test_insert_audio_or_reap_removes_file_on_failure(
+    db_path: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Failed insert must not leave the downloaded file on disk."""
+    from core.errors import DbError
+
+    orphan = tmp_path / "orphan.m4a"
+    orphan.write_bytes(b"fake audio")
+    asset = AudioAsset(
+        track_audio_id=None,
+        track_id="T1",
+        platform="youtube",
+        source_url="https://www.youtube.com/watch?v=x",
+        player_id="orphan-vid",
+        path=str(orphan),
+        sha256="cc",
+        duration_s=1.0,
+        sample_rate=44100,
+        codec="m4a",
+        bitrate_kbps=128,
+    )
+
+    def _fail(_db: Path, _asset: AudioAsset) -> Err:
+        return Err(DbError(kind="integrity", detail="simulated insert failure"))
+
+    monkeypatch.setattr(db_adapter, "insert_audio", _fail)
+    r = db_adapter.insert_audio_or_reap(db_path, asset)
+    assert isinstance(r, Err)
+    assert not orphan.exists()

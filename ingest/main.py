@@ -21,13 +21,13 @@ Designed for pi-storage long-running background runs:
   to be lower-quality DJ rips.
 
 Usage:
-    venvs/audio/bin/python -m audio_pipeline.main \\
+    venvs/audio/bin/python -m ingest.main \\
         --job-file data/djs/tier1_plus_bb.json \\
         --db /mnt/storage/data/db/music_database.db \\
         --audio-root /mnt/storage
 
 For a smoke run on Big Bootie 10-15 only:
-    venvs/audio/bin/python -m audio_pipeline.main \\
+    venvs/audio/bin/python -m ingest.main \\
         --job-file data/djs/tier1_plus_bb.json \\
         --db /mnt/storage/data/db/music_database.db \\
         --audio-root /mnt/storage \\
@@ -51,7 +51,7 @@ from .errors import DbError, DownloadError
 from core.models import AudioAsset, MediaSource, SetMediaLink, Track
 from core.result import Err, Ok, Result
 
-_log = logging.getLogger("audio_pipeline.main")
+_log = logging.getLogger("ingest.main")
 
 # Big Bootie 10-15 set IDs — used by --bb-only convenience flag.
 _BIG_BOOTIE_10_15: frozenset[str] = frozenset((

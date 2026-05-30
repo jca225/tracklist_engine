@@ -10,16 +10,14 @@ Two modes:
 
   Canonical-ingest mode (when --track-id / --track-audio-id is given):
     acquire the audio, place it under the canonical objects/ store, and INSERT
-    a ``track_audio`` row carrying ``variant_tag`` (acappella | instrumental)
-    alongside the existing 'original' row (this ADDS a variant, it does NOT
+    a ``track_audio`` row carrying ``stem`` (acappella | instrumental)
+    alongside the existing ``regular`` row (this ADDS a sibling, it does NOT
     replace). Reuses the canonical-write path from the sibling
     ``replace_track_audio.py`` rather than duplicating it.
 
-    Downstream gating on variant_tag is partial: cue-detr already runs only on
-    variant_tag='original' (analysis/canonical_cues.py), so variants get no
-    canonical cues. Essentia BPM/key does NOT yet gate on variant_tag, so an
-    acappella variant would currently receive meaningless features — gating
-    Essentia on variant_tag is a TODO (see the no-essentia-on-acapellas rule).
+    Downstream gating on ``stem`` is partial: cue-detr runs only on
+    ``stem='regular'`` (analysis/canonical_cues.py). Essentia BPM/key gates on
+    ``stem='regular'`` in analysis/pipeline.py.
 
 Works with any yt-dlp-supported URL (YouTube, SoundCloud, ...). Spotify URLs
 route through spotdl in canonical mode.
@@ -44,7 +42,7 @@ DEFAULT_DEST = Path(
     "/Users/johnnycabrahams/Desktop/big bootie 12 labeling Project/sourced"
 )
 
-# input role -> (canonical track_audio.variant_tag, display suffix)
+# input role -> (canonical track_audio.stem, display suffix)
 _ROLES = {
     "acappella": ("acappella", "Acapella"),
     "acapella": ("acappella", "Acapella"),
@@ -82,15 +80,15 @@ def download(url: str, dest: Path, stem: str) -> Path:
 
 
 def log_provenance(
-    dest: Path, slot: int | None, variant_tag: str, name: str, url: str, filename: str
+    dest: Path, slot: int | None, stem: str, name: str, url: str, filename: str
 ) -> Path:
     log = dest / "replacements.tsv"
     fresh = not log.exists()
     with log.open("a") as fh:
         if fresh:
-            fh.write("slot\tvariant_tag\tname\turl\tfilename\tacquired_at\n")
+            fh.write("slot\tstem\tname\turl\tfilename\tacquired_at\n")
         fh.write(
-            f"{'' if slot is None else slot}\t{variant_tag}\t{name}\t{url}"
+            f"{'' if slot is None else slot}\t{stem}\t{name}\t{url}"
             f"\t{filename}\t{dt.datetime.now().isoformat(timespec='seconds')}\n"
         )
     return log
@@ -102,12 +100,12 @@ def staging_ingest(args: argparse.Namespace) -> int:
         sys.exit("staging mode needs a URL (positional)")
     if not args.name:
         sys.exit('staging mode needs --name "Artist - Title"')
-    variant_tag, display = norm_role(args.role)
-    stem = basename(args.slot, args.name, display)
-    out = download(args.url, args.dest, stem)
-    log = log_provenance(args.dest, args.slot, variant_tag, args.name, args.url, out.name)
+    stem_axis, display = norm_role(args.role)
+    fname = basename(args.slot, args.name, display)
+    out = download(args.url, args.dest, fname)
+    log = log_provenance(args.dest, args.slot, stem_axis, args.name, args.url, out.name)
     print(f"\nsaved: {out}")
-    print(f"variant_tag={variant_tag}  |  logged to {log}")
+    print(f"stem={stem_axis}  |  logged to {log}")
     return 0
 
 
@@ -124,7 +122,7 @@ def canonical_ingest(args: argparse.Namespace) -> int:
     sys.path.insert(0, str(REPO_ROOT))
     from scripts import replace_track_audio as rta  # reuse canonical-write path
 
-    variant_tag, _ = norm_role(args.role)
+    stem_axis, _ = norm_role(args.role)
 
     track_id = args.track_id
     if track_id is None and args.track_audio_id is not None:
@@ -139,30 +137,30 @@ def canonical_ingest(args: argparse.Namespace) -> int:
     if args.url:
         rc = rta._replace_via_url(
             args.db, args.audio_root, track_id, args.url,
-            track_audio_id=None, variant_tag=variant_tag,
+            track_audio_id=None, stem=stem_axis,
         )
     elif args.file:
         pid = args.player_id or args.file.stem
         rc = rta._replace_via_file(
             args.db, args.audio_root, track_id, args.file, pid,
-            track_audio_id=None, variant_tag=variant_tag,
+            track_audio_id=None, stem=stem_axis,
         )
     else:
         sys.exit("canonical ingest needs --url or --file")
 
     if rc == 0:
-        _identity_check(args.db, track_id, variant_tag)
+        _identity_check(args.db, track_id, stem_axis)
         if not args.no_log:
-            _log_to_ledger(args, track_id, variant_tag)
+            _log_to_ledger(args, track_id, stem_axis)
     return rc
 
 
-def _log_to_ledger(args: argparse.Namespace, track_id: str, variant_tag: str) -> None:
+def _log_to_ledger(args: argparse.Namespace, track_id: str, stem_axis: str) -> None:
     """Append an additive (stem-axis) correction row (non-fatal)."""
     from core.result import Err, Ok
     from ingest.corrections import Correction, latest_row, log_correction
 
-    new = latest_row(args.db, track_id, variant_tag)
+    new = latest_row(args.db, track_id, stem_axis)
     position = None if args.slot is None else str(args.slot)
     c = Correction(
         track_id=track_id, axis="stem", action="add",
@@ -171,7 +169,7 @@ def _log_to_ledger(args: argparse.Namespace, track_id: str, variant_tag: str) ->
         new_platform=(new or {}).get("platform"),
         new_player_id=(new or {}).get("player_id"),
         new_url=(new or {}).get("source_url"),
-        variant_tag=variant_tag,
+        stem_value=stem_axis,
         reason=args.reason, source="acquire_variant",
     )
     match log_correction(args.db, c):
@@ -181,19 +179,19 @@ def _log_to_ledger(args: argparse.Namespace, track_id: str, variant_tag: str) ->
             print(f"correction log failed (non-fatal): {e.kind} — {e.detail}")
 
 
-def _lookup_audio_path(db_path: Path, track_id: str, variant_tag: str) -> tuple[int, str] | None:
+def _lookup_audio_path(db_path: Path, track_id: str, stem_axis: str) -> tuple[int, str] | None:
     import sqlite3
     with sqlite3.connect(db_path) as conn:
         row = conn.execute(
             "SELECT track_audio_id, path FROM track_audio "
-            "WHERE track_id = ? AND variant_tag = ? "
+            "WHERE recording_id = ? AND stem = ? "
             "ORDER BY is_reference DESC, downloaded_at DESC LIMIT 1",
-            (track_id, variant_tag),
+            (track_id, stem_axis),
         ).fetchone()
     return (int(row[0]), row[1]) if row else None
 
 
-def _identity_check(db_path: Path, track_id: str, variant_tag: str) -> None:
+def _identity_check(db_path: Path, track_id: str, stem_axis: str) -> None:
     """Advisory: compare the just-acquired variant against the track's
     'original' via chromaprint and print a verdict. Never blocks the insert —
     this is a manual annotator aid; calibrate thresholds before hard-gating.
@@ -201,7 +199,7 @@ def _identity_check(db_path: Path, track_id: str, variant_tag: str) -> None:
     from core.result import Ok, Err
     from ingest.adapters import fingerprint as fp
 
-    var = _lookup_audio_path(db_path, track_id, variant_tag)
+    var = _lookup_audio_path(db_path, track_id, stem_axis)
     orig = _lookup_audio_path(db_path, track_id, "original")
     if var is None:
         print("identity-check: variant row not found post-insert — skipping")
@@ -219,7 +217,7 @@ def _identity_check(db_path: Path, track_id: str, variant_tag: str) -> None:
         case (Ok(a), Ok(b)):
             sim = fp.similarity(a.raw, b.raw)
             dur_ratio = (b.duration_s / a.duration_s) if a.duration_s else 0.0
-            verdict, detail = fp.classify(variant_tag, sim, dur_ratio)
+            verdict, detail = fp.classify(stem_axis, sim, dur_ratio)
             print(f"identity-check [{verdict}]: {detail}")
             print(f"  similarity={sim:.3f}  variant={b.duration_s:.1f}s  original={a.duration_s:.1f}s  ratio={dur_ratio:.2f}")
         case (Err(e), _) | (_, Err(e)):

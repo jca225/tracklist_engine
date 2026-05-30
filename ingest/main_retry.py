@@ -1,6 +1,6 @@
 """Targeted Spotify-only retry pass over tracks the main downloader couldn't fetch.
 
-The main downloader (`audio_pipeline.main`) walks YouTube → SoundCloud per track.
+The main downloader (`ingest.main`) walks YouTube → SoundCloud per track.
 spotdl was previously the second link in that chain but was removed (commit
 d64dc96) after a 14h corpus run produced 0 successes and 174× 300s timeouts on
 anonymous Spotify queries.
@@ -12,13 +12,13 @@ keeps the dead-link tax bounded — spotdl 4.x ships with built-in default
 Spotify API credentials, so no credential plumbing is needed here.
 
 Usage (pi-storage, runs in parallel with main download loop):
-    venvs/spotdl/bin/python -m audio_pipeline.main_retry \\
+    venvs/spotdl/bin/python -m ingest.main_retry \\
         --db /mnt/storage/data/db/music_database.db \\
         --audio-root /mnt/storage \\
         --timeout 60
 
 Smoke run on Big Bootie 10-15 only:
-    venvs/spotdl/bin/python -m audio_pipeline.main_retry \\
+    venvs/spotdl/bin/python -m ingest.main_retry \\
         --db /mnt/storage/data/db/music_database.db \\
         --audio-root /mnt/storage \\
         --bb-only --dry-run
@@ -41,9 +41,9 @@ from .errors import DbError, DownloadError
 from core.models import AudioAsset, MediaSource, spotify_track_url
 from core.result import Err, Ok, Result
 
-_log = logging.getLogger("audio_pipeline.main_retry")
+_log = logging.getLogger("ingest.main_retry")
 
-# Big Bootie 10-15 set IDs — mirrors `audio_pipeline.main`.
+# Big Bootie 10-15 set IDs — mirrors `ingest.main`.
 _BIG_BOOTIE_10_15: frozenset[str] = frozenset((
     "w1mgcjt", "2nvzlh2k", "1fsnxchk", "qj4v0wt", "1yl70ql1", "237tdqmk",
 ))

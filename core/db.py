@@ -423,28 +423,48 @@ def load_track_section_starts(
     return Ok(frozenset(starts))
 
 
+def _ensure_recording(conn: sqlite3.Connection, asset: AudioAsset) -> None:
+    """Upsert work+recording so track_audio FK succeeds (1:1 with legacy track_id)."""
+    rid = asset.recording_id
+    conn.execute(
+        "INSERT OR IGNORE INTO work (work_id, full_name) VALUES (?, ?)",
+        (rid, rid),
+    )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO recording
+        (recording_id, work_id, version, stem, variant)
+        VALUES (?, ?, 'original', ?, ?)
+        """,
+        (rid, rid, asset.stem, asset.variant),
+    )
+
+
 def insert_audio(db_path: Path, asset: AudioAsset) -> Result[int, DbError]:
     try:
         with _connect(db_path) as conn:
+            _ensure_recording(conn, asset)
             cur = conn.execute(
                 """
                 INSERT OR IGNORE INTO track_audio
-                (track_id, platform, source_url, player_id, path, sha256,
+                (recording_id, track_id, platform, source_url, player_id, path, sha256,
                  duration_s, sample_rate, codec, bitrate_kbps, is_reference,
-                 variant_tag, edit_tag)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+                 stem, variant)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
                 """,
                 (
-                    asset.track_id, asset.platform, asset.source_url, asset.player_id,
-                    asset.path, asset.sha256, asset.duration_s, asset.sample_rate,
-                    asset.codec, asset.bitrate_kbps, asset.variant_tag, asset.edit_tag,
+                    asset.recording_id, asset.track_id, asset.platform, asset.source_url,
+                    asset.player_id, asset.path, asset.sha256, asset.duration_s,
+                    asset.sample_rate, asset.codec, asset.bitrate_kbps,
+                    asset.stem, asset.variant,
                 ),
             )
             conn.commit()
             if cur.lastrowid is None or cur.rowcount == 0:
                 existing = conn.execute(
-                    "SELECT track_audio_id FROM track_audio WHERE track_id=? AND platform=? AND player_id=?",
-                    (asset.track_id, asset.platform, asset.player_id),
+                    "SELECT track_audio_id FROM track_audio "
+                    "WHERE recording_id=? AND platform=? AND player_id=?",
+                    (asset.recording_id, asset.platform, asset.player_id),
                 ).fetchone()
                 if existing is None:
                     return Err(DbError(kind="integrity", detail="insert returned no row and lookup failed"))

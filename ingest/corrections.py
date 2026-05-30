@@ -2,15 +2,7 @@
 
 Records one row each time a track's downloaded audio is replaced or a variant
 added because the auto-acquired version was the wrong *identity* along one of
-the three axes (version / variant / stem — see
-[[audio-identity-taxonomy]]). These rows are the training signal for the future
-acquisition gates: every manual fix during labeling becomes a labeled example
-instead of evaporating into a timestamp.
-
-Domain-persistence module: like ``analysis/persistence.py`` it borrows
-``core.db._connect`` for the connection but owns its own (ingest-domain) write.
-The table has NO foreign keys, so a correction outlives the ``track_audio`` rows
-it references — it snapshots the old/new identity inline.
+the three axes (version / variant / stem). See core/identity.py.
 """
 from __future__ import annotations
 
@@ -23,6 +15,7 @@ from pathlib import Path
 
 from core.db import _connect
 from core.errors import DbError
+from core.identity import normalize_stem
 from core.result import Err, Ok, Result
 
 AXES = ("version", "variant", "stem")
@@ -32,10 +25,10 @@ ACTIONS = ("replace", "add")
 @dataclass(frozen=True)
 class Correction:
     track_id: str
-    axis: str                          # version | variant | stem
-    action: str                        # replace | add
+    axis: str
+    action: str
     set_id: str | None = None
-    position: str | None = None        # published section no. / slot label
+    position: str | None = None
     old_track_audio_id: int | None = None
     old_platform: str | None = None
     old_player_id: str | None = None
@@ -44,13 +37,12 @@ class Correction:
     new_platform: str | None = None
     new_player_id: str | None = None
     new_url: str | None = None
-    variant_tag: str | None = None     # stem axis: acappella|instrumental|original
+    stem_value: str | None = None     # regular | acappella | instrumental
     reason: str | None = None
-    source: str | None = None          # replace_track_audio | acquire_variant | manual
+    source: str | None = None
 
 
 def log_correction(db_path: Path, c: Correction) -> Result[int, DbError]:
-    """INSERT one correction row. Returns the new correction_id."""
     if c.axis not in AXES:
         return Err(DbError(kind="bad_axis", detail=f"{c.axis!r} not in {AXES}"))
     if c.action not in ACTIONS:
@@ -63,14 +55,14 @@ def log_correction(db_path: Path, c: Correction) -> Result[int, DbError]:
                   (set_id, position, track_id, axis, action,
                    old_track_audio_id, old_platform, old_player_id, old_url,
                    new_track_audio_id, new_platform, new_player_id, new_url,
-                   variant_tag, reason, source)
+                   stem_value, reason, source)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     c.set_id, c.position, c.track_id, c.axis, c.action,
                     c.old_track_audio_id, c.old_platform, c.old_player_id, c.old_url,
                     c.new_track_audio_id, c.new_platform, c.new_player_id, c.new_url,
-                    c.variant_tag, c.reason, c.source,
+                    c.stem_value, c.reason, c.source,
                 ),
             )
             conn.commit()
@@ -80,31 +72,25 @@ def log_correction(db_path: Path, c: Correction) -> Result[int, DbError]:
 
 
 def snapshot_row(db_path: Path, track_audio_id: int) -> dict | None:
-    """Read (platform, player_id, source_url, variant_tag) for a taid, or None.
-
-    Call this BEFORE a destructive replace so the retired row's identity is
-    captured while it still exists.
-    """
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         r = conn.execute(
-            "SELECT platform, player_id, source_url, variant_tag "
+            "SELECT platform, player_id, source_url, stem "
             "FROM track_audio WHERE track_audio_id = ?",
             (track_audio_id,),
         ).fetchone()
     return dict(r) if r else None
 
 
-def latest_row(db_path: Path, track_id: str, variant_tag: str | None = None) -> dict | None:
-    """Read the most-recently-inserted track_audio row for a track_id (the row
-    a just-completed acquire/replace produced). Filter by variant_tag for the
-    additive variant path."""
-    q = ("SELECT track_audio_id, platform, player_id, source_url, variant_tag "
-         "FROM track_audio WHERE track_id = ?")
+def latest_row(db_path: Path, track_id: str, stem: str | None = None) -> dict | None:
+    q = (
+        "SELECT track_audio_id, platform, player_id, source_url, stem "
+        "FROM track_audio WHERE recording_id = ?"
+    )
     params: list[object] = [track_id]
-    if variant_tag is not None:
-        q += " AND variant_tag = ?"
-        params.append(variant_tag)
+    if stem is not None:
+        q += " AND stem = ?"
+        params.append(normalize_stem(stem))
     q += " ORDER BY track_audio_id DESC LIMIT 1"
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
@@ -126,7 +112,7 @@ def _main(argv: list[str] | None = None) -> int:
     p.add_argument("--position", default=None)
     p.add_argument("--old-taid", type=int, default=None)
     p.add_argument("--new-taid", type=int, default=None)
-    p.add_argument("--variant-tag", default=None)
+    p.add_argument("--stem", default=None, help="Stem axis value for ledger row")
     p.add_argument("--reason", default=None)
     p.add_argument("--source", default="manual")
     a = p.parse_args(argv)
@@ -144,7 +130,7 @@ def _main(argv: list[str] | None = None) -> int:
         new_platform=(new or {}).get("platform"),
         new_player_id=(new or {}).get("player_id"),
         new_url=(new or {}).get("source_url"),
-        variant_tag=a.variant_tag or (new or {}).get("variant_tag"),
+        stem_value=a.stem or (new or {}).get("stem"),
         reason=a.reason, source=a.source,
     )
     r = log_correction(a.db, c)
