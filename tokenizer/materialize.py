@@ -179,15 +179,46 @@ def _flush_slots(conn: sqlite3.Connection, buf: list[tuple]) -> None:
 # Main pipeline
 # -----------------------------------------------------------------------------
 
+_MATERIALIZE_DDL = """
+CREATE TABLE IF NOT EXISTS track_metadata (
+    track_id TEXT PRIMARY KEY, title TEXT, artists_json TEXT, full_name TEXT,
+    genre TEXT, duration_seconds INTEGER, is_remixish INTEGER DEFAULT 0,
+    version TEXT, has_youtube INTEGER DEFAULT 0, has_soundcloud INTEGER DEFAULT 0,
+    has_spotify INTEGER DEFAULT 0, has_apple INTEGER DEFAULT 0,
+    plays_total INTEGER, set_count INTEGER, artwork_url TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS set_track_slots (
+    set_id TEXT NOT NULL, row_index INTEGER NOT NULL, tlp_id INTEGER,
+    recording_id TEXT, track_id TEXT NOT NULL, source TEXT DEFAULT 'scraped',
+    slot_label TEXT, is_concurrent INTEGER DEFAULT 0, cue_seconds INTEGER,
+    cue_time_seconds INTEGER, claimed_version TEXT,
+    claimed_stem TEXT NOT NULL DEFAULT 'regular',
+    claimed_variant TEXT NOT NULL DEFAULT 'regular',
+    full_name TEXT, title TEXT, artists_json TEXT, duration_seconds INTEGER,
+    parsed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (set_id, row_index)
+);
+CREATE TABLE IF NOT EXISTS track_suggestions (
+    sug_id INTEGER PRIMARY KEY, set_id TEXT NOT NULL, tlp_id INTEGER,
+    pos INTEGER, track_slug TEXT, track_display TEXT, artist_title TEXT,
+    suggester_user_id INTEGER, suggester_name TEXT,
+    suggestion_timestamp TEXT, is_remix INTEGER, has_youtube INTEGER,
+    has_soundcloud INTEGER, has_spotify INTEGER
+);
+"""
+
+
 def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
     log.info("opening %s", db_path)
-    conn = sqlite3.connect(str(db_path))
+    conn = sqlite3.connect(str(db_path), timeout=120.0)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA busy_timeout = 120000")
 
-    # Ensure the 3 destination tables exist (schema.sql runs IF NOT EXISTS)
-    schema_path = _REPO_ROOT / "web_crawler" / "database" / "schema.sql"
-    log.info("applying schema (idempotent IF NOT EXISTS)")
-    conn.executescript(schema_path.read_text(encoding="utf-8"))
+    # Only ensure our destination tables — do NOT replay full schema.sql on the
+    # 8GB canonical DB (minutes of index churn + lock contention).
+    log.info("ensuring destination tables exist")
+    conn.executescript(_MATERIALIZE_DDL)
     conn.commit()
 
     log.info("clearing destination tables for clean rebuild")
