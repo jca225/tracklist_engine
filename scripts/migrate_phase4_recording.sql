@@ -30,19 +30,36 @@ CREATE TABLE IF NOT EXISTS recording (
 -- Ignore error if already recording_id.
 ALTER TABLE track_fingerprints RENAME COLUMN track_id TO recording_id;
 
--- track_audio: add recording_id if missing (post identity rename)
--- SQLite lacks IF NOT EXISTS for columns — ignore errors if already applied.
-ALTER TABLE track_audio ADD COLUMN recording_id TEXT;
+-- track_audio: backfill recording_id + normalize stem (column added in partial runs)
 UPDATE track_audio SET recording_id = track_id WHERE recording_id IS NULL;
+UPDATE track_audio SET stem = 'regular' WHERE stem IN ('original', 'full');
 
--- set_track_slots: claim columns + recording_id
-ALTER TABLE set_track_slots ADD COLUMN recording_id TEXT;
-ALTER TABLE set_track_slots ADD COLUMN claimed_version TEXT;
-ALTER TABLE set_track_slots ADD COLUMN claimed_stem TEXT DEFAULT 'regular';
-ALTER TABLE set_track_slots ADD COLUMN claimed_variant TEXT DEFAULT 'regular';
-UPDATE set_track_slots SET recording_id = track_id WHERE recording_id IS NULL;
-UPDATE set_track_slots SET claimed_stem = 'regular' WHERE claimed_stem IS NULL;
-UPDATE set_track_slots SET claimed_variant = 'regular' WHERE claimed_variant IS NULL;
+-- set_track_slots: create on DBs that predate the table, else add claim columns
+CREATE TABLE IF NOT EXISTS set_track_slots (
+    set_id            TEXT NOT NULL,
+    row_index         INTEGER NOT NULL,
+    tlp_id            INTEGER,
+    recording_id      TEXT,
+    track_id          TEXT NOT NULL,
+    source            TEXT DEFAULT 'scraped',
+    slot_label        TEXT,
+    is_concurrent     INTEGER DEFAULT 0,
+    cue_seconds       INTEGER,
+    cue_time_seconds  INTEGER,
+    claimed_version   TEXT,
+    claimed_stem      TEXT NOT NULL DEFAULT 'regular',
+    claimed_variant   TEXT NOT NULL DEFAULT 'regular',
+    full_name         TEXT,
+    title             TEXT,
+    artists_json      TEXT,
+    duration_seconds  INTEGER,
+    parsed_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (set_id, row_index),
+    FOREIGN KEY (set_id) REFERENCES dj_sets(set_id) ON DELETE CASCADE,
+    FOREIGN KEY (recording_id) REFERENCES recording(recording_id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_set_track_slots_recording ON set_track_slots(recording_id);
+CREATE INDEX IF NOT EXISTS idx_set_track_slots_track ON set_track_slots(track_id);
 
 -- Backfill work + recording 1:1 from track_metadata / track_audio
 INSERT OR IGNORE INTO work (work_id, title, artists_json, full_name)
