@@ -479,15 +479,9 @@ def insert_audio_or_reap(db_path: Path, asset: AudioAsset) -> Result[int, DbErro
     the just-downloaded file so a crashed insert can't strand it on disk as an
     orphan. Makes "row committed XOR file removed" the only two outcomes.
 
-    Reaps ONLY on Err. On Ok the file is kept — including the INSERT OR IGNORE
-    duplicate path, which returns Ok(existing_taid) for an already-registered
-    (track_id, platform, player_id); that row legitimately exists, so the file
-    must stay.
-
-    Known residual (NOT handled here): a retry that downloads to a *new* path but
-    the same (track_id, platform, player_id) gets Ok(existing_taid) pointing at
-    the OLD path, leaving the new file an orphan-by-dedup. That case is caught by
-    scripts/reconcile_orphans.py's dedup pass, not by this wrapper.
+    On Ok after INSERT OR IGNORE dedup — same (recording_id, platform, player_id)
+    already registered at a *different* path — the just-downloaded file is reaped
+    so only the canonical row's path remains on disk.
     """
     r = insert_audio(db_path, asset)
     if not r.is_ok():
@@ -495,4 +489,17 @@ def insert_audio_or_reap(db_path: Path, asset: AudioAsset) -> Result[int, DbErro
             Path(asset.path).unlink(missing_ok=True)
         except OSError:
             pass  # best-effort reap; the reconcile sweep is the backstop
+        return r
+
+    # Dedup retry: new download, existing row — reap when paths diverge.
+    try:
+        with _connect(db_path) as conn:
+            row = conn.execute(
+                "SELECT path FROM track_audio WHERE track_audio_id = ?",
+                (r.value,),
+            ).fetchone()
+        if row is not None and row[0] != asset.path:
+            Path(asset.path).unlink(missing_ok=True)
+    except (OSError, sqlite3.DatabaseError):
+        pass  # best-effort; reconcile_orphans is the backstop
     return r

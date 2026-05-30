@@ -21,11 +21,5 @@ jobs:
       - name: Mechanical guardrails
         run: python scripts/guardrails.py
 
-      - name: Fast pytest subset
-        run: |
-          python -m pytest \
-            tests/test_repo_root_paths.py \
-            tests/test_identity_axes.py \
-            tests/test_recording_axes.py \
-            tests/test_essentia_adapter.py \
-            -q
+      - name: Pytest
+        run: python -m pytest tests/ -q

@@ -12,11 +12,4 @@ if [[ ! -x "$PYTHON" ]]; then
 fi
 
 "$PYTHON" scripts/guardrails.py
-
-if [[ "${GUARDRAILS_FULL:-}" == "1" ]]; then
-  "$PYTHON" -m pytest \
-    tests/test_repo_root_paths.py \
-    tests/test_identity_axes.py \
-    tests/test_recording_axes.py \
-    tests/test_essentia_adapter.py -q
-fi
+"$PYTHON" -m pytest tests/ -q

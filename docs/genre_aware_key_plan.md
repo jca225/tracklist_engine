@@ -67,7 +67,7 @@ the easy part to iterate on.
 ### 1. Capture genre output (10 min)
 
 Extend `EssentiaFeatures` dataclass at
-[audio_pipeline/analysis/models.py:115](../audio_pipeline/analysis/models.py#L115):
+[analysis/models.py:120](../analysis/models.py#L120):
 
 ```python
 genre_top1: str | None              # Discogs taxonomy string e.g. "Electronic-Techno"
@@ -80,7 +80,7 @@ key_alternatives_json: str | None   # JSON {profile: {key_pc, key_mode, key_stre
 ### 2. Essentia worker changes (30–60 min)
 
 In whichever file runs `KeyExtractor` and `discogs_effnet`
-(`audio_pipeline/analysis/adapters/essentia_*.py` — find via grep):
+(`analysis/adapters/essentia_*.py` — find via grep):
 
 - Always run discogs_effnet (already do this; just preserve output).
 - Read top-1 genre and `P(top1)`.
@@ -127,7 +127,7 @@ ssh vast 'sqlite3 /workspace/scratch.db "<same five ALTERs>"'
 
 ### 4. Update `_write_essentia_row` (10 min)
 
-In [audio_pipeline/adapters/db.py](../audio_pipeline/adapters/db.py),
+In [analysis/persistence.py](../analysis/persistence.py) (`_write_essentia_row`),
 extend the INSERT and the ON CONFLICT update branch to include the five
 new columns. Keep the JSON blobs in `confidence_json` too for one release
 cycle (defense in depth in case schema migration misbehaves).
@@ -203,9 +203,9 @@ investigate whether the genre mapping is wrong before discarding.
 
 ## Files touched
 
-- `audio_pipeline/analysis/models.py` — extend `EssentiaFeatures`
-- `audio_pipeline/analysis/adapters/essentia_*.py` — multi-profile logic
-- `audio_pipeline/adapters/db.py` — extend `_write_essentia_row`
+- `analysis/models.py` — extend `EssentiaFeatures`
+- `analysis/adapters/essentia_*.py` — multi-profile logic
+- `analysis/persistence.py` — extend `_write_essentia_row`
 - `web_crawler/database/schema.sql` — 5 new columns
 - `scripts/backfill_essentia.py` — new file (~50 lines)
 - `docs/genre_aware_key_plan.md` — this file (update with results)

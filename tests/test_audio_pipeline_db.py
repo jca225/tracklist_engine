@@ -161,3 +161,47 @@ def test_insert_audio_or_reap_removes_file_on_failure(
     r = db_adapter.insert_audio_or_reap(db_path, asset)
     assert isinstance(r, Err)
     assert not orphan.exists()
+
+
+def test_insert_audio_or_reap_reaps_dedup_orphan_at_new_path(
+    db_path: Path, tmp_path: Path,
+) -> None:
+    """INSERT OR IGNORE dedup: retry at a new path must not leave a disk orphan."""
+    canonical = tmp_path / "canonical.m4a"
+    duplicate = tmp_path / "duplicate.m4a"
+    canonical.write_bytes(b"registered")
+    duplicate.write_bytes(b"retry download")
+
+    asset = AudioAsset(
+        track_audio_id=None,
+        track_id="T1",
+        platform="youtube",
+        source_url="https://www.youtube.com/watch?v=vid-abc",
+        player_id="vid-abc",
+        path=str(canonical),
+        sha256="deadbeef",
+        duration_s=210.5,
+        sample_rate=44100,
+        codec="m4a",
+        bitrate_kbps=128,
+    )
+    first = db_adapter.insert_audio(db_path, asset)
+    assert isinstance(first, Ok)
+
+    retry = AudioAsset(
+        track_audio_id=None,
+        track_id="T1",
+        platform="youtube",
+        source_url="https://www.youtube.com/watch?v=vid-abc",
+        player_id="vid-abc",
+        path=str(duplicate),
+        sha256="beefdead",
+        duration_s=210.5,
+        sample_rate=44100,
+        codec="m4a",
+        bitrate_kbps=128,
+    )
+    second = db_adapter.insert_audio_or_reap(db_path, retry)
+    assert isinstance(second, Ok) and second.value == first.value
+    assert canonical.exists()
+    assert not duplicate.exists()

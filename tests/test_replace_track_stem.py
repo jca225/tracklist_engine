@@ -40,3 +40,13 @@ def test_qualifier_suffix_compound_remix_and_acappella():
 
 def test_qualifier_suffix_stem_only():
     assert _qualifier_suffix("Artist - Title", "original", stem="instrumental") == " (Instrumental)"
+
+
+def test_qualifier_suffix_extended_with_remix():
+    suffix = _qualifier_suffix(
+        "Artist - Title (Syn Cole Remix)",
+        "remix",
+        stem="regular",
+        variant="extended",
+    )
+    assert suffix == " (Syn Cole Remix) (Extended Mix)"

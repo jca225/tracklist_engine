@@ -31,6 +31,12 @@ VARIANT_TAG_ALLOW_FILES = frozenset(
 
 STALE_MODULE_SKIP_FILES = frozenset({REPO_ROOT / "scripts" / "guardrails.py"})
 
+DOC_STALE_PIPELINE_RE = re.compile(
+    r"audio_pipeline/(?:analysis|adapters|main)",
+)
+
+DOCS_DIR = REPO_ROOT / "docs"
+
 ADAPTER_PARENTS_DIRS = (
     REPO_ROOT / "analysis" / "adapters",
     REPO_ROOT / "ingest" / "adapters",
@@ -121,6 +127,22 @@ def _check_variant_tag(path: Path, text: str) -> list[Violation]:
     return violations
 
 
+def _check_stale_audio_pipeline_docs(path: Path, text: str) -> list[Violation]:
+    """Flag markdown that still links to pre-split audio_pipeline/ code paths."""
+    violations: list[Violation] = []
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        if DOC_STALE_PIPELINE_RE.search(line):
+            violations.append(
+                Violation(
+                    path,
+                    lineno,
+                    "stale_doc_path",
+                    "audio_pipeline/ code path in doc — use ingest/ or analysis/",
+                )
+            )
+    return violations
+
+
 def _check_adapter_parents(path: Path, text: str) -> list[Violation]:
     in_adapter_dir = any(
         path == d or d in path.parents for d in ADAPTER_PARENTS_DIRS
@@ -156,6 +178,14 @@ def run_checks() -> list[Violation]:
         violations.extend(_check_stale_data_analysis(path, text))
         violations.extend(_check_variant_tag(path, text))
         violations.extend(_check_adapter_parents(path, text))
+    if DOCS_DIR.is_dir():
+        for path in sorted(DOCS_DIR.glob("*.md")):
+            try:
+                text = path.read_text(encoding="utf-8")
+            except OSError as exc:
+                violations.append(Violation(path, 0, "read_error", str(exc)))
+                continue
+            violations.extend(_check_stale_audio_pipeline_docs(path, text))
     return violations
 
 

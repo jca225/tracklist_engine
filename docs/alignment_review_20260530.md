@@ -193,13 +193,9 @@ and manual labeling scope.*
 ### Same name, different stem / instrumental in one tracklist
 
 **Observed:** Bug when two slots share a title but differ on stem axis.  
-**Likely cause:** `pull_set_for_alignment.py` `_qualifier_suffix()` returns early
-on the first trailing parenthetical (usually remix name) and **does not append**
-`(Acappella)` / `(Instrumental)` / `(Extended Mix)` when stem/variant ≠ regular.
-Filenames collide or mislead in Ableton; manifest `axes_key` is correct but
-display names are not.  
-**Fix:** Compound suffix — e.g. `(Syn Cole Remix) (Acappella)`. See
-[labeling/CLAUDE.md](../labeling/CLAUDE.md) baby rule + manifest fields.
+**Cause:** `_qualifier_suffix()` used to return only the remix parenthetical.  
+**Fixed:** compound suffix — e.g. `(Syn Cole Remix) (Acappella)` — in
+`pull_set_for_alignment.py`; covered by `tests/test_replace_track_stem.py`.
 
 ---
 
@@ -210,7 +206,7 @@ Priorities updated given legacy-download context: **re-source before re-label**.
 ### Tier 0 — unblock GT write-back
 
 1. **Write back completed GT** via `labeling/write_back_ground_truth.py`.
-2. **Fix pull suffix bug** (compound stem/variant qualifiers).
+2. **Fix pull suffix bug** ✅ (`_qualifier_suffix()` compound `(Remix) (Acappella)` — `tests/test_replace_track_stem.py`).
 3. **Capture this review** ✅ (this document).
 
 ### Tier 1 — fix the bulk corpus (high leverage; code mostly exists)

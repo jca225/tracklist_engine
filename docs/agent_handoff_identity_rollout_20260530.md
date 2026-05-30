@@ -51,6 +51,8 @@
 
 ### In progress — `tokenizer.materialize`
 
+**Last checked:** 2026-05-30 ~10:28 pi-storage local — **10%** (150k/1.4M rows), PID **59888** alive, ~151k `set_track_slots`, `track_metadata` still 0 (written at end). ETA **~5–6 h** from 09:53 start if rate holds.
+
 ```bash
 # Running in background (verify PID still alive):
 pgrep -af "python -m tokenizer.materialize"

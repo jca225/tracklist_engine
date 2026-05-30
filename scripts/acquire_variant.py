@@ -22,9 +22,8 @@ Two modes:
 Works with any yt-dlp-supported URL (YouTube, SoundCloud, ...). Spotify URLs
 route through spotdl in canonical mode.
 
-TODO (follow-up): chromaprint the acquired variant against the track's
-'original' fingerprint as an identity sanity-check before insert — needs a
-fingerprint adapter (none exists in-repo yet) and the original audio present.
+Canonical mode runs an advisory chromaprint check (_identity_check) after
+insert when a regular reference row exists; it never hard-blocks.
 """
 from __future__ import annotations
 
