@@ -134,16 +134,19 @@ def canonical_ingest(args: argparse.Namespace) -> int:
 
     if args.url and args.file:
         sys.exit("--url and --file are mutually exclusive")
+    promote = not args.no_promote_reference
     if args.url:
         rc = rta._replace_via_url(
             args.db, args.audio_root, track_id, args.url,
             track_audio_id=None, stem=stem_axis,
+            promote_reference=promote,
         )
     elif args.file:
         pid = args.player_id or args.file.stem
         rc = rta._replace_via_file(
             args.db, args.audio_root, track_id, args.file, pid,
             track_audio_id=None, stem=stem_axis,
+            promote_reference=promote,
         )
     else:
         sys.exit("canonical ingest needs --url or --file")
@@ -200,7 +203,7 @@ def _identity_check(db_path: Path, track_id: str, stem_axis: str) -> None:
     from ingest.adapters import fingerprint as fp
 
     var = _lookup_audio_path(db_path, track_id, stem_axis)
-    orig = _lookup_audio_path(db_path, track_id, "original")
+    orig = _lookup_audio_path(db_path, track_id, "regular")
     if var is None:
         print("identity-check: variant row not found post-insert — skipping")
         return
@@ -253,6 +256,8 @@ def main() -> int:
     ap.add_argument("--set-id", default=None, help="set where noticed (correction ledger)")
     ap.add_argument("--reason", default=None, help="free-text why (correction ledger)")
     ap.add_argument("--no-log", action="store_true", help="skip the correction-ledger row")
+    ap.add_argument("--no-promote-reference", action="store_true",
+                    help="Do not set is_reference=1 on the new row (default: promote).")
     args = ap.parse_args()
 
     if args.track_id is not None or args.track_audio_id is not None:

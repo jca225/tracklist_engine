@@ -560,7 +560,7 @@ def _run(args: argparse.Namespace) -> int:
         )
 
     if rc == 0 and not args.no_log:
-        _log_to_ledger(args, track_id, old, ledger_axis=ledger_axis)
+        _log_to_ledger(args, track_id, old, ledger_axis=ledger_axis, stem=stem)
     return rc
 
 
@@ -570,9 +570,10 @@ def _log_to_ledger(
     old: dict | None,
     *,
     ledger_axis: str,
+    stem: str,
 ) -> None:
     """Append a correction row for a successful replace/add (non-fatal)."""
-    new = latest_row(args.db, track_id)
+    new = latest_row(args.db, track_id, stem)
     action = "replace" if args.track_audio_id is not None else "add"
     c = Correction(
         track_id=track_id, axis=ledger_axis, action=action,
