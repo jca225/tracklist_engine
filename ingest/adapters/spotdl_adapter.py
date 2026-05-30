@@ -119,11 +119,20 @@ def download_one(
         ))
     src_path = new_audio[0]
 
-    # Rename to the project's stable convention.
+    # Rename to the project's stable convention. If the rename fails, reap the
+    # staged bare-name file ("Artist - Title.m4a") so a failed canonicalization
+    # can't leave it on disk as an orphan (the spotdl variant of the orphan bug).
     dst_path = cfg.out_dir / f"{track_id}__spotify__{source.player_id}.{cfg.audio_format}"
     if dst_path.exists() and dst_path != src_path:
         dst_path.unlink()
-    src_path.rename(dst_path)
+    try:
+        src_path.rename(dst_path)
+    except OSError as e:
+        src_path.unlink(missing_ok=True)
+        return Err(DownloadError(
+            kind="parse", url=source.url,
+            detail=f"canonical rename failed, reaped staged file: {e}",
+        ))
 
     return Ok(AudioAsset(
         track_audio_id=None,
@@ -255,7 +264,16 @@ def download_batch(
             dst = track_dir / f"{it.track_id}__spotify__{it.source.player_id}.{audio_format}"
             if dst.exists():
                 dst.unlink()
-            shutil.move(str(staged), str(dst))
+            try:
+                shutil.move(str(staged), str(dst))
+            except OSError as e:
+                # Reap any partial destination; staged stays in temp (cleaned in finally).
+                Path(dst).unlink(missing_ok=True)
+                results.append(BatchResult(it, Err(DownloadError(
+                    kind="parse", url=it.source.url,
+                    detail=f"canonical move failed: {e}",
+                ))))
+                continue
 
             asset = AudioAsset(
                 track_audio_id=None,

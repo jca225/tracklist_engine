@@ -343,7 +343,7 @@ def _replace_via_file(
 
 
 def _insert_and_report(db_path: Path, asset: AudioAsset) -> int:
-    r = db_adapter.insert_audio(db_path, asset)
+    r = db_adapter.insert_audio_or_reap(db_path, asset)
     match r:
         case Err(e):
             _log.error("insert_audio failed: %s", e.detail)

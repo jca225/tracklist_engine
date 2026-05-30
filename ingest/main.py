@@ -289,7 +289,7 @@ def _process_track(
                            source.platform, err.kind)
                 continue
             case Ok(asset):
-                ins_r = db_adapter.insert_audio(db_path, asset)
+                ins_r = db_adapter.insert_audio_or_reap(db_path, asset)
                 match ins_r:
                     case Err(e):
                         return ("db_failed", f"insert_audio: {e.detail}")

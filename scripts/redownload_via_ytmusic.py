@@ -339,7 +339,7 @@ def _phase1_download(
         for c, r in zip(chunk_cands, results):
             match r.result:
                 case Ok(asset):
-                    ins = db_adapter.insert_audio(args.db, asset)
+                    ins = db_adapter.insert_audio_or_reap(args.db, asset)
                     match ins:
                         case Ok(new_taid):
                             stats = dc_replace(stats, phase1_ok=stats.phase1_ok + 1)

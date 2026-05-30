@@ -227,7 +227,7 @@ def _attempt(
                 return ("unavailable", err.detail)
             return ("other_fail", f"{err.kind}: {(err.detail or '')[:200]}")
         case Ok(asset):
-            ins_r = db_adapter.insert_audio(db_path, asset)
+            ins_r = db_adapter.insert_audio_or_reap(db_path, asset)
             match ins_r:
                 case Err(e):
                     return ("db_failed", f"insert_audio: {e.detail}")
@@ -291,7 +291,7 @@ def _run_batched(
             tid = r.item.track_id
             match r.result:
                 case Ok(asset):
-                    ins_r = db_adapter.insert_audio(args.db, asset)
+                    ins_r = db_adapter.insert_audio_or_reap(args.db, asset)
                     match ins_r:
                         case Err(e):
                             stats = replace(stats, db_failed=stats.db_failed + 1)
