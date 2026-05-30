@@ -1,0 +1,28 @@
+---
+description: Three-axis track identity — version, stem, variant (do not conflate)
+globs: tokenizer/**,ingest/**,labeling/**,core/identity.py,tests/test_identity*.py,tests/test_recording*.py
+alwaysApply: false
+---
+
+# Track identity (three axes)
+
+Recorded music is keyed on **three orthogonal axes** (plus optional remixer name).
+Do not conflate them with Demucs stem names (`vocals`, `drums`, …) or scrape-only fields.
+
+| Axis | DB / code values | Meaning |
+|------|------------------|---------|
+| **version** | original, remix, rework, altversion, edit, bootleg, mashup | Creative version — `track_metadata.version` |
+| **stem** | **regular**, acappella, instrumental | Vocal/instrumental form — `track_audio.stem` |
+| **variant** | regular, extended | Edit length — `track_audio.variant` |
+
+**Lookup key:** `version__stem__variant` via `RecordingAxes.key()` in [core/identity.py](core/identity.py).
+
+## Rules
+
+- Demucs `track_stems.stem_name` is unrelated to identity `stem`.
+- Never write `full` or `original` as stem — canonical default is **`regular`**.
+- Scrape `version_tag='Remix'` maps to version axis; acappella/instrumental are **`claimed_stem`**, not `version_tag`.
+- Ground-truth YAML: prefer `claimed_stem:`; legacy `version_tag:` still parses.
+- **Baby rule (labeling + ingest):** one full mix file in `~/aligning/.../tracks/`; when the tracklist says acappella/instrumental, use Demucs `stems/vocals` or `stems/instrumental` — do not download a second full file unless it is a different recording.
+
+Full spec: root [CLAUDE.md](CLAUDE.md) section "Track identity (three axes)".

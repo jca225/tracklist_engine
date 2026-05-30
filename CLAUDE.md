@@ -24,6 +24,11 @@ with `eda/` a cross-cutting consumer that reads from multiple stages.
   no working aligner yet — the ML model is not built; it will incubate in
   `workspaces/`.
 
+**Alignment north star (target Aug 1):** the aligner consumes `{tokenized tracklist,
+track audios, set audio}` → an Ableton-round-trippable structure, trained on manual
+Ableton GT. Stem discovery and version/variant QA are **ingest**, *not* the aligner.
+Full spec: [docs/alignment_objective.md](docs/alignment_objective.md).
+
 Everything outside this chain is one of:
 - A vendored dependency: `cue-detr/` (DETR-based cue-point detection model,
   consumed only by `analysis/canonical_cues.py`).
@@ -177,6 +182,16 @@ Use [Makefile](Makefile) for cluster ops (`make deploy`, `make status`, `make ss
 ## Git workflow
 
 Use your best judgement on when to commit and push. The default Claude Code rule "only commit when explicitly asked" is **overridden for this project** — proactively commit logical units of work and push them so pi-storage / pi-worker can pick them up via `make deploy`. Group changes into reviewable commits (one feature per commit, not one-giant-blob). Don't push directly to `main` if a pending change is still unstable; otherwise keep it moving.
+
+## Guardrails
+
+Mechanical checks catch rename drift, stale module names, and wrong adapter path depth:
+
+- **`make check`** — runs [scripts/guardrails.py](scripts/guardrails.py) + fast pytest subset before push
+- **Git hooks** — one-time per clone: `git config core.hooksPath .githooks`
+- **Cursor rules** — [.cursor/rules/](.cursor/rules/) (`identity-axes`, `repo-paths`) load when editing matching files
+- **Refactor checklist** — [.claude/skills/refactor-safety/SKILL.md](.claude/skills/refactor-safety/SKILL.md) for module renames and directory splits
+- **CI** — [.github/workflows/guardrails.yml](.github/workflows/guardrails.yml) on push/PR
 
 ## Environment
 

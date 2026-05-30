@@ -1,0 +1,31 @@
+name: guardrails
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  guardrails:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pytest
+        run: pip install -q pytest
+
+      - name: Mechanical guardrails
+        run: python scripts/guardrails.py
+
+      - name: Fast pytest subset
+        run: |
+          python -m pytest \
+            tests/test_repo_root_paths.py \
+            tests/test_identity_axes.py \
+            tests/test_recording_axes.py \
+            tests/test_essentia_adapter.py \
+            -q

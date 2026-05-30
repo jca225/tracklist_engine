@@ -95,7 +95,7 @@ MODELS: Final[tuple[Model, ...]] = (
 )
 
 
-_REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[3]
+_REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 _DEFAULT_MODELS_DIR: Final[Path] = _REPO_ROOT / "data" / "essentia_models"
 
 

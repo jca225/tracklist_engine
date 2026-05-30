@@ -1,6 +1,6 @@
-"""Pytest config: make the repo root importable so `row_tokens`, `audio_pipeline`,
-and the `eda` helpers can all be imported from tests without installing
-the project as a package.
+"""Pytest config: make the repo root importable so `row_tokens`, `ingest`,
+`analysis`, and the `eda` helpers can all be imported from tests without
+installing the project as a package.
 """
 import sys
 from pathlib import Path

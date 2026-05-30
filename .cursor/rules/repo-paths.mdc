@@ -1,0 +1,26 @@
+---
+description: Repo-root path resolution after module renames — adapters and scripts
+globs: **/adapters/**,scripts/**,analysis/**,ingest/**
+alwaysApply: false
+---
+
+# Repo-root paths
+
+From `ingest/adapters/*.py` or `analysis/adapters/*.py`, repo root is:
+
+```python
+Path(__file__).resolve().parents[2]
+```
+
+From `scripts/*.py`, repo root is `parents[1]`.
+
+**Never use `parents[3]` in adapter modules** — that was a leftover from the pre-split `audio_pipeline/` layout.
+
+## After any module rename or directory move
+
+1. Grep for the old module name across `*.py`, `Makefile`, and `CLAUDE.md` deploy caveats.
+2. Fix all `Path(__file__).parents[N]` in moved files.
+3. Update systemd / `python -m …` entrypoints documented in module CLAUDE.md files.
+4. Run `make check` (guardrails + fast pytest).
+
+For the full refactor checklist, use the **refactor-safety** skill in [.claude/skills/refactor-safety/SKILL.md](.claude/skills/refactor-safety/SKILL.md).

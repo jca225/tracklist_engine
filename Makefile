@@ -14,12 +14,13 @@ REPO         := ~/tracklist_engine
 PIP          := $(REPO)/venvs/web_crawler/bin/pip
 DB           := /mnt/storage/data/db/music_database.db
 
-.PHONY: help deploy deploy-storage deploy-worker \
+.PHONY: help check deploy deploy-storage deploy-worker \
         restart-jobqueue start-scraper stop-scraper restart-retry \
         status logs-jobqueue logs-scraper logs-retry queue ssh-storage ssh-worker
 
 help:
 	@echo "Common targets:"
+	@echo "  make check            — guardrails script + fast pytest subset"
 	@echo "  make deploy           — git pull + pip install on both Pis"
 	@echo "  make status           — service states + scrape_failures queue depth"
 	@echo "  make queue            — just the scrape_failures count"
@@ -35,6 +36,12 @@ help:
 	@echo ""
 	@echo "Quick shells:"
 	@echo "  make ssh-storage / ssh-worker"
+
+# ---------- local guardrails ------------------------------------------------
+
+check:
+	venvs/audio/bin/python scripts/guardrails.py
+	venvs/audio/bin/python -m pytest tests/test_repo_root_paths.py tests/test_identity_axes.py tests/test_recording_axes.py tests/test_essentia_adapter.py -q
 
 # ---------- deploy ----------------------------------------------------------
 
