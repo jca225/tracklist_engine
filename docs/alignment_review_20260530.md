@@ -228,7 +228,9 @@ Priorities updated given legacy-download context: **re-source before re-label**.
 ### Tier 2 — new ingest capabilities
 
 8. Extended classifier + duration gate.
-9. Acap/inst candidate search with quality scoring.
+9. Acap/inst candidate search with quality scoring — ops playbook:
+   [stem_discovery_playbook.md](stem_discovery_playbook.md); tools:
+   `replace_stem_audio.py`, `track_audio_correction` ledger.
 10. Mix-extract path for phantom tracks (Lux Holmes Omega).
 11. GT schema extensions: warp BPM, transitions, FX, substitutability.
 

@@ -189,26 +189,28 @@ def _qualifier_suffix(
     stem: str = "regular",
     variant: str = "regular",
 ) -> str:
-    """Build the version/remix suffix for a track filename.
+    """Build the version/remix/stem suffix for a track filename.
 
-    Prefers the trailing parenthetical of `full_name` ("(Syn Cole Remix)") so
-    the annotator can tell which remix a slot is at a glance. Falls back to
-    the version axis ("remix" → "(Remix)") only when full_name carries no
-    parens. Appends stem/variant qualifiers when not regular."""
+    Prefers the trailing parenthetical of `full_name` ("(Syn Cole Remix)").
+    Falls back to the version axis when full_name has no parens. Always appends
+    separate (Acappella) / (Instrumental) / (Extended Mix) when those axes are
+    non-regular so remix + stem slots do not collide in Ableton."""
+    parts: list[str] = []
     if full_name:
         m = _TRAILING_PAREN_RE.search(full_name)
         if m:
-            return f" ({m.group(1).strip()})"
-    if version and version != "original":
-        label = _VERSION_DISPLAY.get(version, version.title())
-        return f" ({label})"
+            parts.append(m.group(1).strip())
+    elif version and version != "original":
+        parts.append(_VERSION_DISPLAY.get(version, version.title()))
     if stem == "acappella":
-        return " (Acappella)"
-    if stem == "instrumental":
-        return " (Instrumental)"
+        parts.append("Acappella")
+    elif stem == "instrumental":
+        parts.append("Instrumental")
     if variant == "extended":
-        return " (Extended Mix)"
-    return ""
+        parts.append("Extended Mix")
+    if not parts:
+        return ""
+    return "".join(f" ({p})" for p in parts)
 
 
 def _label_rows(

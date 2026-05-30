@@ -15,7 +15,8 @@ Invoke from repo root, usually with `venvs/audio/bin/python scripts/<x>.py`.
 - `redownload_via_ytmusic.py` — re-source yt-dlp `track_audio` rows via YT Music search (the main rescue path; sends `full_name` so the remixer qualifier resolves the right release).
 - `redownload_via_spotdl.py` — re-source yt-dlp rows via pooled spotdl.
 - `replace_track_audio.py` — manually replace one track's audio (URL / local file). **Destructive** (deletes old row + cascades). Backs the `replace-track-audio` skill.
-- `acquire_variant.py` — acquire a vocal/instrumental variant from a URL into a staging folder (v1); v2 (planned) writes a canonical `track_audio` row reusing `replace_track_audio.py`'s write path.
+- `acquire_variant.py` — acquire a vocal/instrumental variant (staging or canonical `track_audio` row).
+- `replace_stem_audio.py` — replace a bad acappella/instrumental row by `--track-audio-id` + URL/file; logs `axis=stem`, runs fingerprint check. See [../docs/stem_discovery_playbook.md](../docs/stem_discovery_playbook.md).
 - `reconcile_orphans.py` — route disk orphans (no `track_audio.path`) into delete / register / promote; dry-run by default. Use **ASCII** punctuation in print paths (pi SSH locale). Do not re-run `--apply` after a completed pass without dry-run — see [../docs/agent_handoff_reconcile_20260530.md](../docs/agent_handoff_reconcile_20260530.md).
 - `reconcile_pass1_manual.sh` — pre-apply manual delete list for dup clusters (run before bulk `--apply` when needed).
 - `migrate_identity_axes.sql` / `migrate_phase4_recording.sql` — pi-storage DB column renames + `work`/`recording`/`set_ground_truth` (run once after deploy; then `tokenizer.materialize`).

@@ -72,9 +72,12 @@ from ingest.adapters.downloader import DownloadConfig
 from ingest.errors import DownloadError
 from core.models import AudioAsset, MediaSource
 from core.result import Err, Ok
+from core.identity import DEFAULT_STEM, normalize_stem
 from ingest.corrections import Correction, latest_row, log_correction, snapshot_row
 
 _log = logging.getLogger("replace_track_audio")
+
+_STEM_CHOICES = ("regular", "acappella", "instrumental")
 
 
 def _sha256(path: Path) -> str:
@@ -112,6 +115,27 @@ def _spotify_track_id(url: str) -> str | None:
     """Extract track id from open.spotify.com/track/<id>."""
     m = re.search(r"/track/([A-Za-z0-9]+)", url)
     return m.group(1) if m else None
+
+
+def _resolve_stem_for_replace(
+    stem_arg: str | None,
+    old: dict | None,
+) -> str:
+    """CLI --stem, else retired row's stem, else regular."""
+    if stem_arg is not None:
+        return normalize_stem(stem_arg)
+    if old and old.get("stem"):
+        return normalize_stem(str(old["stem"]))
+    return DEFAULT_STEM
+
+
+def _resolve_axis_for_ledger(axis: str, stem: str) -> str:
+    """Default --axis version; auto-use stem when replacing acappella/instrumental."""
+    if axis != "version":
+        return axis
+    if stem in ("acappella", "instrumental"):
+        return "stem"
+    return axis
 
 
 def _resolve_track_id_from_taid(db_path: Path, taid: int) -> str | None:
@@ -448,7 +472,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     p.add_argument("--axis", default="version",
                    choices=("version", "variant", "stem"),
-                   help="Which identity axis was wrong (correction ledger).")
+                   help="Which identity axis was wrong (correction ledger). "
+                        "Defaults to stem when replacing acappella/instrumental rows.")
+    p.add_argument("--stem", default=None, choices=_STEM_CHOICES,
+                   help="Identity stem for the new row (default: inherit from "
+                        "--track-audio-id row, else regular).")
     p.add_argument("--edit", default="regular",
                    choices=("regular", "extended"),
                    help="Edit length (Variant axis) for the new row.")
@@ -513,34 +541,41 @@ def _run(args: argparse.Namespace) -> int:
     # so the correction ledger keeps the old identity even after cascade.
     old = (snapshot_row(args.db, args.track_audio_id)
            if args.track_audio_id is not None else None)
+    stem = _resolve_stem_for_replace(args.stem, old)
+    ledger_axis = _resolve_axis_for_ledger(args.axis, stem)
 
     promote = not args.no_promote_reference
     if args.url:
         rc = _replace_via_url(
             args.db, args.audio_root, track_id,
-            args.url, args.track_audio_id, variant=args.edit,
+            args.url, args.track_audio_id, stem=stem, variant=args.edit,
             promote_reference=promote, purge_siblings=args.purge_siblings,
         )
     else:  # File mode
         pid = args.player_id or args.file.stem
         rc = _replace_via_file(
             args.db, args.audio_root, track_id, args.file, pid,
-            args.track_audio_id, variant=args.edit,
+            args.track_audio_id, stem=stem, variant=args.edit,
             promote_reference=promote, purge_siblings=args.purge_siblings,
         )
 
     if rc == 0 and not args.no_log:
-        _log_to_ledger(args, track_id, old)
+        _log_to_ledger(args, track_id, old, ledger_axis=ledger_axis)
     return rc
 
 
-def _log_to_ledger(args: argparse.Namespace, track_id: str,
-                   old: dict | None) -> None:
+def _log_to_ledger(
+    args: argparse.Namespace,
+    track_id: str,
+    old: dict | None,
+    *,
+    ledger_axis: str,
+) -> None:
     """Append a correction row for a successful replace/add (non-fatal)."""
     new = latest_row(args.db, track_id)
     action = "replace" if args.track_audio_id is not None else "add"
     c = Correction(
-        track_id=track_id, axis=args.axis, action=action,
+        track_id=track_id, axis=ledger_axis, action=action,
         set_id=args.set_id, position=args.position,
         old_track_audio_id=args.track_audio_id,
         old_platform=(old or {}).get("platform"),
