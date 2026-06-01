@@ -40,6 +40,13 @@ Status tracked inline below.
 - `labeling/write_back_ground_truth.py` — YAML → DB
 - Algorithmic aligner still deferred (`workspaces/`)
 
+## Phase 6 — Analysis / embedding readiness ⏳
+
+Identity/inventory (0–5) is done. The next bottleneck is feature generation that
+feeds the aligner: 330M MERT backfill, set/mix-side MERT, variant MERT, and
+re-sourcing pre-fix audio. Tracked separately:
+[embedding_backfill_plan.md](embedding_backfill_plan.md).
+
 ## Three axes (vocabulary)
 
 | Axis | Values | Source |

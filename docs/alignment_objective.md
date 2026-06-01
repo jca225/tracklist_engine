@@ -45,7 +45,9 @@ dependency on the timeline, not the 20k.
 
 ## Upstream capabilities (ingest/analysis, *not* the aligner)
 
-These feed alignment but belong to earlier stages — keep code in the right module:
+These feed alignment but belong to earlier stages — keep code in the right module.
+**Execution tracking:** [embedding_backfill_plan.md](embedding_backfill_plan.md)
+(Phase 6 — 330M backfill, set-side MERT, variant MERT, re-sourcing).
 
 - **Stem discovery** *(ingest / official-stems search)* — find or select better
   acappellas/instrumentals online, and choose among separators (Demucs vs UVR).
