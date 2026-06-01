@@ -54,7 +54,7 @@ failure:
   kill_process_after_consecutive_failures: 5
 
 retry:
-  max_retries: 3
+  max_retries: 4
   retry_delay_s: 10
   retry_jitter_s: 2
 
