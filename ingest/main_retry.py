@@ -35,6 +35,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from core import db as db_adapter
+from core.db import connect
 from .adapters import spotdl_adapter
 from .adapters.downloader import DownloadConfig
 from .errors import DbError, DownloadError
@@ -177,8 +178,7 @@ def _load_candidates(
         ORDER BY m.track_id
     """
     try:
-        with sqlite3.connect(db_path) as conn:
-            conn.row_factory = sqlite3.Row
+        with connect(db_path) as conn:
             rows = conn.execute(query, params).fetchall()
     except sqlite3.DatabaseError as e:
         return Err(DbError(kind="query_failed", detail=str(e)))

@@ -13,7 +13,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from core.db import _connect
+from core.db import connect
 from core.errors import DbError
 from core.identity import normalize_stem
 from core.result import Err, Ok, Result
@@ -48,7 +48,7 @@ def log_correction(db_path: Path, c: Correction) -> Result[int, DbError]:
     if c.action not in ACTIONS:
         return Err(DbError(kind="bad_action", detail=f"{c.action!r} not in {ACTIONS}"))
     try:
-        with _connect(db_path) as conn:
+        with connect(db_path) as conn:
             cur = conn.execute(
                 """
                 INSERT INTO track_audio_correction
@@ -72,8 +72,7 @@ def log_correction(db_path: Path, c: Correction) -> Result[int, DbError]:
 
 
 def snapshot_row(db_path: Path, track_audio_id: int) -> dict | None:
-    with sqlite3.connect(db_path) as conn:
-        conn.row_factory = sqlite3.Row
+    with connect(db_path) as conn:
         r = conn.execute(
             "SELECT platform, player_id, source_url, stem "
             "FROM track_audio WHERE track_audio_id = ?",
@@ -92,8 +91,7 @@ def latest_row(db_path: Path, track_id: str, stem: str | None = None) -> dict | 
         q += " AND stem = ?"
         params.append(normalize_stem(stem))
     q += " ORDER BY track_audio_id DESC LIMIT 1"
-    with sqlite3.connect(db_path) as conn:
-        conn.row_factory = sqlite3.Row
+    with connect(db_path) as conn:
         r = conn.execute(q, tuple(params)).fetchone()
     return dict(r) if r else None
 

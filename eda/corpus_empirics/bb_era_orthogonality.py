@@ -23,6 +23,8 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+
+from corpus_empirics.stats import pearson
 from urllib.request import Request, urlopen
 
 DB = Path("data/db/music_database.db")
@@ -163,15 +165,6 @@ def main() -> None:
     gaps = [a - i for i, a in zip(instr, acap)]
 
     # Pearson + Spearman without scipy.
-    def pearson(xs, ys):
-        n = len(xs)
-        mx = sum(xs) / n
-        my = sum(ys) / n
-        num = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
-        dx = (sum((x - mx) ** 2 for x in xs)) ** 0.5
-        dy = (sum((y - my) ** 2 for y in ys)) ** 0.5
-        return num / (dx * dy) if dx and dy else float("nan")
-
     def spearman(xs, ys):
         def rank(vs):
             order = sorted(range(len(vs)), key=lambda i: vs[i])

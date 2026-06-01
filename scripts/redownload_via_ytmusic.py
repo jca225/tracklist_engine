@@ -41,7 +41,6 @@ import argparse
 import json
 import logging
 import os
-import shutil
 import sqlite3
 import sys
 import time
@@ -52,17 +51,14 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
 from core import db as db_adapter
+from core.db import connect
+from scripts.rescue_common import bb_set_ids_sql, run_two_phase
 from ingest.adapters import ytmusic_adapter
 from ingest.errors import DownloadError
 from ingest.search_query import to_search_query
 from core.result import Err, Ok
 
 _log = logging.getLogger("redownload_via_ytmusic")
-
-
-_BB_SETS: frozenset[str] = frozenset((
-    "w1mgcjt", "2nvzlh2k", "1fsnxchk", "qj4v0wt", "1yl70ql1", "237tdqmk",
-))
 
 
 @dataclass(frozen=True)
@@ -130,12 +126,15 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--no-replace", action="store_true",
                    help="Skip Phase 2 destructive cleanup; both rows coexist.")
-    p.add_argument("--mode", choices=("replace", "acquire", "all"),
+    p.add_argument("--mode", choices=("replace", "acquire", "all", "resource"),
                    default="all",
                    help="replace=only existing yt-dlp rows (the original "
                         "redownload behavior); acquire=only tracks with no "
-                        "track_audio row yet; all=both, replace candidates "
-                        "first then acquire (default).")
+                        "track_audio row yet; resource=re-source existing "
+                        "youtube/youtube_music rows (variant-aware query); "
+                        "all=both replace+acquire (default).")
+    p.add_argument("--track-ids", nargs="+", default=None,
+                   help="Restrict to these track_ids only.")
     p.add_argument("--job-file", type=Path, default=None,
                    help="Optional JSON job file (e.g. data/djs/tier1_plus_bb.json) "
                         "to restrict candidates to tracks that appear in any of "
@@ -175,8 +174,9 @@ def _row_to_candidate(r: sqlite3.Row) -> Candidate:
 
 def _load_candidates(
     db_path: Path,
-    mode: str,                            # 'replace' | 'acquire' | 'all'
+    mode: str,                            # 'replace' | 'acquire' | 'all' | 'resource'
     job_set_ids: frozenset[str] | None,   # None = whole corpus
+    track_ids: frozenset[str] | None = None,
 ) -> tuple[Candidate, ...]:
     """Loads candidates per `mode`:
       - 'replace': existing track_audio rows where platform='youtube'
@@ -190,7 +190,11 @@ def _load_candidates(
     Ordering: BB-first, then by set_id, then track_audio_id (or track_id
     for acquire candidates with no audio_id).
     """
-    bb_csv = ",".join(f"'{s}'" for s in _BB_SETS)
+    bb_csv = bb_set_ids_sql()
+    track_filter = ""
+    if track_ids:
+        tid_csv = ",".join(f"'{t}'" for t in track_ids)
+        track_filter = f"AND base.track_id IN ({tid_csv})"
     job_filter = ""
     if job_set_ids is not None and job_set_ids:
         job_csv = ",".join(f"'{s}'" for s in job_set_ids)
@@ -202,15 +206,18 @@ def _load_candidates(
         )
 
     out: list[Candidate] = []
-    with sqlite3.connect(db_path) as conn:
-        conn.row_factory = sqlite3.Row
-
-        if mode in ("replace", "all"):
+    with connect(db_path) as conn:
+        if mode in ("replace", "all", "resource"):
+            platform_clause = (
+                "ta.platform IN ('youtube', 'youtube_music')"
+                if mode == "resource"
+                else "ta.platform = 'youtube'"
+            )
             replace_q = f"""
                 WITH base AS (
                     SELECT ta.track_audio_id, ta.path, ta.track_id
                     FROM track_audio ta
-                    WHERE ta.platform = 'youtube'
+                    WHERE {platform_clause}
                 )
                 SELECT
                   base.track_audio_id   AS yt_track_audio_id,
@@ -234,12 +241,13 @@ def _load_candidates(
                 JOIN track_metadata tm ON tm.track_id = base.track_id
                 WHERE tm.title IS NOT NULL AND tm.title != ''
                   {job_filter}
+                  {track_filter}
                 ORDER BY is_bb DESC, set_id, base.track_audio_id
             """
             for r in conn.execute(replace_q).fetchall():
                 out.append(_row_to_candidate(r))
 
-        if mode in ("acquire", "all"):
+        if mode in ("acquire", "all") and mode != "resource":
             acquire_q = f"""
                 WITH base AS (
                     SELECT tm.track_id
@@ -270,6 +278,7 @@ def _load_candidates(
                 JOIN track_metadata tm ON tm.track_id = base.track_id
                 WHERE 1=1
                   {job_filter}
+                  {track_filter}
                 ORDER BY is_bb DESC, set_id, base.track_id
             """
             for r in conn.execute(acquire_q).fetchall():
@@ -347,76 +356,6 @@ def _phase1_download(
     return stats, ok_map
 
 
-def _phase2_replace(
-    candidates: tuple[Candidate, ...],
-    ok_map: dict[str, int],
-    audio_root: Path,
-    db_path: Path,
-    stats: RunStats,
-) -> RunStats:
-    """For each Phase-1 success, sanity-check the new file then DELETE the
-    yt-dlp row (cascade kills downstream analysis tables). Unlink the
-    yt-dlp m4a and the old stems dir.
-    """
-    _log.info("Phase 2: replacing %d yt-dlp rows", len(ok_map))
-    stems_root = audio_root / "stems"
-
-    for c in candidates:
-        if not c.needs_replace:
-            # ACQUIRE candidate — Phase 1 inserted a fresh row, nothing to
-            # delete in Phase 2. (Counted in phase2_skipped to avoid
-            # over-reporting "actual" failures.)
-            stats = dc_replace(stats, phase2_skipped=stats.phase2_skipped + 1)
-            continue
-        new_taid = ok_map.get(c.track_id)
-        if new_taid is None:
-            stats = dc_replace(stats, phase2_skipped=stats.phase2_skipped + 1)
-            continue
-
-        # Sanity check: new file must exist and be reasonable size.
-        try:
-            with sqlite3.connect(db_path) as conn:
-                conn.row_factory = sqlite3.Row
-                row = conn.execute(
-                    "SELECT path FROM track_audio WHERE track_audio_id = ?",
-                    (new_taid,),
-                ).fetchone()
-        except sqlite3.DatabaseError as e:
-            stats = dc_replace(stats, phase2_failed=stats.phase2_failed + 1)
-            _log.error("[skip] %s lookup failed: %s", c.track_id, e)
-            continue
-        new_path = Path(row["path"]) if row and row["path"] else None
-        if new_path is None or not new_path.is_file() or new_path.stat().st_size < 100_000:
-            stats = dc_replace(stats, phase2_skipped=stats.phase2_skipped + 1)
-            _log.warning("[skip-unsafe] %s new file missing/tiny (%s); "
-                         "leaving yt-dlp row in place",
-                         c.track_id, new_path)
-            continue
-
-        try:
-            with sqlite3.connect(db_path) as conn:
-                conn.execute("PRAGMA foreign_keys = ON;")
-                conn.execute("DELETE FROM track_audio WHERE track_audio_id = ?",
-                             (c.yt_track_audio_id,))
-                conn.commit()
-
-            yt_path = Path(c.yt_audio_path)
-            if yt_path.is_file():
-                yt_path.unlink()
-
-            old_stems = stems_root / str(c.yt_track_audio_id)
-            if old_stems.exists():
-                shutil.rmtree(old_stems, ignore_errors=True)
-
-            stats = dc_replace(stats, phase2_replaced=stats.phase2_replaced + 1)
-            _log.info("replaced %s yt_taid=%d -> ytm_taid=%d",
-                      c.track_id, c.yt_track_audio_id, new_taid)
-        except (sqlite3.DatabaseError, OSError) as e:
-            stats = dc_replace(stats, phase2_failed=stats.phase2_failed + 1)
-            _log.error("replace failed for %s: %s", c.track_id, e)
-    return stats
-
-
 def _run(args: argparse.Namespace) -> int:
     logging.basicConfig(
         level=getattr(logging, args.log_level),
@@ -435,7 +374,8 @@ def _run(args: argparse.Namespace) -> int:
             _log.error("failed to read job file %s: %s", args.job_file, e)
             return 1
 
-    candidates = _load_candidates(args.db, args.mode, job_set_ids)
+    track_ids = frozenset(args.track_ids) if args.track_ids else None
+    candidates = _load_candidates(args.db, args.mode, job_set_ids, track_ids)
     if args.max_tracks is not None:
         candidates = candidates[: args.max_tracks]
     if not candidates:
@@ -461,29 +401,17 @@ def _run(args: argparse.Namespace) -> int:
             _log.info("... and %d more", len(candidates) - 10)
         return 0
 
-    t0 = time.monotonic()
-    stats, ok_map = _phase1_download(candidates, args)
-    _log.info("Phase 1 done in %.0fs: %d ok, %d search-fail, %d dl-fail, %d insert-fail",
-              time.monotonic() - t0, stats.phase1_ok,
-              stats.phase1_failed_search, stats.phase1_failed_dl,
-              stats.phase1_failed_insert)
-
-    if not args.no_replace and ok_map:
-        t1 = time.monotonic()
-        stats = _phase2_replace(candidates, ok_map, args.audio_root, args.db, stats)
-        _log.info("Phase 2 done in %.0fs: %d replaced, %d skipped, %d failed",
-                  time.monotonic() - t1,
-                  stats.phase2_replaced, stats.phase2_skipped, stats.phase2_failed)
-
-    _log.info(
-        "DONE in %.0fs | candidates=%d phase1_ok=%d phase2_replaced=%d "
-        "(failures: search=%d, dl=%d, insert=%d, replace=%d)",
-        time.monotonic() - t0,
-        stats.candidates, stats.phase1_ok, stats.phase2_replaced,
-        stats.phase1_failed_search, stats.phase1_failed_dl,
-        stats.phase1_failed_insert, stats.phase2_failed,
+    return run_two_phase(
+        candidates=candidates,
+        args=args,
+        phase1_fn=_phase1_download,
+        stats_cls=RunStats,
+        log=_log,
+        phase2_replacement_label="ytmusic",
+        phase1_failure_fields=(
+            "phase1_failed_search", "phase1_failed_dl", "phase1_failed_insert",
+        ),
     )
-    return 0
 
 
 def main(argv: list[str] | None = None) -> int:

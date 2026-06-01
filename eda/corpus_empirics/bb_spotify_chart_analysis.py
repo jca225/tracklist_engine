@@ -31,6 +31,8 @@ import sys
 from pathlib import Path
 from statistics import mean, median
 
+from corpus_empirics.stats import pearson
+
 AUX_DB = Path("data/analysis/aux.db")
 MAIN_DB = Path("data/db/music_database.db")
 OUT_JSON = Path("data/analysis/bb_spotify_chart.json")
@@ -54,16 +56,6 @@ def parse_volume(title: str) -> int | None:
         m = re.search(pat, title.lower())
         if m: return int(m.group(1))
     return None
-
-
-def pearson(xs, ys):
-    n = len(xs)
-    if n < 2: return float("nan")
-    mx = sum(xs) / n; my = sum(ys) / n
-    num = sum((x-mx)*(y-my) for x,y in zip(xs,ys))
-    dx = sum((x-mx)**2 for x in xs)**0.5
-    dy = sum((y-my)**2 for y in ys)**0.5
-    return num/(dx*dy) if dx and dy else float("nan")
 
 
 def spearman(xs, ys):

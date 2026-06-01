@@ -122,13 +122,15 @@ def main() -> None:
     config_file_path = project_root / "config.yaml"
 
     if not config_file_path.exists():
-        print(f"CRITICAL: Config file not found at {config_file_path}")
+        log = logging.getLogger("Main")
+        log.critical("Config file not found at %s", config_file_path)
         return
 
     try:
         cfg = load_config(config_file_path, project_root)
     except Exception as e:
-        print(f"CRITICAL: Could not load config: {e}")
+        log = logging.getLogger("Main")
+        log.critical("Could not load config: %s", e)
         return
 
     setup_logging(cfg)

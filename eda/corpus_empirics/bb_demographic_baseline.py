@@ -28,6 +28,8 @@ import sys
 from math import exp, log
 from collections import defaultdict
 
+from corpus_empirics.stats import fit_ols, pearson
+
 DB = "data/db/music_database.db"
 AUX = "data/analysis/aux.db"
 TODAY = 2026
@@ -78,41 +80,6 @@ def expected_demand(Y_set: int, today: int = TODAY,
         sensitivity = han(Y_set - b)
         total += pop * sensitivity * years_watching
     return total
-
-
-def pearson(xs, ys):
-    n = len(xs)
-    if n < 2: return float("nan")
-    mx, my = sum(xs)/n, sum(ys)/n
-    num = sum((x-mx)*(y-my) for x,y in zip(xs,ys))
-    dx = (sum((x-mx)**2 for x in xs))**0.5
-    dy = (sum((y-my)**2 for y in ys))**0.5
-    return num/(dx*dy) if dx and dy else float("nan")
-
-
-def fit_ols(y, X):
-    n, k = len(y), len(X)
-    cols = [[1.0]*n] + X
-    XtX = [[sum(cols[i][r]*cols[j][r] for r in range(n)) for j in range(k+1)] for i in range(k+1)]
-    Xty = [sum(cols[i][r]*y[r] for r in range(n)) for i in range(k+1)]
-    A = [row[:]+[Xty[i]] for i, row in enumerate(XtX)]
-    m = k+1
-    for i in range(m):
-        p = max(range(i, m), key=lambda r: abs(A[r][i]))
-        A[i], A[p] = A[p], A[i]
-        d = A[i][i]
-        if abs(d) < 1e-12: return None, None, None
-        for j in range(i, m+1): A[i][j] /= d
-        for r in range(m):
-            if r == i: continue
-            f = A[r][i]
-            for j in range(i, m+1): A[r][j] -= f*A[i][j]
-    b = [A[i][m] for i in range(m)]
-    yhat = [b[0] + sum(b[j+1]*X[j][r] for j in range(k)) for r in range(n)]
-    sse = sum((y[r]-yhat[r])**2 for r in range(n))
-    my = sum(y)/n
-    sst = sum((y[r]-my)**2 for r in range(n))
-    return b, 1 - sse/sst, [y[r]-yhat[r] for r in range(n)]
 
 
 def cen(xs):

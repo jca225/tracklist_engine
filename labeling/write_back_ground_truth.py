@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sqlite3
 import sys
 from pathlib import Path
 
@@ -27,6 +26,7 @@ if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
 from labeling.ground_truth.schema import load as load_gt
+from core.db import connect
 from core.result import Err, Ok
 
 
@@ -67,7 +67,7 @@ def write_back(db_path: Path, yaml_path: Path, *, dry_run: bool = False) -> int:
             print(f"  ... +{len(rows) - 5} more")
         return 0
 
-    with sqlite3.connect(db_path) as conn:
+    with connect(db_path) as conn:
         conn.executemany(
             """
             INSERT OR REPLACE INTO set_ground_truth (

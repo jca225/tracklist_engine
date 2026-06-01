@@ -31,6 +31,8 @@ from collections import defaultdict
 from pathlib import Path
 from statistics import mean, median
 
+from corpus_empirics.stats import partial_pearson, pearson
+
 AUX_DB = Path("data/analysis/aux.db")
 MAIN_DB = Path("data/db/music_database.db")
 OUT_JSON = Path("data/analysis/bb_weekly_chart.json")
@@ -58,31 +60,6 @@ def parse_volume(title: str) -> int | None:
         if m:
             return int(m.group(1))
     return None
-
-
-def pearson(xs: list[float], ys: list[float]) -> float:
-    n = len(xs)
-    if n < 2:
-        return float("nan")
-    mx = sum(xs) / n
-    my = sum(ys) / n
-    num = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
-    dx = (sum((x - mx) ** 2 for x in xs)) ** 0.5
-    dy = (sum((y - my) ** 2 for y in ys)) ** 0.5
-    return num / (dx * dy) if dx and dy else float("nan")
-
-
-def partial_pearson(xs, ys, zs):
-    """Pearson(x,y) controlling for z."""
-    def resid(vs, ctrl):
-        mc = sum(ctrl) / len(ctrl)
-        mv = sum(vs) / len(vs)
-        num = sum((c - mc) * (v - mv) for c, v in zip(ctrl, vs))
-        den = sum((c - mc) ** 2 for c in ctrl)
-        b = num / den if den else 0.0
-        a = mv - b * mc
-        return [v - (a + b * c) for c, v in zip(ctrl, vs)]
-    return pearson(resid(xs, zs), resid(ys, zs))
 
 
 def pct(xs: list, p: float) -> float:

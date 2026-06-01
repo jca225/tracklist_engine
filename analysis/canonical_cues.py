@@ -24,6 +24,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from core.db import connect
+
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 # Audio storage root. Default points at the canonical pi-storage path; override
 # via TRACKLIST_AUDIO_ROOT for local-scratch runs (see CLAUDE.md → Storage).
@@ -55,13 +57,6 @@ BB11_ORIGINALS: tuple[OriginalSpec, ...] = (
     OriginalSpec("2m5wh0t5", "Gnash",              "I Hate U I Love U Olivia O'Brien"),
     # ntm7wqx (Antoine Delvig & Paul Vinx - Blondies) already has an original variant.
 )
-
-
-def _connect(db_path: Path) -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON;")
-    return conn
 
 
 # ---- yt-dlp search + download --------------------------------------------
@@ -291,15 +286,12 @@ def main() -> int:
               "table for other sets or automate variant detection.")
         return 1
 
-    conn = _connect(args.db)
-    try:
+    with connect(args.db) as conn:
         print("Backfilling canonical cues from existing 'original' variants…")
         backfill_existing_originals(conn)
         print("\nProcessing BB11 tracks needing an original variant…")
         for spec in BB11_ORIGINALS:
             process(spec, conn)
-    finally:
-        conn.close()
     print("\ndone")
     return 0
 

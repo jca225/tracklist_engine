@@ -43,7 +43,6 @@ import hashlib
 import json
 import logging
 import os
-import sqlite3
 import subprocess
 import sys
 from collections import defaultdict
@@ -54,6 +53,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
 from core import db as db_adapter
+from core.db import connect
 from core.models import AudioAsset
 from core.result import Ok
 from ingest.corrections import Correction, log_correction
@@ -133,8 +133,7 @@ def _load_registered(db: Path) -> tuple[set[str], dict[str, list[RegRow]]]:
     """Return (set of registered paths, by_tid -> [RegRow])."""
     paths: set[str] = set()
     by_tid: dict[str, list[RegRow]] = defaultdict(list)
-    with sqlite3.connect(db) as conn:
-        conn.row_factory = sqlite3.Row
+    with connect(db) as conn:
         for r in conn.execute(
             "SELECT track_audio_id, track_id, path, platform, player_id, "
             "duration_s, stem, is_reference FROM track_audio"
@@ -157,8 +156,7 @@ def _reference_row(rows: list[RegRow]) -> RegRow | None:
 def _acappella_smell(db: Path, track_id: str, ref: RegRow) -> bool:
     if ref.stem and ref.stem.lower() == "acappella":
         return True
-    with sqlite3.connect(db) as conn:
-        conn.row_factory = sqlite3.Row
+    with connect(db) as conn:
         r = conn.execute(
             "SELECT full_name, version FROM track_metadata WHERE track_id=?",
             (track_id,),
@@ -296,7 +294,7 @@ def _do_register(db: Path, o: Orphan, *, as_reference: bool) -> int | None:
         return None
     taid = r.value
     if as_reference:
-        with sqlite3.connect(db) as conn:
+        with connect(db) as conn:
             conn.execute("UPDATE track_audio SET is_reference=1 WHERE track_audio_id=?", (taid,))
             conn.commit()
     log_correction(db, Correction(
@@ -316,7 +314,7 @@ def _do_promote(db: Path, o: Orphan, by_tid: dict[str, list[RegRow]]) -> int | N
     if new_taid is None:
         return None
     # Demote the old reference IN PLACE — keep its stems/analysis (no cascade).
-    with sqlite3.connect(db) as conn:
+    with connect(db) as conn:
         conn.execute(
             "UPDATE track_audio SET is_reference=0, stem='acappella' "
             "WHERE track_audio_id=?", (ref.track_audio_id,))

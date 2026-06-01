@@ -46,8 +46,6 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-import shutil
-import sqlite3
 import sys
 import time
 from dataclasses import dataclass, replace as dc_replace
@@ -57,6 +55,8 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
 from core import db as db_adapter
+from core.db import connect
+from scripts.rescue_common import bb_set_ids_sql, run_two_phase
 from ingest.adapters import spotdl_adapter
 from ingest.errors import DownloadError
 from core.models import MediaSource, spotify_track_url
@@ -74,14 +74,6 @@ class Candidate:
     spotify_player_id: str       # Spotify track ID for spotdl
     set_id: str                  # any DJ set this track appears in (used for ordering)
     is_bb: int                   # 1 if track appears in any BB10-15 set, 0 otherwise
-
-
-# BB10-15 set IDs — tracks appearing in any of these get redownloaded first so
-# Vast can start re-analyzing them quickly instead of waiting for the global
-# queue to roll past.
-_BB_SETS: frozenset[str] = frozenset((
-    "w1mgcjt", "2nvzlh2k", "1fsnxchk", "qj4v0wt", "1yl70ql1", "237tdqmk",
-))
 
 
 @dataclass(frozen=True)
@@ -139,7 +131,7 @@ def _load_candidates(db_path: Path) -> tuple[Candidate, ...]:
     inherits whichever set comes first alphabetically. This deduplicates
     the candidate list (one row per unique track_audio_id).
     """
-    bb_csv = ",".join(f"'{s}'" for s in _BB_SETS)
+    bb_csv = bb_set_ids_sql()
     query = f"""
         SELECT
           ta.track_audio_id     AS yt_track_audio_id,
@@ -176,8 +168,7 @@ def _load_candidates(db_path: Path) -> tuple[Candidate, ...]:
           )
         ORDER BY is_bb DESC, set_id, ta.track_audio_id
     """
-    with sqlite3.connect(db_path) as conn:
-        conn.row_factory = sqlite3.Row
+    with connect(db_path) as conn:
         rows = conn.execute(query).fetchall()
     return tuple(
         Candidate(
@@ -259,85 +250,6 @@ def _phase1_download(
     return stats, ok_map
 
 
-def _phase2_replace(
-    candidates: tuple[Candidate, ...],
-    ok_map: dict[str, int],
-    audio_root: Path,
-    db_path: Path,
-    stats: RunStats,
-) -> RunStats:
-    """For each track where Phase 1 inserted a spotify row, delete the yt-dlp
-    track_audio row (cascades to analysis tables) and unlink files on disk.
-
-    Stems: track_stems rows are deleted by cascade. The on-disk stems dir
-    /mnt/storage/stems/<old_track_audio_id>/ also needs manual rmtree —
-    cascade only handles DB.
-    """
-    _log.info("Phase 2: replacing %d yt-dlp rows with their spotify replacements",
-              len(ok_map))
-    stems_root = audio_root / "stems"
-    objects_root = audio_root / "objects"
-
-    for c in candidates:
-        new_taid = ok_map.get(c.track_id)
-        if new_taid is None:
-            stats = dc_replace(stats, phase2_skipped=stats.phase2_skipped + 1)
-            _log.debug("[skip] %s no spotify replacement (Phase 1 did not insert)",
-                       c.track_id)
-            continue
-
-        # Sanity check: the spotify replacement file must actually exist on
-        # disk and be non-trivially sized before we delete the yt-dlp source.
-        # If insert_audio succeeded but the file was somehow missing, blindly
-        # deleting the yt-dlp would leave the track audioless.
-        try:
-            with sqlite3.connect(db_path) as conn:
-                conn.row_factory = sqlite3.Row
-                row = conn.execute(
-                    "SELECT path FROM track_audio WHERE track_audio_id = ?",
-                    (new_taid,),
-                ).fetchone()
-        except sqlite3.DatabaseError as e:
-            stats = dc_replace(stats, phase2_failed=stats.phase2_failed + 1)
-            _log.error("[skip] %s could not look up new spotify row (taid=%d): %s",
-                       c.track_id, new_taid, e)
-            continue
-        new_path = Path(row["path"]) if row and row["path"] else None
-        if new_path is None or not new_path.is_file() or new_path.stat().st_size < 100_000:
-            stats = dc_replace(stats, phase2_skipped=stats.phase2_skipped + 1)
-            _log.warning("[skip-unsafe] %s spotify file missing or tiny (path=%s); "
-                         "leaving yt-dlp row in place",
-                         c.track_id, new_path)
-            continue
-
-        try:
-            # 1. Delete the yt-dlp DB row → cascade kills downstream tables.
-            with sqlite3.connect(db_path) as conn:
-                conn.execute("PRAGMA foreign_keys = ON;")
-                conn.execute("DELETE FROM track_audio WHERE track_audio_id = ?",
-                             (c.yt_track_audio_id,))
-                conn.commit()
-
-            # 2. Unlink the yt-dlp m4a file.
-            yt_path = Path(c.yt_audio_path)
-            if yt_path.is_file():
-                yt_path.unlink()
-
-            # 3. Remove the old stems directory keyed by the deleted track_audio_id.
-            old_stems = stems_root / str(c.yt_track_audio_id)
-            if old_stems.exists():
-                shutil.rmtree(old_stems, ignore_errors=True)
-
-            stats = dc_replace(stats, phase2_replaced=stats.phase2_replaced + 1)
-            _log.info("replaced track_id=%s yt_taid=%d -> spotify_taid=%d",
-                      c.track_id, c.yt_track_audio_id, new_taid)
-        except (sqlite3.DatabaseError, OSError) as e:
-            stats = dc_replace(stats, phase2_failed=stats.phase2_failed + 1)
-            _log.error("replace failed for %s (taid=%d): %s",
-                       c.track_id, c.yt_track_audio_id, e)
-    return stats
-
-
 def _run(args: argparse.Namespace) -> int:
     logging.basicConfig(
         level=getattr(logging, args.log_level),
@@ -367,30 +279,15 @@ def _run(args: argparse.Namespace) -> int:
                   "%d Phase 2 deletes", len(candidates), len(candidates))
         return 0
 
-    t0 = time.monotonic()
-    stats, ok_map = _phase1_download(candidates, args)
-    _log.info("Phase 1 done in %.0fs: %d/%d ok, %d dl-fail, %d insert-fail",
-              time.monotonic() - t0,
-              stats.phase1_ok, stats.candidates,
-              stats.phase1_failed_to_dl, stats.phase1_failed_to_insert)
-
-    if not args.no_replace and ok_map:
-        t1 = time.monotonic()
-        stats = _phase2_replace(candidates, ok_map, args.audio_root, args.db, stats)
-        _log.info("Phase 2 done in %.0fs: %d replaced, %d skipped, %d failed",
-                  time.monotonic() - t1,
-                  stats.phase2_replaced, stats.phase2_skipped, stats.phase2_failed)
-    elif args.no_replace:
-        _log.info("Phase 2 skipped (--no-replace). Spotify rows coexist with yt-dlp rows.")
-
-    _log.info(
-        "DONE in %.0fs | candidates=%d phase1_ok=%d phase2_replaced=%d "
-        "(failures: dl=%d, insert=%d, replace=%d)",
-        time.monotonic() - t0,
-        stats.candidates, stats.phase1_ok, stats.phase2_replaced,
-        stats.phase1_failed_to_dl, stats.phase1_failed_to_insert, stats.phase2_failed,
+    return run_two_phase(
+        candidates=candidates,
+        args=args,
+        phase1_fn=_phase1_download,
+        stats_cls=RunStats,
+        log=_log,
+        phase2_replacement_label="spotify",
+        phase1_failure_fields=("phase1_failed_to_dl", "phase1_failed_to_insert"),
     )
-    return 0
 
 
 def main(argv: list[str] | None = None) -> int:

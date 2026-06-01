@@ -19,7 +19,7 @@ from core.result import Err, Ok, Result
 
 
 @contextmanager
-def _connect(db_path: Path) -> Iterator[sqlite3.Connection]:
+def connect(db_path: Path) -> Iterator[sqlite3.Connection]:
     conn = sqlite3.connect(db_path)
     try:
         conn.row_factory = sqlite3.Row
@@ -33,6 +33,10 @@ def _connect(db_path: Path) -> Iterator[sqlite3.Connection]:
         yield conn
     finally:
         conn.close()
+
+
+# Back-compat alias — prefer `connect` in new code.
+_connect = connect
 
 
 def _source_for(platform: str, player_id: str) -> MediaSource | None:

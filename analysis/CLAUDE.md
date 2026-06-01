@@ -140,7 +140,7 @@ exceptions into `DbError` Results and knows only `core` types. It must stay free
 of analysis-domain types. The analysis-result writers (`TrackAnalysisResult` /
 `EssentiaFeatures` / `SetAnalysisResult`) depend on [models.py](models.py), so
 they live here in [persistence.py](persistence.py) and import `core.db`'s
-`_connect` primitive for the connection — not the other way around. Keep new
+`connect` primitive for the connection — not the other way around. Keep new
 analysis-domain DB writes in `persistence.py`, not `core/db.py`.
 
 ## Deploy caveat

@@ -56,7 +56,6 @@ import logging
 import os
 import re
 import shutil
-import sqlite3
 import subprocess
 import sys
 import urllib.parse
@@ -66,6 +65,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
+from core.db import connect
 from core import db as db_adapter
 from ingest.adapters import spotdl_adapter, ytmusic_adapter
 from ingest.adapters.downloader import DownloadConfig
@@ -139,7 +139,7 @@ def _resolve_axis_for_ledger(axis: str, stem: str) -> str:
 
 
 def _resolve_track_id_from_taid(db_path: Path, taid: int) -> str | None:
-    with sqlite3.connect(db_path) as conn:
+    with connect(db_path) as conn:
         row = conn.execute(
             "SELECT track_id FROM track_audio WHERE track_audio_id = ?", (taid,),
         ).fetchone()
@@ -174,8 +174,7 @@ def _list_failed_from_log(log_path: Path, db_path: Path) -> list[FailedTrack]:
         return []
 
     placeholders = ",".join("?" * len(fails))
-    with sqlite3.connect(db_path) as conn:
-        conn.row_factory = sqlite3.Row
+    with connect(db_path) as conn:
         rows = conn.execute(
             f"""
             SELECT ta.track_audio_id, ta.track_id, ta.platform,
@@ -207,7 +206,7 @@ def _delete_old_row_if_exists(
     """Delete the existing track_audio row + cascade-delete its analysis,
     stems, features, MERT measures. Also unlink the on-disk audio file
     and the stems dir (they belong to the old track_audio_id)."""
-    with sqlite3.connect(db_path) as conn:
+    with connect(db_path) as conn:
         row = conn.execute(
             "SELECT path FROM track_audio WHERE track_audio_id = ?",
             (track_audio_id,),
@@ -215,7 +214,6 @@ def _delete_old_row_if_exists(
         if row is None:
             return
         old_path = row[0]
-        conn.execute("PRAGMA foreign_keys = ON;")
         conn.execute("DELETE FROM track_audio WHERE track_audio_id = ?",
                      (track_audio_id,))
         conn.commit()
@@ -232,8 +230,7 @@ def _delete_old_row_if_exists(
 
 def _promote_reference(db_path: Path, track_id: str, track_audio_id: int) -> None:
     """Mark one row the reference for this track_id; demote all others."""
-    with sqlite3.connect(db_path) as conn:
-        conn.execute("PRAGMA foreign_keys = ON;")
+    with connect(db_path) as conn:
         conn.execute(
             "UPDATE track_audio SET is_reference = 0 WHERE track_id = ?",
             (track_id,),
@@ -251,7 +248,7 @@ def _purge_sibling_rows(
     db_path: Path, audio_root: Path, track_id: str, keep_taid: int,
 ) -> None:
     """Delete every other track_audio row for this track_id (+ on-disk files)."""
-    with sqlite3.connect(db_path) as conn:
+    with connect(db_path) as conn:
         siblings = conn.execute(
             "SELECT track_audio_id FROM track_audio "
             "WHERE track_id = ? AND track_audio_id != ?",

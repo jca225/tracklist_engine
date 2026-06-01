@@ -13,7 +13,7 @@ import sqlite3
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from core.db import _connect
+from core.db import connect
 from core.errors import DbError
 from core.result import Err, Ok, Result
 
@@ -32,7 +32,7 @@ def persist_set_analysis(db_path: Path, result: "SetAnalysisResult") -> Result[N
     """
     sid = result.set_audio_id
     try:
-        with _connect(db_path) as conn:
+        with connect(db_path) as conn:
             conn.execute("BEGIN")
 
             for stem in result.stems.stems:
@@ -83,7 +83,7 @@ def persist_analysis(db_path: Path, result: TrackAnalysisResult) -> Result[None,
     """
     tid = result.track_audio_id
     try:
-        with _connect(db_path) as conn:
+        with connect(db_path) as conn:
             conn.execute("BEGIN")
 
             for stem in result.stems.stems:
@@ -246,7 +246,7 @@ def persist_essentia_features(
     pipeline).
     """
     try:
-        with _connect(db_path) as conn:
+        with connect(db_path) as conn:
             _write_essentia_row(conn, feat)
             conn.commit()
     except sqlite3.DatabaseError as e:
