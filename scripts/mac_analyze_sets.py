@@ -136,10 +136,9 @@ def push_set_rows(result, mix_local_path: Path) -> None:
     versions_json = json.dumps(result.analyzer_versions)
     sql_lines.append(
         "INSERT INTO set_analysis (set_audio_id, beat_times_json, "
-        "downbeat_times_json, measure_times_json, bpm, analyzer_versions_json) "
+        "downbeat_times_json, measure_times_json, analyzer_versions_json) "
         f"VALUES ({sid}, {_sql_lit(beats_json)}, {_sql_lit(downbeats_json)}, "
-        f"{_sql_lit(measures_json)}, {_sql_lit(result.beats.bpm)}, "
-        f"{_sql_lit(versions_json)});"
+        f"{_sql_lit(measures_json)}, {_sql_lit(versions_json)});"
     )
     sql_lines.append("COMMIT;")
     full = "\n".join(sql_lines)
@@ -151,7 +150,7 @@ def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--set-audio-ids", type=str, default=None,
                    help="Comma-separated list to scope (default: all pending)")
-    p.add_argument("--separator", choices=["demucs", "uvr"], default="demucs",
+    p.add_argument("--separator", choices=["demucs", "uvr", "roformer"], default="demucs",
                    help="Stem-separation backend (default: demucs).")
     args = p.parse_args()
     only_ids = None

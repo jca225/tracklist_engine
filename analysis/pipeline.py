@@ -15,7 +15,7 @@ import logging
 
 from .adapters import (
     audio_io, beat_this_adapter, cue_detr_adapter, demucs_adapter,
-    essentia_adapter, loudness, uvr_chain_adapter,
+    essentia_adapter, loudness, roformer_chain_adapter, uvr_chain_adapter,
 )
 
 from core.models import AudioAsset
@@ -40,23 +40,30 @@ class Analyzers:
     """All model handles bundled so they load once per process.
 
     Exactly one stem-separation backend is loaded per `separator`: the default
-    `demucs` (`htdemucs_ft`) or `uvr` (the audio-separator cleanup chain). Both
-    produce the same `StemSet(vocals, instrumental)`; the unselected one stays
-    `None`. `with_essentia` flips automatically based on whether the
-    venvs/essentia/ sandbox exists on disk — Essentia is best-effort.
+    `demucs` (`htdemucs_ft`), `uvr` (audio-separator cleanup chain), or
+    `roformer` (MSST RoFormer ensemble). All produce `StemSet(vocals,
+    instrumental)`; unselected backends stay `None`. `with_essentia` flips
+    automatically based on whether the venvs/essentia/ sandbox exists on disk —
+    Essentia is best-effort.
     """
     beats: beat_this_adapter.BeatThisHandle
     cues: cue_detr_adapter.CueDetrHandle
     mert: mert_adapter.MertHandle
     demucs: demucs_adapter.DemucsHandle | None = None
     uvr: uvr_chain_adapter.UvrChainHandle | None = None
+    roformer: roformer_chain_adapter.RoformerChainHandle | None = None
     separator: str = "demucs"
     with_essentia: bool = False
 
     @property
     def stems_version(self) -> str:
-        backend = self.uvr if self.separator == "uvr" else self.demucs
-        return backend.version if backend is not None else "?"
+        if self.separator == "uvr" and self.uvr is not None:
+            return self.uvr.version
+        if self.separator == "roformer" and self.roformer is not None:
+            return self.roformer.version
+        if self.demucs is not None:
+            return self.demucs.version
+        return "?"
 
 
 def load_analyzers(
@@ -64,8 +71,8 @@ def load_analyzers(
 ) -> Result[Analyzers, AnalysisError]:
     """Load every model once. Fails fast on the first load error.
 
-    `separator` picks the stem backend ('demucs' | 'uvr'); only the selected
-    one is loaded.
+    `separator` picks the stem backend ('demucs' | 'uvr' | 'roformer'); only
+    the selected one is loaded.
     """
     b = beat_this_adapter.load(device=device)
     if not b.is_ok():
@@ -77,12 +84,17 @@ def load_analyzers(
     if not m.is_ok():
         return m
 
-    demucs_h = uvr_h = None
+    demucs_h = uvr_h = roformer_h = None
     if separator == "uvr":
         u = uvr_chain_adapter.load(device=device)
         if not u.is_ok():
             return u
         uvr_h = u.value
+    elif separator == "roformer":
+        r = roformer_chain_adapter.load(device=device)
+        if not r.is_ok():
+            return r
+        roformer_h = r.value
     else:
         d = demucs_adapter.load(device=device)
         if not d.is_ok():
@@ -91,7 +103,7 @@ def load_analyzers(
 
     return Ok(Analyzers(
         beats=b.value, cues=c.value, mert=m.value,
-        demucs=demucs_h, uvr=uvr_h, separator=separator,
+        demucs=demucs_h, uvr=uvr_h, roformer=roformer_h, separator=separator,
         with_essentia=essentia_adapter.is_available(),
     ))
 
@@ -105,6 +117,10 @@ def run_separation(
         if a.uvr is None:
             return Err(StemError(kind="model_load", detail="uvr backend not loaded"))
         return uvr_chain_adapter.separate(a.uvr, audio_path, out_dir, audio_id)
+    if a.separator == "roformer":
+        if a.roformer is None:
+            return Err(StemError(kind="model_load", detail="roformer backend not loaded"))
+        return roformer_chain_adapter.separate(a.roformer, audio_path, out_dir, audio_id)
     if a.demucs is None:
         return Err(StemError(kind="model_load", detail="demucs backend not loaded"))
     return demucs_adapter.separate(a.demucs, audio_path, out_dir, audio_id)

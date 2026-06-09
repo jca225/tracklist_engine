@@ -1,0 +1,24 @@
+# RoFormer separation chain — MSST vocal_models (vocals + instrumental stems).
+# Checkpoints live under workspaces/msst_webui/pretrain/ (see setup_roformer_separation.sh).
+
+msst_root: workspaces/msst_webui
+device: auto                    # auto | mps | cuda | cpu
+ensemble_algorithm: avg_fft
+output_format: flac
+flac_bit_depth: PCM_16
+
+# Vocals: 3-model ensemble
+vocal_models:
+  - model_type: bs_roformer
+    ckpt: model_bs_roformer_ep_368_sdr_12.9628.ckpt
+  - model_type: mel_band_roformer
+    ckpt: model_mel_band_roformer_ep_3005_sdr_11.4360.ckpt
+  - model_type: mel_band_roformer
+    ckpt: kimmel_unwa_ft.ckpt
+
+# Instrumental: Mel-Band + BS only (no SCNet — weaker inst head)
+instrumental_models:
+  - model_type: bs_roformer
+    ckpt: model_bs_roformer_ep_368_sdr_12.9628.ckpt
+  - model_type: mel_band_roformer
+    ckpt: model_mel_band_roformer_ep_3005_sdr_11.4360.ckpt

@@ -59,7 +59,9 @@ LOCAL_AUDIO = SCRATCH_DIR / "audio"
 LOCAL_STEMS = SCRATCH_DIR / "stems"
 SCRATCH_DB = SCRATCH_DIR / "scratch.db"
 
-BB_SETS = ("1rfb0yl9", "pwgrrb1")  # Disco Lines @ Mammoth Mountain + it's murph @ Club Space
+BB_SETS = (
+    "w1mgcjt", "2nvzlh2k", "1fsnxchk", "qj4v0wt", "1yl70ql1", "237tdqmk",
+)
 
 # MPS = Apple Silicon GPU. analyze_track uses this for Demucs / MERT /
 # cue-detr. beat_this is CPU-light. Essentia runs in its own venv subprocess.
@@ -77,21 +79,34 @@ def ssh_pi(sql: str) -> str:
     return r.stdout.strip()
 
 
-def next_task(skip_tids: frozenset[int] = frozenset()) -> tuple[int, str] | None:
-    """Next BB10-15 track that has no track_analysis row yet. `skip_tids`
-    excludes in-session "tried and failed" track_audio_ids so a corrupt
-    file doesn't get re-pulled forever (matches vast_loop behavior — same
-    bug class as the [149] infinite-spin we hit on Vast)."""
-    bb_csv = ",".join(f"'{s}'" for s in BB_SETS)
+def _set_filter_clause(set_ids: tuple[str, ...] | None) -> str:
+    ids = set_ids if set_ids else BB_SETS
+    csv = ",".join(f"'{s}'" for s in ids)
+    return (
+        "AND ta.track_id IN ("
+        f"SELECT DISTINCT track_id FROM set_track_slots WHERE set_id IN ({csv})) "
+    )
+
+
+def next_task(
+    skip_tids: frozenset[int] = frozenset(),
+    *,
+    set_ids: tuple[str, ...] | None = None,
+    only_reference: bool = False,
+) -> tuple[int, str] | None:
+    """Next track with no track_analysis row yet. `skip_tids` excludes
+    in-session failures so a corrupt file doesn't spin forever."""
     skip_clause = ""
     if skip_tids:
         skip_csv = ",".join(str(t) for t in skip_tids)
         skip_clause = f"AND ta.track_audio_id NOT IN ({skip_csv}) "
+    ref_clause = "AND ta.is_reference = 1 " if only_reference else ""
     sql = (
         "SELECT ta.track_audio_id, ta.path FROM track_audio ta "
         "LEFT JOIN track_analysis tan ON tan.track_audio_id=ta.track_audio_id "
-        f"WHERE tan.track_audio_id IS NULL AND ta.track_id IN "
-        f"(SELECT DISTINCT track_id FROM dj_set_track_media_links WHERE set_id IN ({bb_csv})) "
+        "WHERE tan.track_audio_id IS NULL "
+        f"{ref_clause}"
+        f"{_set_filter_clause(set_ids)}"
         f"{skip_clause}"
         "ORDER BY ta.track_audio_id LIMIT 1"
     )
@@ -251,12 +266,30 @@ def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--max-tracks", type=int, default=None,
                    help="Stop after N successful tracks (smoke testing).")
-    p.add_argument("--separator", choices=["demucs", "uvr"], default="demucs",
+    p.add_argument("--separator", choices=["demucs", "uvr", "roformer"], default="demucs",
                    help="Stem-separation backend (default: demucs).")
+    p.add_argument(
+        "--set-ids",
+        default=None,
+        help="Comma-separated set_id scope (default: all BB10–15).",
+    )
+    p.add_argument(
+        "--only-reference",
+        action="store_true",
+        help="Only analyze is_reference=1 rows (post re-source canonical refs).",
+    )
     args = p.parse_args()
+    set_ids = (
+        tuple(s.strip() for s in args.set_ids.split(",") if s.strip())
+        if args.set_ids
+        else None
+    )
 
-    log.info("starting BB10-15 analyze loop on Mac (device=%s, separator=%s, max_tracks=%s)",
-             DEVICE, args.separator, args.max_tracks)
+    log.info(
+        "starting analyze loop on Mac (device=%s, separator=%s, max_tracks=%s, "
+        "set_ids=%s, only_reference=%s)",
+        DEVICE, args.separator, args.max_tracks, set_ids or BB_SETS, args.only_reference,
+    )
     init_scratch_db()
 
     log.info("loading analyzers (%s, %s)…", DEVICE, args.separator)
@@ -307,7 +340,11 @@ def main() -> int:
             bg.join()
             bg = None
 
-        nxt = next_task(frozenset(failed_tids))
+        nxt = next_task(
+            frozenset(failed_tids),
+            set_ids=set_ids,
+            only_reference=args.only_reference,
+        )
         if nxt is None:
             log.info("queue drained — analyzed %d, failed %d", n_done, n_failed)
             return 0

@@ -231,7 +231,7 @@ def push_track_rows(track_audio_id: int) -> None:
 def main() -> int:
     import argparse
     p = argparse.ArgumentParser()
-    p.add_argument("--separator", choices=["demucs", "uvr"], default="demucs",
+    p.add_argument("--separator", choices=["demucs", "uvr", "roformer"], default="demucs",
                    help="Stem-separation backend (default: demucs).")
     args = p.parse_args()
 
