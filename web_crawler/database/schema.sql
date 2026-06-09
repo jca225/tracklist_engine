@@ -423,6 +423,23 @@ CREATE TABLE IF NOT EXISTS set_measures (
     FOREIGN KEY (set_audio_id) REFERENCES set_audio(set_audio_id) ON DELETE CASCADE
 );
 
+-- Per-measure MERT on the full DJ mix (P4 / 6b). Mirror of track_mert_measures;
+-- beat grid from set_analysis.measure_times_json (beat_this).
+CREATE TABLE IF NOT EXISTS set_mert_measures (
+    set_audio_id   INTEGER NOT NULL,
+    measure_idx    INTEGER NOT NULL,
+    start_s        REAL NOT NULL,
+    end_s          REAL NOT NULL,
+    dim            INTEGER NOT NULL,
+    dtype          TEXT NOT NULL,             -- 'float16'
+    embedding      BLOB NOT NULL,
+    created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (set_audio_id, measure_idx),
+    FOREIGN KEY (set_audio_id) REFERENCES set_audio(set_audio_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_set_mert_measures_set ON set_mert_measures(set_audio_id);
+
 
 -- Measure-level alignment: for each played mix measure, which ref measure
 -- of which track is sounding (multiple rows per mix measure for mashups),

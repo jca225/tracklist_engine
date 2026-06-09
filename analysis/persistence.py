@@ -17,7 +17,7 @@ from core.db import connect
 from core.errors import DbError
 from core.result import Err, Ok, Result
 
-from .models import EssentiaFeatures, TrackAnalysisResult
+from .models import EssentiaFeatures, MeasureEmbedding, TrackAnalysisResult
 
 if TYPE_CHECKING:
     from .set_analysis import SetAnalysisResult
@@ -232,6 +232,112 @@ def _write_essentia_row(conn: sqlite3.Connection, feat: EssentiaFeatures) -> Non
             json.dumps(confidence),
         ),
     )
+
+
+def persist_mert_measures(
+    db_path: Path,
+    track_audio_id: int,
+    measures: tuple[MeasureEmbedding, ...],
+    mert_version: str,
+) -> Result[None, DbError]:
+    """Replace per-measure MERT rows and patch the `mert` key in analyzer_versions.
+
+    Does not touch stems, beats, cues, or Essentia — for re-embedding after a
+    model upgrade when `track_analysis` already exists.
+    """
+    try:
+        with connect(db_path) as conn:
+            conn.execute("BEGIN")
+            conn.execute(
+                "DELETE FROM track_mert_measures WHERE track_audio_id = ?",
+                (track_audio_id,),
+            )
+            for m in measures:
+                conn.execute(
+                    """
+                    INSERT INTO track_mert_measures
+                      (track_audio_id, measure_idx, start_s, end_s,
+                       dim, dtype, embedding)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        m.track_audio_id, m.measure_idx, m.start_s, m.end_s,
+                        m.dim, m.dtype, m.embedding_bytes,
+                    ),
+                )
+            row = conn.execute(
+                "SELECT analyzer_versions_json FROM track_analysis "
+                "WHERE track_audio_id = ?",
+                (track_audio_id,),
+            ).fetchone()
+            if row is not None:
+                versions = json.loads(row[0]) if row[0] else {}
+                versions["mert"] = mert_version
+                conn.execute(
+                    """
+                    UPDATE track_analysis
+                    SET analyzer_versions_json = ?, analyzed_at = CURRENT_TIMESTAMP
+                    WHERE track_audio_id = ?
+                    """,
+                    (json.dumps(versions), track_audio_id),
+                )
+            conn.commit()
+    except sqlite3.DatabaseError as e:
+        return Err(DbError(kind="integrity", detail=str(e)))
+    return Ok(None)
+
+
+def persist_set_mert_measures(
+    db_path: Path,
+    set_audio_id: int,
+    measures: tuple[MeasureEmbedding, ...],
+    mert_version: str,
+) -> Result[None, DbError]:
+    """Replace per-measure MERT rows on the mix side (P4 / 6b).
+
+    Patches the ``mert`` key in ``set_analysis.analyzer_versions_json``.
+    Requires ``scripts/migrate_set_mert_measures.sql`` on the target DB.
+    """
+    try:
+        with connect(db_path) as conn:
+            conn.execute("BEGIN")
+            conn.execute(
+                "DELETE FROM set_mert_measures WHERE set_audio_id = ?",
+                (set_audio_id,),
+            )
+            for m in measures:
+                conn.execute(
+                    """
+                    INSERT INTO set_mert_measures
+                      (set_audio_id, measure_idx, start_s, end_s,
+                       dim, dtype, embedding)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        set_audio_id, m.measure_idx, m.start_s, m.end_s,
+                        m.dim, m.dtype, m.embedding_bytes,
+                    ),
+                )
+            row = conn.execute(
+                "SELECT analyzer_versions_json FROM set_analysis "
+                "WHERE set_audio_id = ?",
+                (set_audio_id,),
+            ).fetchone()
+            if row is not None:
+                versions = json.loads(row[0]) if row[0] else {}
+                versions["mert"] = mert_version
+                conn.execute(
+                    """
+                    UPDATE set_analysis
+                    SET analyzer_versions_json = ?, analyzed_at = CURRENT_TIMESTAMP
+                    WHERE set_audio_id = ?
+                    """,
+                    (json.dumps(versions), set_audio_id),
+                )
+            conn.commit()
+    except sqlite3.DatabaseError as e:
+        return Err(DbError(kind="integrity", detail=str(e)))
+    return Ok(None)
 
 
 def persist_essentia_features(

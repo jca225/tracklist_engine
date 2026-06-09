@@ -220,8 +220,10 @@ def embed_track_per_measure(
     out_list: list[MeasureEmbedding] = []
     for idx in range(n_measures):
         if counts[idx] == 0:
-            continue   # measure shorter than MERT frame resolution / no overlap
-        pooled = (sums[idx] / counts[idx]).astype(np.float16)   # (n_layers, dim)
+            continue
+        pooled = sums[idx] / counts[idx]
+        pooled = np.nan_to_num(pooled, nan=0.0, posinf=0.0, neginf=0.0)
+        pooled = pooled.astype(np.float16)
         out_list.append(MeasureEmbedding(
             track_audio_id=track_audio_id,
             measure_idx=idx,
