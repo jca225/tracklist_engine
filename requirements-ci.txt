@@ -1,0 +1,16 @@
+# Minimal dependency set for the guardrails CI job (.github/workflows/guardrails.yml).
+# Only what `pytest tests/` needs to *collect and run* — not the full audio stack.
+# Heavy GPU/audio deps (torch, demucs, MERT, essentia, librosa) are deliberately
+# excluded; tests that need them must lazy-import or pytest.importorskip.
+pytest
+numpy
+pandas
+scipy
+scikit-learn
+beautifulsoup4
+lxml
+pydantic
+PyYAML
+yt-dlp
+httpx
+soundfile

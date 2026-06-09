@@ -17,3 +17,10 @@ __pycache__
 /logs
 browser_daw/cache/
 _mac_scratch/
+
+# LaTeX build artifacts (docs/*.tex is the source; pdf is regenerable)
+docs/*.aux
+docs/*.log
+docs/*.out
+docs/*.toc
+docs/*.pdf
