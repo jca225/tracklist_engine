@@ -24,3 +24,13 @@ docs/*.log
 docs/*.out
 docs/*.toc
 docs/*.pdf
+
+# macOS
+.DS_Store
+
+# workspaces: vendored MSST webUI (own git repo + 2.4G of checkpoints),
+# separation smoke outputs, and local MERT caches stay untracked
+workspaces/msst_webui/
+workspaces/separation_qa/smoke_out/
+workspaces/separation_qa/smoke_run.log
+workspaces/alignment_prototype/.cache/
