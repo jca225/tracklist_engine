@@ -30,6 +30,20 @@ from core.db import connect
 from core.result import Err, Ok
 
 
+def _db_label(track: GroundTruthTrack, seen: set[str]) -> str:
+    """Unique ``set_ground_truth.label`` — slot + stem + optional time suffix."""
+    base = track.slot_label or track.label
+    stem = track.claimed_stem or "regular"
+    if stem != "regular":
+        base = f"{base}__{stem}"
+    if base not in seen:
+        seen.add(base)
+        return base
+    disambig = f"{base}__{track.set_start_s:.2f}"
+    seen.add(disambig)
+    return disambig
+
+
 def write_back(db_path: Path, yaml_path: Path, *, dry_run: bool = False) -> int:
     match load_gt(yaml_path):
         case Err(e):
@@ -38,6 +52,7 @@ def write_back(db_path: Path, yaml_path: Path, *, dry_run: bool = False) -> int:
         case Ok(gt):
             pass
     rows: list[tuple] = []
+    seen_labels: set[str] = set()
     for t in gt.tracks:
         stem = t.claimed_stem
         seg_json = json.dumps([
@@ -45,15 +60,19 @@ def write_back(db_path: Path, yaml_path: Path, *, dry_run: bool = False) -> int:
             for s in t.ref_segments
         ]) if t.ref_segments else None
         ml_json = json.dumps(t.media_links.as_dict()) if t.media_links.any() else None
+        db_label = _db_label(t, seen_labels)
         rows.append((
             gt.set_id,
-            t.label,
+            db_label,
             t.track_id,
             stem,
             t.set_start_s,
             t.set_end_s,
             t.ref_start_s,
             t.ref_end_s,
+            t.tempo_ratio,
+            t.pitch_shift_semi,
+            t.ref_source,
             int(t.is_loop),
             seg_json,
             ml_json,
@@ -73,8 +92,9 @@ def write_back(db_path: Path, yaml_path: Path, *, dry_run: bool = False) -> int:
             INSERT OR REPLACE INTO set_ground_truth (
                 set_id, label, recording_id, claimed_stem,
                 set_start_s, set_end_s, ref_start_s, ref_end_s,
+                tempo_ratio, pitch_shift_semi, ref_source,
                 is_loop, ref_segments_json, media_links_json, source
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             rows,
         )

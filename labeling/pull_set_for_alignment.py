@@ -61,6 +61,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -504,8 +505,9 @@ def rsync(src_remote: str, dst_local: Path, dry_run: bool) -> bool:
     flags = ["-aL", "--partial", "--inplace", "--timeout=60"]
     if dry_run:
         flags.append("--dry-run")
-    cmd = ["rsync", *flags, f"{PI_HOST}:{src_remote}", str(dst_local)]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    # Quote remote path so pi-storage shell does not split on spaces/parens.
+    cmd = ["rsync", *flags, f"{PI_HOST}:{shlex.quote(src_remote)}", str(dst_local)]
+    result = subprocess.run(cmd, capture_output=True, text=True, errors="replace")
     if result.returncode != 0:
         print(f"  ! rsync failed: {result.stderr.strip()}", file=sys.stderr)
         return False

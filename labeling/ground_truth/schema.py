@@ -68,6 +68,10 @@ class GroundTruthTrack:
     set_end_s: float
     ref_start_s: float                      # MANDATORY — see schema doc
     ref_end_s: float | None = None
+    slot_label: str = ""                    # PK slot e.g. 154, 154w1
+    ref_source: str = "reference"           # reference | demucs | online_candidate | ...
+    tempo_ratio: float | None = None        # ref_span_s / set_span_s
+    pitch_shift_semi: int = 0
     is_loop: bool = False
     ref_segments: tuple[RefSegment, ...] = ()
     media_links: MediaLinks = field(default_factory=MediaLinks)
@@ -126,6 +130,22 @@ def _parse_track(idx: int, t: dict[str, Any], path: Path) -> Result[GroundTruthT
         ml = {}
     ref_end_raw = t.get("ref_end_s")
     ref_end = float(ref_end_raw) if isinstance(ref_end_raw, (int, float)) else None
+    slot_raw = t.get("slot_label")
+    if slot_raw is not None and str(slot_raw).strip():
+        slot_label = str(slot_raw).strip()
+        if slot_label.isdigit() and len(slot_label) <= 3:
+            slot_label = str(int(slot_label)).zfill(3)
+        elif "w" in slot_label:
+            base, _, suffix = slot_label.partition("w")
+            if base.isdigit():
+                slot_label = f"{int(base):03d}w{suffix}"
+    else:
+        slot_label = ""
+    ref_source = str(t.get("ref_source") or "reference").strip() or "reference"
+    tempo_raw = t.get("tempo_ratio")
+    tempo_ratio = float(tempo_raw) if isinstance(tempo_raw, (int, float)) else None
+    pitch_raw = t.get("pitch_shift_semi")
+    pitch_shift_semi = int(pitch_raw) if isinstance(pitch_raw, (int, float)) else 0
     return Ok(GroundTruthTrack(
         label=label,
         track_id=track_id,
@@ -136,6 +156,10 @@ def _parse_track(idx: int, t: dict[str, Any], path: Path) -> Result[GroundTruthT
         set_end_s=float(t["set_end_s"]),
         ref_start_s=float(t["ref_start_s"]),
         ref_end_s=ref_end,
+        slot_label=slot_label,
+        ref_source=ref_source,
+        tempo_ratio=tempo_ratio,
+        pitch_shift_semi=pitch_shift_semi,
         is_loop=is_loop,
         ref_segments=tuple(segments),
         media_links=MediaLinks(
@@ -222,17 +246,29 @@ def dump(gt: GroundTruthSet, *, title: str | None = None) -> str:
     out.append(f"annotated_by: {gt.annotated_by}")
     out.append("tracks:")
     for t in gt.tracks:
-        label = t.label.replace('"', r'\"')
+        label = (
+            t.label.replace('"', r'\"')
+            .replace("\u2013", "-")
+            .replace("\u2014", "-")
+        )
         out.append(f'  - track:       "{label}"')
+        if t.slot_label:
+            out.append(f'    slot_label:  "{t.slot_label}"')
         if t.track_id:
             out.append(f"    track_id:    {t.track_id}")
         if t.claimed_stem and t.claimed_stem != "regular":
             out.append(f"    claimed_stem: {t.claimed_stem}")
+        if t.ref_source and t.ref_source != "reference":
+            out.append(f"    ref_source:  {t.ref_source}")
         out.append(f"    set_start_s: {_fmt_num(t.set_start_s)}")
         out.append(f"    set_end_s:   {_fmt_num(t.set_end_s)}")
         out.append(f"    ref_start_s: {_fmt_num(t.ref_start_s)}")
         if t.ref_end_s is not None:
             out.append(f"    ref_end_s:   {_fmt_num(t.ref_end_s)}")
+        if t.tempo_ratio is not None:
+            out.append(f"    tempo_ratio: {_fmt_num(t.tempo_ratio)}")
+        if t.pitch_shift_semi:
+            out.append(f"    pitch_shift_semi: {t.pitch_shift_semi}")
         if t.is_loop:
             out.append(f"    is_loop:     true")
         if t.ref_segments:

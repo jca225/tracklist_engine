@@ -1,0 +1,431 @@
+{
+  "set_id": "1fsnxchk",
+  "n_gt_rows": 166,
+  "checklist": [
+    {
+      "slot": "020w2",
+      "track_id": "2j9zlwuf",
+      "title": "Say It Right",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 8,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "p15_winner_ingest",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "001w1",
+      "track_id": "281u6p4x",
+      "title": "Congratulations",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "001w3",
+      "track_id": "728rvg5",
+      "title": "Fade Into Darkness",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "002",
+      "track_id": "mtck04x",
+      "title": "Freeze Time",
+      "claimed_version": "altversion",
+      "claimed_stem": "instrumental",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=instrumental",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "002w2",
+      "track_id": "2q0xyjzp",
+      "title": "Love On Me",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "002w3",
+      "track_id": "y10w66f",
+      "title": "Outside",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "003w1",
+      "track_id": "716vt0f",
+      "title": "Beat It",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "004w1",
+      "track_id": "2p25k23p",
+      "title": "In The Name Of Love",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "004w3",
+      "track_id": "1b4hd9lp",
+      "title": "Jealous",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "007w3",
+      "track_id": "1qbbnpkp",
+      "title": "Forever",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "009w2",
+      "track_id": "186yndjf",
+      "title": "Ten Feet Tall",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "011w2",
+      "track_id": "1znyu24x",
+      "title": "Middle",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "013w2",
+      "track_id": "1zggjhbf",
+      "title": "Somebody Told Me",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "013w3",
+      "track_id": "2uq9800f",
+      "title": "Pacific Coast Highway",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "014w1",
+      "track_id": "1q8nc02p",
+      "title": "When You Were Young",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "014w3",
+      "track_id": "ygllqp",
+      "title": "DJ Got Us Fallin' In Love",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "015w1",
+      "track_id": "dgrjwux",
+      "title": "Honest",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "015w3",
+      "track_id": "nrmh6yp",
+      "title": "Die Young",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "017w2",
+      "track_id": "1gv9w2px",
+      "title": "Be Together",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "020w1",
+      "track_id": "21kvmkk5",
+      "title": "Rich Boy",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "021w2",
+      "track_id": "v67u23p",
+      "title": "BAD",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "022w1",
+      "track_id": "1wx0v09f",
+      "title": "Castle On The Hill",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "023w3",
+      "track_id": "2tscznp5",
+      "title": "Nothing Stopping Me",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "025w2",
+      "track_id": "ut8vl5",
+      "title": "Show Me Love",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "027w4",
+      "track_id": "1wvndht5",
+      "title": "Scared To Be Lonely",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "028w4",
+      "track_id": "pryzw5",
+      "title": "I'm In Miami Bitch",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "029",
+      "track_id": "1lnqmw75",
+      "title": "Faded",
+      "claimed_version": "rework",
+      "claimed_stem": "instrumental",
+      "risk_score": 5,
+      "reasons": [
+        "version=rework",
+        "stem=instrumental",
+        "manual_ingest"
+      ],
+      "gt_set_span": [
+        708.382,
+        730.724
+      ]
+    },
+    {
+      "slot": "029w3",
+      "track_id": "67z8kmp",
+      "title": "I Gotta Feeling",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "030w1",
+      "track_id": "2l4gzr8x",
+      "title": "Rather Be",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    },
+    {
+      "slot": "032w1",
+      "track_id": "1b52k3xx",
+      "title": "Spaceman",
+      "claimed_version": "altversion",
+      "claimed_stem": "acappella",
+      "risk_score": 5,
+      "reasons": [
+        "version=altversion",
+        "stem=acappella",
+        "manual_ingest"
+      ],
+      "gt_set_span": null
+    }
+  ],
+  "instructions": "In Ableton: for each row, audition ref audio vs mix slice at gt_set_span. Re-export YAML only where audio clearly diverges from annotation."
+}

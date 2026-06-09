@@ -636,6 +636,9 @@ CREATE TABLE IF NOT EXISTS set_ground_truth (
     set_end_s       REAL NOT NULL,
     ref_start_s     REAL NOT NULL,
     ref_end_s       REAL,
+    tempo_ratio     REAL,
+    pitch_shift_semi INTEGER,
+    ref_source      TEXT,
     is_loop         INTEGER DEFAULT 0,
     ref_segments_json TEXT,                  -- JSON list of {ref_start_s, ref_end_s, mix_start_s}
     media_links_json  TEXT,

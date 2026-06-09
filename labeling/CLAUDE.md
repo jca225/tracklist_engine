@@ -87,13 +87,20 @@ expect a separate downloaded acappella master unless you explicitly acquired one
 
 - Schema: [ground_truth/schema.py](ground_truth/schema.py) — YAML field
   **`claimed_stem`** (`regular` | `acappella` | `instrumental`); legacy
-  `version_tag:` in fixtures still loads.
+  `version_tag:` in fixtures still loads. P1 adds `slot_label`, `ref_source`,
+  `tempo_ratio`, `pitch_shift_semi`.
+- Export: `venvs/audio/bin/python -m labeling.export_als_to_gt --als ... --set-dir ...`
+  reads the live `.als` + `manifest.json` → `*_ground_truth.yaml` (see
+  [../docs/alignment_program_plan.md](../docs/alignment_program_plan.md) P1).
+- Anchor-check: `venvs/audio/bin/python -m labeling.anchor_check` compares YAML
+  vs fresh `.als` re-export (offline; no pi-storage).
 - CLI: `venvs/audio/bin/python -m labeling.write_back_ground_truth --db ... --yaml ...`
   upserts [set_ground_truth](../web_crawler/database/schema.sql). Dry-run with
-  `--dry-run`. Algorithmic aligner still in `workspaces/`.
+  `--dry-run`. Uses `slot_label` as DB `label` when present. Algorithmic aligner
+  still in `workspaces/`.
 
 ## Folder lifecycle
 
 The folder is ephemeral — delete a set once ground truth is written back to
 pi-storage via `write_back_ground_truth.py` (or archived YAML is enough for your
-workflow). Ableton-session → YAML export is still manual outside this repo.
+workflow). Ableton → YAML export: `labeling/export_als_to_gt.py`.
