@@ -11,3 +11,7 @@ PyYAML==6.0.3
 fastapi>=0.115
 uvicorn[standard]>=0.30
 httpx>=0.27
+
+# taste-prior scrape loop (pi-worker): workspaces/taste_prior/taste_cluster.py
+scipy>=1.13
+scikit-learn>=1.5
