@@ -5,8 +5,10 @@ findings, not pipeline state. Organized into per-concern subfolders:
 
 - **`corpus_empirics/`** — empirical studies of the corpus (`bb_*.py` scripts +
   `findings.md`). House pattern below.
-- **`alignment/`** — placeholder for alignment-side EDA (the aligner isn't built
-  yet; see the root terminology block).
+- **`alignment/`** — mix structure analysis (MERT probes, section/event boundaries).
+  See [alignment/README.md](alignment/README.md) and
+  [docs/aligner_attention_design.md](../docs/aligner_attention_design.md). Not the
+  algorithmic aligner (`workspaces/alignment_prototype/`).
 - **`queries/`** — ad-hoc query scratch.
 - **`common.py`** — shared DB access + DataFrame loading + pydantic_ai agent
   integration, used by the notebooks (`eda.ipynb`, `set_structure.ipynb`,
