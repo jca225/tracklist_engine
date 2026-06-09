@@ -14,7 +14,10 @@ Invoke from repo root, usually with `venvs/audio/bin/python scripts/<x>.py`.
 **Ingest** (download / acquisition — see [../ingest/CLAUDE.md](../ingest/CLAUDE.md)):
 - `redownload_via_ytmusic.py` — re-source yt-dlp `track_audio` rows via YT Music search (the main rescue path; sends `full_name` so the remixer qualifier resolves the right release).
 - `redownload_via_spotdl.py` — re-source yt-dlp rows via pooled spotdl.
-- `replace_track_audio.py` — manually replace one track's audio (URL / local file). **Destructive** (deletes old row + cascades). Backs the `replace-track-audio` skill.
+- `replace_track_audio.py` — manually replace one track's audio (YouTube / YT Music /
+  **SoundCloud** / Spotify URL, or local file). **Destructive** when replacing an
+  existing row. SC-only scrape rows: `--url 'https://api.soundcloud.com/tracks/<id>'`.
+  Backs the `replace-track-audio` skill.
 - `acquire_variant.py` — acquire a vocal/instrumental variant (staging or canonical `track_audio` row).
 - `replace_stem_audio.py` — replace a bad acappella/instrumental row by `--track-audio-id` + URL/file; logs `axis=stem`, runs fingerprint check.
 - `ingest_stem_url.py` — **Mac URL-first driver**: SSH to pi (`acquire_variant` add or `replace_stem_audio` replace), optional `--pull`, `--fail-on`, `--file` scp fallback. See [../docs/stem_discovery_playbook.md](../docs/stem_discovery_playbook.md).
@@ -23,6 +26,7 @@ Invoke from repo root, usually with `venvs/audio/bin/python scripts/<x>.py`.
 - `migrate_identity_axes.sql` / `migrate_phase4_recording.sql` — pi-storage DB column renames + `work`/`recording`/`set_ground_truth` (run once after deploy; then `tokenizer.materialize`).
 
 **Analysis** (MIR workers — see [../analysis/CLAUDE.md](../analysis/CLAUDE.md)):
+- `mert_backfill_loop.py` — MERT-only 330M re-embed (no Demucs/beats); corpus-wide by default, optional `--set-ids`.
 - `mac_analyze_loop.py` — Mac-MPS analysis loop (sibling of `vast_loop.py`). `--separator {demucs,uvr}`.
 - `mac_analyze_sets.py` — one-shot beat_this + stem backend on full DJ-set mixes via Mac MPS. `--separator {demucs,uvr}`.
 - `separate.py` — standalone single-file separation for QA / A-B (`uvr` | `demucs` | `both`), via the project adapters' Python API. Supersedes the old `sota_stems.py`. See [../analysis/CLAUDE.md](../analysis/CLAUDE.md) "Stem-separation backends".

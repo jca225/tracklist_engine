@@ -21,7 +21,7 @@ that gap. Status tracked inline.
 | `track_audio` rows | ~18,050 — **all `stem='regular'`** (no acappella/instrumental ingested) |
 | `track_mert_measures` | 93,705 rows / **819 tracks** (~4.5% of reference tracks) |
 | → 768-dim (**MERT-v1-95M**, superseded) | 815 tracks |
-| → 1024-dim (**MERT-v1-330M**, target) | **4 tracks** |
+| → 1024-dim (**MERT-v1-330M**, target) | **0 tracks** (adapter flipped; nothing re-embedded yet) |
 | `track_mert_sections` | **0** — populated post-BPE (8b), empty *by design* |
 | Set/mix-side MERT | **no table, no path** |
 | `track_audio_features` (Essentia) | ~1,650 (~9%) |
@@ -34,8 +34,8 @@ The five "types" still owed map to orthogonal axes: **model** (330M) ·
 ## Tasks
 
 ### 6a — 330M reference backfill
-- [ ] Diagnose why `vast_loop` / `mac_analyze_loop` left MERT at 4 tracks on 330M
-      (job-filter / set-id scope caveat — see [analysis/CLAUDE.md](../analysis/CLAUDE.md)).
+- [x] Diagnose stall: pilot `BB_SETS` filter + `track_analysis IS NULL` queue skips
+      the 815 stale 768-dim rows; driver is `scripts/mert_backfill_loop.py`.
 - [ ] Re-embed the ~17.2k uncovered reference tracks with `m-a-p/MERT-v1-330M`,
       all hidden layers per measure (current production format,
       [analysis/models.py](../analysis/models.py)).

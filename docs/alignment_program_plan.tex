@@ -1,0 +1,340 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\geometry{margin=1in}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  urlcolor=blue!70!black,
+  pdftitle={Tracklist Engine Alignment Program Plan},
+  pdfauthor={Tracklist Engine}
+}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  columns=fullflexible,
+  frame=single,
+  rulecolor=\color{black!20},
+  backgroundcolor=\color{black!3}
+}
+
+\title{Alignment Program Plan\\[0.4em]
+  \large GT Export \textrightarrow{} Stem-Quality Cascade \textrightarrow{} MERT \textrightarrow{} Aligner}
+\author{Tracklist Engine \quad|\quad set \texttt{1fsnxchk} (Big Bootie Vol.\ 12)}
+\date{2026-06-05 --- canonical source: \texttt{alignment\_program\_plan.md}}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Shared cross-agent program plan for the alignment stage of Tracklist Engine.
+\textbf{Canonical editable source: \texttt{alignment\_program\_plan.md}.}
+Phase~1 exports BB12 Ableton ground truth into \texttt{set\_ground\_truth}; later phases
+build stem quality via a priority cascade, upgrade separation to RoFormer ensembles,
+backfill MERT embeddings, and prototype the span aligner $f_\theta(A,T,D)\to L$.
+Companion docs: \texttt{alignment\_objective.md}, \texttt{stem\_discovery\_playbook.md},
+\texttt{embedding\_backfill\_plan.md}.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Context}
+
+Manual labeling of Big Bootie Vol.\ 12 (\texttt{set\_id = 1fsnxchk}) is complete in
+Ableton (\path|~/Desktop/big bootie 12 labeling Project/big bootie 12 labeling_fast.als|;
+re-parse on disk every run).
+
+Two forces drive this program:
+\begin{enumerate}[noitemsep]
+  \item Extract human ground truth $L^*$ into \texttt{set\_ground\_truth} (deliverable~A).
+  \item The quality ceiling of the pipeline is set by \textbf{stem source type}, not the
+        separator---so stem acquisition is a \emph{priority cascade}, and MERT must be
+        recomputed with correct sequencing (see \S\ref{sec:mert}).
+\end{enumerate}
+
+\noindent\textbf{DAG:}
+\texttt{core $\cdot$ scrape $\to$ ingest $\to$ analysis $\to$ labeling $\to$ (GT) $\to$ alignment}.
+
+\section{Formal Objective}\label{sec:formal}
+
+Fold into \texttt{docs/alignment\_objective.md} (Phase~0).
+
+\begin{equation}
+  f_\theta(A,T,D) \to L
+\end{equation}
+
+\noindent Render invariant: $E_a(L)=\hat{A}$, $d(\hat{A},A)<\epsilon$; $L$ = minimum
+information to reproduce the set within perceptual $\epsilon$.
+
+\begin{itemize}[noitemsep]
+  \item \textbf{Metric:} structured perceptual $d$, \emph{not} Frobenius
+        $\|\hat{A}-A\|_F^2$. Pin $\epsilon$ via listening study; proxy later with
+        \texttt{set\_playback\_score.reconstruction\_mfcc\_distance}. No numeric
+        $\epsilon$ / waveform loss in v1 training.
+  \item \textbf{MDL:}
+        $L^*=\arg\min_L[\mathrm{bits}(L)+\lambda\,d(E_a(L),A)]$ --- rate term encodes
+        importance: placement $\gg$ stem $\gg$ bpm/key $\gg$ FX/transitions.
+  \item $T$ is a \textbf{constraint} (alignment over finite $D$, not open transcription).
+  \item $E_a$ is non-differentiable $\Rightarrow$ render invariant = eval/reward; train
+        supervised on $L^*$ first.
+  \item \textbf{Degenerate cheat:} $E_a(L)$ can paste slices of $A$; rate term +
+        placement-identity supervision block ``play $A$'' collapse.
+  \item $L$ admits refs $\notin D$ via \texttt{ref\_source = mix\_extract} (and related).
+  \item Stem \textbf{discovery} stays out of $f_\theta$; it is ingest (Phase~2).
+\end{itemize}
+
+\subsection{Tiered $L$}
+
+\begin{center}
+\begin{tabular}{@{}clll@{}}
+\toprule
+Tier & Content & Schema home & This program \\
+\midrule
+1 & Placement, spans, \texttt{ref\_segments}, \texttt{slot\_label} & \texttt{set\_ground\_truth} & P1 \\
+2 & Stem select + \texttt{ref\_source} & \texttt{set\_ground\_truth} & P1 \\
+3 & \texttt{tempo\_ratio} (span-level bpm) & GT DSL + DB & P1 \\
+4 & \texttt{pitch\_shift\_semi} (span-level key) & GT DSL + DB & P1 \\
+5 & FX, volume, transitions & deferred & later \\
+play & Atomic measure grid $L_{\mathrm{play}}$ & \texttt{measure\_alignment} & P5+ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Phase Overview}
+
+\begin{center}
+\begin{tabular}{@{}cl@{}}
+\toprule
+Phase & Scope \\
+\midrule
+P0 & Formal objective $\to$ \texttt{alignment\_objective.md} \\
+P1 & BB12 GT export + schema/write-back patches \\
+P1.5 & Ingest BB12 placed stem winners into \texttt{track\_audio} \\
+P2 & Stem-quality priority cascade (ingest) \\
+P3 & RoFormer separation backend (ingest/analysis) \\
+P4 & MERT backfill (analysis; split sequencing) \\
+P5 & Span aligner prototype \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Phase 1 --- BB12 GT Export}\label{sec:p1}
+
+\textbf{Critical path;} depends on nothing else.
+
+\begin{lstlisting}
+.als -> export_als_to_gt.py -> bb12_ground_truth.yaml
+     -> write_back_ground_truth.py -> set_ground_truth
+\end{lstlisting}
+
+\subsection{Session structure (verified)}
+
+\begin{itemize}[noitemsep]
+  \item Track~1: \texttt{1-mix} (set-time anchor).
+  \item Track~2: \texttt{2-mix\_instrumental} (skip).
+  \item 40 top-level GroupTracks = mashup sections (e.g.\ Honest $\times$ Mean).
+  \item GT = every \textbf{kept} placed clip past track~2 (after clip hygiene).
+  \item Mashup simultaneity: one YAML row per \emph{layer} (not one row per group).
+\end{itemize}
+
+\subsection{Identity (outsourced to aligning folder)}
+
+Parse clip \textbf{SourceContext/OriginalFileRef/Path} (prefer over
+\texttt{Samples/Imported} copy):
+
+\begin{center}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+Path shape & Slot & \texttt{claimed\_stem} \\
+\midrule
+\texttt{tracks/NNN[wK]\_\_\ldots} & \texttt{NNN[wK]} & \texttt{regular} \\
+\texttt{stems/NNN\_\_\ldots/candidates/vocals/\ldots} & \texttt{NNN} & \texttt{acappella} \\
+\texttt{stems/NNN\_\_\ldots/vocals.flac} (Demucs) & \texttt{NNN} & \texttt{acappella} \\
+\texttt{stems/NNN\_\_\ldots/candidates/instrumental/\ldots} & \texttt{NNN} & \texttt{instrumental} \\
+\texttt{stems/NNN\_\_\ldots/instrumental.flac} & \texttt{NNN} & \texttt{instrumental} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Join \texttt{NNN[wK]} to \texttt{manifest.json} \texttt{local\_path} prefix
+$\to$ \texttt{recording\_id}. Strip user tags \texttt{[NNNbpm KK]}. Legacy BB12
+manifest lacks \texttt{label}/\texttt{version}/\texttt{stem} --- parse slot from path only.
+Unresolved Rvmor \texttt{w}-rows $\to$ \texttt{recording\_id=null} + flag.
+
+\subsection{Time mapping}
+
+\begin{itemize}[noitemsep]
+  \item \textbf{Set spans:} map arrangement beats through \texttt{1-mix} warp markers
+        (\texttt{content\_beat = LoopStart + (arr - CurrentStart)} $\to$ SecTime).
+        Interpolation primary; linear fallback if markers absent.
+  \item \textbf{Ref spans:} clip warp markers + \texttt{Loop/LoopStart}.
+  \item \textbf{Bpm:} \texttt{tempo\_ratio = ref\_span\_s / set\_span\_s}.
+  \item \textbf{Key:} \texttt{pitch\_shift\_semi} from \texttt{PitchCoarse} (+ \texttt{PitchFine}).
+\end{itemize}
+
+\subsection{Parts played + clip hygiene (v1)}
+
+\begin{enumerate}[noitemsep]
+  \item \textbf{Parking-lot drop:} clips with \texttt{set\_start\_s > mix\_end\_s + tol}
+        (mix ends ${\sim}$90:37; some refs have clips at 116--122\,min).
+  \item \textbf{Abutting sliver merge:} sub-threshold clips glued to dominant neighbor
+        (e.g.\ Maps 56:15--56:18) merge into dominant span.
+  \item \textbf{Intentional loops:} comparable-size or overlapping clips on same track
+        $\to$ \texttt{is\_loop: true} + \texttt{ref\_segments} per iteration.
+  \item \textbf{Defer:} Blink-182 7-clip chop/stutter chain (effect vs.\ artifact);
+        sub-clip jumps without separate arrangement regions (measure-level $L_{\mathrm{play}}$).
+\end{enumerate}
+
+Review table lists kept, dropped, and merged clips with reasons.
+Optional \texttt{--include-all-clips} for debugging.
+
+\subsection{Schema / write-back patches}
+
+Add to \texttt{set\_ground\_truth}:
+\begin{itemize}[noitemsep]
+  \item \texttt{tempo\_ratio REAL}
+  \item \texttt{pitch\_shift\_semi INTEGER}
+  \item \texttt{ref\_source TEXT} --- \texttt{reference|official|phase\_cancel|
+        online\_candidate|demucs|roformer|mix\_extract}
+\end{itemize}
+
+In \texttt{labeling/ground\_truth/schema.py}:
+\texttt{slot\_label} (PK key, distinct from display title), plus fields above.
+
+\texttt{write\_back\_ground\_truth.py}: use \texttt{slot\_label} as DB \texttt{label}
+(fixes duplicate ``Honest'' title collisions).
+
+\subsection{Verification (P1)}
+
+Anchor-check 3--4 spans vs.\ Ableton playhead ($\pm{\sim}1$ beat); \texttt{schema.load} OK;
+\texttt{write\_back --dry-run}; live write; confirm row count on pi-storage.
+
+\section{Phase 1.5 --- BB12 Winner Ingest}
+
+After export: batch-ingest placed \texttt{candidates/} and volcr.it winners via
+\texttt{ingest\_stem\_url.py} so corpus $D$ matches $L^*$. Log source in
+\texttt{track\_audio\_correction.reason}.
+
+\section{Phase 2 --- Stem-Quality Priority Cascade}\label{sec:p2}
+
+Reframe: source type dominates; separation is the floor; official/phase-derived is the ceiling.
+
+\textbf{Discipline:} detect-then-correct, never blanket; log to \texttt{track\_audio\_correction};
+version-aware matching via \texttt{core/identity.py}.
+
+\subsection{2a --- Solvability (metadata)}
+
+Discogs + MusicBrainz APIs: official instrumental/acappella exists?
+Classify ${\sim}$18k tracks into tier~1 (official pair) / tier~2 (derive) / tier~3 (separation only).
+
+\subsection{2b --- Tiered acquisition}
+
+Lossless FLAC/WAV only (MP3 breaks phase-cancel):
+stores/Stems packs $\to$ paid DJ pools (DJcity, BPM Supreme, ZIPDJ) $\to$
+community (acapellas4u, voclr, YouTube; throttled, cached, ToS-aware).
+
+\subsection{2c --- Derive + verify}
+
+Reuse \path|~/aligning/phase-cancel/cancel.py| as-is:
+official instrumental + full mix $\to$ acappella
+(\texttt{adaptive --smooth 0.5 --fft 4096 --cap 4}).
+
+\textbf{Sum-check:} aligned \texttt{acap + inst $\approx$ original} $\to$ residual score.
+
+\subsection{2d --- Quality gate}
+
+\begin{enumerate}[noitemsep]
+  \item Identity/version: chromaprint + cross-correlation (chroma/low-mid); BPM/key prefilter.
+  \item Sum-check residual (strongest when pair exists).
+  \item Separator-as-judge bleed (RoFormer vocal on candidate instrumental).
+  \item Watermark ASR lexicon (e.g.\ \texttt{digitalmusicpoolstudio.com}).
+  \item Transcode detection (spectral cliff ${\sim}$16\,kHz).
+  \item Coverage: vocal-activity vs RoFormer vocals (truncation).
+\end{enumerate}
+
+\textbf{Selection:} official pair $>$ phase-derived $>$ community beating separation floor $>$ separation.
+
+\texttt{fetch\_candidate\_stems.py} stays labeling-support for audition; P2 cascade driver is separate.
+
+\section{Phase 3 --- RoFormer Separation Backend}
+
+Maximize SDR; cost not constrained. Replace Demucs floor with
+\textbf{Mel-Band RoFormer + BS-RoFormer + SCNet-XL} ensemble (pluggable interface).
+
+\begin{itemize}[noitemsep]
+  \item \textbf{Vast (CUDA):} primary bulk path --- \texttt{audio-separator[gpu]} or MSST.
+  \item \textbf{Mac (Apple Silicon):} use \texttt{ssmall256/mlx-audio-separator} --- stock
+        MPS path silently falls back to CPU for unsupported ops.
+  \item Validate SDR vs Demucs + bleed-judge ${\approx}0$ on known official instrumental before bulk.
+  \item Re-separate existing Demucs \texttt{track\_stems} after validation.
+\end{itemize}
+
+\section{Phase 4 --- MERT Backfill}\label{sec:mert}
+
+330M target: \textbf{0 tracks}; ${\sim}$4.5\% stale 95M (unmatchable). Clean full 330M recompute required.
+
+\textbf{Split sequencing} (merged from program review):
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Task & When & Rationale \\
+\midrule
+6b set-side MERT & Parallel with P1 & Stem-independent; aligner prereq \\
+6a regular refs & Parallel with P1 (BB12 + whitelist) & Wrong-audio excluded via 6d list \\
+6c variant (acap/inst) & After P2 for those rows & Avoid embedding replaced audio \\
+Re-embed changed rows & Incremental post-P2 & detect-then-correct \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Size disk/GPU-hours first (${\sim}$100+ GB at full corpus). Driver: \texttt{mert\_backfill\_loop.py} on Vast.
+
+\section{Phase 5 --- Aligner Prototype}
+
+\texttt{workspaces/} $\to$ promote to \texttt{alignment/}.
+
+Supervised span aligner: inputs $A$ features + $T$ slots + $\{E(x)\}$; output span-level $L$
+matching \texttt{GroundTruthTrack}.
+
+Loss: Huber on spans; CE on \texttt{(recording\_id, claimed\_stem)}; set-multiplicity for mashups.
+
+Later: distill to \texttt{measure\_alignment}; proxy $E_a$; listening study pins $\epsilon$.
+
+\section{Critical Files}
+
+\begin{itemize}[noitemsep]
+  \item \textbf{New:} \texttt{labeling/export\_als\_to\_gt.py}; ingest solvability querier,
+        cascade driver, sum-check, quality gate; RoFormer wrapper.
+  \item \textbf{Edit:} \texttt{ground\_truth/schema.py}, \texttt{write\_back\_ground\_truth.py},
+        \texttt{schema.sql}, \texttt{alignment\_objective.md}, playbooks.
+  \item \textbf{Reuse:} \texttt{phase-cancel/cancel.py}, \texttt{fetch\_candidate\_stems.py},
+        \texttt{ingest\_stem\_url.py}, \texttt{core/identity.py}, \texttt{mert\_backfill\_loop.py}.
+  \item \textbf{Tests:} fixture \texttt{.als} for beat$\to$sec, path join, tempo/semi extraction.
+\end{itemize}
+
+\section{Risks}
+
+\begin{itemize}[noitemsep]
+  \item Live \texttt{.als} edits --- always re-parse.
+  \item \texttt{pyexpat} broken in Py3.14 venv --- use \texttt{lxml} or \texttt{/usr/bin/python3}.
+  \item Version disambiguation is the hard part of P2 --- wrong master breaks phase-cancel.
+  \item Phase-cancel needs lossless, sample-accurate alignment.
+  \item Don't blanket re-source/re-embed --- detect-then-correct.
+  \item Community scraping: throttle/cache; personal-use copyright norms only.
+\end{itemize}
+
+\end{document}

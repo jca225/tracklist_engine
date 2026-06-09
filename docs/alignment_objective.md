@@ -7,6 +7,9 @@ codebase. Throughout: **labeling** = the human Ableton ground-truth pass;
 **alignment** = the algorithm that learns from it. Never swap the words (see the
 terminology block in [../CLAUDE.md](../CLAUDE.md)).
 
+**Execution plan (phased):** [alignment_program_plan.md](alignment_program_plan.md) — canonical
+shared doc for GT export, stem cascade, MERT, and aligner prototype.
+
 ## Corpus scope
 
 Define a **clean corpus** of DJ sets — roughly **20,000 sets** — by three filters:

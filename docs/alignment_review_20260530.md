@@ -5,6 +5,10 @@
 full set (mostly done). Ground truth **not yet written back** to pi-storage
 (`set_ground_truth` row count = 0 as of 2026-05-30).
 
+**GT write-back blocked (not forgotten):** no `*_ground_truth.yaml` exists —
+nothing under `~/aligning/` or the repo. Ableton → YAML export is still manual.
+Skip write-back until that file exists; do not treat as a deploy/pipeline failure.
+
 **Related docs:**
 
 - North star: [alignment_objective.md](alignment_objective.md)
@@ -205,7 +209,8 @@ Priorities updated given legacy-download context: **re-source before re-label**.
 
 ### Tier 0 — unblock GT write-back
 
-1. **Write back completed GT** via `labeling/write_back_ground_truth.py`.
+1. **Write back completed GT** via `labeling/write_back_ground_truth.py` —
+   **blocked:** export `*_ground_truth.yaml` from Ableton first (file does not exist yet).
 2. **Fix pull suffix bug** ✅ (`_qualifier_suffix()` compound `(Remix) (Acappella)` — `tests/test_replace_track_stem.py`).
 3. **Capture this review** ✅ (this document).
 

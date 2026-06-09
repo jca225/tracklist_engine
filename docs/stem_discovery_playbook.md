@@ -5,6 +5,8 @@
 
 **Related:** [alignment_review_20260530.md](alignment_review_20260530.md), [alignment_objective.md](alignment_objective.md).
 
+**Reference:** [UVR vocal/instrumental extraction chain](assets/UVR_Instructions.png) — Ultimate Vocal Remover model pipeline (Kim Vocals 2 → Karaoke ensemble → Reverb/De-Echo/Denoise; Demucs htdemucs v4 for instrumental). External community recipe (credit: LucidFir, soucarlosxavier).
+
 ---
 
 ## URL-first (primary path)

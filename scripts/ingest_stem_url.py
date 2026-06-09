@@ -305,7 +305,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     print(f"remote: {shell}")
-    r = subprocess.run(ssh_cmd, capture_output=True, text=True)
+    r = subprocess.run(ssh_cmd, capture_output=True, text=True, errors="replace")
     if r.stdout:
         print(r.stdout, end="" if r.stdout.endswith("\n") else "\n")
     if r.stderr:

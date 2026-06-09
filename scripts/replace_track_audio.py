@@ -1,6 +1,6 @@
 """Manually replace a track's audio. Three input modes:
 
-  1. By URL (YouTube, YouTube Music, Spotify) — runs yt-dlp or spotdl
+  1. By URL (YouTube, YouTube Music, SoundCloud, Spotify) — yt-dlp / spotdl
   2. By local file (already-downloaded m4a/wav/mp3) — copy in place
   3. List failed tracks (from Mac analyze log + DB join)
 
@@ -68,9 +68,9 @@ sys.path.insert(0, str(REPO))
 from core.db import connect
 from core import db as db_adapter
 from ingest.adapters import spotdl_adapter, ytmusic_adapter
-from ingest.adapters.downloader import DownloadConfig
+from ingest.adapters.downloader import DownloadConfig, download_one
 from ingest.errors import DownloadError
-from core.models import AudioAsset, MediaSource
+from core.models import AudioAsset, MediaSource, soundcloud_api_url
 from core.result import Err, Ok
 from core.identity import DEFAULT_STEM, normalize_stem
 from ingest.corrections import Correction, latest_row, log_correction, snapshot_row
@@ -89,7 +89,8 @@ def _sha256(path: Path) -> str:
 
 
 def _detect_url_kind(url: str) -> str:
-    """Return one of: 'youtube', 'spotify', 'unknown'.
+    """Return one of: 'youtube', 'soundcloud', 'spotify', 'unknown'.
+
     YT Music URLs (music.youtube.com) are treated as 'youtube' since the
     video_id namespace is shared.
     """
@@ -97,9 +98,17 @@ def _detect_url_kind(url: str) -> str:
     host = (p.netloc or "").lower()
     if "spotify.com" in host:
         return "spotify"
+    if "soundcloud.com" in host:
+        return "soundcloud"
     if "youtube.com" in host or "youtu.be" in host:
         return "youtube"
     return "unknown"
+
+
+def _soundcloud_player_id(url: str) -> str | None:
+    """Extract numeric track id from api.soundcloud.com or soundcloud.com URLs."""
+    m = re.search(r"soundcloud\.com/tracks/(\d+)", url)
+    return m.group(1) if m else None
 
 
 def _yt_video_id(url: str) -> str | None:
@@ -301,8 +310,50 @@ def _replace_via_url(
             db_path, audio_root, track_id, vid, track_audio_id, stem, variant,
             promote_reference=promote_reference, purge_siblings=purge_siblings,
         )
+    if kind == "soundcloud":
+        scid = _soundcloud_player_id(url)
+        if not scid:
+            _log.error("could not extract soundcloud track id from %s", url)
+            return 1
+        return _replace_via_soundcloud(
+            db_path, audio_root, track_id, scid, track_audio_id, stem, variant,
+            promote_reference=promote_reference, purge_siblings=purge_siblings,
+        )
     _log.error("unrecognized URL kind for %s", url)
     return 1
+
+
+def _replace_via_soundcloud(
+    db_path: Path, audio_root: Path, track_id: str, sc_player_id: str,
+    track_audio_id: int | None, stem: str = "regular",
+    variant: str = "regular",
+    *, promote_reference: bool = True, purge_siblings: bool = False,
+) -> int:
+    """Download via yt-dlp from api.soundcloud.com/tracks/<id>."""
+    objects_root = audio_root / "objects"
+    out_dir = objects_root / track_id
+    cfg = DownloadConfig(out_dir=out_dir, audio_format="m4a", retries=2,
+                         cookies_path=None)
+    source = MediaSource(
+        platform="soundcloud",
+        player_id=sc_player_id,
+        url=soundcloud_api_url(sc_player_id),
+    )
+    _log.info("downloading via yt-dlp: soundcloud:%s", sc_player_id)
+    r = download_one(track_id, source, cfg)
+    match r:
+        case Err(err):
+            _log.error("soundcloud download failed: %s — %s", err.kind, err.detail)
+            return 1
+        case Ok(asset):
+            pass
+    asset = replace(asset, stem=stem, variant=variant)
+    if track_audio_id is not None:
+        _delete_old_row_if_exists(db_path, audio_root, track_audio_id)
+    return _insert_and_report(
+        db_path, audio_root, asset,
+        promote_reference=promote_reference, purge_siblings=purge_siblings,
+    )
 
 
 def _replace_via_spotdl(

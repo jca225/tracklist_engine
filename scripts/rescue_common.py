@@ -76,6 +76,13 @@ def phase2_replace(
 
         old_taid = c.yt_track_audio_id
         old_path_str = c.yt_audio_path
+        if old_taid == new_taid:
+            stats = dc_replace(stats, phase2_replaced=stats.phase2_replaced + 1)
+            log.info(
+                "replaced track_id=%s in-place %s_taid=%d (row updated, no delete)",
+                c.track_id, replacement_label, new_taid,
+            )
+            continue
         try:
             with connect(db_path) as conn:
                 conn.execute(

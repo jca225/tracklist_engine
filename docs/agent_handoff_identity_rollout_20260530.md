@@ -104,14 +104,22 @@ ssh pi-storage 'cd ~/tracklist_engine && venvs/audio/bin/python scripts/reconcil
 
 ### 2. Seven tracks need re-download (empty folders)
 
-`4dtxu75`, `19bg4m9p`, `1fw35fxp`, `1mlz2hg5`, `1uz8820p`, `1wws7mtf`, `hm0pvnp` — use `scripts/redownload_via_ytmusic.py` when yt-dlp/cookies healthy.
+`4dtxu75`, `19bg4m9p`, `1fw35fxp`, `1mlz2hg5`, `1uz8820p`, `1wws7mtf`, `hm0pvnp` — use
+`scripts/redownload_via_ytmusic.py` when yt-dlp/cookies healthy (YouTube/YT Music).
+
+**SoundCloud-only:** `1fw35fxp` has no YouTube scrape link — still acquire via
+`ingest.main` (youtube → **soundcloud** fallback) or
+`replace_track_audio.py --url 'https://api.soundcloud.com/tracks/255865692'`.
+Do not treat SC-only as unmappable.
 
 ### 3. Mac labeling / analysis
 
 - Stem re-source (acappella/instrumental quality): [stem_discovery_playbook.md](stem_discovery_playbook.md)
 - Pull sets: `labeling/pull_set_for_alignment.py` — manifest now has `version`, `stem`, `variant`, `axes_key`
 - GT YAML: use **`claimed_stem`** (legacy `version_tag:` still parses)
-- Write-back: `python -m labeling.write_back_ground_truth --db ... --yaml ...`
+- **GT write-back: SKIP** — no `*_ground_truth.yaml` exported from Ableton yet
+  (`~/aligning/` has no YAML; `set_ground_truth` = 0). Do not block other ops on this.
+  When YAML exists: `python -m labeling.write_back_ground_truth --db ... --yaml ...`
 - Mac analyze loop for new/refreshed `track_audio` rows (BB job filter caveat)
 - **Preserve** `9hp84x` acappella ref (`taid=758`) unless intentional
 

@@ -70,7 +70,10 @@ Acquire via `scripts/redownload_via_ytmusic.py` (or ingest) when convenient:
 | `1wws7mtf` | Hardwell & Armin van Buuren - Boundaries (AMF 2017…) |
 | `hm0pvnp` | Armin van Buuren - A State Of Trance Year Mix 2021 |
 
-Pass-1 removed wrong 75m/650m search hits from these folders. **No analysis rows** to cascade-delete for most (never registered).
+Pass-1 removed wrong 75m/650m search hits from these folders. **No analysis rows**
+to cascade-delete for most (never registered). **`1fw35fxp` is SoundCloud-only**
+in scrape links — acquire via `ingest.main` or `replace_track_audio` with an
+`api.soundcloud.com/tracks/<id>` URL, not YT Music rescue.
 
 ---
 

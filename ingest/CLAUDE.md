@@ -12,6 +12,20 @@ disk. Lands files at
 > That rule lives in [tokenizer/CLAUDE.md](../tokenizer/CLAUDE.md); don't restate
 > it here.
 
+## SoundCloud-only tracks
+
+Some scrape rows have **only** a SoundCloud `player_id` in
+`dj_set_track_media_links` (no YouTube). That is **not** a skip — `ingest.main`
+falls through the platform chain `youtube → soundcloud` and
+`ingest/adapters/downloader.py` downloads SC via yt-dlp at
+`https://api.soundcloud.com/tracks/<id>`.
+
+Rescue scripts that search YT Music (`redownload_via_ytmusic.py`) do **not**
+cover SC-only rows; use `ingest.main` (scoped to the set/job) or
+`replace_track_audio.py --url` with a SoundCloud/API track URL.
+
+Example: `1fw35fxp` (GTA & Astronomar - Heavy Thunder) — SC `255865692` only.
+
 ## Download topology
 
 This is *not* "yt-dlp + spotdl in one chain" — it's a yt-dlp main path, a spotdl

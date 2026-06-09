@@ -178,7 +178,7 @@ def _log_to_ledger(args: argparse.Namespace, track_id: str, stem_axis: str) -> N
         case Ok(cid):
             print(f"logged correction_id={cid} (stem/add)")
         case Err(e):
-            print(f"correction log failed (non-fatal): {e.kind} — {e.detail}")
+            print(f"correction log failed (non-fatal): {e.kind} - {e.detail}")
 
 
 def _lookup_audio_path(db_path: Path, track_id: str, stem_axis: str) -> tuple[int, str] | None:
@@ -204,10 +204,10 @@ def _identity_check(db_path: Path, track_id: str, stem_axis: str) -> None:
     var = _lookup_audio_path(db_path, track_id, stem_axis)
     orig = _lookup_audio_path(db_path, track_id, "regular")
     if var is None:
-        print("identity-check: variant row not found post-insert — skipping")
+        print("identity-check: variant row not found post-insert - skipping")
         return
     if orig is None:
-        print(f"identity-check: WARNING — no 'original' present for track {track_id}.")
+        print(f"identity-check: WARNING - no 'original' present for track {track_id}.")
         print("  · the variant has no Essentia-feature source (variants don't get their own BPM/key),")
         print("  · and the chromaprint identity check can't run.")
         print("  -> download the regular version first (normal ingest) so the variant can inherit its features.")
@@ -223,7 +223,7 @@ def _identity_check(db_path: Path, track_id: str, stem_axis: str) -> None:
             print(f"identity-check [{verdict}]: {detail}")
             print(f"  similarity={sim:.3f}  variant={b.duration_s:.1f}s  original={a.duration_s:.1f}s  ratio={dur_ratio:.2f}")
         case (Err(e), _) | (_, Err(e)):
-            print(f"identity-check: skipped (fingerprint failed: {e.kind} — {e.detail})")
+            print(f"identity-check: skipped (fingerprint failed: {e.kind} - {e.detail})")
 
 
 def main() -> int:
