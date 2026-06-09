@@ -16,6 +16,7 @@ DB           := /mnt/storage/data/db/music_database.db
 
 .PHONY: help check deploy deploy-storage deploy-worker \
         restart-jobqueue start-scraper stop-scraper restart-retry \
+        install-taste-scrape restart-taste-scrape logs-taste-scrape \
         status logs-jobqueue logs-scraper logs-retry queue ssh-storage ssh-worker
 
 help:
@@ -30,6 +31,8 @@ help:
 	@echo "  make start-scraper    — start tracklist-scraper.service (full corpus)"
 	@echo "  make stop-scraper     — stop the scraper"
 	@echo "  make restart-retry    — stop + start the retry drain on pi-worker"
+	@echo "  make install-taste-scrape — install taste-scrape systemd unit on pi-worker"
+	@echo "  make restart-taste-scrape — restart taste scrape loop on pi-worker"
 	@echo ""
 	@echo "Logs (Ctrl-C to exit):"
 	@echo "  make logs-jobqueue logs-scraper logs-retry"
@@ -102,6 +105,18 @@ logs-scraper:
 
 logs-retry:
 	ssh $(PI_WORKER) 'sudo journalctl -u tracklist-ajax-retry.service -f --no-hostname'
+
+install-taste-scrape:
+	scp deploy/taste-scrape.service $(PI_WORKER):/tmp/taste-scrape.service
+	ssh $(PI_WORKER) 'sudo mv /tmp/taste-scrape.service /etc/systemd/system/tracklist-taste-scrape.service && sudo systemctl daemon-reload && sudo systemctl enable tracklist-taste-scrape.service'
+
+restart-taste-scrape:
+	ssh $(PI_WORKER) 'sudo systemctl restart tracklist-taste-scrape.service'
+	@sleep 2
+	@ssh $(PI_WORKER) 'sudo systemctl status tracklist-taste-scrape.service --no-pager | head -8'
+
+logs-taste-scrape:
+	ssh $(PI_WORKER) 'sudo journalctl -u tracklist-taste-scrape.service -f --no-hostname'
 
 # ---------- shells ----------------------------------------------------------
 

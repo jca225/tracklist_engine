@@ -1,0 +1,17 @@
+[Unit]
+Description=Tracklist Engine — SoundCloud taste prior scrape loop
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=johncabrahams
+WorkingDirectory=/home/johncabrahams/tracklist_engine
+Environment=TASTE_DATA_DIR=/home/johncabrahams/tracklist_engine/data/taste
+Environment=TASTE_SC_RPM=45
+ExecStart=/home/johncabrahams/tracklist_engine/venvs/web_crawler/bin/python -m workspaces.taste_prior.main loop --all-mixes --batch 15 --sleep 300
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target
