@@ -89,6 +89,41 @@ def _run_mert_eval(
     print("\nMertLearnedAligner + monotonic decode (eval):")
     for line in seq_report.lines():
         print(f"  {line}")
+
+    # Decoupled per-span DTW fine refinement (audio). Snaps each coarse start to
+    # the best local match within a ±band corridor; no-op if the aligning folder
+    # (mix_instrumental.flac + manifest) is absent.
+    from workspaces.alignment_prototype.fine_refine import AudioContext, refine_placements
+
+    ctx = AudioContext.from_set(gt_set_id)
+    if ctx is None:
+        print("\n(fine refinement skipped — no aligning audio for this set)")
+        return 0
+
+    import numpy as np
+
+    def _dist(name: str, preds_seq, base_seq=None) -> None:
+        errs, base = [], []
+        for p, b, t in zip(preds_seq, base_seq or preds_seq, targets):
+            if id(t) not in eval_ids or t.recording_id is None:
+                continue
+            errs.append(abs(p.set_start_s - t.set_start_s))
+            base.append(abs(b.set_start_s - t.set_start_s))
+        e = np.asarray(errs)
+        tag = ""
+        if base_seq is not None:
+            be = np.asarray(base)
+            better = int((e < be - 3).sum()); worse = int((e > be + 3).sum())
+            tag = f"  [{better} better / {worse} worse / {len(e) - better - worse} tie vs coarse]"
+        print(f"  {name:34} n={len(e):2d} median={np.median(e):5.1f}s mean={e.mean():5.1f}s "
+              f"<8s:{(e < 8).sum()} <16s:{(e < 16).sum()} <30s:{(e < 30).sum()} max={e.max():.0f}s{tag}")
+
+    print("\nfine-placement distribution (eval, set_start error):")
+    _dist("coarse monotonic decode", all_preds)
+    for band_s, gate_z in ((30.0, None), (45.0, None), (30.0, 1.0)):
+        refined = refine_placements(all_preds, targets, ctx, band_s=band_s, gate_z=gate_z)
+        gate = "no gate" if gate_z is None else f"gate z≥{gate_z}"
+        _dist(f"per-span DTW ±{band_s:.0f}s ({gate})", refined, base_seq=all_preds)
     return 0
 
 
