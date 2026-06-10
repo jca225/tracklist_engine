@@ -1,12 +1,15 @@
 """Training examples and inference helpers for MERT span alignment."""
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 import numpy as np
 
 from .mert_store import MertSeries
 from .records import SlotCandidate, SpanTarget
+
+log = logging.getLogger(__name__)
 
 
 def candidate_list(
@@ -49,6 +52,7 @@ def build_examples(
     gen = rng or np.random.default_rng(0)
     all_ids = tuple(sorted(refs))
     out: list[MertSpanExample] = []
+    missing_refs: set[str] = set()
 
     for t in targets:
         if not t.recording_id or t.recording_id not in refs:
@@ -82,7 +86,10 @@ def build_examples(
             if cid == t.recording_id:
                 seg = pos_seg
             elif rs is None:
+                # Zero vector can never win the identity argmax — a silent
+                # handicap; surface it (see MISS slot=039 / 2qy7u05p).
                 seg = np.zeros_like(pos_seg)
+                missing_refs.add(cid)
             else:
                 seg = rs.track_mean()
             ref_segments.append(seg)
@@ -112,6 +119,13 @@ def build_examples(
                 ref_segments=ref_segments_arr,
                 span_mask=span_mask,
             )
+        )
+    if missing_refs:
+        log.warning(
+            "build_examples: %d candidate(s) have no MERT embedding and were "
+            "zero-filled (cannot win identity): %s",
+            len(missing_refs),
+            ", ".join(sorted(missing_refs)),
         )
     return tuple(out)
 
