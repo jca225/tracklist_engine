@@ -10,6 +10,15 @@ Promote to top-level `alignment/` when stable.
 - Eval metrics + baselines (`eval.py`, `model.py`)
 - `CopyGTBaseline` sanity model (loss should be 0 on eval)
 - Huber placement + identity CE loss stubs
+- `MertAlignHead` seed ensemble (`TrainConfig.n_heads`) + joint slot decoding:
+  identity = max over (mix window, ref window) pairs in the search band; a
+  slot's k spans assign to top-k candidates ordered by matched mix time
+
+**BB12 held-out eval (2026-06-09):** identity 100% (30/30), ref_start MAE
+0.79 s, set placement MAE ~171 s — placement is the open front (needs
+sequence structure / boundary-proposer constraints, not similarity quality).
+Candidates without MERT embeddings are logged loudly, never silently
+zero-filled (that hid the slot-039 miss).
 
 ## Not wired yet
 
