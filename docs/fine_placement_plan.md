@@ -246,6 +246,55 @@ place the ambiguous ~80 %. Audio gives precision where it can, the cue gives
 global shape, and the anchors are exactly the "few points" the cue calibration
 needs — the two ideas compose instead of competing.
 
+## Anchor-and-fill result + the wall (2026-06-10)
+
+Audio-confident spans (fused-curve peak z ≥ THR) → hard anchors → isotonic
+calibration of cue→time → calibrated cue fills the rest. On 29 held-out spans:
+
+| Method | median | mean | <8 s | <16 s | <30 s |
+|---|---|---|---|---|---|
+| coarse (MERT) | 37.7 s | 42 s | 3 | 5 | 11 |
+| anchor-fill THR=3.0 | 37.7 s | 106 s | 5 | 7 | 12 |
+| anchor-fill THR=4.0 | **31.3 s** | 99 s | 4 | **9** | **14** |
+
+Modest body improvement (<16 s: 5→9), but a fat tail (mean → 99 s) from
+cue-fill outliers, and only ~1–3 eval spans are anchors so most predictions ride
+the ~20 s cue prior. **Net: roughly coarse-parity, not a breakthrough.**
+
+**The wall, stated plainly.** Every signal we have — MERT (bar-resolution),
+chroma/fingerprint (self-similar → flat for ~80 % of spans), scraped cue (~20 s
+after calibration), tracklist order — is a *coarse* ~20–40 s prior. Fusing
+coarse priors yields a coarse result. Sub-bar placement of the ambiguous
+majority is **not reachable by independent per-span matching against any of
+them.** Six methods now agree on this.
+
+## Bold method — global program-to-mix alignment (proposed, not built)
+
+Stop matching spans independently. Instead **reconstruct the expected program**
+and align the whole thing at once:
+
+1. Concatenate the known source sections in tracklist order, each tempo-warped
+   to the mix's local tempo and placed at its `ref_start`, into a **synthetic
+   reference timeline** (we have identity 100 % + ref_start 0.8 s — the
+   ingredients are reliable).
+2. One **global subsequence DTW** between the synthetic-reference chromagram and
+   the actual-mix chromagram → a single monotonic warping that maps every source
+   position to a mix time, placing **all spans jointly**.
+
+Why this can break the wall where per-span matching can't: a self-similar drop
+that's locally ambiguous is **pinned by its neighbours in the global path** — the
+warping can't misplace it without breaking the alignment of the tracks around it.
+This is how audio-to-score alignment works (whole-piece DTW, not per-note), and
+it uses the full harmonic *trajectory* of the set, not isolated snippets. The
+anchors and the cue prior become DTW band constraints (limit the warp corridor),
+not independent guesses. Higher build cost (tempo-warp + concatenate + one big
+DTW), but it's the first method that's *qualitatively* different from "score
+each span against the mix."
+
+Fallbacks if global DTW also stalls: (a) phrase-grid snapping — constrain starts
+to boundary-probe peaks + 8/16/32-bar spacing; (b) a learned fine head once more
+GT sets exist (one BB12 overfits).
+
 ## Risks (tied to the domain taxonomy)
 
 - **Beatless acappellas** — no beat grid (open Q in `project_variant_mert`).
