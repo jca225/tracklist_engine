@@ -138,9 +138,16 @@ corpus batch; Pi CPU is out of scope.
 
 | Host | Stack | Notes |
 |------|-------|-------|
-| **Vast.ai (CUDA)** | `pip install "audio-separator[gpu]"` or ZFTurbo **MSST** | Primary batch path; `onnxruntime-gpu` required; loud-fail if CUDA requested but CPU fallback (existing guard in `audio_separator_adapter.py`) |
-| **Mac (Apple Silicon)** | **`ssmall256/mlx-audio-separator`** | **Do not** rely on stock `audio-separator` + `PYTORCH_ENABLE_MPS_FALLBACK=1` — silent op drop to CPU |
+| **Vast.ai (CUDA)** | **MSST-WebUI clone** via `scripts/setup_roformer_separation.sh` (run after `vast_bootstrap.sh`; reuses `/venv/main` CUDA torch, symlinks `venvs/msst -> /venv/main`) | Primary batch path |
+| **Mac (Apple Silicon)** | Same MSST clone, dedicated `venvs/msst` (MPS torch) | **Validated 2026-06-10:** MSST runs natively on MPS (no CPU fallback) — the earlier mlx-audio-separator recommendation is obsolete. But slow: ~16 min/model-pass on a ~4 min track → ~45 min per track for the full ensemble. QA only. |
 | **pi-storage CPU** | Not supported for RoFormer batch | Keep Demucs-off or queue jobs to Mac/Vast |
+
+> **Interpreter gotcha (2026-06-10):** `roformer_chain_adapter` imports MSST
+> **in-process** (`sys.path` insert), so the *calling* interpreter needs the MSST
+> deps — drive roformer runs with `venvs/msst/bin/python`, **not** `venvs/audio`.
+> Also `modules/bs_roformer` imports `neuralop.models.FNO` — the `neuraloperator`
+> package is **missing from upstream MSST requirements**; it's pinned in
+> [requirements-msst.txt](../requirements-msst.txt).
 
 ### New setup script
 
@@ -177,13 +184,15 @@ check into repo as small fixtures only (not full stems).
 
 ### Phase A — Adapter + config (no production flip)
 
-- [ ] Add `roformer_chain.yaml` + `roformer_chain_adapter.py`
-- [ ] Wire `pipeline.load_analyzers` / `run_separation`
-- [ ] Extend `scripts/separate.py` for local A/B
-- [ ] `scripts/setup_roformer_separation.sh` on Mac + Vast bootstrap
+- [x] Add `roformer_chain.yaml` + `roformer_chain_adapter.py`
+- [x] Wire `pipeline.load_analyzers` / `run_separation`
+- [x] Extend `scripts/separate.py` for local A/B
+- [x] `scripts/setup_roformer_separation.sh` — host-detecting (Mac venv / Vast `/venv/main` reuse), pinned MSST commit + ckpt download (2026-06-10)
 - [ ] Unit test: mock `audio_separator` return list → correct `StemSet` paths (mirror UVR tests)
 
-**Exit:** `separate.py --separator roformer` works on one file on Mac and Vast.
+**Exit:** `separate.py --separator roformer` works on one file on Mac *(2026-06-10:
+running on MPS via `venvs/msst` interpreter — see gotcha above)* and Vast *(pending
+first Vast box)*.
 
 ### Phase B — Validation + benchmark
 

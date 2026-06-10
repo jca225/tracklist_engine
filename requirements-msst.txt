@@ -1,0 +1,21 @@
+# MSST RoFormer inference deps (analysis/adapters/roformer_chain_adapter.py).
+# Inference-only subset of MSST-WebUI's requirements.txt — no gradio/fastapi/
+# training stack. torch/torchaudio are installed per-host by
+# scripts/setup_roformer_separation.sh (Vast reuses /venv/main's CUDA build).
+#
+# neuraloperator is REQUIRED but missing from upstream requirements.txt —
+# modules/bs_roformer imports `neuralop.models.FNO` (found 2026-06-10).
+einops>=0.8
+beartype>=0.22
+rotary-embedding-torch>=0.8
+omegaconf>=2.3
+ml_collections>=1.1
+librosa>=0.11
+soundfile>=0.13
+neuraloperator>=2.0
+timm>=1.0
+scipy>=1.7
+tqdm
+pydantic>=2
+huggingface-hub>=0.23
+safetensors
