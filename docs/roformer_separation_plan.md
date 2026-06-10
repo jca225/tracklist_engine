@@ -357,7 +357,20 @@ roformer version string when fallback fires. Revisit a column only if join pain 
 
 ## Results
 
-*Fill in after Phase B validation.*
+**Decision (2026-06-10): RoFormer approved for set-scoped re-stem (BB11), full
+Phase B gate deferred to the corpus default flip.** Basis: the 2026-06-09 Mac
+MPS smoke (3 BB12 clips, 30 s) — RoFormer inst-ensemble beat Demucs on
+bleed-RMS on **3/3 clips**:
+
+| clip | roformer bleed | demucs bleed | ratio |
+|------|----------------|--------------|-------|
+| Manse – Freeze Time | 0.00017 | 0.00288 | 17× |
+| Calvin Harris – Outside | 0.00124 | 0.00176 | 1.4× |
+| KYLE – iSpy | 0.00351 | 0.01407 | 4× |
+
+n=3 and bleed-only — sufficient for one set's stems (detect-then-correct
+applies), **not** for Phase D default flip; that still wants the full gate
+(20-clip SDR + official-instrumental bleed floor + listening).
 
 | Backend | Median vocal SDR | Median inst SDR | p50 track time (4090) | p50 track time (Mac MPS) | Notes |
 |---------|------------------|-----------------|------------------------|---------------------------|-------|
