@@ -42,6 +42,7 @@ def _torch_device() -> str:
 
 def _run_mert_eval(
     gt_set_id: str,
+    targets: tuple,
     train: tuple,
     eval_: tuple,
     slot_pools: dict,
@@ -74,6 +75,19 @@ def _run_mert_eval(
     report = evaluate(preds, eval_)
     print("\nMertLearnedAligner (eval):")
     for line in report.lines():
+        print(f"  {line}")
+
+    # Sequence decode runs over ALL spans (placement needs the full tiling
+    # context — no GT used at decode time), scored on the held-out subset.
+    all_preds = aligner.predict_sequence(targets)
+    eval_ids = {id(t) for t in eval_}
+    seq_pairs = [(p, t) for p, t in zip(all_preds, targets) if id(t) in eval_ids]
+    seq_report = evaluate(
+        tuple(p for p, _ in seq_pairs),
+        tuple(t for _, t in seq_pairs),
+    )
+    print("\nMertLearnedAligner + monotonic decode (eval):")
+    for line in seq_report.lines():
         print(f"  {line}")
     return 0
 
@@ -141,6 +155,7 @@ def main(argv: list[str] | None = None) -> int:
             slots = slot_candidates_from_targets(targets)
             rc = _run_mert_eval(
                 gt.set_id,
+                targets,
                 train,
                 eval_,
                 slots,

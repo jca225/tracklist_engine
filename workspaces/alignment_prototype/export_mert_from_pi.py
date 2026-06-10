@@ -49,14 +49,28 @@ def main() -> int:
     mix_end = np.array([r[2] for r in mix_rows], dtype=np.float64)
     mix_vec = np.stack([probe(r[4], r[3], layer) for r in mix_rows], axis=0)
 
+    # One audio row per recording, preferring is_reference but falling back to
+    # any row that has MERT — requiring is_reference=1 dropped 57/135 BB12 GT
+    # recordings whose embeddings already existed. Keyed by recording_id (the
+    # GT/pool key), not legacy track_id.
     cur.execute(
         """
-        SELECT ta.track_id, tmm.measure_idx, tmm.start_s, tmm.end_s, tmm.dim, tmm.embedding
-        FROM set_track_slots sts
-        JOIN track_audio ta ON ta.recording_id = sts.recording_id AND ta.is_reference = 1
-        JOIN track_mert_measures tmm ON tmm.track_audio_id = ta.track_audio_id
-        WHERE sts.set_id = ?
-        ORDER BY ta.track_id, tmm.measure_idx
+        SELECT pick.recording_id, tmm.measure_idx, tmm.start_s, tmm.end_s, tmm.dim, tmm.embedding
+        FROM (
+            SELECT DISTINCT recording_id FROM set_track_slots WHERE set_id = ?
+        ) sts
+        JOIN (
+            SELECT ta.recording_id, ta.track_audio_id,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY ta.recording_id
+                       ORDER BY ta.is_reference DESC, ta.track_audio_id
+                   ) AS rn
+            FROM track_audio ta
+            JOIN (SELECT DISTINCT track_audio_id FROM track_mert_measures) m
+              ON m.track_audio_id = ta.track_audio_id
+        ) pick ON pick.recording_id = sts.recording_id AND pick.rn = 1
+        JOIN track_mert_measures tmm ON tmm.track_audio_id = pick.track_audio_id
+        ORDER BY pick.recording_id, tmm.measure_idx
         """,
         (set_id,),
     )

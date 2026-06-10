@@ -220,12 +220,131 @@ class MertLearnedAligner:
                     preds[i] = p
         return tuple(preds)  # type: ignore[arg-type]
 
+    def predict_sequence(self, targets: tuple[SpanTarget, ...]) -> tuple[SpanPrediction, ...]:
+        """Identity per slot, then one global monotonic placement decode.
+
+        Placement quality no longer depends on the per-slot anchor prior:
+        every assigned recording is scored against the whole mix and the DP
+        picks the jointly-best non-decreasing start sequence (`targets` must
+        be in tracklist order).
+        """
+        from .dataset import slot_candidates_from_targets
+        from .sequence_decode import monotonic_decode, window_mean_curve, window_mean_vectors
+
+        pools = self.slot_pools or slot_candidates_from_targets(targets)
+        mix_mid = 0.5 * (self.mix.start_s + self.mix.end_s)
+        median_bar = float(np.median(np.diff(mix_mid))) if len(mix_mid) > 1 else 2.0
+
+        groups: dict[str, list[int]] = {}
+        for i, t in enumerate(targets):
+            groups.setdefault(t.slot_label, []).append(i)
+
+        assigned: list[tuple | None] = [None] * len(targets)
+        with torch.no_grad():
+            for idxs in groups.values():
+                group = tuple(targets[i] for i in idxs)
+                asn = self._assign_slot(group, pools, mix_mid)
+                if asn is None:
+                    continue
+                cand_ids, cand_stems, ref_windows, cand_ref_win, cand_score, chosen, dur = asn
+                for i, ci in zip(idxs, chosen):
+                    assigned[i] = (cand_ids, cand_stems, ref_windows, cand_ref_win, cand_score, ci, dur)
+
+            decode_idx = [i for i, a in enumerate(assigned) if a is not None]
+            preds: list[SpanPrediction | None] = [
+                None if assigned[i] is not None else _fallback_pred(targets[i])
+                for i in range(len(targets))
+            ]
+            if decode_idx:
+                mix_t = torch.from_numpy(self.mix.vectors).to(self.device)
+                pooled_by_k: dict[int, torch.Tensor] = {}
+                curves = []
+                ks = []
+                for i in decode_idx:
+                    cand_ids, _stems, ref_windows, cand_ref_win, _scores, ci, dur = assigned[i]
+                    ref_vec = (
+                        torch.from_numpy(ref_windows[ci][cand_ref_win[ci]])
+                        .unsqueeze(0)
+                        .to(self.device)
+                    )
+                    k = max(1, int(round(dur / median_bar)))
+                    ks.append(k)
+                    # Span-head curve: mean per-measure logit over the window.
+                    logits = self.head.span_logits(mix_t.unsqueeze(0), ref_vec)[0]
+                    span_curve = window_mean_curve(logits.cpu().numpy().astype(np.float64), k)
+                    # Identity-head curve: pooled window vs the candidate's best
+                    # ref window. The identity head is the discriminative one —
+                    # acappella spans drown in the span head alone (the pooled
+                    # mix window is mostly someone else's instrumental).
+                    if k not in pooled_by_k:
+                        pooled_by_k[k] = torch.from_numpy(
+                            window_mean_vectors(self.mix.vectors, k)
+                        ).to(self.device)
+                    pooled = pooled_by_k[k]
+                    id_curve = (
+                        self.head.identity_logits(pooled, ref_vec.unsqueeze(0).expand(pooled.shape[0], -1, -1))
+                        .squeeze(1)
+                        .cpu()
+                        .numpy()
+                        .astype(np.float64)
+                    )
+                    curves.append(span_curve + id_curve)
+                starts = monotonic_decode(np.stack(curves))
+
+                for j, i in enumerate(decode_idx):
+                    cand_ids, cand_stems, _wins, _refwin, cand_score, ci, dur = assigned[i]
+                    s_i = int(starts[j])
+                    e_i = min(s_i + ks[j], self.mix.n_measures) - 1
+                    rid = cand_ids[ci]
+                    ref_start = 0.0
+                    ref_end = None
+                    if rid in self.refs:
+                        ref_start = float(self.refs[rid].start_s[0])
+                        ref_end = ref_start + dur
+                    preds[i] = SpanPrediction(
+                        slot_label=targets[i].slot_label,
+                        recording_id=rid,
+                        claimed_stem=cand_stems[ci],
+                        set_start_s=float(self.mix.start_s[s_i]),
+                        set_end_s=float(self.mix.end_s[e_i]),
+                        ref_start_s=ref_start,
+                        ref_end_s=ref_end,
+                        confidence=float(cand_score[ci]),
+                    )
+        return tuple(preds)  # type: ignore[arg-type]
+
     def _predict_slot(
         self,
         ts: tuple[SpanTarget, ...],
         pools: dict[str, tuple],
         mix_mid: np.ndarray,
     ) -> tuple[SpanPrediction, ...]:
+        asn = self._assign_slot(ts, pools, mix_mid)
+        if asn is None:
+            return tuple(_fallback_pred(t) for t in ts)
+        cand_ids, cand_stems, ref_windows, cand_ref_win, cand_score, chosen, dur = asn
+
+        anchor = slot_anchor(ts[0].slot_label, train_medians=self.train_medians)
+        margin = self.search_margin_s * (1.5 if "w" in ts[0].slot_label else 1.0)
+        lo = max(0.0, anchor - margin)
+        hi = min(float(mix_mid[-1]), anchor + margin + dur)
+        band = np.where((mix_mid >= lo) & (mix_mid <= hi))[0]
+        if band.size == 0:
+            band = np.arange(self.mix.n_measures)
+        mix_t = torch.from_numpy(self.mix.vectors).to(self.device)
+
+        return tuple(
+            self._place_candidate(t, ci, cand_ids, cand_stems, ref_windows,
+                                  cand_ref_win, cand_score, band, mix_t, mix_mid, dur)
+            for t, ci in zip(ts, chosen)
+        )
+
+    def _assign_slot(
+        self,
+        ts: tuple[SpanTarget, ...],
+        pools: dict[str, tuple],
+        mix_mid: np.ndarray,
+    ) -> tuple | None:
         from .mert_features import candidate_list
 
         t0 = ts[0]
@@ -234,7 +353,7 @@ class MertLearnedAligner:
             all_ids = tuple(sorted(self.refs))
             cand_ids, cand_stems = candidate_list(t0.slot_label, pools, all_ids)
         if not cand_ids:
-            return tuple(_fallback_pred(t) for t in ts)
+            return None
 
         dur = slide_duration(t0, self.slot_medians)
 
@@ -278,7 +397,7 @@ class MertLearnedAligner:
             win_starts.append(int(start_i))
             win_ends.append(end_i)
         if not win_pools:
-            return tuple(_fallback_pred(t) for t in ts)
+            return None
         mix_wins = torch.stack(win_pools)  # (Wm, dim)
 
         # Identity by max-over-placements: each candidate's score is its best
@@ -304,11 +423,7 @@ class MertLearnedAligner:
             chosen.append(by_score[0])
         chosen.sort(key=lambda c: cand_loc[c])
 
-        return tuple(
-            self._place_candidate(t, ci, cand_ids, cand_stems, ref_windows,
-                                  cand_ref_win, cand_score, band, mix_t, mix_mid, dur)
-            for t, ci in zip(ts, chosen)
-        )
+        return (cand_ids, cand_stems, ref_windows, cand_ref_win, cand_score, chosen, dur)
 
     def _place_candidate(
         self,
