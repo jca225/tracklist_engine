@@ -359,3 +359,39 @@ BB12). Audio acquired via the **new** pipeline: full-track download + Demucs
 all-stems + identity-correct, logged to `track_audio_correction` — NOT the old
 YTM-search-`hits[0]` rescue path (mashup/bootleg mismatch). Stage into
 `~/aligning/`.
+
+## CORRECTION (2026-06-10, same day) — the wall verdict above was WRONG
+
+The "7 methods hit the wall, signal isn't there" conclusion was premature. Two
+fixable bugs, not signal absence, caused the global-DTW collapse:
+
+1. **Trusted the acappella label.** The stem-routed run tagged 83/135 spans
+   "vocal" from `claimed_stem=='acappella'` and matched those *full-track*
+   sources against the mix *vocals* stem (per project_acappella_label_vs_audio,
+   most BB12 "acappella" rows are full tracks). Fix: route by actual audio →
+   all → `mix_instrumental`.
+2. **No corridor → degenerate collapse.** An unconstrained DTW on a moderately
+   self-similar cost surface dumps the whole program into one cheap band. Fix:
+   penalise the cost matrix outside ±BAND s of each ref column's coarse-expected
+   mix time (`exp_time` from the coarse prediction — no GT leak).
+
+With both fixes (`/tmp/spike_global_dtw_band.py`):
+
+| method | n=29 | median | mean | <8s | <16s | <30s |
+|---|---|---|---|---|---|---|
+| coarse (MERT decode) | | 37.7s | 42.1s | 3 | 5 | 11 |
+| banded DTW ±60s | | 21.0s | 40.6s | 5 | 10 | 16 |
+| **banded DTW ±30s** | | **21.2s** | 32.5s | **8** | **13** | 15 |
+
+First genuine improvement over coarse in the whole investigation: median
+37.7→21 s, sub-8 s hits 3→8, sub-16 s 5→13. The audio DOES carry exploitable
+local harmonic signal once you (a) route to the right stem / don't trust the
+acappella label and (b) band the DTW so it cannot collapse. Unbanded is still
+1347 s garbage — the collapse, not the signal, was the failure.
+
+**Method going forward:** stem-routed (by audio, not label) + corridor-banded
+global subsequence DTW, band ≈ ±25–30 s around the coarse prior. Refinements to
+try: finer band, true-acappella detection (instrumental-stem silence) → route
+those few to vocals, beat-synchronous columns, per-span transposition. The
+more-labeled-sets plan still stands for a learned placer + real CV, but fine
+placement is NOT blocked on it — DSP refinement is working.
