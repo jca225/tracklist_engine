@@ -106,6 +106,16 @@ def _build_separator(
         from inference.msst_infer import MSSeparator
         from utils.logger import get_logger
 
+        msst_logger = get_logger()
+        if not hasattr(msst_logger, "console_handler"):
+            # get_logger() short-circuits when the caller already configured
+            # logging (e.g. vast_loop's basicConfig) and returns a logger
+            # without the console_handler attr MSSeparator.set_log_level
+            # expects. Attach one so the vendored code's contract holds.
+            handler = logging.StreamHandler()
+            msst_logger.addHandler(handler)
+            msst_logger.console_handler = handler
+
         store = (
             {"vocals": "", "instrumental": ""}
             if spec.model_type == "bs_roformer"
@@ -118,7 +128,7 @@ def _build_separator(
             device=h.device,
             output_format="wav",
             store_dirs=store,
-            logger=get_logger(),
+            logger=msst_logger,
             debug=False,
         ))
 
