@@ -46,11 +46,13 @@ if [[ ! -d "$MSST" ]]; then
   echo "== cloning MSST-WebUI"
   git clone --depth 1 https://github.com/SUC-DriverOld/MSST-WebUI.git "$MSST"
 fi
-# Pin to the validated commit (GitHub allows fetching reachable SHAs).
+# Pin to the validated commit. GitHub refuses bare-SHA shallow fetches
+# (observed 2026-06-10), so unshallow first — the pin is an ancestor of HEAD.
 if [[ "$(git -C "$MSST" rev-parse --short HEAD)" != "$MSST_COMMIT" ]]; then
-  git -C "$MSST" fetch --quiet --depth 1 origin "$MSST_COMMIT" \
-    && git -C "$MSST" checkout --quiet "$MSST_COMMIT" \
-    || echo "!! could not pin $MSST_COMMIT — staying on $(git -C "$MSST" rev-parse --short HEAD)"
+  git -C "$MSST" fetch --quiet --unshallow origin 2>/dev/null \
+    || git -C "$MSST" fetch --quiet origin
+  git -C "$MSST" checkout --quiet "$MSST_COMMIT" \
+    || { echo "!! could not pin $MSST_COMMIT"; exit 1; }
 fi
 echo "== msst: $(git -C "$MSST" log -1 --oneline)"
 

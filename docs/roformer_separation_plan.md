@@ -359,11 +359,11 @@ roformer version string when fallback fires. Revisit a column only if join pain 
 
 *Fill in after Phase B validation.*
 
-| Backend | Median vocal SDR | Median inst SDR | p50 track time (4090) | p50 track time (Mac MLX) | Notes |
+| Backend | Median vocal SDR | Median inst SDR | p50 track time (4090) | p50 track time (Mac MPS) | Notes |
 |---------|------------------|-----------------|------------------------|---------------------------|-------|
 | demucs (`htdemucs_ft`) | — | — | — | — | baseline |
 | uvr chain | — | — | — | — | vocal-cleanup reference |
-| roformer ensemble | — | — | — | — | candidate default |
+| roformer ensemble | — | — | **89.5 s** *(1 track, ~4 min source — Phase A smoke 2026-06-10, instance 4090/$0.43hr)* | ~45 min *(same track — QA only)* | candidate default |
 
 ---
 
