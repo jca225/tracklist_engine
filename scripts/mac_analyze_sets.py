@@ -120,7 +120,10 @@ def push_set_rows(result, mix_local_path: Path) -> None:
     stems = result.stems.stems
     sql_lines = [".bail on", "BEGIN;"]
     sql_lines.append(f"DELETE FROM set_analysis WHERE set_audio_id={sid};")
-    sql_lines.append(f"DELETE FROM set_stems WHERE set_audio_id={sid};")
+    if stems:
+        # Beat-grid-only runs (--skip-stems) must not clobber existing
+        # set_stems rows written by another host.
+        sql_lines.append(f"DELETE FROM set_stems WHERE set_audio_id={sid};")
     for stem in stems:
         canonical_path = str(stem.path).replace(
             str(LOCAL_SET_STEMS), f"{PI_STEMS_ROOT}/set",
@@ -152,6 +155,9 @@ def main() -> int:
                    help="Comma-separated list to scope (default: all pending)")
     p.add_argument("--separator", choices=["demucs", "uvr", "roformer"], default="demucs",
                    help="Stem-separation backend (default: demucs).")
+    p.add_argument("--skip-stems", action="store_true",
+                   help="Beat grid only (set_analysis row, no set_stems) — "
+                        "use when separation runs on another host.")
     args = p.parse_args()
     only_ids = None
     if args.set_audio_ids:
@@ -195,7 +201,8 @@ def main() -> int:
             bitrate_kbps=asset.bitrate_kbps,
         )
         t1 = time.monotonic()
-        result = analyze_set(analyzers, local_asset, LOCAL_SET_STEMS)
+        result = analyze_set(analyzers, local_asset, LOCAL_SET_STEMS,
+                             skip_stems=args.skip_stems)
         elapsed = time.monotonic() - t1
         match result:
             case Ok(r):

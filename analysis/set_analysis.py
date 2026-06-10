@@ -35,11 +35,17 @@ def analyze_set(
     analyzers: Analyzers,
     asset: SetAudioAsset,
     stems_dir: Path,
+    *,
+    skip_stems: bool = False,
 ) -> Result[SetAnalysisResult, AnalysisError]:
     """Run beat_this + the selected stem backend on the full mix. `stems_dir`
     is the parent; output goes into
     `stems_dir/set/<set_audio_id>/{vocals,instrumental}.flac` to keep set stems
-    clearly separated from track stems on disk."""
+    clearly separated from track stems on disk.
+
+    ``skip_stems=True`` runs the beat grid only (empty StemSet) — for when
+    separation is scheduled on another host (e.g. roformer on Vast) and this
+    host only needs ``measure_times_json`` for set-side MERT."""
     assert asset.set_audio_id is not None, "SetAudioAsset must be persisted before analysis"
     mix_path = Path(asset.path)
     set_stems_dir = stems_dir / "set"
@@ -51,13 +57,22 @@ def analyze_set(
     bpm = beat_this_adapter.estimate_bpm(beat_times)
     measures = beat_this_adapter.measure_times(downbeat_times)
 
-    # Reuse the selected stem backend — it already writes to stems_dir/<id>/.
-    # Pass `set_audio_id` as the id; the "set/" parent keeps namespaces clear.
-    stems_r = run_separation(
-        analyzers, mix_path, set_stems_dir, asset.set_audio_id,
-    )
-    if not stems_r.is_ok():
-        return stems_r
+    if skip_stems:
+        stems = StemSet(track_audio_id=asset.set_audio_id, stems=())
+        versions = {"beat_this": analyzers.beats.version}
+    else:
+        # Reuse the selected stem backend — it already writes to stems_dir/<id>/.
+        # Pass `set_audio_id` as the id; the "set/" parent keeps namespaces clear.
+        stems_r = run_separation(
+            analyzers, mix_path, set_stems_dir, asset.set_audio_id,
+        )
+        if not stems_r.is_ok():
+            return stems_r
+        stems = stems_r.value
+        versions = {
+            analyzers.separator: analyzers.stems_version,
+            "beat_this": analyzers.beats.version,
+        }
 
     return Ok(SetAnalysisResult(
         set_audio_id=asset.set_audio_id,
@@ -68,9 +83,6 @@ def analyze_set(
             measure_times=measures,
             bpm=bpm,
         ),
-        stems=stems_r.value,
-        analyzer_versions={
-            analyzers.separator: analyzers.stems_version,
-            "beat_this": analyzers.beats.version,
-        },
+        stems=stems,
+        analyzer_versions=versions,
     ))
