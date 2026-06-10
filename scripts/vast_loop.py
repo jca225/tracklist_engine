@@ -71,7 +71,10 @@ def ssh_pi(sql: str) -> str:
     return r.stdout.strip()
 
 
-def next_task(skip_tids: frozenset[int] = frozenset()) -> tuple[int, str] | None:
+def next_task(
+    skip_tids: frozenset[int] = frozenset(),
+    sets: tuple[str, ...] = BB_SETS,
+) -> tuple[int, str] | None:
     """Returns (track_audio_id, audio_path) for the next BB10-15 track that
     has no track_analysis row yet. `skip_tids` is the in-session "tried and
     failed" set — without this, a track whose audio fails to decode (or
@@ -81,16 +84,21 @@ def next_task(skip_tids: frozenset[int] = frozenset()) -> tuple[int, str] | None
     set for the lifetime of the loop; restart re-attempts (good — could be
     a transient rsync truncation).
     """
-    bb_csv = ",".join(f"'{s}'" for s in BB_SETS)
+    bb_csv = ",".join(f"'{s}'" for s in sets)
     skip_clause = ""
     if skip_tids:
         skip_csv = ",".join(str(t) for t in skip_tids)
         skip_clause = f"AND ta.track_audio_id NOT IN ({skip_csv}) "
+    # Membership via set_track_slots (the canonical per-set spine), NOT
+    # dj_set_track_media_links — gap rows (sided rows with no scraped media
+    # links, e.g. 14 of BB11's re-sourced tail) have zero link rows and
+    # would silently fall out of the loop.
     sql = (
         "SELECT ta.track_audio_id, ta.path FROM track_audio ta "
         "LEFT JOIN track_analysis tan ON tan.track_audio_id=ta.track_audio_id "
         f"WHERE tan.track_audio_id IS NULL AND ta.track_id IN "
-        f"(SELECT DISTINCT track_id FROM dj_set_track_media_links WHERE set_id IN ({bb_csv})) "
+        f"(SELECT DISTINCT track_id FROM set_track_slots WHERE set_id IN ({bb_csv}) "
+        "AND track_id IS NOT NULL) "
         f"{skip_clause}"
         "ORDER BY ta.track_audio_id LIMIT 1"
     )
@@ -233,9 +241,17 @@ def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--separator", choices=["demucs", "uvr", "roformer"], default="demucs",
                    help="Stem-separation backend (default: demucs).")
+    p.add_argument("--set-ids", default=None,
+                   help="Comma-separated set_ids to scope the loop to "
+                        "(default: the 6 BB10-15 sets).")
     args = p.parse_args()
+    active_sets: tuple[str, ...] = (
+        tuple(s.strip() for s in args.set_ids.split(",") if s.strip())
+        if args.set_ids else BB_SETS
+    )
 
-    log.info("starting BB10-15 analyze loop on Vast (separator=%s)", args.separator)
+    log.info("starting analyze loop on Vast (separator=%s, sets=%s)",
+             args.separator, ",".join(active_sets))
     init_scratch_db()
 
     log.info("loading analyzers (cuda, %s)…", args.separator)
@@ -307,7 +323,7 @@ def main() -> int:
             bg.join()
             bg = None
 
-        nxt = next_task(frozenset(failed_tids))
+        nxt = next_task(frozenset(failed_tids), sets=active_sets)
         if nxt is None:
             log.info("queue drained — analyzed %d, failed %d", n_done, n_failed)
             return 0

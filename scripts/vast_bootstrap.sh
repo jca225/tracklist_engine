@@ -145,7 +145,7 @@ PI_TS_USER="${PI_TS_USER:-johncabrahams}"
 mkdir -p ~/.ssh
 if ! grep -q "Host pi-storage.tail116c2d.ts.net" ~/.ssh/config 2>/dev/null; then
     cat >> ~/.ssh/config <<EOF
-Host pi-storage.tail116c2d.ts.net
+Host pi-storage pi-storage.tail116c2d.ts.net
     HostName ${PI_TS_IP}
     User ${PI_TS_USER}
     ProxyCommand nc -X 5 -x localhost:1055 %h %p
