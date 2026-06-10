@@ -49,7 +49,7 @@ apt-get update -qq
 # adapters/downloader.py — without it ~all YouTube videos return only
 # image formats and downloads fail with "Signature solving failed").
 apt-get install -y -qq ffmpeg nodejs libsndfile1 build-essential pkg-config \
-    git rsync curl ca-certificates >/dev/null
+    git rsync curl ca-certificates sqlite3 >/dev/null
 echo "    ffmpeg : $(ffmpeg -version 2>&1 | head -1 | awk '{print $3}')"
 echo "    node   : $(node --version 2>/dev/null || echo MISSING)"
 
