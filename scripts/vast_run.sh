@@ -37,7 +37,7 @@ WORKER_ARGS=()
 PASSTHROUGH=()
 while [ $# -gt 0 ]; do
     case "$1" in
-        --bb-only|--max-tracks|--set-ids|--device|--log-level)
+        --bb-only|--max-tracks|--set-ids|--device|--log-level|--separator)
             PASSTHROUGH+=("$1")
             if [ "$1" != "--bb-only" ]; then
                 shift

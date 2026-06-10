@@ -79,7 +79,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="Shortcut for --set-ids matching the 6 Big Bootie "
                         "10-15 set_ids.")
     p.add_argument("--device", default="auto", choices=("auto", "cuda", "mps", "cpu"))
-    p.add_argument("--separator", default="demucs", choices=("demucs", "uvr"),
+    p.add_argument("--separator", default="demucs", choices=("demucs", "uvr", "roformer"),
                    help="Stem-separation backend (default: demucs).")
     p.add_argument("--log-level", default="INFO",
                    choices=("DEBUG", "INFO", "WARNING", "ERROR"))
