@@ -314,3 +314,48 @@ Pooled self-supervised embeddings encode *timbre/identity*, which is shift- and
 tempo-robust by design — exactly the property that makes them **bad** at
 pinning a moment in time. Localization wants the opposite: a feature that *is*
 sensitive to precise pitch/onset content. Chroma + beats is that feature.
+
+## RESULT — global program-to-mix DTW (2026-06-10): FAILED catastrophically
+
+Built and ran (`/tmp/spike_global_dtw.py`). Synthetic reference = 135 source
+sections footprint-tiled (gap-to-next-predicted-start, so reference length
+3211 cols ≈ mix 3734 cols rather than overlapping past it), each loaded at the
+predicted `ref_start`, in predicted order. One subsequence DTW (ref matched
+within mix, free intro offset) over ~1 s L2-normed CQT-chroma columns, with a
+12-roll global transposition search.
+
+| method | n=29 eval | median | mean | <8s | <16s | <30s |
+|---|---|---|---|---|---|---|
+| coarse (MERT decode) | | **37.7s** | 42.1s | 3 | 5 | 11 |
+| global DTW | | 1379.5s | 1407.8s | 0 | 0 | 0 |
+
+The DTW **collapsed**: the entire 3211-col program warped into the mix's
+257–644 s band — a ~6:1 compression of a 62-min program into ~6 min. **Smoking
+gun:** all 12 key-transposition rolls returned *identical* per-step cost 0.1
+(cosine ≈ 0.9 everywhere). The program↔mix chroma cost surface is **flat** — no
+harmonic gradient anywhere — so a global DTW has nothing to align to and
+produces a degenerate warp. Transposition being irrelevant proves there is no
+dominant tonal structure to match; it is the same self-similarity wall, now at
+the global scale.
+
+The only untried variant — banding the DTW to a ±60 s corridor around the
+coarse diagonal — cannot help: the within-band cost is equally flat, so it
+returns the coarse prior (~37 s) at best.
+
+### Verdict — per-mix DSP/DP is exhausted (7 methods)
+
+MERT · chroma (3 variants) · mel-DTW · fingerprint · fusion+joint · anchor-fill
+· **global DTW** all bottom out on one fact: BB12's mix audio carries no
+per-moment discriminative signal any decoder can exploit. The within-set 0.2
+eval split is a single **leaky** split (same mix/DJ/render), not generalization
+evidence. **Deliverable holds:** coarse 37–39 s MAE, identity 100%, ref_start
+0.8 s.
+
+### The actual unlock — more labeled sets (next action)
+
+Hand-align 5–10 more DJ sets (different DJs/styles) → leave-one-**set**-out CV
++ a learned placer become meaningful (a learned placer on n=1 only memorizes
+BB12). Audio acquired via the **new** pipeline: full-track download + Demucs
+all-stems + identity-correct, logged to `track_audio_correction` — NOT the old
+YTM-search-`hits[0]` rescue path (mashup/bootleg mismatch). Stage into
+`~/aligning/`.
