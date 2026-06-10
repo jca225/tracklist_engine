@@ -15,7 +15,6 @@ PINNED = (
     "model_bs_roformer_ep_368_sdr_12.9628.ckpt",
     "model_mel_band_roformer_ep_3005_sdr_11.4360.ckpt",
     "kimmel_unwa_ft.ckpt",  # third vocal-ensemble head (mel_band_roformer)
-    "melband_roformer_inst_v2.ckpt",  # third inst-ensemble head, instrumental-specialized (unwa Inst V2)
 )
 
 
