@@ -134,10 +134,30 @@ nohup tailscaled \
     > /var/log/tailscaled.log 2>&1 &
 sleep 2
 echo "    tailscaled started in userspace mode (socks5: localhost:1055)"
+
+# Userspace mode gives no direct outbound to tailnet IPs — plain
+# `ssh pi-storage.tail116c2d.ts.net` fails on no-TUN boxes (hit 2026-06-10).
+# Route ssh/sshfs through the socks5 proxy, pinned to pi's tailnet IP so
+# MagicDNS isn't needed either. vast_run.sh's checks then pass unmodified.
+apt-get install -y -qq netcat-openbsd >/dev/null
+PI_TS_IP="${PI_TS_IP:-100.103.219.39}"
+PI_TS_USER="${PI_TS_USER:-johncabrahams}"
+mkdir -p ~/.ssh
+if ! grep -q "Host pi-storage.tail116c2d.ts.net" ~/.ssh/config 2>/dev/null; then
+    cat >> ~/.ssh/config <<EOF
+Host pi-storage.tail116c2d.ts.net
+    HostName ${PI_TS_IP}
+    User ${PI_TS_USER}
+    ProxyCommand nc -X 5 -x localhost:1055 %h %p
+    StrictHostKeyChecking accept-new
+EOF
+    chmod 600 ~/.ssh/config
+    echo "    ssh config: pi-storage.tail116c2d.ts.net via socks5 proxy"
+fi
+
 echo "    *** RUN ON THIS BOX TO COMPLETE TAILSCALE SETUP ***"
-echo "    tailscale up --auth-key=tskey-auth-... --hostname=vast-mert"
-echo "    (auth key from https://login.tailscale.com/admin/settings/keys)"
-echo "    After 'tailscale up', test: ALL_PROXY=socks5://localhost:1055 ssh pi-storage 'hostname'"
+echo "    tailscale up --hostname=vast-roformer   (prints a login URL to click)"
+echo "    After 'tailscale up', test: ssh pi-storage.tail116c2d.ts.net 'hostname'"
 
 echo
 echo "==> READY"
