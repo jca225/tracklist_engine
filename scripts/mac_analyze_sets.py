@@ -158,6 +158,11 @@ def main() -> int:
     p.add_argument("--skip-stems", action="store_true",
                    help="Beat grid only (set_analysis row, no set_stems) — "
                         "use when separation runs on another host.")
+    p.add_argument("--device", default=DEVICE, choices=("auto", "mps", "cpu"),
+                   help="Inference device. Use cpu for --skip-stems on long "
+                        "mixes: beat_this chunks fit easily, while the MPS "
+                        "caching allocator accretes ~26GiB across chunks and "
+                        "OOMs (observed 2026-06-10 on 60-min mixes).")
     args = p.parse_args()
     only_ids = None
     if args.set_audio_ids:
@@ -168,7 +173,7 @@ def main() -> int:
     LOCAL_SET_STEMS.mkdir(parents=True, exist_ok=True)
 
     log.info("loading analyzers (device=%s, separator=%s)…", DEVICE, args.separator)
-    ar = load_analyzers(device=DEVICE, separator=args.separator)
+    ar = load_analyzers(device=args.device, separator=args.separator)
     if not ar.is_ok():
         log.error("load_analyzers failed: %s", ar.error)
         return 1
