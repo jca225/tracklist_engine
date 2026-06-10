@@ -141,7 +141,50 @@ Two takeaways that redirect P1:
    fine stage should be *re-running the `sequence_decode` DP with sharper
    per-span emission curves*, not independent per-span argmax.
 
-Spike scripts: `/tmp/spike_p0{b,d,e}.py` (not committed — throwaway).
+### Fingerprinting follow-up (same day) — flashes, not a silver bullet
+
+Built a minimal Shazam-style constellation matcher (sparse STFT-peak landmark
+hashes → offset-histogram vote), tempo handled by stretching the source to the
+mix's local bar:
+
+| Span | chroma (beat-sync) | fingerprint | **best of the two** |
+|---|---|---|---|
+| 086 Pizza | **3.9 s** | 18.6 s | **3.9 s** |
+| 089 My Window | 14.5 s | **0.3 s** (sub-bar!) | **0.3 s** |
+| 075 Pinball | 13.2 s | **2.9 s** | **2.9 s** |
+| 068 Work From Home | 25.7 s | 65 s | 25.7 s |
+| **<8 s hits** | 1/4 | 2/4 | **3/4 (2 sub-bar)** |
+
+Fingerprinting alone is **not** a silver bullet — its offset histograms are not
+sharp (peak barely clears the noise floor; My Window 132 vs 122), because the
+dense multi-track EDM mix produces many spurious hash collisions. A tempo-ratio
+*sweep* selecting by max votes made it **worse** (0/4) — vote count rewards
+diffuse collisions; **sharpness (peak/second), not count, is the right
+selector** and the lesson for P1.
+
+**The actual finding — fusion, not a single feature.** No one method dominates,
+but *different cheap channels nail different spans to sub-bar*, and each hit is a
+true sub-bar lock, not luck. Oracle channel-selection over {chroma, fingerprint}
+= **3/4 <8 s, 2/4 sub-bar**. Only Work From Home resists everything — a remix
+with vocals where the source tempo estimate blew up and the matched master may
+not be the one the DJ used.
+
+### Revised P1 (supersedes the chroma-only module above)
+
+1. **Multi-channel emission** — compute chroma-DTW *and* constellation-fingerprint
+   curves per span; the fusion is selection-by-sharpness (the channel whose peak
+   most clears its own noise floor wins that span), not averaging.
+2. **Confidence = peak sharpness.** Below threshold → abstain to human review
+   (Work From Home is the canonical abstain case). This is what makes the stage
+   safe rather than a forced guess.
+3. **Joint, not per-span.** Feed the fused per-span curves back into the
+   `sequence_decode` DP so neighbour monotonic constraints rescue the spans no
+   channel locks in isolation — the spike tested the *hardest* (isolated) setting.
+4. **Source-master QA upstream.** Work-From-Home-class failures may be an
+   *ingest* problem (wrong master), not a placement problem — cross-check before
+   blaming the aligner (the correctness-vs-accuracy rule).
+
+Spike scripts: `/tmp/spike_p0{b,d,e}.py`, `/tmp/spike_fp{,2}.py` (throwaway).
 
 ## Risks (tied to the domain taxonomy)
 
