@@ -106,6 +106,43 @@ Persist to the findings doc.
 Run on BB11 once it has any GT (or ear-check blind). The real generalization
 test; ties into the BB11 blind-inference item already on the identity side.
 
+## P0 result (2026-06-10) — chroma-class gate FAILED; pivot to fingerprinting
+
+Ran the spike on 4 clean held-out BB12 spans (full tracks, GT-centered ±60–90 s
+window = best case). Four emission signals, all snapping to the coarse window:
+
+| Span (ref len) | MERT | chroma DTW | beat-sync bar-chroma | log-mel DTW |
+|---|---|---|---|---|
+| 086 Pizza (47 s, melodic lead) | ~900 s | **4.0 s** | **3.9 s** | 19.8 s |
+| 089 My Window (12 s) | — | 15 s | 14.5 s | **6.1 s** |
+| 075 Pinball (12 s) | — | 17 s | 13.2 s | 14.9 s |
+| 068 Work From Home (27 s) | — | 67 s | 25.7 s | 60 s |
+| **<8 s hits** | 0/4 | 1/4 | 1/4 | 1/4 |
+
+**Verdict: qualified fail.** Chroma/mel reliably localize only a *long,
+harmonically-distinctive* section (Pizza). For short, repetitive EDM drops the
+match scores are uniformly high (0.9+ chroma) **everywhere** in the window — the
+mix is harmonically self-similar, so 12-bin chroma has nothing to discriminate
+on, and log-mel is thrown by the DJ's EQ. Stems gave only marginal lift
+(Pinball 32→17 s). This beats MERT (~900 s) but is **not** sub-bar and **not**
+reliable, and the window here was GT-centered (easiest case) — real coarse
+output (39 s MAE, off-center) would be worse.
+
+Two takeaways that redirect P1:
+
+1. **Pivot to stretch-tolerant fingerprinting** (the plan's own fail-branch):
+   spectral-peak landmark hashing captures the exact rhythmic/timbral detail
+   chroma discards and EQ survives — the thing that breaks self-similarity.
+   Home is the empty `set_fingerprint_hits` table. Chroma stays as a
+   complementary channel for the melodic cases it already nails.
+2. **Fine placement must be JOINT, not per-span.** The spike scored each span in
+   isolation (hardest setting). A ±15 s local ambiguity should collapse when the
+   monotonic decode forbids overlap with confidently-placed neighbours — so the
+   fine stage should be *re-running the `sequence_decode` DP with sharper
+   per-span emission curves*, not independent per-span argmax.
+
+Spike scripts: `/tmp/spike_p0{b,d,e}.py` (not committed — throwaway).
+
 ## Risks (tied to the domain taxonomy)
 
 - **Beatless acappellas** — no beat grid (open Q in `project_variant_mert`).
