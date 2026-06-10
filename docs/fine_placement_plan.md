@@ -186,6 +186,28 @@ not be the one the DJ used.
 
 Spike scripts: `/tmp/spike_p0{b,d,e}.py`, `/tmp/spike_fp{,2}.py` (throwaway).
 
+## Two ideas evaluated (2026-06-10)
+
+**(A) Three-stream MERT (vocal / instrumental / full).** Sound for *identity*
+on mashups (each overlaid layer matches its own stem) and could sharpen the
+*coarse* per-bar curve by removing cross-layer contamination — but it **cannot**
+reach fine placement: the MERT export is one vector **per bar (~2 s)**, a
+resolution wall below the sub-bar target. Measured prior: full-mix MERT can't
+localize even against a clean oracle ref (~900 s, all layers 0–24). Stems are
+the right lever — but on the **DSP matcher** (chroma/fingerprint run per-stem),
+not on MERT. Folded into revised-P1 step 1 as stem-aware channels.
+
+**(B) Bootstrap from scraped tracklist cue times.** Conceptually right (use a
+free placement prior, wean off later) — but **the BB12 cues are unusable**:
+`set_track_slots.cue_seconds` vs GT set_start is Spearman 0.79 / Pearson 0.49,
+raw median error **1083 s**, and even a per-set affine calibration leaves
+**148 s** median residual (0/49 within 16 s). Early slots look plausible
+(002=127 s) then drift catastrophically (039 cue=3255 s, true 915 s) — an
+ingest/scrape-quality problem, not a usable signal here. The cue *order* is
+already captured by the monotonic decode. **Verdict:** good idea on sets where
+1001tracklists has clean timestamps; for BB12 it's noise. Fixing the cue scrape
+is an ingest task, separable from the aligner.
+
 ## Risks (tied to the domain taxonomy)
 
 - **Beatless acappellas** — no beat grid (open Q in `project_variant_mert`).
