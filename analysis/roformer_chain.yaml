@@ -16,9 +16,13 @@ vocal_models:
   - model_type: mel_band_roformer
     ckpt: kimmel_unwa_ft.ckpt
 
-# Instrumental: Mel-Band + BS only (no SCNet — weaker inst head)
+# Instrumental: Mel-Band + BS + an instrumental-specialized head (no SCNet — weaker inst head).
+# inst_v2 is trained with target_instrument=other (instrumental-side loss) → less vocal
+# bleed in the inst stem; published inst SDR 16.06 vs ep_368's 16.31, ep_3005's 15.13.
 instrumental_models:
   - model_type: bs_roformer
     ckpt: model_bs_roformer_ep_368_sdr_12.9628.ckpt
   - model_type: mel_band_roformer
     ckpt: model_mel_band_roformer_ep_3005_sdr_11.4360.ckpt
+  - model_type: mel_band_roformer
+    ckpt: melband_roformer_inst_v2.ckpt

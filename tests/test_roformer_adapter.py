@@ -9,7 +9,7 @@ from analysis.roformer_config import RoformerChainConfig
 def test_roformer_config_default_loads() -> None:
     cfg = RoformerChainConfig.default()
     assert len(cfg.vocal_models) == 3
-    assert len(cfg.instrumental_models) == 2
+    assert len(cfg.instrumental_models) == 3  # third head: inst-specialized unwa Inst V2
     assert cfg.ensemble_algorithm == "avg_fft"
     assert "roformer:" in cfg.version
 
