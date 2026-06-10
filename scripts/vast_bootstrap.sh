@@ -45,7 +45,7 @@ fi
 
 echo "==> [1/7] apt: ffmpeg + nodejs + libsndfile + build tools"
 apt-get update -qq
-# nodejs needed for yt-dlp's n-challenge JS runtime (see audio_pipeline/
+# nodejs needed for yt-dlp's n-challenge JS runtime (see ingest/
 # adapters/downloader.py — without it ~all YouTube videos return only
 # image formats and downloads fail with "Signature solving failed").
 apt-get install -y -qq ffmpeg nodejs libsndfile1 build-essential pkg-config \
@@ -111,7 +111,7 @@ echo "    symlink: $REPO_DIR/venvs/essentia -> /venv/essentia"
 
 echo "==> [6/7] Download Essentia .pb models (~40 MB)"
 PYTHONPATH="$REPO_DIR" /venv/essentia/bin/python - <<'PY'
-from audio_pipeline.analysis.adapters import essentia_models as em
+from analysis.adapters import essentia_models as em
 report = em.ensure_downloaded()
 print(f"    downloaded={len(report.downloaded)} skipped={len(report.skipped)} failed={len(report.failed)}")
 if report.failed:

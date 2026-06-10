@@ -121,7 +121,7 @@ say "  args: ${WORKER_ARGS[*]}"
 
 ssh "${VAST_SSH_ALIAS}" "
     tmux kill-session -t ${TMUX_SESSION} 2>/dev/null || true
-    tmux new -d -s ${TMUX_SESSION} \"PYTHONPATH=/workspace/tracklist_engine /venv/main/bin/python -m audio_pipeline.vast_worker ${WORKER_ARGS[*]} 2>&1 | tee /workspace/vast_worker.log\"
+    tmux new -d -s ${TMUX_SESSION} \"PYTHONPATH=/workspace/tracklist_engine /venv/main/bin/python -m analysis.vast_worker ${WORKER_ARGS[*]} 2>&1 | tee /workspace/vast_worker.log\"
     sleep 3
     tmux ls
 "
