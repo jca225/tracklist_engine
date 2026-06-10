@@ -415,3 +415,48 @@ coarse start, one subsequence DTW, and a confidence gate that keeps the coarse
 start where the coarse decode margin is high. Re-run the real held-out eval
 (train.py). Then the more-labeled-sets plan adds learned placement + real
 leave-one-set-out CV on top.
+
+## WIRED IN (2026-06-10) — decoupled per-span DTW; coupling is unsafe
+
+Productionised the refinement (`fine_refine.py`, wired into `train.py
+--train-mert`). The earlier spike's median-21 s came from the *coupled* global
+program-to-mix DTW using **ground-truth identity** for the reference. Through
+the real path with **predicted identity** the coupled method collapses to 32 s,
+and the cause is a hard lesson about the method:
+
+**Global coupling propagates identity errors catastrophically.** The joint
+decode swaps the two spans within slots 058/059 (4/147 = 2.7 %, both *training*
+spans). One global warp shares all spans, so those 4 wrong reference sections
+re-route the path and wreck *eval* spans with perfect identity:
+
+| eval span | coupled+oracle-id | coupled+pred-id |
+|---|---|---|
+| slot 004 (first track) | 0.1 s | **79.8 s** |
+| slot 150 | 6.3 s | 35.7 s |
+| slot 151 | 3.2 s | 26.8 s |
+
+A method that turns a 2.7 % identity error into 80 s placement errors on
+correctly-identified spans is not deployable — and new sets won't have 100 %
+identity.
+
+**Fix: decouple.** Place each span independently — subsequence DTW of its
+predicted source section against the ±band mix-instrumental slice around its
+coarse start. A wrong section can only hurt itself; no cascade. Real path,
+predicted identity, BB12 held-out (n=30):
+
+| method | median | mean | <8 s | <16 s |
+|---|---|---|---|---|
+| coarse decode | 36.7 s | 41.0 s | 3 | 6 |
+| coupled global (pred id) | 32.0 s | — | 4 | 7 |
+| **decoupled ±45 s (pred id)** | **26.7 s** | 39.4 s | **6** | **10** |
+| decoupled ±30 s (pred id) | 31.9 s | 37.1 s | 6 | 10 |
+| coupled global (oracle id) | 21.2 s | 32.5 s | 8 | 13 |
+
+Decoupled beats coarse and coupled-honest, doubles close-hits (<8 s 3→6,
+<16 s 6→10), and is robust. Tradeoff: it loses coupling's ability to rescue a
+span whose *coarse* is off by more than the band (slot 004 stays ~43 s).
+
+**Two follow-ups to reach the oracle 21 s:** (1) fix the joint-decode
+within-slot identity swap (slots 058/059); (2) a confidence-anchored hybrid —
+couple only high-confidence spans, let the rest float. Both tracked for after
+more labeled sets enable a learned placer + leave-one-set-out CV.
