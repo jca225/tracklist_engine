@@ -395,3 +395,23 @@ try: finer band, true-acappella detection (instrumental-stem silence) → route
 those few to vocals, beat-synchronous columns, per-span transposition. The
 more-labeled-sets plan still stands for a learned placer + real CV, but fine
 placement is NOT blocked on it — DSP refinement is working.
+
+### Band sweep + per-span (2026-06-10)
+
+Sweet spot **±30 s** (median 21.2 s, <8 s:8, <16 s:13, mean 32.5, max 91);
+robust ±30–60 s, small-n dip at ±20–25 s. Per-span at ±25 s: **16 better /
+9 worse / 4 tie**. Wins concentrate where coarse was *wrong* (e.g. 127 38→8 s,
+089 27→3 s, 150 27→6 s, 078 31→15 s); the few regressions are where coarse was
+already <12 s and DTW nudged a near-perfect pick off the exact-but-self-similar
+local minimum (106 0.4→16 s, 055 12→21 s).
+
+**Implication:** refine only when coarse is uncertain; keep coarse when tight.
+A keep-coarse-when-confident gate captures the wins and drops most regressions.
+
+**Productionization plan:** add a fine-refinement stage to `predict_sequence`
+— after the monotonic coarse decode, build the all→instrumental reference
+(footprint-tiled at predicted ref_start), corridor-band ±30 s around each
+coarse start, one subsequence DTW, and a confidence gate that keeps the coarse
+start where the coarse decode margin is high. Re-run the real held-out eval
+(train.py). Then the more-labeled-sets plan adds learned placement + real
+leave-one-set-out CV on top.
