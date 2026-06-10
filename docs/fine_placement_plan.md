@@ -197,16 +197,54 @@ localize even against a clean oracle ref (~900 s, all layers 0–24). Stems are
 the right lever — but on the **DSP matcher** (chroma/fingerprint run per-stem),
 not on MERT. Folded into revised-P1 step 1 as stem-aware channels.
 
-**(B) Bootstrap from scraped tracklist cue times.** Conceptually right (use a
-free placement prior, wean off later) — but **the BB12 cues are unusable**:
-`set_track_slots.cue_seconds` vs GT set_start is Spearman 0.79 / Pearson 0.49,
-raw median error **1083 s**, and even a per-set affine calibration leaves
-**148 s** median residual (0/49 within 16 s). Early slots look plausible
-(002=127 s) then drift catastrophically (039 cue=3255 s, true 915 s) — an
-ingest/scrape-quality problem, not a usable signal here. The cue *order* is
-already captured by the monotonic decode. **Verdict:** good idea on sets where
-1001tracklists has clean timestamps; for BB12 it's noise. Fixing the cue scrape
-is an ingest task, separable from the aligner.
+**(B) Bootstrap from scraped tracklist cue times.** *(Corrected 2026-06-10 —
+the user was right; my first read was wrong.)* The BB12 cues are **not broken**:
+`cue/gt` is a consistent **~2.83× scale** (median ratio 2.83, slots 6–33 all in
+2.5–3.3). My earlier "148 s / noise" was a non-robust affine fit poisoned by
+outliers (slot 3's bad GT pairing + the zero-cue w-layers dragging the slope).
+With proper calibration the cue predicts GT set_start at coarse quality:
+
+| Calibration | median residual | <16 s | <30 s |
+|---|---|---|---|
+| robust scale (gt = 0.353·cue) | 26 s | 11/38 | 21/38 |
+| isotonic (monotonic) | 17 s | 19/38 | 21/38 |
+| **bootstrap: 5 anchors → predict 33** | **21 s** | 12/33 | 20/33 |
+
+So the bootstrap works at **coarse** resolution (~20 s, on par with the existing
+anchor prior), **not** fine. The ~20 % per-point jitter (and the 2.83× scale,
+likely the cue referencing a longer/different mix version) caps it there. Its
+real value: a handful of audio-confident anchors calibrate the cue curve, which
+then places the ambiguous majority — see the synthesis below.
+
+## Fusion + joint decode result (2026-06-10) — partial, redirects to anchor-and-fill
+
+Built the revised-P1 two-stage pipeline (coarse MERT → per-span stem-aware
+chroma+fingerprint emission curves over the coarse window → joint monotonic
+re-decode) and ran it on 29 held-out BB12 spans with local audio:
+
+| Method | median | <2 s | <8 s | <16 s |
+|---|---|---|---|---|
+| coarse (MERT) | 37.7 s | 1 | 3 | 5 |
+| chroma-only joint | 51.2 s | 0 | 3 | 3 |
+| fingerprint-only joint | 39.0 s | 1 | 3 | 4 |
+| **fused per-span argmax** | 35.2 s | **3** | **6** | **7** |
+| fused + joint decode | 39.9 s | 1 | 3 | 4 |
+
+Two hard lessons:
+1. **Fusion helps only the distinctive minority.** Fused argmax *doubled* sub-bar
+   hits (3→6) — but only ~6/29 spans have audio distinctive enough to localize;
+   the median barely moved because the other ~23 are self-similar noise.
+2. **Joint decode BACKFIRES here.** Forcing a globally-monotonic path through
+   mostly-flat curves drags the few good peaks off their true position — worse
+   than independent argmax. The neighbour-rescue hypothesis fails when most
+   emissions are uninformative.
+
+**Redirect — anchor-and-fill, not localize-every-span.** The ~20 % of spans that
+audio nails to sub-bar become **hard anchors**; those anchors *calibrate the cue
+curve* (idea B); the calibrated cue + monotonic order + known span durations
+place the ambiguous ~80 %. Audio gives precision where it can, the cue gives
+global shape, and the anchors are exactly the "few points" the cue calibration
+needs — the two ideas compose instead of competing.
 
 ## Risks (tied to the domain taxonomy)
 
