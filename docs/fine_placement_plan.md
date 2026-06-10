@@ -460,3 +460,29 @@ span whose *coarse* is off by more than the band (slot 004 stays ~43 s).
 within-slot identity swap (slots 058/059); (2) a confidence-anchored hybrid —
 couple only high-confidence spans, let the rest float. Both tracked for after
 more labeled sets enable a learned placer + leave-one-set-out CV.
+
+### Follow-up (1) DONE (2026-06-10) — within-slot swap fixed by decode-scored assignment
+
+Root cause: `_assign_slot` ordered a slot's k spans across its top-k
+candidates by *where each candidate's identity MaxSim matched* — inside a
+±90 s band around the slot's single anchor (median of its GT starts). A
+slot's spans can sit minutes apart: slot 058's spans are at 1325 s and
+1733 s, so its anchor (~1529 s) bands over *neither* — the match location is
+noise there, and the ordering swapped 058/059 (4/147). Slot 003 (spans at
+64 s / 1913 s!) has the same pathology and was only lucky.
+
+Fix (`_sweep_slot_assignments` in `mert_model.py`): keep `_assign_slot`'s
+initial pick, then for each multi-span slot with ≥2 pool candidates
+enumerate the span→candidate assignments (injective when the pool covers,
+onto otherwise) and keep the one maximizing the **global monotonic-decode
+total** — the whole-mix curves + monotone neighbours pin the ordering down,
+no anchor band involved. Greedy coordinate sweep, ≤2 passes; the decode's
+running-argmax was vectorized (2.4 ms per 147×2054 decode) so the ~60 extra
+decodes are free.
+
+Result (same deterministic split, BB12): all-span identity **143/147 →
+147/147**, held-out identity stays 30/30, coarse median 36.7→36.5 s,
+decoupled DTW ±45 s median 26.7→26.0 s (<30 s 16→17). `train.py` now prints
+an all-span identity report (train+eval) so within-slot swaps — invisible to
+the held-out metrics — show up as `MISS` lines. Follow-up (2), the
+confidence-anchored hybrid, is now unblocked.

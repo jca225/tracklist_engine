@@ -12,13 +12,20 @@ Promote to top-level `alignment/` when stable.
 - Huber placement + identity CE loss stubs
 - `MertAlignHead` seed ensemble (`TrainConfig.n_heads`) + joint slot decoding:
   identity = max over (mix window, ref window) pairs in the search band; a
-  slot's k spans assign to top-k candidates ordered by matched mix time
+  slot's k spans assign to top-k candidates, and `predict_sequence` then
+  re-scores each multi-span slot's span→candidate assignment by global
+  decode total (`_sweep_slot_assignments`) — the anchor-band match-time
+  ordering swapped slots 058/059 (spans minutes apart, band covers neither)
 
 **BB12 held-out eval (2026-06-09):** identity 100% (30/30), ref_start MAE
 0.84 s, set placement MAE 39 s (median 37 s, p90 78 s) via
 `predict_sequence` — a whole-mix monotonic DP (`sequence_decode.py`)
 replacing the per-slot anchor band. Candidates without MERT embeddings are
 logged loudly, never silently zero-filled (that hid the slot-039 miss).
+All-span identity (train+eval) is 147/147 after the assignment sweep
+(2026-06-10) and printed by `train.py --eval --train-mert` as a `MISS`
+report — watch it on new sets; within-slot swaps don't show in held-out
+metrics.
 
 **Measured limitation:** pooled-MERT cosine does not *localize* content in
 the mix — with the oracle ref segment, the unconstrained argmax is ~900 s

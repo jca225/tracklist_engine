@@ -60,16 +60,17 @@ def monotonic_decode(curves: np.ndarray, *, min_step: int = 1) -> np.ndarray:
     n, t = curves.shape
     ptr = np.zeros((n, t), dtype=np.int32)
     best = curves[0].astype(np.float64)
+    idx = np.arange(t, dtype=np.int32)
 
     for i in range(1, n):
         prefix = np.maximum.accumulate(best)
-        # running argmax of `best` (first index achieving the prefix max)
-        arg = np.zeros(t, dtype=np.int32)
-        cur = 0
-        for j in range(1, t):
-            if best[j] > best[cur]:
-                cur = j
-            arg[j] = cur
+        # running argmax of `best` (first index achieving the prefix max):
+        # a new running max appears exactly where best strictly exceeds the
+        # prefix max so far; cummax of those indices forward-fills the rest.
+        new_max = np.empty(t, dtype=bool)
+        new_max[0] = True
+        new_max[1:] = best[1:] > prefix[:-1]
+        arg = np.maximum.accumulate(np.where(new_max, idx, 0)).astype(np.int32)
         shifted_max = np.full(t, NEG, dtype=np.float64)
         shifted_arg = np.zeros(t, dtype=np.int32)
         if min_step < t:
@@ -83,3 +84,8 @@ def monotonic_decode(curves: np.ndarray, *, min_step: int = 1) -> np.ndarray:
     for i in range(n - 1, 0, -1):
         starts[i - 1] = ptr[i][starts[i]]
     return starts
+
+
+def decode_total(curves: np.ndarray, starts: np.ndarray) -> float:
+    """Total path score of a decoded start sequence (the DP objective)."""
+    return float(curves[np.arange(curves.shape[0]), starts].sum())

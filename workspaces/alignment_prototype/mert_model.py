@@ -227,6 +227,14 @@ class MertLearnedAligner:
         every assigned recording is scored against the whole mix and the DP
         picks the jointly-best non-decreasing start sequence (`targets` must
         be in tracklist order).
+
+        Within-slot span→candidate assignment is decided by the decode, not
+        by the anchor band: a slot's spans can sit minutes apart (BB12 slot
+        058 spans at 1325 s / 1733 s, anchor band covering neither), so
+        `_assign_slot`'s match-location ordering is noise there — it swapped
+        slots 058/059. The sweep re-scores each multi-span slot's candidate
+        assignments by total decode score, where neighbour spans pin the
+        ordering down.
         """
         from .dataset import slot_candidates_from_targets
         from .sequence_decode import monotonic_decode, window_mean_curve, window_mean_vectors
@@ -239,36 +247,41 @@ class MertLearnedAligner:
         for i, t in enumerate(targets):
             groups.setdefault(t.slot_label, []).append(i)
 
-        assigned: list[tuple | None] = [None] * len(targets)
+        slot_asn: dict[str, tuple] = {}
+        assigned_ci: list[int | None] = [None] * len(targets)
         with torch.no_grad():
-            for idxs in groups.values():
+            for label, idxs in groups.items():
                 group = tuple(targets[i] for i in idxs)
                 asn = self._assign_slot(group, pools, mix_mid)
                 if asn is None:
                     continue
-                cand_ids, cand_stems, ref_windows, cand_ref_win, cand_score, chosen, dur = asn
+                slot_asn[label] = asn
+                chosen = asn[5]
                 for i, ci in zip(idxs, chosen):
-                    assigned[i] = (cand_ids, cand_stems, ref_windows, cand_ref_win, cand_score, ci, dur)
+                    assigned_ci[i] = ci
 
-            decode_idx = [i for i, a in enumerate(assigned) if a is not None]
+            decode_idx = [i for i, ci in enumerate(assigned_ci) if ci is not None]
             preds: list[SpanPrediction | None] = [
-                None if assigned[i] is not None else _fallback_pred(targets[i])
+                None if assigned_ci[i] is not None else _fallback_pred(targets[i])
                 for i in range(len(targets))
             ]
             if decode_idx:
                 mix_t = torch.from_numpy(self.mix.vectors).to(self.device)
                 pooled_by_k: dict[int, torch.Tensor] = {}
-                curves = []
-                ks = []
-                for i in decode_idx:
-                    cand_ids, _stems, ref_windows, cand_ref_win, _scores, ci, dur = assigned[i]
+                curve_cache: dict[tuple[str, int], np.ndarray] = {}
+
+                def candidate_curve(label: str, ci: int, k: int) -> np.ndarray:
+                    """Whole-mix decode curve for one (slot, candidate)."""
+                    key = (label, ci)
+                    cached = curve_cache.get(key)
+                    if cached is not None:
+                        return cached
+                    _ids, _stems, ref_windows, cand_ref_win, _sc, _ch, _dur = slot_asn[label]
                     ref_vec = (
                         torch.from_numpy(ref_windows[ci][cand_ref_win[ci]])
                         .unsqueeze(0)
                         .to(self.device)
                     )
-                    k = max(1, int(round(dur / median_bar)))
-                    ks.append(k)
                     # Span-head curve: mean per-measure logit over the window.
                     logits = self.head.span_logits(mix_t.unsqueeze(0), ref_vec)[0]
                     span_curve = window_mean_curve(logits.cpu().numpy().astype(np.float64), k)
@@ -288,11 +301,28 @@ class MertLearnedAligner:
                         .numpy()
                         .astype(np.float64)
                     )
-                    curves.append(span_curve + id_curve)
-                starts = monotonic_decode(np.stack(curves))
+                    curve_cache[key] = span_curve + id_curve
+                    return curve_cache[key]
+
+                row_of = {i: j for j, i in enumerate(decode_idx)}
+                ks = []
+                for i in decode_idx:
+                    dur_i = slot_asn[targets[i].slot_label][6]
+                    ks.append(max(1, int(round(dur_i / median_bar))))
+                curves = np.stack([
+                    candidate_curve(targets[i].slot_label, assigned_ci[i], ks[row_of[i]])
+                    for i in decode_idx
+                ])
+                starts = monotonic_decode(curves)
+                assigned_ci = self._sweep_slot_assignments(
+                    targets, groups, slot_asn, assigned_ci, curves, starts,
+                    row_of, ks, candidate_curve,
+                )
+                starts = monotonic_decode(curves)
 
                 for j, i in enumerate(decode_idx):
-                    cand_ids, cand_stems, _wins, _refwin, cand_score, ci, dur = assigned[i]
+                    cand_ids, cand_stems, _wins, _refwin, cand_score, _ch, dur = slot_asn[targets[i].slot_label]
+                    ci = assigned_ci[i]
                     s_i = int(starts[j])
                     e_i = min(s_i + ks[j], self.mix.n_measures) - 1
                     rid = cand_ids[ci]
@@ -312,6 +342,75 @@ class MertLearnedAligner:
                         confidence=float(cand_score[ci]),
                     )
         return tuple(preds)  # type: ignore[arg-type]
+
+    def _sweep_slot_assignments(
+        self,
+        targets: tuple[SpanTarget, ...],
+        groups: dict[str, list[int]],
+        slot_asn: dict[str, tuple],
+        assigned_ci: list[int | None],
+        curves: np.ndarray,
+        starts: np.ndarray,
+        row_of: dict[int, int],
+        ks: list[int],
+        candidate_curve,
+    ) -> list[int | None]:
+        """Re-assign each multi-span slot's candidates by total decode score.
+
+        For every slot with >=2 decoded spans and >=2 pool candidates,
+        enumerate the span→candidate assignments (injective when the pool is
+        large enough, onto otherwise — GT pools are built from the slot's own
+        spans, so every candidate appears) and keep the one whose jointly-best
+        monotonic decode scores highest. Greedy coordinate sweep, two passes;
+        the total strictly increases so it cannot oscillate. Mutates `curves`
+        rows in place; returns the updated assignment.
+        """
+        from itertools import permutations, product
+
+        from .sequence_decode import decode_total, monotonic_decode
+
+        best_total = decode_total(curves, starts)
+        assigned_ci = list(assigned_ci)
+        for _ in range(2):
+            changed = False
+            for label, idxs in groups.items():
+                decoded = [i for i in idxs if i in row_of]
+                rows = [row_of[i] for i in decoded]
+                if len(rows) < 2 or label not in slot_asn:
+                    continue
+                n_cand = len(slot_asn[label][0])
+                if n_cand < 2:
+                    continue
+                k_spans = len(rows)
+                if n_cand >= k_spans:
+                    options = list(permutations(range(n_cand), k_spans))
+                else:
+                    options = [
+                        a for a in product(range(n_cand), repeat=k_spans)
+                        if len(set(a)) == n_cand
+                    ]
+                if len(options) > 64:
+                    continue
+                cur = tuple(assigned_ci[i] for i in decoded)
+                best_opt = cur
+                for opt in options:
+                    if opt == cur:
+                        continue
+                    trial = curves.copy()
+                    for r, ci in zip(rows, opt):
+                        trial[r] = candidate_curve(label, ci, ks[r])
+                    tot = decode_total(trial, monotonic_decode(trial))
+                    if tot > best_total + 1e-9:
+                        best_total = tot
+                        best_opt = opt
+                if best_opt != cur:
+                    for i, r, ci in zip(decoded, rows, best_opt):
+                        assigned_ci[i] = ci
+                        curves[r] = candidate_curve(label, ci, ks[r])
+                    changed = True
+            if not changed:
+                break
+        return assigned_ci
 
     def _predict_slot(
         self,

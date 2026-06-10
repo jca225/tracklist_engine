@@ -90,6 +90,23 @@ def _run_mert_eval(
     for line in seq_report.lines():
         print(f"  {line}")
 
+    # Identity over ALL spans (train + eval): within-slot swaps live on
+    # training spans (058/059) and are invisible to the held-out report.
+    train_ids = {id(t) for t in train}
+    resolved = [(p, t) for p, t in zip(all_preds, targets) if t.recording_id]
+    misses = [
+        (p, t)
+        for p, t in resolved
+        if (p.recording_id, p.claimed_stem) != (t.recording_id, t.claimed_stem)
+    ]
+    print(f"\nall-span identity (sequence decode): {len(resolved) - len(misses)}/{len(resolved)}")
+    for p, t in misses:
+        split = "train" if id(t) in train_ids else "eval"
+        print(
+            f"  MISS slot={t.slot_label} ({split}) gt={t.recording_id}/{t.claimed_stem}"
+            f" pred={p.recording_id}/{p.claimed_stem} gt_start={t.set_start_s:.0f}s"
+        )
+
     # Decoupled per-span DTW fine refinement (audio). Snaps each coarse start to
     # the best local match within a ±band corridor; no-op if the aligning folder
     # (mix_instrumental.flac + manifest) is absent.
