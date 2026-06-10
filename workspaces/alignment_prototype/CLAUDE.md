@@ -15,10 +15,18 @@ Promote to top-level `alignment/` when stable.
   slot's k spans assign to top-k candidates ordered by matched mix time
 
 **BB12 held-out eval (2026-06-09):** identity 100% (30/30), ref_start MAE
-0.79 s, set placement MAE ~171 s — placement is the open front (needs
-sequence structure / boundary-proposer constraints, not similarity quality).
-Candidates without MERT embeddings are logged loudly, never silently
-zero-filled (that hid the slot-039 miss).
+0.84 s, set placement MAE 39 s (median 37 s, p90 78 s) via
+`predict_sequence` — a whole-mix monotonic DP (`sequence_decode.py`)
+replacing the per-slot anchor band. Candidates without MERT embeddings are
+logged loudly, never silently zero-filled (that hid the slot-039 miss).
+
+**Measured limitation:** pooled-MERT cosine does not *localize* content in
+the mix — with the oracle ref segment, the unconstrained argmax is ~900 s
+off at every layer (0–24), raw or learned, centered or whitened. The 39 s
+placement comes from the monotonic tiling prior, not audio matching.
+Sub-bar placement needs a different emission signal (stem-aware chroma /
+DTW or stretch-tolerant fingerprinting — `set_fingerprint_hits` exists but
+is empty corpus-wide), not a better MERT head.
 
 ## Not wired yet
 
