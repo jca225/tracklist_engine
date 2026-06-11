@@ -66,7 +66,11 @@ def main() -> int:
                        ORDER BY ta.is_reference DESC, ta.track_audio_id
                    ) AS rn
             FROM track_audio ta
-            JOIN (SELECT DISTINCT track_audio_id FROM track_mert_measures) m
+            -- Only all-layer 330M rows: legacy 95M rows (dim=768, single
+            -- layer) survive in track_mert_measures and crash the layer
+            -- probe (n_layers=1). Filter by blob shape, not just dim.
+            JOIN (SELECT DISTINCT track_audio_id FROM track_mert_measures
+                  WHERE dim = 1024 AND length(embedding) / 2 / dim > 1) m
               ON m.track_audio_id = ta.track_audio_id
         ) pick ON pick.recording_id = sts.recording_id AND pick.rn = 1
         JOIN track_mert_measures tmm ON tmm.track_audio_id = pick.track_audio_id
@@ -80,6 +84,22 @@ def main() -> int:
         by_tid.setdefault(tid, []).append((s, e, dim, blob))
 
     ref_ids = sorted(by_tid)
+
+    # Loudly list slot recordings with no exportable (330M all-layer) MERT —
+    # silent absence hid the legacy-768 gap (15 BB11 refs, 2026-06-11).
+    cur.execute(
+        "SELECT DISTINCT recording_id FROM set_track_slots "
+        "WHERE set_id=? AND recording_id IS NOT NULL",
+        (set_id,),
+    )
+    wanted = {r[0] for r in cur.fetchall()}
+    missing = sorted(wanted - set(ref_ids))
+    if missing:
+        print(
+            f"WARNING: {len(missing)} slot recording(s) have no 330M MERT "
+            f"and were not exported: {', '.join(missing)}",
+            file=sys.stderr,
+        )
     ref_payload: dict[str, np.ndarray] = {}
     for tid in ref_ids:
         rows = by_tid[tid]
