@@ -22,11 +22,12 @@ from workspaces.taste_prior.persistence import (
 from workspaces.taste_prior.records import ScLikeRow
 from workspaces.taste_prior.soundcloud_client import (
     SC_API,
-    USER_AGENT,
+    SKIP_STATUS_CODES,
     RateLimiter,
     extract_client_id,
     next_url,
     rl_get,
+    sc_client,
 )
 
 logger = logging.getLogger(__name__)
@@ -68,7 +69,7 @@ def enrich_batch(settings: TasteSettings, mix: MixTarget, *, batch_size: int = 2
     inserted = 0
     jsonl_path = _likes_jsonl(settings, mix.mix_id)
 
-    with httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=30, follow_redirects=True) as client:
+    with sc_client() as client:
         client_id = ck.get("client_id") or extract_client_id(client, rl)
         ck["client_id"] = client_id
 
@@ -86,22 +87,27 @@ def enrich_batch(settings: TasteSettings, mix: MixTarget, *, batch_size: int = 2
             )
             rows: list[ScLikeRow] = []
             jsonl_batch: list[dict[str, Any]] = []
-            done = False
+            user_done = False
+            skip_user = False
             pages = 0
 
             while url and len(rows) < DEFAULT_MAX_LIKES_PER_USER and pages < 10:
                 try:
                     resp = rl_get(client, rl, url)
                 except httpx.HTTPStatusError as e:
-                    if e.response.status_code in (401, 403, 404, 429, 500, 502, 503):
+                    if e.response.status_code in SKIP_STATUS_CODES:
                         logger.warning(
                             "enrich skip user sc_uid=%s status=%s",
                             sc_uid,
                             e.response.status_code,
                         )
-                        done = True
+                        skip_user = True
                         break
                     raise
+                except httpx.TransportError as e:
+                    # Retries exhausted — resume from in_progress cursor on next tick.
+                    logger.warning("enrich defer user sc_uid=%s transport=%s pages=%d", sc_uid, e, pages)
+                    break
                 data = resp.json()
                 for item in data.get("collection") or []:
                     track = item.get("track") or item
@@ -137,7 +143,7 @@ def enrich_batch(settings: TasteSettings, mix: MixTarget, *, batch_size: int = 2
                 nxt = data.get("next_href")
                 pages += 1
                 if not nxt or len(rows) >= DEFAULT_MAX_LIKES_PER_USER:
-                    done = True
+                    user_done = True
                     url = None
                 else:
                     url = next_url(nxt, client_id)
@@ -151,13 +157,15 @@ def enrich_batch(settings: TasteSettings, mix: MixTarget, *, batch_size: int = 2
             if rows:
                 inserted += insert_likes(conn, tuple(rows))
 
-            if done:
+            if user_done or skip_user:
                 completed.add(sc_uid)
                 in_progress.pop(key, None)
+            elif pages == 0 and not rows:
+                in_progress.pop(key, None)
 
-    ck["completed_sc_user_ids"] = sorted(completed)
-    ck["in_progress"] = in_progress
-    save_checkpoint(conn, mix.mix_id, "enrich_likes", ck)
+            ck["completed_sc_user_ids"] = sorted(completed)
+            ck["in_progress"] = in_progress
+            save_checkpoint(conn, mix.mix_id, "enrich_likes", ck)
     log_run(
         conn,
         phase="enrich_likes",

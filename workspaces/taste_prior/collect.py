@@ -8,8 +8,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import httpx
-
 from workspaces.taste_prior.config import MixTarget, TasteSettings
 from workspaces.taste_prior.persistence import (
     connect,
@@ -22,12 +20,12 @@ from workspaces.taste_prior.persistence import (
 from workspaces.taste_prior.records import ListenerRow, ScMixCommentRow
 from workspaces.taste_prior.soundcloud_client import (
     SC_API,
-    USER_AGENT,
     RateLimiter,
     extract_client_id,
     next_url,
     resolve_track,
     rl_get,
+    sc_client,
 )
 
 logger = logging.getLogger(__name__)
@@ -65,7 +63,7 @@ def collect_tick(settings: TasteSettings, mix: MixTarget) -> int:
     rl = RateLimiter(settings.soundcloud_rpm)
     n_upserted = 0
 
-    with httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=30, follow_redirects=True) as client:
+    with sc_client() as client:
         client_id = ck.get("client_id") or extract_client_id(client, rl)
         track_id = ck.get("track_id")
         if track_id is None:

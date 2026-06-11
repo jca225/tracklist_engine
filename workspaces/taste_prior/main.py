@@ -185,6 +185,18 @@ def _collect_done(settings, mix_id: str) -> bool:
     return bool(ck.get("likers_done") and ck.get("reposters_done") and ck.get("comments_done"))
 
 
+def _enrich_likes_done(settings, mix_id: str) -> bool:
+    from workspaces.taste_prior.persistence import listener_sc_ids, load_checkpoint
+
+    with connect(settings.db_path) as conn:
+        ck = load_checkpoint(conn, mix_id, "enrich_likes")
+        completed = set(ck.get("completed_sc_user_ids") or [])
+        in_progress = ck.get("in_progress") or {}
+        if in_progress:
+            return False
+        return len(completed) >= len(listener_sc_ids(conn, mix_id))
+
+
 def cmd_loop(args: argparse.Namespace) -> int:
     settings = load_settings()
     init_db(settings.db_path)
@@ -196,7 +208,8 @@ def cmd_loop(args: argparse.Namespace) -> int:
                 collect_tick(settings, mix)
             # Enrich runs in parallel with likers collect — don't wait for collect done.
             enrich_batch(settings, mix, batch_size=args.batch)
-            enrich_playlists_batch(settings, mix, batch_size=args.batch)
+            if _enrich_likes_done(settings, mix.mix_id):
+                enrich_playlists_batch(settings, mix, batch_size=args.batch)
 
     if args.once:
         one_pass()

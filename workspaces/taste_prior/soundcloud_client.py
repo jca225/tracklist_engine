@@ -1,11 +1,14 @@
 """SoundCloud api-v2 client helpers (from dj-listener-pipeline)."""
 from __future__ import annotations
 
+import logging
 import re
 import time
 from typing import Any
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 SC_HOME = "https://soundcloud.com/"
 SC_API = "https://api-v2.soundcloud.com"
@@ -15,6 +18,12 @@ USER_AGENT = (
 )
 SCRIPT_RE = re.compile(r'https://[a-z0-9\-\.]+\.sndcdn\.com/assets/[^"\']+\.js')
 CLIENT_ID_RE = re.compile(r'client_id\s*[:=]\s*"([A-Za-z0-9]{20,40})"')
+
+# SC's edge resets idle keep-alive sockets; one-shot connections are more reliable.
+SC_CLIENT_LIMITS = httpx.Limits(max_keepalive_connections=0, max_connections=1)
+
+# HTTP statuses that mean "skip this resource", not "abort the tick".
+SKIP_STATUS_CODES = frozenset({401, 403, 404, 429, 500, 502, 503})
 
 
 class RateLimiter:
@@ -29,11 +38,40 @@ class RateLimiter:
         self._last = time.monotonic()
 
 
-def rl_get(client: httpx.Client, rl: RateLimiter, url: str, **kwargs: Any) -> httpx.Response:
-    rl.wait()
-    resp = client.get(url, **kwargs)
-    resp.raise_for_status()
-    return resp
+def sc_client(**kwargs: Any) -> httpx.Client:
+    return httpx.Client(
+        headers={"User-Agent": USER_AGENT},
+        timeout=30,
+        follow_redirects=True,
+        limits=SC_CLIENT_LIMITS,
+        **kwargs,
+    )
+
+
+def rl_get(
+    client: httpx.Client,
+    rl: RateLimiter,
+    url: str,
+    *,
+    max_retries: int = 3,
+    **kwargs: Any,
+) -> httpx.Response:
+    last_err: httpx.TransportError | None = None
+    for attempt in range(max_retries):
+        try:
+            rl.wait()
+            resp = client.get(url, **kwargs)
+            resp.raise_for_status()
+            return resp
+        except httpx.TransportError as e:
+            last_err = e
+            if attempt + 1 >= max_retries:
+                raise
+            delay = 0.5 * (2**attempt)
+            logger.debug("rl_get transport retry %d/%d delay=%.1fs url=%s", attempt + 1, max_retries, delay, url)
+            time.sleep(delay)
+    assert last_err is not None
+    raise last_err
 
 
 def extract_client_id(client: httpx.Client, rl: RateLimiter) -> str:
