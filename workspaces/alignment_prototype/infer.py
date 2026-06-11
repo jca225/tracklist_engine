@@ -220,6 +220,10 @@ def main(argv: list[str] | None = None) -> int:
         train_medians=anchors,        # scraped cue times = placement anchors
         search_margin_s=cfg.search_margin_s,
         device=device,
+        # Cross-set decode needs the anchor prior: without it the DP has no
+        # placement signal on an unseen mix and collapses to the front
+        # (observed on BB11 — every span < 70 s). Cues are scrape input.
+        anchor_sigma_s=60.0,
     )
     print("decoding sequence…")
     preds = aligner.predict_sequence(decodable)

@@ -94,15 +94,36 @@ def _pull_from_pi(set_id: str) -> Result[Path, str]:
     return Ok(local)
 
 
+_FP16_MAX = 65504.0
+
+
+def _finite(vec: np.ndarray, what: str) -> np.ndarray:
+    """Clamp non-finite values: fp16 overflow at embed time leaves ±inf in
+    stored blobs (BB12 ref dkg1c995), and a single inf NaNs the whole
+    training batch -> NaN head -> NaN decode curves (found 2026-06-11)."""
+    bad = ~np.isfinite(vec)
+    if bad.any():
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "mert_store: %d non-finite value(s) clamped in %s", int(bad.sum()), what
+        )
+        vec = np.nan_to_num(vec, nan=0.0, posinf=_FP16_MAX, neginf=-_FP16_MAX)
+    return vec
+
+
 def _parse_bundle(path: Path) -> tuple[int, MertSeries, dict[str, MertSeries]]:
     with np.load(path, allow_pickle=False) as z:
-        mix = MertSeries(start_s=z["mix_start"], end_s=z["mix_end"], vectors=z["mix_vec"])
+        mix = MertSeries(
+            start_s=z["mix_start"], end_s=z["mix_end"],
+            vectors=_finite(z["mix_vec"], "mix"),
+        )
         ref_ids = json.loads(str(z["ref_ids"]))
         refs = {
             tid: MertSeries(
                 start_s=z[f"ref_{tid}_start"],
                 end_s=z[f"ref_{tid}_end"],
-                vectors=z[f"ref_{tid}_vec"],
+                vectors=_finite(z[f"ref_{tid}_vec"], f"ref {tid}"),
             )
             for tid in ref_ids
         }

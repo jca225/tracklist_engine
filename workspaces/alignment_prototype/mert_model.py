@@ -198,6 +198,15 @@ class MertLearnedAligner:
     train_medians: dict[str, float]
     search_margin_s: float = 90.0
     device: str = "cpu"
+    # Soft placement prior for the sequence decode: quadratic penalty around
+    # each span's slot anchor (train_medians), capped. None = off (the BB12
+    # eval path). Cross-set inference needs this: the in-domain decode is
+    # pinned by memorized train spans interleaving the eval spans; on an
+    # unseen set the curves carry no placement signal and the DP collapses
+    # to the front of the mix (BB11, 2026-06-11). Scraped tracklist cues are
+    # aligner *input*, not GT — anchoring on them is fair.
+    anchor_sigma_s: float | None = None
+    anchor_cap: float = 9.0
 
     def predict(self, targets: tuple[SpanTarget, ...]) -> tuple[SpanPrediction, ...]:
         from .dataset import slot_candidates_from_targets
@@ -309,16 +318,50 @@ class MertLearnedAligner:
                 for i in decode_idx:
                     dur_i = slot_asn[targets[i].slot_label][6]
                     ks.append(max(1, int(round(dur_i / median_bar))))
+
+                priors: np.ndarray | None = None
+                if self.anchor_sigma_s is not None:
+                    priors = np.zeros((len(decode_idx), self.mix.n_measures))
+                    n_anchored = 0
+                    for j, i in enumerate(decode_idx):
+                        a = slot_anchor(
+                            targets[i].slot_label, train_medians=self.train_medians
+                        )
+                        if a <= 0.0:
+                            continue
+                        pen = ((mix_mid - a) / self.anchor_sigma_s) ** 2
+                        priors[j] = -np.minimum(pen, self.anchor_cap)
+                        n_anchored += 1
+                    log.info(
+                        "decode anchor prior: sigma=%.0fs cap=%.1f anchored=%d/%d",
+                        self.anchor_sigma_s, self.anchor_cap, n_anchored, len(decode_idx),
+                    )
+
+                def decode_row(label: str, ci: int, k: int, row: int) -> np.ndarray:
+                    c = candidate_curve(label, ci, k)
+                    return c if priors is None else c + priors[row]
+
                 curves = np.stack([
-                    candidate_curve(targets[i].slot_label, assigned_ci[i], ks[row_of[i]])
+                    decode_row(targets[i].slot_label, assigned_ci[i], ks[row_of[i]], row_of[i])
                     for i in decode_idx
                 ])
                 starts = monotonic_decode(curves)
                 assigned_ci = self._sweep_slot_assignments(
                     targets, groups, slot_asn, assigned_ci, curves, starts,
-                    row_of, ks, candidate_curve,
+                    row_of, ks, candidate_curve, priors=priors,
                 )
                 starts = monotonic_decode(curves)
+
+                import os
+                if os.environ.get("ALIGN_DEBUG_DUMP"):
+                    np.savez(
+                        os.environ["ALIGN_DEBUG_DUMP"],
+                        curves=curves,
+                        starts=starts,
+                        mix_start=self.mix.start_s,
+                        ks=np.array(ks),
+                    )
+                    log.info("decode debug dump -> %s", os.environ["ALIGN_DEBUG_DUMP"])
 
                 for j, i in enumerate(decode_idx):
                     cand_ids, cand_stems, _wins, _refwin, cand_score, _ch, dur = slot_asn[targets[i].slot_label]
@@ -354,6 +397,7 @@ class MertLearnedAligner:
         row_of: dict[int, int],
         ks: list[int],
         candidate_curve,
+        priors: np.ndarray | None = None,
     ) -> list[int | None]:
         """Re-assign each multi-span slot's candidates by total decode score.
 
@@ -399,6 +443,8 @@ class MertLearnedAligner:
                     trial = curves.copy()
                     for r, ci in zip(rows, opt):
                         trial[r] = candidate_curve(label, ci, ks[r])
+                        if priors is not None:
+                            trial[r] = trial[r] + priors[r]
                     tot = decode_total(trial, monotonic_decode(trial))
                     if tot > best_total + 1e-9:
                         best_total = tot
@@ -407,6 +453,8 @@ class MertLearnedAligner:
                     for i, r, ci in zip(decoded, rows, best_opt):
                         assigned_ci[i] = ci
                         curves[r] = candidate_curve(label, ci, ks[r])
+                        if priors is not None:
+                            curves[r] = curves[r] + priors[r]
                     changed = True
             if not changed:
                 break
