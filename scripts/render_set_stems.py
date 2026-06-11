@@ -32,7 +32,8 @@ sys.path.insert(0, str(REPO))
 
 os.environ.setdefault("TRACKLIST_DISABLE_FK", "1")
 
-from analysis.adapters import demucs_adapter, uvr_chain_adapter  # noqa: E402
+from analysis.adapters import demucs_adapter, roformer_chain_adapter, uvr_chain_adapter  # noqa: E402
+from analysis.roformer_config import RoformerChainConfig  # noqa: E402
 from analysis.separation_config import ChainConfig  # noqa: E402
 
 PI_HOST = "pi-storage"
@@ -99,6 +100,8 @@ def separate_chunk(separator, handle, chunk: Path, tmp_dir: Path):
     """Return (vocals_path, instrumental_path) for one chunk."""
     if separator == "uvr":
         r = uvr_chain_adapter.separate(handle, chunk, tmp_dir, track_audio_id=0)
+    elif separator == "roformer":
+        r = roformer_chain_adapter.separate(handle, chunk, tmp_dir, track_audio_id=0)
     else:
         r = demucs_adapter.separate(handle, chunk, tmp_dir, 0)
     if not r.is_ok():
@@ -141,7 +144,7 @@ def push_to_canonical(set_audio_id: int, out_dir: Path) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--set-audio-id", type=int, required=True)
-    ap.add_argument("--separator", choices=["uvr", "demucs"], default="uvr")
+    ap.add_argument("--separator", choices=["uvr", "demucs", "roformer"], default="uvr")
     ap.add_argument("--device", default="mps", choices=["mps", "cuda", "cpu"])
     ap.add_argument("--chunk-sec", type=int, default=360)
     ap.add_argument("--mix", type=Path, default=None,
@@ -164,6 +167,8 @@ def main() -> int:
     log.info("loading %s analyzers (device=%s)…", args.separator, args.device)
     if args.separator == "uvr":
         lr = uvr_chain_adapter.load(ChainConfig.default(), device=args.device)
+    elif args.separator == "roformer":
+        lr = roformer_chain_adapter.load(RoformerChainConfig.default(), device=args.device)
     else:
         lr = demucs_adapter.load(device=args.device)
     if not lr.is_ok():
