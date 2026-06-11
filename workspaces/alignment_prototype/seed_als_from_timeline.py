@@ -184,6 +184,53 @@ def build_track(
     return t
 
 
+def doc_max_id(root: etree._Element) -> int:
+    mx = 0
+    for el in root.iter():
+        for attr in ("Id",):
+            v = el.get(attr)
+            if v is not None and v.lstrip("-").isdigit():
+                mx = max(mx, int(v))
+        if el.tag == "NextPointeeId":
+            v = el.get("Value")
+            if v and v.isdigit():
+                mx = max(mx, int(v))
+    return mx
+
+
+def renumber_pointee_ids(track: etree._Element, alloc) -> None:
+    """Deep-copied tracks share AutomationTarget/ModulationTarget ids; Live
+    requires pointee ids unique document-wide. Re-id every *Target element in
+    the copy and rewrite same-track PointeeId references to match."""
+    idmap: dict[str, str] = {}
+    for el in track.iter():
+        if el.tag.endswith("Target") and el.get("Id") is not None:
+            new = str(next(alloc))
+            idmap[el.get("Id")] = new
+            el.set("Id", new)
+    for el in track.iter("PointeeId"):
+        v = el.get("Value")
+        if v in idmap:
+            el.set("Value", idmap[v])
+
+
+_STEM_FILE = {"acappella": "vocals", "instrumental": "instrumental"}
+
+
+def pick_audio(span: dict, track: dict) -> Path | None:
+    """Clip audio: the Demucs stem for acappella/instrumental claims, else
+    the full track. Stems share the full track's timeline, so predicted ref
+    offsets hold — and export_als_to_gt's classify_path() reads the stem
+    kind back from the stems/ path, so claimed_stem round-trips into GT."""
+    stem_key = _STEM_FILE.get(span.get("claimed_stem") or "regular")
+    if stem_key:
+        stem_path = (track.get("stems") or {}).get(stem_key)
+        if stem_path and Path(stem_path).is_file():
+            return Path(stem_path)
+    p = Path(track["local_path"])
+    return p if p.is_file() else None
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--set-id", required=True)
@@ -216,6 +263,9 @@ def main(argv: list[str] | None = None) -> int:
     for tempo_manual in root.xpath(".//MasterTrack//Tempo/Manual"):
         tempo_manual.set("Value", f"{_TEMPO_BPM:.1f}")
 
+    import itertools
+    alloc = itertools.count(doc_max_id(root) + len(spans) * 2 + 1000)
+
     next_id = 1000  # clear of any surviving template ids
     mix_track = build_track(
         template_track,
@@ -231,6 +281,7 @@ def main(argv: list[str] | None = None) -> int:
         ref_start_s=0.0,
         ref_end_s=mix_dur,
     )
+    renumber_pointee_ids(mix_track, alloc)
     tracks_node.insert(0, mix_track)
 
     placed: list[dict] = []
@@ -238,10 +289,10 @@ def main(argv: list[str] | None = None) -> int:
     insert_at = 1
     for i, s in enumerate(spans):
         t = by_tid.get(s["recording_id"])
-        if t is None or not Path(t["local_path"]).is_file():
+        fpath = pick_audio(s, t) if t is not None else None
+        if fpath is None:
             skipped.append(f"{s['slot_label']} {s['name'][:50]}")
             continue
-        fpath = Path(t["local_path"])
         fdur, fsr = ffprobe_audio(fpath)
         ref_start = max(0.0, min(s["ref_start_s"], fdur - 1.0))
         ref_end = max(ref_start + 1.0, min(s["ref_end_s"], fdur))
@@ -262,11 +313,16 @@ def main(argv: list[str] | None = None) -> int:
             ref_start_s=ref_start,
             ref_end_s=ref_end,
         )
+        renumber_pointee_ids(track, alloc)
         tracks_node.insert(insert_at, track)
         insert_at += 1
         placed.append({**s, "ref_start_s": ref_start, "ref_end_s": ref_end, "path": str(fpath)})
         if (i + 1) % 30 == 0:
             print(f"  placed {i + 1}/{len(spans)}")
+
+    # Live requires NextPointeeId above every pointee id in the document.
+    for npi in root.findall(".//NextPointeeId"):
+        npi.set("Value", str(next(alloc)))
 
     out_path = args.out or (
         Path.home() / "Desktop" / f"{args.set_id} predicted review Project"
@@ -296,7 +352,11 @@ def main(argv: list[str] | None = None) -> int:
     for clip, s in zip(sorted(clips, key=lambda c: c.arr_start),
                        sorted(placed, key=lambda x: x["set_start_s"])):
         set_start = mapper.arr_to_set_sec(clip.arr_start)
-        rid, _slot, _label, _stem = resolve_identity(clip, mindex)
+        rid, _slot, _label, stem = resolve_identity(clip, mindex)
+        p = s["path"]
+        expect_stem = ("acappella" if p.endswith("/vocals.flac")
+                       else "instrumental" if p.endswith("/instrumental.flac")
+                       else "regular")
         bad = []
         if set_start is None or abs(set_start - s["set_start_s"]) > 0.05:
             bad.append(f"set_start {set_start} != {s['set_start_s']:.2f}")
@@ -304,6 +364,8 @@ def main(argv: list[str] | None = None) -> int:
             bad.append(f"ref_start {clip.ref_start_s():.2f} != {s['ref_start_s']:.2f}")
         if rid != s["recording_id"]:
             bad.append(f"identity {rid} != {s['recording_id']}")
+        if stem != expect_stem:
+            bad.append(f"stem {stem} != {expect_stem}")
         if bad:
             errs += 1
             print(f"  MISMATCH {s['slot_label']}: {'; '.join(bad)}")

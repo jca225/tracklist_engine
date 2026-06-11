@@ -63,6 +63,40 @@ def find_aligning_dir(set_id: str) -> Path:
     return hits[0]
 
 
+_STEM_FILE = {"acappella": "vocals", "instrumental": "instrumental"}
+
+
+def pick_audio(span: dict, track: dict) -> Path | None:
+    """Audio to A/B against the mix: the Demucs stem for acappella /
+    instrumental claims (the mix has a different instrumental under those
+    vocals — the full track is barely verifiable by ear), else the full
+    track. Stems share the full track's timeline, so ref offsets hold."""
+    stem_key = _STEM_FILE.get(span.get("claimed_stem") or "regular")
+    if stem_key:
+        stem_path = (track.get("stems") or {}).get(stem_key)
+        if stem_path and Path(stem_path).is_file():
+            return Path(stem_path)
+    p = Path(track["local_path"])
+    return p if p.is_file() else None
+
+
+_dur_cache: dict[Path, float] = {}
+
+
+def audio_duration_s(path: Path) -> float:
+    if path not in _dur_cache:
+        r = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "csv=p=0", str(path)],
+            capture_output=True, text=True,
+        )
+        try:
+            _dur_cache[path] = float(r.stdout.strip())
+        except ValueError:
+            _dur_cache[path] = 0.0
+    return _dur_cache[path]
+
+
 def suspicion_score(span: dict) -> float:
     cue = span.get("cue_anchor_s")
     if cue is None or cue <= 0.0:
@@ -211,15 +245,19 @@ def main(argv: list[str] | None = None) -> int:
     missing_audio: list[str] = []
     for rank, s in enumerate(ordered, start=1):
         t = by_tid.get(s["recording_id"])
-        if t is None or not Path(t["local_path"]).is_file():
+        ref_audio = pick_audio(s, t) if t is not None else None
+        if ref_audio is None:
             missing_audio.append(f"{s['slot_label']} {s['name'][:50]}")
             continue
         span_len = max(0.0, s["set_end_s"] - s["set_start_s"])
         delta = min(_OFFSET_CAP_S, span_len * _OFFSET_FRAC)
+        # keep the ref snippet inside the file
+        ref_dur = audio_duration_s(ref_audio)
+        ref_at = min(s["ref_start_s"] + delta, max(0.0, ref_dur - args.snippet_s))
         mix_clip = clips_dir / f"{rank:03d}__{s['slot_label']}__mix.mp3"
         ref_clip = clips_dir / f"{rank:03d}__{s['slot_label']}__ref.mp3"
         ok = ffmpeg_snippet(mix_path, s["set_start_s"] + delta, args.snippet_s, mix_clip) \
-            and ffmpeg_snippet(Path(t["local_path"]), s["ref_start_s"] + delta, args.snippet_s, ref_clip)
+            and ffmpeg_snippet(ref_audio, ref_at, args.snippet_s, ref_clip)
         if not ok:
             missing_audio.append(f"{s['slot_label']} (ffmpeg)")
             continue

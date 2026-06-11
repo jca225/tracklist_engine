@@ -256,34 +256,63 @@ def _label_rows(
 
 
 def fetch_tracks(set_id: str) -> list[TrackRow]:
-    # First pass: pull ordered dj_set_rows to compute per-track labels
-    # that mirror 1001tracklists' published section / "w/" layering.
-    row_rows = ssh_sqlite(f"""
-        SELECT row_index,
-               text_excerpt,
-               COALESCE(
-                   json_extract(data_attrs_json, '$."data-trackid"'),
-                   CASE WHEN json_extract(data_attrs_json, '$."data-isided"') = 'true'
-                             AND json_extract(data_attrs_json, '$."data-id"') IS NOT NULL
-                        THEN 'tlp' || CAST(json_extract(data_attrs_json, '$."data-id"') AS TEXT)
-                   END
-               ) AS track_id
-        FROM dj_set_rows
+    # First pass: per-slot labels. The canonical source is set_track_slots —
+    # the tokenizer already resolved sided/gap rows that dj_set_rows can't
+    # label (no data-trackid; e.g. BB11 013w1/013w2, 2026-06-11). Fall back
+    # to deriving labels from raw dj_set_rows for unmaterialized sets.
+    slot_rows = ssh_sqlite(f"""
+        SELECT row_index, slot_label,
+               COALESCE(recording_id, track_id) AS track_id
+        FROM set_track_slots
         WHERE set_id = '{set_id}'
         ORDER BY row_index;
     """)
-    # Drop rows without a usable track_id (rare but possible).
-    row_rows = [r for r in row_rows if r.get("track_id")]
-    if not row_rows:
+    if slot_rows:
+        labeled = [
+            (r["slot_label"], r["row_index"], r["track_id"])
+            for r in slot_rows
+            if r.get("track_id") and r.get("slot_label")
+        ]
+    else:
+        row_rows = ssh_sqlite(f"""
+            SELECT row_index,
+                   text_excerpt,
+                   COALESCE(
+                       json_extract(data_attrs_json, '$."data-trackid"'),
+                       CASE WHEN json_extract(data_attrs_json, '$."data-isided"') = 'true'
+                                 AND json_extract(data_attrs_json, '$."data-id"') IS NOT NULL
+                            THEN 'tlp' || CAST(json_extract(data_attrs_json, '$."data-id"') AS TEXT)
+                       END
+                   ) AS track_id
+            FROM dj_set_rows
+            WHERE set_id = '{set_id}'
+            ORDER BY row_index;
+        """)
+        row_rows = [r for r in row_rows if r.get("track_id")]
+        labeled = _label_rows(row_rows)
+    if not labeled:
         return []
-    labeled = _label_rows(row_rows)
 
     # Second pass: resolve each unique track_id to its best track_audio
     # row + metadata. Platform ordering prefers cleanest sources.
+    #
+    # Ids come from the canonical set_track_slots spine, unioned with
+    # dj_set_track_media_links for sets not yet materialized. Sourcing only
+    # from media links dropped sided/gap rows that have no data-trackid (the
+    # Rvmor gap) — 15 BB11 slots silently vanished from pulls (2026-06-11).
     rows = ssh_sqlite(f"""
-        WITH ranked AS (
+        WITH wanted(tid) AS (
+            SELECT COALESCE(recording_id, track_id)
+            FROM set_track_slots
+            WHERE set_id = '{set_id}'
+            UNION
+            SELECT track_id FROM dj_set_track_media_links
+            WHERE set_id = '{set_id}'
+        ),
+        ranked AS (
             SELECT
                 ta.track_id,
+                ta.recording_id,
                 ta.track_audio_id,
                 ta.path,
                 ta.codec,
@@ -307,19 +336,25 @@ def fetch_tracks(set_id: str) -> list[TrackRow]:
                              END,
                              ta.downloaded_at DESC
                 ) AS pick
-            FROM dj_set_track_media_links l
-            JOIN track_audio ta ON ta.track_id = l.track_id
+            FROM track_audio ta
             LEFT JOIN track_metadata tm ON tm.track_id = ta.track_id
-            WHERE l.set_id = '{set_id}'
+            WHERE ta.track_id IN (SELECT tid FROM wanted)
+               OR ta.recording_id IN (SELECT tid FROM wanted)
         )
-        SELECT track_id, track_audio_id, artists_json, meta_title AS title,
-               version, full_name, stem, variant, path, codec, duration_s
+        SELECT track_id, recording_id, track_audio_id, artists_json,
+               meta_title AS title, version, full_name, stem, variant,
+               path, codec, duration_s
         FROM ranked
         WHERE pick = 1;
     """)
     if not rows:
         return []
     audio_by_tid: dict[str, dict] = {r["track_id"]: r for r in rows}
+    for r in rows:
+        # dj_set_rows ids usually equal track_id, but post-reconcile remaps
+        # can leave only recording_id matching — index both, exact key wins.
+        if r.get("recording_id"):
+            audio_by_tid.setdefault(r["recording_id"], r)
 
     # Bulk-fetch stems for all picked track_audio_ids in one query.
     audio_ids = [r["track_audio_id"] for r in rows]
