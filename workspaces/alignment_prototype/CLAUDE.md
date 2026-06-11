@@ -47,4 +47,26 @@ is empty corpus-wide), not a better MERT head.
 venvs/audio/bin/python -m workspaces.alignment_prototype.train --dry-run
 venvs/audio/bin/python -m workspaces.alignment_prototype.train --eval
 venvs/audio/bin/python -m workspaces.alignment_prototype.train --eval --train-mert
+# cross-set inference (train on BB12 GT, predict target set)
+venvs/audio/bin/python -m workspaces.alignment_prototype.infer --set-id 2nvzlh2k --band-s 45
+# human verification of a predicted timeline (after infer):
+venvs/audio/bin/python -m workspaces.alignment_prototype.render_review_snippets --set-id 2nvzlh2k
+venvs/audio/bin/python -m workspaces.alignment_prototype.seed_als_from_timeline --set-id 2nvzlh2k
 ```
+
+## Human review loop (predictions → GT)
+
+1. `infer` writes `out/<set_id>_predicted_timeline.json`.
+2. `render_review_snippets` renders per-span A/B clips (mix at predicted
+   position vs ref at predicted offset; acappella/instrumental spans use the
+   Demucs stem) + `out/review/<set_id>/review.html` — keyboard verdicts,
+   worst-suspicion-first. Listening pass ≈ 30–40 min for ~150 spans.
+3. `seed_als_from_timeline` writes a pre-seeded Live project to the Desktop
+   (60 BPM = 1 beat/s; clips warped onto predicted ref segments; color =
+   suspicion). Self-validates by round-tripping its own output through
+   `labeling/als_io` (placement, identity, stem). Human fixes failures only.
+4. The corrected `.als` exports via `labeling/export_als_to_gt.py` → the
+   target set becomes new GT; diff vs the predicted timeline = honest
+   placement/identity scorecard. Requires the set pulled via
+   `labeling/pull_set_for_alignment.py` (slot-spine fix ed7f121 — older
+   pulls silently dropped Rvmor-gap slots).
