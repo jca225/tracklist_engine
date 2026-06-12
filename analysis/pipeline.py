@@ -39,20 +39,23 @@ _log = logging.getLogger(__name__)
 class Analyzers:
     """All model handles bundled so they load once per process.
 
-    Exactly one stem-separation backend is loaded per `separator`: the default
-    `demucs` (`htdemucs_ft`), `uvr` (audio-separator cleanup chain), or
-    `roformer` (MSST RoFormer ensemble). All produce `StemSet(vocals,
-    instrumental)`; unselected backends stay `None`. `with_essentia` flips
-    automatically based on whether the venvs/essentia/ sandbox exists on disk —
-    Essentia is best-effort.
+    Exactly one stem-separation backend is loaded per `separator`: `demucs`
+    (`htdemucs_ft`), `uvr` (audio-separator cleanup chain), or `roformer` (MSST
+    RoFormer ensemble). All produce `StemSet(vocals, instrumental)`; unselected
+    backends stay `None`. `with_essentia` flips automatically based on whether
+    the venvs/essentia/ sandbox exists on disk — Essentia is best-effort.
+
+    NOTE: `separator` still defaults to `"demucs"` for backward compatibility,
+    but **`roformer` is the current backend of choice** — demucs is stale/legacy.
+    Pass `separator="roformer"` on new runs (see analysis/CLAUDE.md).
     """
     beats: beat_this_adapter.BeatThisHandle
     cues: cue_detr_adapter.CueDetrHandle
     mert: mert_adapter.MertHandle
-    demucs: demucs_adapter.DemucsHandle | None = None
+    demucs: demucs_adapter.DemucsHandle | None = None   # ⚠️ stale/legacy backend
     uvr: uvr_chain_adapter.UvrChainHandle | None = None
     roformer: roformer_chain_adapter.RoformerChainHandle | None = None
-    separator: str = "demucs"
+    separator: str = "demucs"   # legacy default; prefer "roformer" on new runs
     with_essentia: bool = False
 
     @property
@@ -72,7 +75,9 @@ def load_analyzers(
     """Load every model once. Fails fast on the first load error.
 
     `separator` picks the stem backend ('demucs' | 'uvr' | 'roformer'); only
-    the selected one is loaded.
+    the selected one is loaded. `demucs` is the legacy default kept for
+    backward compatibility — **`roformer` is the current choice**; pass it
+    explicitly on new runs.
     """
     b = beat_this_adapter.load(device=device)
     if not b.is_ok():

@@ -1,5 +1,11 @@
 """Demucs adapter: 2-stem split (vocals / instrumental) via `htdemucs_ft`.
 
+⚠️ STALE / legacy backend. **Roformer (`roformer_chain_adapter`) is the current
+separator of choice.** This adapter is kept working as a fallback and to keep
+historical `ref_source: demucs` stems reproducible, but new separation runs
+should pass `--separator roformer`. Do not delete without coordinating the
+separation migration (see analysis/CLAUDE.md "Stem-separation backends").
+
 The model still internally computes 4 sources (vocals/drums/bass/other) —
 that's how htdemucs_ft works, no faster way to get just two. We just
 persist only `vocals.flac` (direct) and `instrumental.flac` (drums + bass +

@@ -9,21 +9,28 @@ section embeddings. Writes the *audio-pipeline tables* (`track_analysis`,
 `pipeline.py` / `set_analysis.py` orchestrate; `adapters/` wrap each model;
 `vast_worker.py` is the GPU-side batch worker; `persistence.py` writes results.
 
-## Stem-separation backends (demucs | uvr)
+## Stem-separation backends (roformer | demucs | uvr)
 
 Stem separation is a **selectable backend** behind one contract —
-`StemSet(vocals, instrumental)`. Both backends produce exactly those two stems,
+`StemSet(vocals, instrumental)`. All backends produce exactly those two stems,
 so nothing downstream (schema, alignment, library) changes when you switch.
+
+> **`roformer` is the current backend of choice.** `demucs` is **stale/legacy**:
+> still wired and runnable (and the code default for backward compatibility), but
+> new separation runs should pass `--separator roformer`. The old `ref_source:
+> demucs` stems remain valid historical records — don't rewrite them.
 
 | Backend | What | Speed | When |
 |---|---|---|---|
-| `demucs` *(default)* | `htdemucs_ft`, 2-stem ([adapters/demucs_adapter.py](adapters/demucs_adapter.py)) | ~1 model pass | the corpus default |
-| `uvr` | audio-separator cleanup **chain** ([adapters/uvr_chain_adapter.py](adapters/uvr_chain_adapter.py)): Kim Vocals 2 → karaoke ensemble → dereverb → de-echo → denoise | ~5 sequential passes (much slower) | when a *clean dry lead vocal* matters more than throughput |
+| `roformer` *(current)* | MSST RoFormer vocal+instrumental ensemble ([adapters/roformer_chain_adapter.py](adapters/roformer_chain_adapter.py); needs `workspaces/msst_webui` + `venvs/msst`, see `scripts/setup_roformer_separation.sh`) | GPU ensemble | **default choice for new runs** |
+| `demucs` *(stale/legacy, code default)* | `htdemucs_ft`, 2-stem ([adapters/demucs_adapter.py](adapters/demucs_adapter.py)) | ~1 model pass | legacy / fallback only |
+| `uvr` | audio-separator cleanup **chain** ([adapters/uvr_chain_adapter.py](adapters/uvr_chain_adapter.py)): Kim Vocals 2 → karaoke ensemble → dereverb → de-echo → denoise (note: its `instrumental_cascade` re-sums via demucs) | ~5 sequential passes (much slower) | when a *clean dry lead vocal* matters more than throughput |
 
 - `pipeline.run_separation()` dispatches on `Analyzers.separator`; select via
-  `load_analyzers(device, separator="uvr")` or the `--separator {demucs,uvr}`
-  flag on every loop (`mac_analyze_loop.py`, `mac_analyze_sets.py`,
-  `vast_loop.py`, `vast_worker.py`).
+  `load_analyzers(device, separator="roformer")` or the `--separator
+  {roformer,demucs,uvr}` flag on every loop (`mac_analyze_loop.py`,
+  `mac_analyze_sets.py`, `vast_loop.py`, `vast_worker.py`). The code default is
+  still `demucs` (legacy) — pass `roformer` explicitly.
 - The chain is **data-driven** by [uvr_chain.yaml](uvr_chain.yaml) (parsed in
   [separation_config.py](separation_config.py)) — reorder/disable/retune stages,
   or set `enable_ensemble: false`, with no code change. Stage stem-selection
@@ -66,7 +73,7 @@ which suspends the process for hours. (Validated on BB12 `set_audio_id=5`,
 | cue-detr (EDM cues) | pi-storage CPU **or** Mac MPS | DETR transformer; small model |
 | librosa, pyloudnorm | pi-storage **or** Mac | pure Python |
 | **Essentia** (key/BPM/valence/mood/etc.) | **Vast.ai** *or* **Mac** | no aarch64 wheels — ships only x86_64 manylinux + macOS arm64, so the Mac has a `venvs/essentia/` Py3.13 sandbox and runs Essentia as a subprocess |
-| **Demucs** stems | **Vast.ai** *or* **Mac MPS** | GPU-bound; ~30s/track on Pi CPU vs ~1s/track on 4090 vs ~3–5s/track on M-series MPS |
+| **Stem separation** (roformer *(current)* / demucs *(stale)*) | **Vast.ai** *or* **Mac MPS** | GPU-bound; demucs ~30s/track Pi CPU vs ~1s/track 4090 vs ~3–5s/track MPS |
 | **MERT** embeddings | **Vast.ai** *or* **Mac MPS** | GPU-bound; [adapters/mert_adapter.py](adapters/mert_adapter.py) auto-selects `cuda → mps → cpu` |
 
 The Mac mirrors the pi-storage CPU stack (`venvs/audio/`) plus the
