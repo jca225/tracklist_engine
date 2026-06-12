@@ -186,6 +186,55 @@ def _job(args: tuple) -> dict:
     }
 
 
+def _stack_best(windows, ref_f, stretches, band_frames):
+    """(err-free) best stack over stretches: (r0_s, peak, prominence, stretch).
+
+    prominence = peak - median(joint curve): how much the line stands out from
+    the channel's own background — a label-free confidence usable without GT
+    (raw peak is biased across channels; prominence is comparable)."""
+    best = None
+    for st in stretches:
+        curves, shifts = [], []
+        for dt_frames, win in windows:
+            c = _scores_at_stretch(win, ref_f, st)
+            if c.size:
+                curves.append(c)
+                shifts.append(int(round(dt_frames * st)))
+        if not curves:
+            continue
+        j, _ = stack_curves(curves, shifts, band_frames=band_frames)
+        if j.size == 0:
+            continue
+        k = int(j.argmax())
+        pk = float(j[k])
+        if best is None or pk > best[1]:
+            best = (k * HOP / SR, pk, pk - float(np.median(j)), st)
+    return best
+
+
+def _xchan_job(args: tuple) -> dict:
+    """Stack every available channel for one span; return per-channel results."""
+    idx, gt_ref_start, channels = args
+    import librosa
+    out = []
+    for name, ref_path, win_list, stretches, band in channels:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            ref_y, _ = librosa.load(ref_path, sr=SR, mono=True)
+        ref_f = chroma(ref_y)
+        windows = [(int(dt), np.asarray(w, dtype=np.float32)) for dt, w in win_list]
+        b = _stack_best(windows, ref_f, tuple(stretches), band)
+        if b is None:
+            out.append({"ch": name, "err": float("nan"), "peak": float("nan"),
+                        "prom": float("nan"), "r0": float("nan")})
+        else:
+            r0, pk, prom, _st = b
+            out.append({"ch": name, "err": abs(r0 - gt_ref_start),
+                        "peak": round(pk, 3), "prom": round(prom, 3),
+                        "r0": round(r0, 3)})
+    return {"idx": idx, "channels": out}
+
+
 def _probe_offsets(span_len: float, window_s: float, k_max: int) -> list[float]:
     """Up to k_max mix offsets (s into the span) for probe windows.
 
@@ -227,6 +276,110 @@ def _grid_stretches(t, mix_series, ref_series) -> tuple[float, ...]:
     return tuple(e * f for f in (0.96, 0.98, 1.0, 1.02, 1.04))
 
 
+def _windows_from(mc: np.ndarray, set_start_s: float, dts: list[float], n: int):
+    """Probe windows sliced from a mix-channel chroma at the given offsets."""
+    wl = []
+    for dt in dts:
+        a = int((set_start_s + dt) * SR / HOP)
+        a = min(a, max(0, mc.shape[1] - n))
+        w = mc[:, a:a + n]
+        if w.shape[1] >= n // 2:
+            wl.append((int(round(dt * SR / HOP)), w.tolist()))
+    return wl
+
+
+# mix-channel chroma key + ref-side audio resolver per channel
+_CHANNELS = (
+    ("regular", "regular", None),          # full mix vs full ref track
+    ("acappella", "acappella", "vocals"),  # mix vocals vs ref vocals stem
+    ("instrumental", "instrumental", "instrumental"),
+)
+
+
+def _run_cross_channel(args, targets, src_by_key, linear_by_key, by_tid,
+                       mix_chroma, mix_series, ref_series, n) -> int:
+    """Heuristic #2/#6: per span, stack every channel whose mix + ref audio both
+    exist; flag where the best-localizing (or most-prominent) channel disagrees
+    with claimed_stem. The audio, not the label, names the stem."""
+    acap_band = int(round(args.acap_band_s * SR / HOP))
+    jobs, meta, skipped = [], [], 0
+    for i, t in enumerate(targets):
+        if t.slot_label == "mix":
+            continue
+        if not linear_by_key.get((t.slot_label, round(t.set_start_s, 2)), True):
+            continue
+        track = by_tid.get(t.recording_id)
+        if track is None:
+            skipped += 1
+            continue
+        span_len = max(0.0, t.set_end_s - t.set_start_s)
+        dts = _probe_offsets(span_len, args.window_s, args.probes)
+        stretches = _grid_stretches(t, mix_series, ref_series)
+        chans = []
+        for name, mix_key, ref_stem in _CHANNELS:
+            mc = mix_chroma.get(mix_key)
+            if mc is None:
+                continue
+            if ref_stem is None:
+                ref_path = track.get("local_path")
+            else:
+                ref_path = (track.get("stems") or {}).get(ref_stem)
+            if not ref_path or not Path(ref_path).is_file():
+                continue
+            win_list = _windows_from(mc, t.set_start_s, dts, n)
+            if not win_list:
+                continue
+            band = acap_band if name == "acappella" else 0
+            chans.append((name, str(ref_path), win_list, stretches, band))
+        if len(chans) < 2:  # nothing to arbitrate
+            skipped += 1
+            continue
+        jobs.append((i, t.ref_start_s, chans))
+        meta.append(t)
+
+    print(f"cross-channel on {len(jobs)} spans (>=2 channels each; "
+          f"{skipped} skipped)…")
+    res = {}
+    with ProcessPoolExecutor(max_workers=args.workers) as ex:
+        for k, r in enumerate(ex.map(_xchan_job, jobs, chunksize=2)):
+            res[r["idx"]] = r
+            if (k + 1) % 20 == 0:
+                print(f"  {k + 1}/{len(jobs)}")
+
+    rows = []
+    for (i, _gt, _ch), t in zip(jobs, meta):
+        chans = {c["ch"]: c for c in res[i]["channels"]}
+        claimed = t.claimed_stem or "regular"
+        if claimed not in chans:
+            continue
+        # best channel by GT error (oracle) and by prominence (label-free)
+        valid = {k: c for k, c in chans.items() if not np.isnan(c["err"])}
+        if not valid:
+            continue
+        best_err = min(valid, key=lambda k: valid[k]["err"])
+        best_prom = max(valid, key=lambda k: valid[k]["prom"])
+        rows.append((t, claimed, chans, best_err, best_prom))
+
+    print("\n=== cross-channel mislabel scan (vs corrected GT) ===")
+    agree_err = sum(1 for r in rows if r[3] == r[1])
+    agree_prom = sum(1 for r in rows if r[4] == r[1])
+    prom_matches_err = sum(1 for r in rows if r[3] == r[4])
+    print(f"n={len(rows)}   claimed==best-by-error: {agree_err}/{len(rows)}"
+          f"   claimed==best-by-prominence: {agree_prom}/{len(rows)}"
+          f"   prominence agrees with oracle: {prom_matches_err}/{len(rows)}")
+
+    flagged = [r for r in rows if r[4] != r[1]]
+    print(f"\nFLAGGED (best-by-prominence != claimed) — {len(flagged)}:")
+    print(f"{'slot':6} {'claimed':11} {'best_prom':11} {'best_err':11} "
+          f"{'claim_err':>9} {'alt_err':>8}  label")
+    for t, claimed, chans, best_err, best_prom in flagged:
+        ce = chans[claimed]["err"]
+        ae = chans[best_prom]["err"]
+        print(f"{t.slot_label:6} {claimed:11} {best_prom:11} {best_err:11} "
+              f"{ce:9.1f} {ae:8.1f}  {(t.label or '')[:34]}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--eval", action="store_true", help="score vs BB12 GT")
@@ -238,6 +391,10 @@ def main(argv: list[str] | None = None) -> int:
                    help="warp tolerance (s) applied to ACAPPELLA spans only — each "
                         "probe may slip +/- this off the line (heuristic #7: acaps "
                         "are sub-track warped). 0 = rigid stack everywhere.")
+    p.add_argument("--cross-channel", action="store_true",
+                   help="heuristic #2/#6: stack every available channel (full / "
+                        "vocal / instrumental) per span; flag where the audio's best "
+                        "channel disagrees with claimed_stem (mislabel detector).")
     p.add_argument("--workers", type=int, default=8)
     args = p.parse_args(argv)
 
@@ -290,6 +447,11 @@ def main(argv: list[str] | None = None) -> int:
             mix_chroma[stem] = chroma(y)
 
     n = int(args.window_s * SR / HOP)
+
+    if args.cross_channel:
+        return _run_cross_channel(args, targets, src_by_key, linear_by_key,
+                                  by_tid, mix_chroma, mix_series, ref_series, n)
+
     jobs, meta, skipped, nonlinear = [], [], 0, 0
     for i, t in enumerate(targets):
         if t.slot_label == "mix":
