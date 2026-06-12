@@ -139,13 +139,17 @@ class ParsedClip:
         return self.loop_start + (self.arr_end - self.arr_start)
 
     def ref_start_s(self) -> float:
-        anchor = self.warp.points[0][0] if self.warp.points else 0.0
-        return self.warp.beat_to_sec(anchor)
+        # Content at the clip's (possibly trimmed) left edge — loop_start
+        # through the warp map. The old anchor-based version returned the
+        # FIRST WARP MARKER's position (~file start), so every trimmed clip
+        # exported ref_start≈0; the aligner head trained on those labels
+        # learned to predict ~0 ref offsets (found 2026-06-11 when the
+        # matched-filter detector disagreed with GT at peak 0.99-1.00 and
+        # loop_start mapped exactly to the detector's answer).
+        return self.warp.beat_to_sec(self.content_beat_start)
 
     def ref_end_s(self) -> float:
-        anchor = self.warp.points[0][0] if self.warp.points else 0.0
-        warp_beat = anchor + (self.arr_end - self.arr_start)
-        return self.warp.beat_to_sec(warp_beat)
+        return self.warp.beat_to_sec(self.content_beat_end)
 
 
 def _find_mix_splice_beat(
