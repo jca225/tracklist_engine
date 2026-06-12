@@ -645,10 +645,10 @@ tracks:
     claimed_stem: instrumental
     ref_source:  online_candidate
     set_start_s: 911.936
-    set_end_s:   990.578
+    set_end_s:   1011.54
     ref_start_s: 25.4617
     ref_end_s:   138.548
-    tempo_ratio: 1.25154
+    tempo_ratio: 1.01583
     is_loop:     true
     ref_segments:
       - mix_start_s: 911.936
@@ -660,7 +660,7 @@ tracks:
       - mix_start_s: 916.573
         ref_start_s: 30.0906
         ref_end_s:   83.8797
-      - mix_start_s: 938.722
+      - mix_start_s: 958.179
         ref_start_s: 86.6916
         ref_end_s:   138.548
   - track:       "Halsey - Now Or Never"
@@ -669,16 +669,16 @@ tracks:
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 915.104
-    set_end_s:   940.707
+    set_end_s:   960.164
     ref_start_s: 7.15909
     ref_end_s:   59.6469
-    tempo_ratio: 2.05004
+    tempo_ratio: 1.16484
     is_loop:     true
     ref_segments:
       - mix_start_s: 915.104
         ref_start_s: 7.15909
         ref_end_s:   39.4288
-      - mix_start_s: 923.348
+      - mix_start_s: 942.805
         ref_start_s: 39.3939
         ref_end_s:   59.6469
   - track:       "DJ Snake - Middle (Acappella)"
@@ -686,8 +686,8 @@ tracks:
     track_id:    1znyu24x
     claimed_stem: acappella
     ref_source:  demucs
-    set_start_s: 942.472
-    set_end_s:   956.886
+    set_start_s: 961.929
+    set_end_s:   976.343
     ref_start_s: 46.1818
     ref_end_s:   63.6834
     tempo_ratio: 1.2142
@@ -696,39 +696,39 @@ tracks:
     track_id:    6xdz8mf
     claimed_stem: acappella
     ref_source:  online_candidate
-    set_start_s: 971.534
-    set_end_s:   986.549
+    set_start_s: 990.991
+    set_end_s:   1006.01
     ref_start_s: 18.9124
     ref_end_s:   26.6414
     tempo_ratio: 0.514761
     is_loop:     true
     ref_segments:
-      - mix_start_s: 971.534
+      - mix_start_s: 990.991
         ref_start_s: 18.9124
         ref_end_s:   26.6414
-      - mix_start_s: 979.034
+      - mix_start_s: 998.491
         ref_start_s: 18.8976
         ref_end_s:   26.6414
   - track:       "NGHTMRE & Carmada - Embrace"
     slot_label:  "042"
     track_id:    x730hz5
-    set_start_s: 984.662
-    set_end_s:   1053.62
+    set_start_s: 1004.12
+    set_end_s:   1078.25
     ref_start_s: 60.5622
     ref_end_s:   354.551
-    tempo_ratio: 4.26328
+    tempo_ratio: 3.96618
     is_loop:     true
     ref_segments:
-      - mix_start_s: 984.662
+      - mix_start_s: 1004.12
         ref_start_s: 60.5622
         ref_end_s:   85.8956
-      - mix_start_s: 1002.48
+      - mix_start_s: 1028.47
         ref_start_s: 85.8998
         ref_end_s:   106.673
-      - mix_start_s: 1021.57
+      - mix_start_s: 1049.24
         ref_start_s: 85.34
         ref_end_s:   106.662
-      - mix_start_s: 1042.89
+      - mix_start_s: 1070.56
         ref_start_s: 346.885
         ref_end_s:   354.551
   - track:       "Ludacris Get Back Acapella"
@@ -736,25 +736,25 @@ tracks:
     track_id:    2km1b5p5
     claimed_stem: acappella
     ref_source:  online_candidate
-    set_start_s: 1002.5
-    set_end_s:   1042.95
+    set_start_s: 1028.5
+    set_end_s:   1070.63
     ref_start_s: 10.2942
     ref_end_s:   54.3781
-    tempo_ratio: 1.08975
+    tempo_ratio: 1.04651
   - track:       "Jonas Aden - Feel My Soul"
     slot_label:  "044"
     track_id:    2hgr7xjx
-    set_start_s: 1042.89
-    set_end_s:   1118.62
+    set_start_s: 1070.56
+    set_end_s:   1138.39
     ref_start_s: 70.2548
     ref_end_s:   146.134
-    tempo_ratio: 1.00209
+    tempo_ratio: 1.11889
     is_loop:     true
     ref_segments:
-      - mix_start_s: 1042.89
+      - mix_start_s: 1070.56
         ref_start_s: 70.2548
         ref_end_s:   73.5435
-      - mix_start_s: 1047.5
+      - mix_start_s: 1073.88
         ref_start_s: 81.6239
         ref_end_s:   146.134
   - track:       "Acapella - No Problem by Chance the Rapper"
@@ -762,19 +762,19 @@ tracks:
     track_id:    1t3m1kmf
     claimed_stem: acappella
     ref_source:  online_candidate
-    set_start_s: 1056.12
-    set_end_s:   1076.22
+    set_start_s: 1080.03
+    set_end_s:   1095.98
     ref_start_s: 8.11719
     ref_end_s:   23.0074
-    tempo_ratio: 0.740853
+    tempo_ratio: 0.933333
     pitch_shift_semi: -1
   - track:       "The Killers - Somebody told me (Acapella - Vocals only)"
     slot_label:  "046"
     track_id:    1zggjhbf
     claimed_stem: acappella
     ref_source:  online_candidate
-    set_start_s: 1075.5
-    set_end_s:   1085.34
+    set_start_s: 1095.27
+    set_end_s:   1105.11
     ref_start_s: 46.2111
     ref_end_s:   55.1919
     tempo_ratio: 0.913043
@@ -783,8 +783,8 @@ tracks:
     track_id:    2uq9800f
     claimed_stem: acappella
     ref_source:  demucs
-    set_start_s: 1099.59
-    set_end_s:   1115.27
+    set_start_s: 1119.35
+    set_end_s:   1135.03
     ref_start_s: 178.375
     ref_end_s:   194.836
     tempo_ratio: 1.05
@@ -794,18 +794,18 @@ tracks:
     track_id:    100hm0dp
     claimed_stem: instrumental
     ref_source:  online_candidate
-    set_start_s: 1112.97
-    set_end_s:   1198.89
+    set_start_s: 1132.73
+    set_end_s:   1218.66
     ref_start_s: 28.5696
     ref_end_s:   106.877
     tempo_ratio: 0.91137
     pitch_shift_semi: 1
     is_loop:     true
     ref_segments:
-      - mix_start_s: 1112.97
+      - mix_start_s: 1132.73
         ref_start_s: 28.5696
         ref_end_s:   43.9602
-      - mix_start_s: 1128.36
+      - mix_start_s: 1148.12
         ref_start_s: 36.3449
         ref_end_s:   106.877
   - track:       "The Killers - When You Were Young (Acapella - Vocals only)"
@@ -813,18 +813,18 @@ tracks:
     track_id:    1q8nc02p
     claimed_stem: acappella
     ref_source:  online_candidate
-    set_start_s: 1121.78
-    set_end_s:   1159.85
+    set_start_s: 1141.55
+    set_end_s:   1179.61
     ref_start_s: 0
     ref_end_s:   66.261
     tempo_ratio: 1.74065
     pitch_shift_semi: -1
     is_loop:     true
     ref_segments:
-      - mix_start_s: 1121.78
+      - mix_start_s: 1141.55
         ref_start_s: 0
         ref_end_s:   28.5302
-      - mix_start_s: 1151.22
+      - mix_start_s: 1170.98
         ref_start_s: 57.8956
         ref_end_s:   66.261
   - track:       "Usher - DJ Got Us Fallin' In Love (Acappella)"
@@ -832,42 +832,42 @@ tracks:
     track_id:    ygllqp
     claimed_stem: acappella
     ref_source:  demucs
-    set_start_s: 1174.61
-    set_end_s:   1189.79
+    set_start_s: 1194.38
+    set_end_s:   1209.56
     ref_start_s: 38.76
     ref_end_s:   54.6975
     tempo_ratio: 1.05
   - track:       "RetroVision - Waves"
     slot_label:  "052"
     track_id:    2ct10nbx
-    set_start_s: 1190.29
-    set_end_s:   1270.29
+    set_start_s: 1210.06
+    set_end_s:   1290.06
     ref_start_s: 91.4476
     ref_end_s:   76.1947
     is_loop:     true
     ref_segments:
-      - mix_start_s: 1190.29
+      - mix_start_s: 1210.06
         ref_start_s: 91.4476
         ref_end_s:   126.658
-      - mix_start_s: 1225.5
+      - mix_start_s: 1245.27
         ref_start_s: 31.4058
         ref_end_s:   76.1947
   - track:       "The Chainsmokers - Honest (Acappella)"
     slot_label:  "053"
     claimed_stem: acappella
     ref_source:  demucs
-    set_start_s: 1191.34
-    set_end_s:   1242.71
+    set_start_s: 1211.1
+    set_end_s:   1262.47
     ref_start_s: 21
     ref_end_s:   138.45
     tempo_ratio: 3.86894
     pitch_shift_semi: 1
     is_loop:     true
     ref_segments:
-      - mix_start_s: 1191.34
+      - mix_start_s: 1211.1
         ref_start_s: 21
         ref_end_s:   44.7715
-      - mix_start_s: 1231.28
+      - mix_start_s: 1251.04
         ref_start_s: 124.05
         ref_end_s:   138.45
   - track:       "Sam Hunt - House Party (Acapella)"
@@ -875,21 +875,21 @@ tracks:
     track_id:    26n3brqp
     claimed_stem: acappella
     ref_source:  online_candidate
-    set_start_s: 1209.49
-    set_end_s:   1240.03
+    set_start_s: 1229.26
+    set_end_s:   1259.79
     ref_start_s: 41.3086
     ref_end_s:   69.0014
     tempo_ratio: 0.906897
     pitch_shift_semi: 1
     is_loop:     true
     ref_segments:
-      - mix_start_s: 1209.49
+      - mix_start_s: 1229.26
         ref_start_s: 41.3086
         ref_end_s:   59.7858
-      - mix_start_s: 1224.79
+      - mix_start_s: 1244.56
         ref_start_s: 59.7858
         ref_end_s:   69.0014
-      - mix_start_s: 1232.41
+      - mix_start_s: 1252.17
         ref_start_s: 59.7858
         ref_end_s:   69.0014
   - track:       "Kesha - Die Young (Studio Acapella) + download link"
@@ -897,25 +897,25 @@ tracks:
     track_id:    nrmh6yp
     claimed_stem: acappella
     ref_source:  online_candidate
-    set_start_s: 1254.8
-    set_end_s:   1272.17
+    set_start_s: 1274.56
+    set_end_s:   1291.94
     ref_start_s: 6.4375
     ref_end_s:   23.5405
     tempo_ratio: 0.984375
   - track:       "ASTRVL - Elevate"
     slot_label:  "056"
     track_id:    14pm0srf
-    set_start_s: 1271.31
-    set_end_s:   1369.35
+    set_start_s: 1291.07
+    set_end_s:   1388.81
     ref_start_s: 150.022
     ref_end_s:   262.727
-    tempo_ratio: 1.14961
+    tempo_ratio: 1.15319
     is_loop:     true
     ref_segments:
-      - mix_start_s: 1271.31
+      - mix_start_s: 1291.07
         ref_start_s: 150.022
         ref_end_s:   240.056
-      - mix_start_s: 1361.68
+      - mix_start_s: 1381.14
         ref_start_s: 255.06
         ref_end_s:   262.727
   - track:       "The Neighbourhood - Sweater Weather (Official Studio Acapella)"
@@ -923,17 +923,17 @@ tracks:
     track_id:    244dn6tx
     claimed_stem: acappella
     ref_source:  online_candidate
-    set_start_s: 1276.24
-    set_end_s:   1324.06
+    set_start_s: 1295.96
+    set_end_s:   1343.51
     ref_start_s: 0.00126141
     ref_end_s:   64.6208
-    tempo_ratio: 1.34657
+    tempo_ratio: 1.3539
     is_loop:     true
     ref_segments:
-      - mix_start_s: 1276.24
+      - mix_start_s: 1295.96
         ref_start_s: 0.00126141
         ref_end_s:   32.6972
-      - mix_start_s: 1307.95
+      - mix_start_s: 1327.4
         ref_start_s: 47.9651
         ref_end_s:   64.6208
   - track:       "Matoma - Running Out"
@@ -941,8 +941,8 @@ tracks:
     track_id:    2m5knd0f
     claimed_stem: acappella
     ref_source:  demucs
-    set_start_s: 1324.56
-    set_end_s:   1340.97
+    set_start_s: 1344.02
+    set_end_s:   1360.43
     ref_start_s: 41.0526
     ref_end_s:   63.1466
     tempo_ratio: 1.34668
@@ -951,33 +951,33 @@ tracks:
     track_id:    2lf3hxvf
     claimed_stem: acappella
     ref_source:  online_candidate
-    set_start_s: 1353.99
-    set_end_s:   1369.76
+    set_start_s: 1373.44
+    set_end_s:   1389.23
     ref_start_s: 41.9792
     ref_end_s:   59.3724
-    tempo_ratio: 1.10365
+    tempo_ratio: 1.10287
     is_loop:     true
     ref_segments:
-      - mix_start_s: 1353.99
+      - mix_start_s: 1373.44
         ref_start_s: 41.9792
         ref_end_s:   53.2924
-      - mix_start_s: 1366.73
+      - mix_start_s: 1386.18
         ref_start_s: 56.677
         ref_end_s:   59.3724
   - track:       "RetroVision - Here We Go"
     slot_label:  "060"
     track_id:    prgr9tp
-    set_start_s: 1369.13
-    set_end_s:   1437.85
+    set_start_s: 1388.59
+    set_end_s:   1456.91
     ref_start_s: 1.42857
     ref_end_s:   85
-    tempo_ratio: 1.21607
+    tempo_ratio: 1.22317
     is_loop:     true
     ref_segments:
-      - mix_start_s: 1369.13
+      - mix_start_s: 1388.59
         ref_start_s: 1.42857
         ref_end_s:   65.5831
-      - mix_start_s: 1432.97
+      - mix_start_s: 1452.74
         ref_start_s: 80.8305
         ref_end_s:   85
   - track:       "Mike Posner - Cooler Than Me (Studio Acapella)"
@@ -985,41 +985,41 @@ tracks:
     track_id:    62f04m5
     claimed_stem: acappella
     ref_source:  online_candidate
-    set_start_s: 1372.04
-    set_end_s:   1402.57
+    set_start_s: 1391.54
+    set_end_s:   1422.34
     ref_start_s: -5.11355e-09
     ref_end_s:   29.8499
-    tempo_ratio: 0.977533
+    tempo_ratio: 0.969231
   - track:       "Major Lazer - Be Together (Acappella)"
     slot_label:  "062"
     track_id:    1gv9w2px
     claimed_stem: acappella
     ref_source:  demucs
-    set_start_s: 1418.88
-    set_end_s:   1433.66
+    set_start_s: 1438.65
+    set_end_s:   1453.41
     ref_start_s: 60.75
     ref_end_s:   84
-    tempo_ratio: 1.57343
+    tempo_ratio: 1.575
     pitch_shift_semi: 1
   - track:       "mix"
-    set_start_s: 1433.57
+    set_start_s: 1453.33
     set_end_s:   1555.62
     ref_start_s: 2109.06
     ref_end_s:   2200.72
-    tempo_ratio: 0.751021
+    tempo_ratio: 0.896152
   - track:       "Passion Pit - Sleepyhead (Remix)"
     slot_label:  "066"
     track_id:    22gqmxm5
     claimed_stem: instrumental
     ref_source:  demucs
-    set_start_s: 1552.32
+    set_start_s: 1552.48
     set_end_s:   1599.15
     ref_start_s: -5.11091e-08
     ref_end_s:   56.2703
-    tempo_ratio: 1.20163
+    tempo_ratio: 1.20569
     is_loop:     true
     ref_segments:
-      - mix_start_s: 1552.32
+      - mix_start_s: 1552.48
         ref_start_s: -5.11091e-08
         ref_end_s:   28.035
       - mix_start_s: 1580.32
@@ -1652,35 +1652,6 @@ tracks:
     ref_start_s: 54.4263
     ref_end_s:   99.4263
     tempo_ratio: 0.995392
-  - track:       "Manse - All Around"
-    slot_label:  "121"
-    track_id:    1q9r2r8x
-    claimed_stem: instrumental
-    ref_source:  demucs
-    set_start_s: 2508.97
-    set_end_s:   2848.34
-    ref_start_s: 14.9794
-    ref_end_s:   176.263
-    tempo_ratio: 1.86923
-    is_loop:     true
-    ref_segments:
-      - mix_start_s: 2793.78
-        ref_start_s: 14.9794
-        ref_end_s:   144.539
-      - mix_start_s: 2508.97
-        ref_start_s: 144.539
-        ref_end_s:   176.263
-  - track:       "The Chainsmokers - KANYE ft. SirenXX (Acapella)"
-    slot_label:  "124"
-    track_id:    13m0ltjp
-    claimed_stem: acappella
-    ref_source:  online_candidate
-    set_start_s: 2519.88
-    set_end_s:   2537.32
-    ref_start_s: 35.5225
-    ref_end_s:   52.9688
-    tempo_ratio: 1
-    pitch_shift_semi: -1
   - track:       "Galantis - You"
     slot_label:  "112"
     track_id:    27w2d10f
@@ -1717,42 +1688,6 @@ tracks:
       - mix_start_s: 2565.25
         ref_start_s: 21.7363
         ref_end_s:   47.9277
-  - track:       "Illenium & Gryffin - Feel Good ft. Daya (Instrumental)"
-    slot_label:  "125"
-    track_id:    1xtcwkpp
-    claimed_stem: instrumental
-    ref_source:  online_candidate
-    set_start_s: 2537.09
-    set_end_s:   2635.52
-    ref_start_s: 14.2052
-    ref_end_s:   175.075
-    tempo_ratio: 1.63423
-    is_loop:     true
-    ref_segments:
-      - mix_start_s: 2537.09
-        ref_start_s: 14.2052
-        ref_end_s:   76.4878
-      - mix_start_s: 2604.24
-        ref_start_s: 146.053
-        ref_end_s:   175.075
-  - track:       "Alesso & One Republic  If I Lose Myself Tonight  Studio Acapella"
-    slot_label:  "126"
-    track_id:    1dx4nn2f
-    claimed_stem: acappella
-    ref_source:  online_candidate
-    set_start_s: 2542.71
-    set_end_s:   2576.46
-    ref_start_s: 26.9048
-    ref_end_s:   157.288
-    tempo_ratio: 3.86321
-    is_loop:     true
-    ref_segments:
-      - mix_start_s: 2542.71
-        ref_start_s: 26.9048
-        ref_end_s:   42.3276
-      - mix_start_s: 2559.53
-        ref_start_s: 141.736
-        ref_end_s:   157.288
   - track:       "Selena Gomez - Fetish (Official Acapella)"
     slot_label:  "109"
     track_id:    nuw31u5
@@ -1763,15 +1698,6 @@ tracks:
     ref_start_s: 33.726
     ref_end_s:   63.9699
     tempo_ratio: 1.04065
-    pitch_shift_semi: -1
-  - track:       "Daniel Powter - Bad Day (Acappella)"
-    slot_label:  "127"
-    track_id:    dkg1c995
-    set_start_s: 2572.54
-    set_end_s:   2602.65
-    ref_start_s: 54.1071
-    ref_end_s:   81.6429
-    tempo_ratio: 0.914286
     pitch_shift_semi: -1
   - track:       "Calvin Harris - Sweet Nothing (Remix)"
     slot_label:  "111"
@@ -1790,48 +1716,12 @@ tracks:
     ref_start_s: 53.1
     ref_end_s:   87.5147
     tempo_ratio: 1.16364
-  - track:       "Audien - Something Better"
-    slot_label:  "128"
-    track_id:    1q89rul5
-    claimed_stem: acappella
-    ref_source:  demucs
-    set_start_s: 2618.88
-    set_end_s:   2638.1
-    ref_start_s: 53.426
-    ref_end_s:   72.9498
-    tempo_ratio: 1.01587
-  - track:       "Curbi X Mesto - BRUH"
-    slot_label:  "129"
-    track_id:    nu09jz5
-    set_start_s: 2633.18
-    set_end_s:   2703.96
-    ref_start_s: 27.0932
-    ref_end_s:   176.624
-    tempo_ratio: 2.11258
-    is_loop:     true
-    ref_segments:
-      - mix_start_s: 2633.18
-        ref_start_s: 27.0932
-        ref_end_s:   51.1166
-      - mix_start_s: 2657.2
-        ref_start_s: 129.867
-        ref_end_s:   176.624
   - track:       "mix_instrumental"
     set_start_s: 2636.46
     set_end_s:   2688.84
     ref_start_s: 3800.14
     ref_end_s:   3848.72
     tempo_ratio: 0.927536
-  - track:       "Linkin Park - Heavy (Vocals Only - Acapella)"
-    slot_label:  "130"
-    track_id:    257v8xqx
-    claimed_stem: acappella
-    ref_source:  online_candidate
-    set_start_s: 2643.02
-    set_end_s:   2684.27
-    ref_start_s: 15.525
-    ref_end_s:   50.725
-    tempo_ratio: 0.853333
   - track:       "The Killers - Spaceman"
     slot_label:  "113"
     track_id:    1b52k3xx
@@ -1868,22 +1758,6 @@ tracks:
       - mix_start_s: 2686.18
         ref_start_s: 113.469
         ref_end_s:   117
-  - track:       "Tiësto & KSHMR - Secrets (AltVersion)"
-    slot_label:  "131"
-    track_id:    1ynndn1x
-    set_start_s: 2673.96
-    set_end_s:   2718.73
-    ref_start_s: 65.6753
-    ref_end_s:   202.58
-    tempo_ratio: 3.05826
-    is_loop:     true
-    ref_segments:
-      - mix_start_s: 2673.96
-        ref_start_s: 65.6753
-        ref_end_s:   106.747
-      - mix_start_s: 2714.39
-        ref_start_s: 198.175
-        ref_end_s:   202.58
   - track:       "Jordi Rivera & Sonny Bass - Bubblegum"
     slot_label:  "115"
     track_id:    z1vw4vf
@@ -1902,43 +1776,6 @@ tracks:
     ref_start_s: 61.712
     ref_end_s:   81.2772
     tempo_ratio: 1.3913
-  - track:       "Bassjackers & Brooks - Joyride"
-    slot_label:  "135"
-    track_id:    fclk03p
-    set_start_s: 2712.53
-    set_end_s:   2823.96
-    ref_start_s: 1.4126
-    ref_end_s:   127.847
-    tempo_ratio: 1.13461
-    is_loop:     true
-    ref_segments:
-      - mix_start_s: 2712.53
-        ref_start_s: 1.4126
-        ref_end_s:   87.0657
-      - mix_start_s: 2798.18
-        ref_start_s: 102.066
-        ref_end_s:   127.847
-  - track:       "Heiress of Valentina (Alesso Radio Edit Instrumental)"
-    slot_label:  "132"
-    track_id:    94tc2y5
-    claimed_stem: instrumental
-    ref_source:  online_candidate
-    set_start_s: 2714.39
-    set_end_s:   2786.15
-    ref_start_s: 123.31
-    ref_end_s:   187.566
-    tempo_ratio: 0.895478
-    is_loop:     true
-    ref_segments:
-      - mix_start_s: 2714.39
-        ref_start_s: 123.31
-        ref_end_s:   135.029
-      - mix_start_s: 2726.11
-        ref_start_s: 135.029
-        ref_end_s:   142.529
-      - mix_start_s: 2733.61
-        ref_start_s: 135.029
-        ref_end_s:   187.566
   - track:       "Bingo Players - Mode (Remix)"
     slot_label:  "117"
     track_id:    1lm1yrff
@@ -1958,24 +1795,6 @@ tracks:
     ref_end_s:   53.4659
     tempo_ratio: 0.969697
     pitch_shift_semi: 1
-  - track:       "Oasis - Champagne Supernova(vocals only isolated)"
-    slot_label:  "133"
-    track_id:    lpmk45
-    claimed_stem: acappella
-    ref_source:  online_candidate
-    set_start_s: 2724
-    set_end_s:   2763.96
-    ref_start_s: 34.3481
-    ref_end_s:   93.9445
-    tempo_ratio: 1.49191
-    is_loop:     true
-    ref_segments:
-      - mix_start_s: 2724
-        ref_start_s: 34.3481
-        ref_end_s:   46.964
-      - mix_start_s: 2738.9
-        ref_start_s: 72.6987
-        ref_end_s:   93.9445
   - track:       "Ylvis - The Fox (What Does the Fox Say) (Studio Acapella) + DL Link"
     slot_label:  "119"
     track_id:    w2zgk1p
@@ -1986,30 +1805,12 @@ tracks:
     ref_start_s: 23.4668
     ref_end_s:   37.597
     tempo_ratio: 1
-  - track:       "Martin Jensen - Solo Dance (Acappella)"
-    slot_label:  "134"
-    track_id:    2p248zwf
-    claimed_stem: acappella
-    ref_source:  demucs
-    set_start_s: 2755.07
-    set_end_s:   2786.28
-    ref_start_s: 34.3263
-    ref_end_s:   52.3508
-    tempo_ratio: 0.564695
-    is_loop:     true
-    ref_segments:
-      - mix_start_s: 2755.07
-        ref_start_s: 34.3263
-        ref_end_s:   51.829
-      - mix_start_s: 2770.09
-        ref_start_s: 34.3263
-        ref_end_s:   52.3508
   - track:       "Calvin Harris Slide (Voclr studio acapella)"
     slot_label:  "120"
     claimed_stem: acappella
     ref_source:  online_candidate
     set_start_s: 2778.02
-    set_end_s:   3234.09
+    set_end_s:   3616.85
     ref_start_s: 54.3344
     ref_end_s:   34.4079
     is_loop:     true
@@ -2017,12 +1818,30 @@ tracks:
       - mix_start_s: 2778.02
         ref_start_s: 54.3344
         ref_end_s:   72.2191
-      - mix_start_s: 3154.09
+      - mix_start_s: 3523.52
         ref_start_s: 18.4255
         ref_end_s:   34.4579
-      - mix_start_s: 3217.46
+      - mix_start_s: 3600.23
         ref_start_s: 18.4255
         ref_end_s:   34.4079
+  - track:       "Manse - All Around"
+    slot_label:  "121"
+    track_id:    1q9r2r8x
+    claimed_stem: instrumental
+    ref_source:  demucs
+    set_start_s: 2793.78
+    set_end_s:   2879.8
+    ref_start_s: 14.9794
+    ref_end_s:   176.263
+    tempo_ratio: 1.87504
+    is_loop:     true
+    ref_segments:
+      - mix_start_s: 2793.78
+        ref_start_s: 14.9794
+        ref_end_s:   67.5087
+      - mix_start_s: 2846.31
+        ref_start_s: 142.509
+        ref_end_s:   176.263
   - track:       "No Doubt - Hella Good (Studio Acapella) + DL Link"
     slot_label:  "122"
     track_id:    thz5xjp
@@ -2042,36 +1861,6 @@ tracks:
       - mix_start_s: 2815.49
         ref_start_s: 34.1576
         ref_end_s:   49.5679
-  - track:       "Lady Gaga - The Cure (Restored Acapella)"
-    slot_label:  "136"
-    track_id:    z47gcpf
-    claimed_stem: acappella
-    ref_source:  online_candidate
-    set_start_s: 2801.29
-    set_end_s:   2816.58
-    ref_start_s: 48.8575
-    ref_end_s:   68.4325
-    tempo_ratio: 1.28
-    pitch_shift_semi: 1
-  - track:       "Swedish House Mafia - Save The World"
-    slot_label:  "137"
-    claimed_stem: instrumental
-    ref_source:  online_candidate
-    set_start_s: 2815.52
-    set_end_s:   2847.27
-    ref_start_s: 98.6442
-    ref_end_s:   130.637
-    tempo_ratio: 1.00787
-  - track:       "Katy Perry - I Kissed A Girl (Studio Acapella)"
-    slot_label:  "138"
-    track_id:    1q93dn65
-    claimed_stem: acappella
-    ref_source:  online_candidate
-    set_start_s: 2817.63
-    set_end_s:   2848.34
-    ref_start_s: 33.6418
-    ref_end_s:   63.8726
-    tempo_ratio: 0.984615
   - track:       "Lost Kings - You ft. Katelyn Tarver (Studio Acapella)"
     slot_label:  "123"
     track_id:    1gufy38f
@@ -2082,53 +1871,264 @@ tracks:
     ref_start_s: 37.4051
     ref_end_s:   53.7494
     tempo_ratio: 1.20755
-  - track:       "Swedish House Mafia - Save The World"
-    slot_label:  "137"
-    set_start_s: 2846.23
-    set_end_s:   2883.81
-    ref_start_s: 82.2047
-    ref_end_s:   213.345
-    tempo_ratio: 3.4893
+  - track:       "The Chainsmokers - KANYE ft. SirenXX (Acapella)"
+    slot_label:  "124"
+    track_id:    13m0ltjp
+    claimed_stem: acappella
+    ref_source:  online_candidate
+    set_start_s: 2859.26
+    set_end_s:   2876.67
+    ref_start_s: 35.5225
+    ref_end_s:   52.9688
+    tempo_ratio: 1.00195
+    pitch_shift_semi: -1
+  - track:       "Illenium & Gryffin - Feel Good ft. Daya (Instrumental)"
+    slot_label:  "125"
+    track_id:    1xtcwkpp
+    claimed_stem: instrumental
+    ref_source:  online_candidate
+    set_start_s: 2876.45
+    set_end_s:   2967.84
+    ref_start_s: 14.2052
+    ref_end_s:   175.075
+    tempo_ratio: 1.76027
     is_loop:     true
     ref_segments:
-      - mix_start_s: 2846.23
+      - mix_start_s: 2876.45
+        ref_start_s: 14.2052
+        ref_end_s:   76.4878
+      - mix_start_s: 2938.74
+        ref_start_s: 146.053
+        ref_end_s:   175.075
+  - track:       "Alesso & One Republic  If I Lose Myself Tonight  Studio Acapella"
+    slot_label:  "126"
+    track_id:    1dx4nn2f
+    claimed_stem: acappella
+    ref_source:  online_candidate
+    set_start_s: 2881.67
+    set_end_s:   2912.98
+    ref_start_s: 26.9048
+    ref_end_s:   157.288
+    tempo_ratio: 4.16502
+    is_loop:     true
+    ref_segments:
+      - mix_start_s: 2881.67
+        ref_start_s: 26.9048
+        ref_end_s:   42.3276
+      - mix_start_s: 2897.27
+        ref_start_s: 141.736
+        ref_end_s:   157.288
+  - track:       "Daniel Powter - Bad Day (Acappella)"
+    slot_label:  "127"
+    track_id:    dkg1c995
+    set_start_s: 2909.33
+    set_end_s:   2937.27
+    ref_start_s: 54.1071
+    ref_end_s:   81.6429
+    tempo_ratio: 0.985714
+    pitch_shift_semi: -1
+  - track:       "Audien - Something Better"
+    slot_label:  "128"
+    track_id:    1q89rul5
+    claimed_stem: acappella
+    ref_source:  demucs
+    set_start_s: 2952.32
+    set_end_s:   2970.42
+    ref_start_s: 53.426
+    ref_end_s:   72.9498
+    tempo_ratio: 1.07879
+  - track:       "Curbi X Mesto - BRUH"
+    slot_label:  "129"
+    track_id:    nu09jz5
+    set_start_s: 2965.58
+    set_end_s:   3036.52
+    ref_start_s: 27.0932
+    ref_end_s:   176.624
+    tempo_ratio: 2.10802
+    is_loop:     true
+    ref_segments:
+      - mix_start_s: 2965.58
+        ref_start_s: 27.0932
+        ref_end_s:   51.1166
+      - mix_start_s: 2989.52
+        ref_start_s: 129.867
+        ref_end_s:   176.624
+  - track:       "Linkin Park - Heavy (Vocals Only - Acapella)"
+    slot_label:  "130"
+    track_id:    257v8xqx
+    claimed_stem: acappella
+    ref_source:  online_candidate
+    set_start_s: 2975.34
+    set_end_s:   3016.59
+    ref_start_s: 15.525
+    ref_end_s:   50.725
+    tempo_ratio: 0.853333
+  - track:       "Tiësto & KSHMR - Secrets (AltVersion)"
+    slot_label:  "131"
+    track_id:    1ynndn1x
+    set_start_s: 3006.28
+    set_end_s:   3051.52
+    ref_start_s: 65.6753
+    ref_end_s:   202.58
+    tempo_ratio: 3.02632
+    is_loop:     true
+    ref_segments:
+      - mix_start_s: 3006.28
+        ref_start_s: 65.6753
+        ref_end_s:   106.747
+      - mix_start_s: 3047.11
+        ref_start_s: 198.175
+        ref_end_s:   202.58
+  - track:       "Bassjackers & Brooks - Joyride"
+    slot_label:  "135"
+    track_id:    fclk03p
+    set_start_s: 3045.22
+    set_end_s:   3156.81
+    ref_start_s: 1.4126
+    ref_end_s:   127.847
+    tempo_ratio: 1.13301
+    is_loop:     true
+    ref_segments:
+      - mix_start_s: 3045.22
+        ref_start_s: 1.4126
+        ref_end_s:   87.0657
+      - mix_start_s: 3130.97
+        ref_start_s: 102.066
+        ref_end_s:   127.847
+  - track:       "Heiress of Valentina (Alesso Radio Edit Instrumental)"
+    slot_label:  "132"
+    track_id:    94tc2y5
+    claimed_stem: instrumental
+    ref_source:  online_candidate
+    set_start_s: 3047.11
+    set_end_s:   3118.94
+    ref_start_s: 123.31
+    ref_end_s:   187.566
+    tempo_ratio: 0.89462
+    is_loop:     true
+    ref_segments:
+      - mix_start_s: 3047.11
+        ref_start_s: 123.31
+        ref_end_s:   135.029
+      - mix_start_s: 3058.9
+        ref_start_s: 135.029
+        ref_end_s:   142.529
+      - mix_start_s: 3066.4
+        ref_start_s: 135.029
+        ref_end_s:   187.566
+  - track:       "Oasis - Champagne Supernova(vocals only isolated)"
+    slot_label:  "133"
+    track_id:    lpmk45
+    claimed_stem: acappella
+    ref_source:  online_candidate
+    set_start_s: 3056.79
+    set_end_s:   3096.75
+    ref_start_s: 34.3481
+    ref_end_s:   93.9445
+    tempo_ratio: 1.49191
+    is_loop:     true
+    ref_segments:
+      - mix_start_s: 3056.79
+        ref_start_s: 34.3481
+        ref_end_s:   46.964
+      - mix_start_s: 3071.69
+        ref_start_s: 72.6987
+        ref_end_s:   93.9445
+  - track:       "Martin Jensen - Solo Dance (Acappella)"
+    slot_label:  "134"
+    track_id:    2p248zwf
+    claimed_stem: acappella
+    ref_source:  demucs
+    set_start_s: 3087.86
+    set_end_s:   3119.07
+    ref_start_s: 34.3263
+    ref_end_s:   52.3508
+    tempo_ratio: 0.564695
+    is_loop:     true
+    ref_segments:
+      - mix_start_s: 3087.86
+        ref_start_s: 34.3263
+        ref_end_s:   51.829
+      - mix_start_s: 3102.88
+        ref_start_s: 34.3263
+        ref_end_s:   52.3508
+  - track:       "Lady Gaga - The Cure (Restored Acapella)"
+    slot_label:  "136"
+    track_id:    z47gcpf
+    claimed_stem: acappella
+    ref_source:  online_candidate
+    set_start_s: 3134.08
+    set_end_s:   3149.37
+    ref_start_s: 48.8575
+    ref_end_s:   68.4325
+    tempo_ratio: 1.27992
+    pitch_shift_semi: 1
+  - track:       "Swedish House Mafia - Save The World"
+    slot_label:  "137"
+    claimed_stem: instrumental
+    ref_source:  online_candidate
+    set_start_s: 3148.32
+    set_end_s:   3180.3
+    ref_start_s: 98.6442
+    ref_end_s:   130.637
+    tempo_ratio: 1.00023
+  - track:       "Katy Perry - I Kissed A Girl (Studio Acapella)"
+    slot_label:  "138"
+    track_id:    1q93dn65
+    claimed_stem: acappella
+    ref_source:  online_candidate
+    set_start_s: 3150.43
+    set_end_s:   3181.38
+    ref_start_s: 33.6418
+    ref_end_s:   63.8726
+    tempo_ratio: 0.976923
+  - track:       "Swedish House Mafia - Save The World"
+    slot_label:  "137"
+    set_start_s: 3179.25
+    set_end_s:   3219.67
+    ref_start_s: 82.2047
+    ref_end_s:   213.345
+    tempo_ratio: 3.24496
+    is_loop:     true
+    ref_segments:
+      - mix_start_s: 3179.25
         ref_start_s: 82.2047
         ref_end_s:   97.0866
-      - mix_start_s: 2860.99
+      - mix_start_s: 3194.13
         ref_start_s: 189.751
         ref_end_s:   213.345
   - track:       "Porter Robinson & Madeon - Shelter (Rvmor Remix)"
     slot_label:  "140w1"
     track_id:    tlp2853054
-    set_start_s: 2876.33
-    set_end_s:   2943.73
+    set_start_s: 3209.6
+    set_end_s:   3297.27
     ref_start_s: 0
     ref_end_s:   231.6
-    tempo_ratio: 3.43665
+    tempo_ratio: 2.64176
     is_loop:     true
     ref_segments:
-      - mix_start_s: 2876.33
+      - mix_start_s: 3209.6
         ref_start_s: 0
         ref_end_s:   67.9535
-      - mix_start_s: 2925.58
+      - mix_start_s: 3277.3
         ref_start_s: 206.554
         ref_end_s:   231.6
   - track:       "Porter Robinson & Madeon - Shelter (Instrumental)"
     slot_label:  "140"
-    set_start_s: 2877.16
-    set_end_s:   2911.99
+    set_start_s: 3210.5
+    set_end_s:   3258.55
     ref_start_s: -1.42041e-08
     ref_end_s:   172.869
-    tempo_ratio: 4.96288
+    tempo_ratio: 3.59738
     is_loop:     true
     ref_segments:
-      - mix_start_s: 2877.16
+      - mix_start_s: 3210.5
         ref_start_s: -1.42041e-08
         ref_end_s:   9.66862
-      - mix_start_s: 2884.16
+      - mix_start_s: 3220.15
         ref_start_s: 115.269
         ref_end_s:   134.469
-      - mix_start_s: 2898.08
+      - mix_start_s: 3239.35
         ref_start_s: 153.669
         ref_end_s:   172.869
   - track:       "The Chainsmokers  - All We Know Acapella  ft  Phoebe Ryan (STUDIO ACAPELLA)"
@@ -2136,43 +2136,43 @@ tracks:
     track_id:    bkmhtc5
     claimed_stem: acappella
     ref_source:  online_candidate
-    set_start_s: 2883.25
-    set_end_s:   2911.23
+    set_start_s: 3218.9
+    set_end_s:   3257.5
     ref_start_s: 0
     ref_end_s:   42.8529
-    tempo_ratio: 1.5318
+    tempo_ratio: 1.11
   - track:       "New Rules (Acapella)"
     slot_label:  "143"
     track_id:    mxbsn4p
     claimed_stem: acappella
     ref_source:  online_candidate
-    set_start_s: 2922.15
-    set_end_s:   2957.1
+    set_start_s: 3272.58
+    set_end_s:   3311.92
     ref_start_s: 1.5
     ref_end_s:   59.3796
-    tempo_ratio: 1.65821
+    tempo_ratio: 1.47287
     is_loop:     true
     ref_segments:
-      - mix_start_s: 2922.15
+      - mix_start_s: 3272.58
         ref_start_s: 1.5
         ref_end_s:   25.69
-      - mix_start_s: 2942.7
+      - mix_start_s: 3296.15
         ref_start_s: 42.3013
         ref_end_s:   59.3796
   - track:       "Jay Hardway - Golden Pineapple"
     slot_label:  "142"
     track_id:    cj91dsp
-    set_start_s: 2925.9
-    set_end_s:   2989.59
+    set_start_s: 3277.75
+    set_end_s:   3345.68
     ref_start_s: 121.924
     ref_end_s:   190.157
-    tempo_ratio: 1.07141
+    tempo_ratio: 1.00444
     is_loop:     true
     ref_segments:
-      - mix_start_s: 2925.9
+      - mix_start_s: 3277.75
         ref_start_s: 121.924
         ref_end_s:   125.376
-      - mix_start_s: 2929.05
+      - mix_start_s: 3281.2
         ref_start_s: 125.678
         ref_end_s:   190.157
   - track:       "Snakehips - All My Friends (Acappella)"
@@ -2180,61 +2180,61 @@ tracks:
     track_id:    2uq9800f
     claimed_stem: acappella
     ref_source:  demucs
-    set_start_s: 2956.9
-    set_end_s:   2983.32
+    set_start_s: 3311.71
+    set_end_s:   3339.31
     ref_start_s: 60.8302
     ref_end_s:   77.2513
-    tempo_ratio: 0.621692
+    tempo_ratio: 0.594796
     is_loop:     true
     ref_segments:
-      - mix_start_s: 2956.9
+      - mix_start_s: 3311.71
         ref_start_s: 60.8302
         ref_end_s:   81.1246
-      - mix_start_s: 2971.2
+      - mix_start_s: 3327.01
         ref_start_s: 60.9289
         ref_end_s:   77.2513
   - track:       "Don Diablo - Momentum (Rework)"
     slot_label:  "145"
     track_id:    1zpfjwkx
-    set_start_s: 2963.91
-    set_end_s:   3017.52
+    set_start_s: 3319.38
+    set_end_s:   3374.06
     ref_start_s: 57.6147
     ref_end_s:   112.301
-    tempo_ratio: 1.03479
+    tempo_ratio: 1.01448
     is_loop:     true
     ref_segments:
-      - mix_start_s: 2963.91
+      - mix_start_s: 3319.38
         ref_start_s: 57.6147
         ref_end_s:   79.6818
-      - mix_start_s: 2986.18
+      - mix_start_s: 3342.22
         ref_start_s: 80.4621
         ref_end_s:   112.301
   - track:       "Lucas & Steve & Mike Williams x Curbi - Let's Go"
     slot_label:  "146"
     track_id:    2n51zgwf
-    set_start_s: 3016.14
-    set_end_s:   3101.9
+    set_start_s: 3372.66
+    set_end_s:   3459.87
     ref_start_s: 38.1272
     ref_end_s:   124.768
-    tempo_ratio: 1.01028
+    tempo_ratio: 0.993448
     pitch_shift_semi: 1
   - track:       "Shawn Mendes - There's Nothing Holdin' Me Back"
     slot_label:  "147"
     track_id:    23f2h1h5
     claimed_stem: acappella
     ref_source:  online_candidate
-    set_start_s: 3023.02
-    set_end_s:   3057.37
+    set_start_s: 3379.62
+    set_end_s:   3414.06
     ref_start_s: 0
     ref_end_s:   51.3029
-    tempo_ratio: 1.51217
+    tempo_ratio: 1.50804
     pitch_shift_semi: 1
     is_loop:     true
     ref_segments:
-      - mix_start_s: 3023.02
+      - mix_start_s: 3379.62
         ref_start_s: 0
         ref_end_s:   15.9008
-      - mix_start_s: 3038.84
+      - mix_start_s: 3395.44
         ref_start_s: 32.0688
         ref_end_s:   51.3029
   - track:       "Good Time - Owl City ft. Carly Rae Jepsen (Acapella)"
@@ -2242,36 +2242,36 @@ tracks:
     track_id:    42wv4vp
     claimed_stem: acappella
     ref_source:  online_candidate
-    set_start_s: 3054.29
-    set_end_s:   3076.09
+    set_start_s: 3410.94
+    set_end_s:   3433.08
     ref_start_s: 61.1707
     ref_end_s:   83.3136
-    tempo_ratio: 1.01587
+    tempo_ratio: 1
   - track:       "Come On Over Baby (All I Want Is You) (Acapella Version As Made Famous By Christ"
     slot_label:  "148w1"
     track_id:    tlp2853062
     claimed_stem: acappella
     ref_source:  online_candidate
-    set_start_s: 3084.56
-    set_end_s:   3099.09
+    set_start_s: 3441.68
+    set_end_s:   3456.44
     ref_start_s: -4.90329e-08
     ref_end_s:   15.7627
-    tempo_ratio: 1.08475
+    tempo_ratio: 1.0678
   - track:       "The Chainsmokers - Honest (Official Original Instrumental)100%"
     slot_label:  "149"
     claimed_stem: instrumental
     ref_source:  online_candidate
-    set_start_s: 3098.88
-    set_end_s:   3224.91
+    set_start_s: 3456.23
+    set_end_s:   3607.67
     ref_start_s: 0
     ref_end_s:   112.723
-    tempo_ratio: 1.08017
+    tempo_ratio: 0.909701
     is_loop:     true
     ref_segments:
-      - mix_start_s: 3098.88
+      - mix_start_s: 3456.23
         ref_start_s: 0
         ref_end_s:   71.6786
-      - mix_start_s: 3179.42
+      - mix_start_s: 3555.7
         ref_start_s: 61.3929
         ref_end_s:   112.723
   - track:       "Taylor Swift - Mean (Taylor's Version) (Acapella - Vocal Only)"
@@ -2279,48 +2279,48 @@ tracks:
     track_id:    lyu6xx5
     claimed_stem: acappella
     ref_source:  online_candidate
-    set_start_s: 3106.47
-    set_end_s:   3218.04
+    set_start_s: 3465.44
+    set_end_s:   3600.8
     ref_start_s: 8.61542e-08
     ref_end_s:   24.593
-    tempo_ratio: 0.497656
+    tempo_ratio: 0.423028
     pitch_shift_semi: -1
     is_loop:     true
     ref_segments:
-      - mix_start_s: 3106.47
+      - mix_start_s: 3465.44
         ref_start_s: 8.61542e-08
         ref_end_s:   24.593
-      - mix_start_s: 3138.38
+      - mix_start_s: 3504.34
         ref_start_s: 35.7558
         ref_end_s:   57.5145
-      - mix_start_s: 3199.8
+      - mix_start_s: 3580.64
         ref_start_s: 8.61542e-08
         ref_end_s:   24.593
   - track:       "The Chainsmokers - Honest (SAVI Remix)"
     slot_label:  "152"
     track_id:    h80tgnf
-    set_start_s: 3116.67
-    set_end_s:   3192.71
+    set_start_s: 3477.87
+    set_end_s:   3572.07
     ref_start_s: 0.0971514
     ref_end_s:   96.9778
-    tempo_ratio: 1.27403
+    tempo_ratio: 1.02846
   - track:       "Macy Gray - I Try (Acapella)"
     slot_label:  "151"
     track_id:    17pu9hk5
     claimed_stem: acappella
     ref_source:  online_candidate
-    set_start_s: 3121.38
-    set_end_s:   3275.49
+    set_start_s: 3483.62
+    set_end_s:   3658.25
     ref_start_s: 35.852
     ref_end_s:   63.3823
-    tempo_ratio: 0.721537
+    tempo_ratio: 0.657104
     pitch_shift_semi: 1
     is_loop:     true
     ref_segments:
-      - mix_start_s: 3121.38
+      - mix_start_s: 3483.62
         ref_start_s: 35.852
         ref_end_s:   63.0486
-      - mix_start_s: 3254.42
+      - mix_start_s: 3637.17
         ref_start_s: 35.852
         ref_end_s:   63.3823
   - track:       "Justin Bieber - Sorry (Official Studio Acapella)"
@@ -2328,16 +2328,16 @@ tracks:
     track_id:    2fl7wsnx
     claimed_stem: acappella
     ref_source:  online_candidate
-    set_start_s: 3183.26
-    set_end_s:   3207.83
+    set_start_s: 3560.57
+    set_end_s:   3590.36
     ref_start_s: 52.725
     ref_end_s:   82.4924
-    tempo_ratio: 1.21169
+    tempo_ratio: 0.999385
   - track:       "The Chainsmokers - Honest (Virtu Remix)"
     slot_label:  "154"
     track_id:    2vmxu50p
-    set_start_s: 3214.37
-    set_end_s:   3296.74
+    set_start_s: 3597.29
+    set_end_s:   3684.43
     ref_start_s: 140.758
     ref_end_s:   228.066
-    tempo_ratio: 1.05993
+    tempo_ratio: 1.00184

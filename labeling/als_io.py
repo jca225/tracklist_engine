@@ -70,9 +70,16 @@ class MixClipSpan:
     warp: WarpMarkers
 
     def arr_to_set_sec(self, arr: float) -> float:
-        anchor_beat = self.warp.points[0][0] if self.warp.points else 0.0
-        content_beat = (arr - self.arr_start) + anchor_beat
-        return self.warp.beat_to_sec(content_beat)
+        # 1-mix clips are unwarped with markers whose beat 0 == the clip's
+        # LEFT EDGE (first marker sec == loop_start sec) — so the map is
+        # simply beat_to_sec(arr - arr_start). The old version added the
+        # first marker's beat as an anchor: harmless when that beat is 0
+        # (clips 1/3 of the BB12 fast project) but clips 2/4 carry markers
+        # extending BEFORE the clip (anchor beats -41.5 / -724), which
+        # shifted every late-set GT time ~430 s early (found 2026-06-11).
+        # NOTE loop values on unwarped clips are SECONDS, marker beats are
+        # clip-relative — do not mix the domains.
+        return self.warp.beat_to_sec(arr - self.arr_start)
 
 
 @dataclass(frozen=True)
