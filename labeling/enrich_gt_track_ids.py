@@ -41,7 +41,28 @@ from core.result import Err, Ok
 PI_HOST = "pi-storage"
 PI_DB = "/mnt/storage/data/db/music_database.db"
 DEFAULT_YAML = _REPO / "labeling/fixtures/bb12_ground_truth.yaml"
+OVERRIDES_DIR = _REPO / "labeling/identity_overrides"
 SPAN_TOL_S = 0.05
+
+
+def load_identity_overrides(set_id: str) -> dict[str, str]:
+    """label/slot -> track_id, for clips whose audio file carries no song name
+    (generic imports the human dragged in, e.g. instrumental-2 = Mako). From
+    labeling/identity_overrides/<set_id>.yaml. Keyed by GT `label` or `slot_label`."""
+    import yaml
+    path = OVERRIDES_DIR / f"{set_id}.yaml"
+    if not path.is_file():
+        return {}
+    doc = yaml.safe_load(path.read_text()) or {}
+    out: dict[str, str] = {}
+    for o in doc.get("overrides", []):
+        tid = o.get("track_id")
+        if not tid:
+            continue
+        for key in (o.get("label"), o.get("slot_label")):
+            if key:
+                out[str(key)] = tid
+    return out
 
 
 @dataclass(frozen=True)
@@ -170,6 +191,7 @@ def lookup_db_label(
     *,
     require_stem: bool = True,
     min_tokens: int = 2,
+    resolve_ties: bool = False,
 ) -> str | None:
     stem = (claimed_stem or "regular").lower()
     hits: list[tuple[int, SlotRow]] = []
@@ -187,9 +209,18 @@ def lookup_db_label(
     hits.sort(key=lambda x: (-x[0], x[1].display))
     best_score = hits[0][0]
     top = [row for score, row in hits if score == best_score]
-    if len(top) != 1:
+    if len(top) == 1:
+        return top[0].track_id
+    if not resolve_ties:
         return None
-    return top[0].track_id
+    # ties across stem-variants of the SAME song (e.g. Vicetone regular vs
+    # acappella scrape rows) — prefer the GT's stem, then the base/regular
+    # recording (identity; the GT carries the stem separately), deterministic.
+    for pref in (stem, "regular"):
+        same = [r for r in top if r.claimed_stem == pref and r.track_id]
+        if same:
+            return sorted(same, key=lambda r: r.display)[0].track_id
+    return sorted(top, key=lambda r: r.display)[0].track_id
 
 
 def enrich_track(
@@ -198,9 +229,15 @@ def enrich_track(
     clip: ClipRow | None,
     manifest,
     slots: tuple[SlotRow, ...],
+    overrides: dict[str, str] | None = None,
 ) -> EnrichResult:
     if track.track_id:
         return EnrichResult(track=track, track_id=track.track_id, source="kept")
+
+    overrides = overrides or {}
+    ov = overrides.get(track.label) or overrides.get(track.slot_label or "")
+    if ov:
+        return EnrichResult(track=replace(track, track_id=ov), track_id=ov, source="override")
 
     track_id: str | None = None
     source = "unresolved"
@@ -219,11 +256,15 @@ def enrich_track(
             if track_id:
                 source = "db_label"
                 break
-        if track_id is None and track.ref_source in ("online_candidate", "demucs", "phase_cancel"):
+        # relaxed: stem-agnostic name match for ANY ref_source — the aligning
+        # folder renumbers slots (Manse GT-155 vs scrape-002) and renames stems,
+        # so a renumbered/reference row never resolves via slot or stem-required
+        # match. Identity (recording) is the goal; the GT carries the stem.
+        if track_id is None:
             for candidate in (path_label, track.label, label):
                 track_id = lookup_db_label(
                     candidate, track.claimed_stem, slots,
-                    require_stem=False, min_tokens=3,
+                    require_stem=False, min_tokens=2, resolve_ties=True,
                 )
                 if track_id:
                     source = "db_label_relaxed"
@@ -244,11 +285,12 @@ def enrich_gt(
     slots: tuple[SlotRow, ...],
 ) -> tuple[GroundTruthSet, list[EnrichResult]]:
     assoc = associate_clips(gt, clip_rows)
+    overrides = load_identity_overrides(gt.set_id)
     results: list[EnrichResult] = []
     tracks: list[GroundTruthTrack] = []
     for t in gt.tracks:
         clip = assoc.get(_track_key(t))
-        res = enrich_track(t, clip=clip, manifest=manifest, slots=slots)
+        res = enrich_track(t, clip=clip, manifest=manifest, slots=slots, overrides=overrides)
         results.append(res)
         tracks.append(res.track)
     return replace(gt, tracks=tuple(tracks)), results

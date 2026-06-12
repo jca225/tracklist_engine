@@ -1,0 +1,17 @@
+# Manual identity overrides for BB12 (1fsnxchk) — for clips whose audio FILE
+# doesn't encode the song (generic imports the human dragged in), so neither
+# the path nor a name-overlap match can resolve the track_id. Applied by
+# labeling/enrich_gt_track_ids.py BEFORE name-matching. Keyed by the GT row's
+# `label` (display) and/or `slot_label`; `track_id` is the pi-storage recording.
+set_id: 1fsnxchk
+overrides:
+  - label: instrumental-2            # lane "202-instrumental": an imported
+    track_id: lvzr9s5                # Mako - Smoke Filled Room instrumental
+    claimed_stem: instrumental       # (verified on pi-storage), not a placeholder
+    note: Mako - Smoke Filled Room (instrumental), generic imported file
+  - slot_label: "155"                # GT label degenerates to "Manse ft" (1 token,
+    track_id: mtck04x                # un-matchable); scrape slot 002, recording mtck04x
+    note: Manse ft. Alice Berg - Freeze Time (Instrumental Mix)
+  - label: Outside Official Acapella  # candidate file carries no artist -> un-matchable
+    track_id: y10w66f                 # Calvin Harris ft. Ellie Goulding - Outside (Acappella)
+    note: Calvin Harris - Outside (acappella), generic candidate filename
