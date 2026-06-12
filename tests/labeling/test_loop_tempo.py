@@ -39,3 +39,17 @@ def test_loop_tempo_uses_played_segments_not_envelope():
     assert m.is_loop and len(m.ref_segments) == 3
     # played 65.3s of song over 65.4s of mix => ~1.0x, NOT 175.7/65.4 = 2.69
     assert abs(m.tempo_ratio - 1.0) < 0.05, m.tempo_ratio
+
+
+def test_loop_envelope_handles_backward_jump():
+    # Avicii Fade: loop ref 153-157 x3, then jump BACK to ref 39.6-65.4.
+    # ref_end must not be < ref_start (the old last-end/first-start gave -87.8).
+    rows = [
+        _row("/s/avicii/vocals.flac", 0,  79.0,  82.9, 153.2, 157.1),
+        _row("/s/avicii/vocals.flac", 4,  82.9,  86.6, 153.2, 157.0),
+        _row("/s/avicii/vocals.flac", 8,  86.6,  90.3, 153.2, 157.1),
+        _row("/s/avicii/vocals.flac", 30, 111.1, 136.7, 39.6, 65.4),
+    ]
+    m = _detect_loops(rows)[0]
+    assert m.ref_start_s == 39.6 and m.ref_end_s == 157.1   # min/max envelope
+    assert m.ref_end_s - m.ref_start_s > 0                   # span >= 0, the bug

@@ -280,7 +280,6 @@ def _detect_loops(rows: list[ClipRow]) -> list[ClipRow]:
                 mix_start_s=row.set_start_s,
             ))
         first = key_rows[0]
-        last = key_rows[-1]
         set_span = sum(
             max(0.0, row.set_end_s - row.set_start_s) for row in key_rows
         )
@@ -292,11 +291,19 @@ def _detect_loops(rows: list[ClipRow]) -> list[ClipRow]:
         ref_span = sum(
             max(0.0, row.ref_end_s - row.ref_start_s) for row in key_rows
         )
+        # ref envelope = MIN start / MAX end over all segments, not
+        # first-start/last-end: a loop can jump BACKWARD in the song (Avicii
+        # Fade slot 004 loops ref 153-157s x3 then drops back to ref 39-65s),
+        # so last-in-mix.ref_end (65s) < first-in-mix.ref_start (153s) gave a
+        # negative ref span. The segments carry the real (non-monotonic) path.
+        ref_lo = min(row.ref_start_s for row in key_rows)
+        ref_hi = max(row.ref_end_s for row in key_rows)
         out.append(replace(
             first,
             set_start_s=min(row.set_start_s for row in key_rows),
             set_end_s=max(row.set_end_s for row in key_rows),
-            ref_end_s=last.ref_end_s,
+            ref_start_s=ref_lo,
+            ref_end_s=ref_hi,
             tempo_ratio=tempo_ratio(set_span, ref_span),
             is_loop=len(segments) > 1,
             ref_segments=tuple(segments),

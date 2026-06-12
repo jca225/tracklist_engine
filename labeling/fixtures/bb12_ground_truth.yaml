@@ -45,8 +45,8 @@ tracks:
     ref_source:  online_candidate
     set_start_s: 78.9993
     set_end_s:   136.687
-    ref_start_s: 153.248
-    ref_end_s:   65.4282
+    ref_start_s: 39.6076
+    ref_end_s:   157.133
     tempo_ratio: 0.944961
     pitch_shift_semi: 1
     is_loop:     true
@@ -368,7 +368,7 @@ tracks:
     ref_source:  online_candidate
     set_start_s: 514.322
     set_end_s:   560.453
-    ref_start_s: 82.358
+    ref_start_s: 49.108
     ref_end_s:   158.641
     tempo_ratio: 1.04507
     is_loop:     true
@@ -679,7 +679,7 @@ tracks:
     set_start_s: 911.936
     set_end_s:   1011.54
     ref_start_s: 25.4617
-    ref_end_s:   138.548
+    ref_end_s:   138.837
     tempo_ratio: 0.986362
     is_loop:     true
     ref_segments:
@@ -733,7 +733,7 @@ tracks:
     ref_source:  online_candidate
     set_start_s: 990.991
     set_end_s:   1006.01
-    ref_start_s: 18.9124
+    ref_start_s: 18.8976
     ref_end_s:   26.6414
     tempo_ratio: 1.03051
     is_loop:     true
@@ -882,8 +882,8 @@ tracks:
     track_id:    2ct10nbx
     set_start_s: 1210.06
     set_end_s:   1290.06
-    ref_start_s: 91.4476
-    ref_end_s:   76.1947
+    ref_start_s: 31.4058
+    ref_end_s:   126.658
     tempo_ratio: 1
     is_loop:     true
     ref_segments:
@@ -1126,7 +1126,7 @@ tracks:
     set_start_s: 1650.69
     set_end_s:   1704.72
     ref_start_s: -4.49295e-08
-    ref_end_s:   16.3636
+    ref_end_s:   17.3864
     tempo_ratio: 1.27273
     is_loop:     true
     ref_segments:
@@ -1179,8 +1179,8 @@ tracks:
     ref_source:  demucs
     set_start_s: 1733.47
     set_end_s:   1784.52
-    ref_start_s: 88.6118
-    ref_end_s:   57.6463
+    ref_start_s: 29.5349
+    ref_end_s:   118.15
     tempo_ratio: 0.984615
     is_loop:     true
     ref_segments:
@@ -1200,8 +1200,8 @@ tracks:
     ref_source:  online_candidate
     set_start_s: 1739.96
     set_end_s:   1771.39
-    ref_start_s: 58.922
-    ref_end_s:   88.2427
+    ref_start_s: 47.0956
+    ref_end_s:   77.2645
     tempo_ratio: 0.932547
   - track:       "Frozen - Let It Go  Official Studio Acapella  Vocal Only HQ  Idina Menzel"
     slot_label:  "073"
@@ -1614,7 +1614,7 @@ tracks:
     ref_source:  online_candidate
     set_start_s: 2331.83
     set_end_s:   2364.2
-    ref_start_s: 103.451
+    ref_start_s: 15.3109
     ref_end_s:   105.589
     tempo_ratio: 2.84814
     is_loop:     true
@@ -1737,7 +1737,7 @@ tracks:
     set_start_s: 2527.76
     set_end_s:   2660.83
     ref_start_s: 0.194453
-    ref_end_s:   78.9212
+    ref_end_s:   127.532
     tempo_ratio: 0.999844
     is_loop:     true
     ref_segments:
@@ -1902,8 +1902,8 @@ tracks:
     ref_source:  online_candidate
     set_start_s: 2778.02
     set_end_s:   3616.85
-    ref_start_s: 54.3344
-    ref_end_s:   34.4079
+    ref_start_s: 18.4255
+    ref_end_s:   72.2191
     tempo_ratio: 1.04394
     is_loop:     true
     ref_segments:
@@ -2294,7 +2294,7 @@ tracks:
     set_start_s: 3311.71
     set_end_s:   3339.31
     ref_start_s: 60.8302
-    ref_end_s:   77.2513
+    ref_end_s:   81.1246
     tempo_ratio: 1.32632
     is_loop:     true
     ref_segments:
@@ -2398,7 +2398,7 @@ tracks:
     set_start_s: 3465.44
     set_end_s:   3600.8
     ref_start_s: 8.61542e-08
-    ref_end_s:   24.593
+    ref_end_s:   57.5145
     tempo_ratio: 1.22033
     pitch_shift_semi: -1
     is_loop:     true
