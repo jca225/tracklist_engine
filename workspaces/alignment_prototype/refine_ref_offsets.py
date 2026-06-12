@@ -81,15 +81,16 @@ def correlate_window(wf: np.ndarray, rf: np.ndarray) -> tuple[int, float]:
 
 def detect_offset(
     win_f: np.ndarray, ref_f: np.ndarray,
+    stretches: tuple[float, ...] = STRETCHES,
 ) -> tuple[float, float, float]:
-    """(ref_start_s, peak, stretch) — search all stretch factors.
+    """(ref_start_s, peak, stretch) — search the given stretch factors.
 
     stretch = ref seconds per mix second: the mix window is resampled to
     stretch*len before matching, so a hit at stretch s means the DJ played
     the song at 1/s speed."""
     n = win_f.shape[1]
     best = (0.0, 0.0, 1.0)
-    for st in STRETCHES:
+    for st in stretches:
         m = int(round(n * st))
         idx = np.clip((np.arange(m) / st).astype(int), 0, n - 1)
         k, score = correlate_window(win_f[:, idx], ref_f)
@@ -100,14 +101,14 @@ def detect_offset(
 
 def _span_job(args: tuple) -> dict:
     """Worker: load ref audio, chroma, detect. Returns updates for the span."""
-    span, ref_path, win = args
+    span, ref_path, win, stretches = args
     import librosa
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         ref_y, _ = librosa.load(ref_path, sr=SR, mono=True)
     ref_f = chroma(ref_y)
     win_f = np.asarray(win, dtype=np.float32)
-    ref_start, peak, stretch = detect_offset(win_f, ref_f)
+    ref_start, peak, stretch = detect_offset(win_f, ref_f, tuple(stretches))
     return {
         "slot_label": span["slot_label"],
         "ref_start_s": round(ref_start, 3),
@@ -143,6 +144,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--min-peak", type=float, default=0.55,
                    help="below this, keep the decode offset and flag the span")
     p.add_argument("--workers", type=int, default=8)
+    p.add_argument("--grid-stretch", action="store_true",
+                   help="fix stretch from beat grids (instrumental-BPM-anchor "
+                        "heuristic): ratio = ref bar dur / mix bar dur, "
+                        "searched only ±2%% + half/double-time octaves")
     args = p.parse_args(argv)
 
     import librosa
@@ -171,6 +176,16 @@ def main(argv: list[str] | None = None) -> int:
     if "regular" not in mix_chroma:
         sys.exit("mix.m4a missing")
 
+    grids = None
+    if args.grid_stretch:
+        from core.result import Err, Ok
+        from workspaces.alignment_prototype.mert_store import load_bb12_mert
+        match load_bb12_mert(args.set_id):
+            case Err(msg):
+                sys.exit(f"--grid-stretch needs the MERT bundle (beat grids): {msg}")
+            case Ok((_sid, mix_series, ref_series)):
+                grids = (mix_series, ref_series)
+
     jobs, meta = [], []
     for s in spans:
         t = by_tid.get(s["recording_id"])
@@ -185,7 +200,28 @@ def main(argv: list[str] | None = None) -> int:
         win = mc[:, a:a + n]
         if win.shape[1] < n // 2:
             continue
-        jobs.append((s, str(ref), win.tolist()))
+        stretches = STRETCHES
+        if grids is not None and s["recording_id"] in grids[1]:
+            mix_series, ref_series = grids
+            i = int(np.searchsorted(mix_series.start_s, s["set_start_s"]))
+            lo, hi = max(0, i - 2), min(mix_series.n_measures, i + 3)
+            mix_bar = float(np.median(mix_series.end_s[lo:hi] - mix_series.start_s[lo:hi]))
+            rser = ref_series[s["recording_id"]]
+            ref_bar = float(np.median(rser.end_s - rser.start_s))
+            if mix_bar > 0 and ref_bar > 0:
+                e = ref_bar / mix_bar
+                # Fold metrical-level (octave) mismatch between the two
+                # beat_this grids: the SECONDS-stretch is near 1 regardless
+                # of how each side tagged its bar level. No octave
+                # candidates in the search — comparing matched-filter peaks
+                # across 2x-different query lengths is length-biased (the
+                # shorter query always wins; measured BB11 2026-06-11).
+                while e > 1.45:
+                    e *= 0.5
+                while e < 0.7:
+                    e *= 2.0
+                stretches = tuple(e * f for f in (0.96, 0.98, 1.0, 1.02, 1.04))
+        jobs.append((s, str(ref), win.tolist(), stretches))
         meta.append(s)
 
     print(f"detecting ref offsets for {len(jobs)} spans "
@@ -203,7 +239,7 @@ def main(argv: list[str] | None = None) -> int:
         r = results.get(s["slot_label"])
         if r is None:
             continue
-        s["ref_start_decode"] = s["ref_start_s"]
+        s.setdefault("ref_start_decode", s["ref_start_s"])  # keep original provenance on re-runs
         s["ref_peak"] = r["ref_peak"]
         if r["ref_peak"] >= args.min_peak:
             span_len = s["set_end_s"] - s["set_start_s"]
