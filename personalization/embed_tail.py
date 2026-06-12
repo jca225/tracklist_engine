@@ -15,6 +15,7 @@ import argparse
 import pickle
 import sqlite3
 import tempfile
+import time
 from pathlib import Path
 
 import numpy as np
@@ -89,7 +90,13 @@ def main(argv=None) -> int:
     with tempfile.TemporaryDirectory() as tmp:
         tmpd = Path(tmp)
         for i, (tid, url) in enumerate(todo, 1):
-            p = download_track(url, tmpd / str(tid))
+            p = None
+            for attempt in range(3):                       # survive transient WiFi/throttle blips
+                p = download_track(url, tmpd / str(tid))
+                if p is not None:
+                    break
+                time.sleep(2 * (attempt + 1))              # backoff before retry
+            time.sleep(0.4)                                # gentle pacing between tracks
             if p is None:
                 fail += 1; continue
             wf = audio_io.load_mono(p, target_sr=mert_adapter.MERT_SR)
