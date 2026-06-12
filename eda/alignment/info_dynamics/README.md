@@ -97,12 +97,33 @@ its own shuffle (+0.071), so it is weak evidence at best.
 F1≈0.45 (±2 bars, no chance baseline) was an artifact of density, not evidence of
 localization.
 
-**Bottom line.** For MERT on this mix, information dynamics yields a *good
+**Bottom line (v3, full mix + codebook).** Information dynamics yields a *good
 predictive model* (memory helps next-frame prediction) but its *surprise signals
-are not a transition detector* — a plain local-novelty detector (cosine distance
-between adjacent bars) localizes DJ cuts better than any model surprisal, and even
-that is modest. The "expectation and surprise" objective is supported for
-**prediction**, not for **boundary localization**, on this data.
+are not a transition detector* on the full mashup through a 24-token codebook — a
+plain local-novelty detector beats every model surprisal. See **v4** for the
+resolution.
+
+## v4 — continuous + per-stem (`run_grid`, `run_robustness`)
+
+```bash
+# 3×2 grid: {full, acappella, instrumental} × {codebook, continuous}
+venvs/audio/bin/python -m eda.alignment.info_dynamics.run_grid
+# multi-seed shuffle null (hardens the verdict)
+venvs/audio/bin/python -m eda.alignment.info_dynamics.run_robustness
+```
+
+Two changes test whether v3 failed on *representation*, not theory: **continuous**
+models ([continuous.py](continuous.py) — PCA-whitened MERT, Gaussian-NLL surprise,
+no VQ) and running per **Demucs stem of the mix** (`mix_instrumental.flac` /
+`mix_vocals.flac`, same bar grid via `prepare_mix_artifact`).
+
+**Result:** continuous ≫ codebook everywhere, and **instrumental-stem + continuous
+is the one cell whose ±3 s lift (+0.104) clears its multi-seed shuffle null (~4.5σ,
+shuffle max 0.051)**. The full mashup and acappella-alone do not robustly localize.
+So information dynamics *does* detect DJ transitions once it sees a single coherent
+continuous stream (the instrumental anchor) — vindicating the paper and the
+"flatten to a stem" intuition — but the effect is robust-yet-modest (F1@3s ≈ 0.23,
+n = 1 mix). Full write-up: [`../findings.md`](../findings.md) §v4.
 
 ## Caveats
 

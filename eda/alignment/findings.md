@@ -170,3 +170,41 @@ GT density (~1 boundary / 20 s) a ±10 s window tiles the timeline — *random* 
 score ~0.40 and every model's ±10 s lift is ≈0. So v1/v2's "finds ~half the
 section starts" reflects **density, not localization**. MERT + information
 dynamics gives a good *predictive* model but **not** a transition detector here.
+
+---
+
+## v4 — drop the VQ + flatten to one stem (2026-06-11)
+
+Reproduce: `info_dynamics.run_grid` (3×2 grid) + `info_dynamics.run_robustness`
+(multi-seed null). Hypothesis (user): the paper is right; v3 failed because it
+ran info-dynamics on a *polyphonic mashup* through a *24-symbol quantizer*. Two
+fixes: (a) **continuous** models (PCA-whitened MERT, Gaussian-NLL surprise, no
+codebook); (b) run per **Demucs stem of the mix** (`mix_instrumental.flac`,
+`mix_vocals.flac`, same bar grid) so a single coherent stream is modelled.
+
+**±3 s lift over random-peak chance, real vs multi-seed shuffle null:**
+
+| Source | codebook (M1) real / shuf-max | continuous (M2c) real / shuf-max |
+|--------|------------------------------|----------------------------------|
+| full mix | +0.034 / 0.090 ❌ | +0.098 / 0.068 ~ (suggestive) |
+| acappella | +0.062 / 0.088 ❌ | +0.093 / 0.117 ❌ (vocals too sparse) |
+| **instrumental** | +0.083 / 0.081 (marginal) | **+0.104 / 0.051 ✅ (~4.5σ)** |
+
+**Result — the user's hypothesis holds, narrowly:**
+1. **Continuous ≫ codebook** in every source. VQ (K=24) was the main thing
+   crippling v3; dropping it is necessary.
+2. **Instrumental stem + continuous is the one robust win** — real lift +0.104
+   clears the shuffle distribution (mean 0.037, max 0.051 over 10/4 seeds) by a
+   wide margin. The instrumental is also the *most predictable* stream (prequential
+   NLL 2.06 vs 2.26 full) — it is the structural anchor, and a memory model's
+   forecast-shift (`pred_change`, ≈ predictive-information rate) localizes its
+   section starts above chance.
+3. **Full mashup & acappella-alone do not robustly localize** — superposition
+   masks the seams (full), and intermittent vocals give a high-variance null
+   (acappella).
+
+So information dynamics on MERT **does** detect transitions once it sees a single
+continuous stream (the instrumental), vindicating both the paper and the
+"flatten to a stem" intuition. Caveat: effect is **robust but modest** (absolute
+F1@3s ≈ 0.23), n = 1 mix, one bar grid — needs replication across sets before it
+is a detector rather than a characterisation.
