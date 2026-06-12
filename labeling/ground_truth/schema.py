@@ -79,6 +79,13 @@ class GroundTruthTrack:
     audible_start_s: float | None = None
     audible_end_s: float | None = None
     skip_training: bool = False
+    unalignable: bool = False                # human placeholder (mix/mix_instrumental
+                                             # used as the clip): too hard to align OR
+                                             # source absent. A POSITIVE abstain LABEL,
+                                             # not a training mask — the aligner learns to
+                                             # PREDICT difficulty on unseen mixes. Placement
+                                             # loss is masked; the row stays a training example.
+    source_note: str | None = None           # e.g. "Lux Omega — original unavailable"
 
 
 @dataclass(frozen=True)
@@ -157,6 +164,9 @@ def _parse_track(idx: int, t: dict[str, Any], path: Path) -> Result[GroundTruthT
     aud_end_raw = t.get("audible_end_s")
     audible_end_s = float(aud_end_raw) if isinstance(aud_end_raw, (int, float)) else None
     skip_training = bool(t.get("skip_training", False))
+    unalignable = bool(t.get("unalignable", False))
+    sn_raw = t.get("source_note")
+    source_note = str(sn_raw).strip() if sn_raw not in (None, "") else None
     return Ok(GroundTruthTrack(
         label=label,
         track_id=track_id,
@@ -183,6 +193,8 @@ def _parse_track(idx: int, t: dict[str, Any], path: Path) -> Result[GroundTruthT
         audible_start_s=audible_start_s,
         audible_end_s=audible_end_s,
         skip_training=skip_training,
+        unalignable=unalignable,
+        source_note=source_note,
     ))
 
 
@@ -300,6 +312,10 @@ def dump(gt: GroundTruthSet, *, title: str | None = None) -> str:
             out.append(f"    audible_end_s: {_fmt_num(t.audible_end_s)}")
         if t.skip_training:
             out.append("    skip_training: true")
+        if t.unalignable:
+            out.append("    unalignable: true")
+        if t.source_note:
+            out.append(f'    source_note: "{t.source_note.replace(chr(34), chr(39))}"')
         if t.media_links.any():
             out.append("    media_links:")
             for k, v in t.media_links.as_dict().items():
