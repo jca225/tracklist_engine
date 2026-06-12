@@ -63,22 +63,23 @@ N_PERM, N_BOOT, TOL = 1000, 1000, 3.0
 N_DISC, N_CONT = 10, 4  # secondary input-shuffle seeds
 
 
-def _cell(ss, data, lo, cfg, src, rep) -> dict:
+def _cell(ss, data, lo, cfg, src, rep, *, tol: float = TOL) -> dict:
     """Real lift + permutation p-value + bootstrap CI for one model's best signal."""
+    tol_key = f"tol_{int(tol)}s"
     res = evaluate_signalset(ss, data, cfg=cfg, eval_lo_s=lo)
-    name, lift = best_signal_by_lift(res, tolerance_key="tol_3s")
+    name, lift = best_signal_by_lift(res, tolerance_key=tol_key)
     peaks, lo_used = signal_peak_times(ss.signals[name], data, cfg, eval_lo_s=lo)
     gt = data.gt_boundary_s[data.gt_boundary_s >= lo_used]
     perm = circular_shift_null(
         peaks, gt, lo_s=lo_used, hi_s=data.labeled_hi_s,
-        tolerance_s=TOL, n_perm=N_PERM, seed=0,
+        tolerance_s=tol, n_perm=N_PERM, seed=0,
     )
     boot = bootstrap_lift_ci(
         peaks, gt, lo_s=lo_used, hi_s=data.labeled_hi_s,
-        tolerance_s=TOL, n_boot=N_BOOT, seed=0,
+        tolerance_s=tol, n_boot=N_BOOT, seed=0,
     )
     return {
-        "source": src, "rep": rep, "signal": name,
+        "source": src, "rep": rep, "signal": name, "tol_s": tol,
         "lift": float(lift), "real_f1": perm["real_f1"],
         "p_value": perm["p_value"], "z": perm["z"],
         "null_mean": perm["null_mean"], "null_max": perm["null_max"],

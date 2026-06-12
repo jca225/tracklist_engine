@@ -56,6 +56,73 @@ class StudyData:
         )
 
 
+def _load_and_tokenize(
+    artifact_path: Path | str, *, n_tokens: int, seed: int
+) -> tuple[MixMertArtifact, np.ndarray, np.ndarray, np.ndarray]:
+    """Load a mix MERT artifact, repair non-finite bars, fit the shared VQ."""
+    art = load_mix_mert_artifact(Path(artifact_path))
+    # Sanitize any non-finite MERT bars (float16 accumulate overflow, see
+    # findings.md note on bar 36) before clustering.
+    mert = np.asarray(art.mert, dtype=np.float32).copy()
+    bad = ~np.isfinite(mert).all(axis=1)
+    if bad.any():
+        mert[bad] = np.nanmean(mert[~bad], axis=0)
+    centroids, tokens = fit_vq_kmeans(mert, n_tokens, seed=seed)
+    return art, mert, centroids, tokens
+
+
+def _merge_boundaries(starts: np.ndarray, merge_tol_s: float) -> np.ndarray:
+    """Collapse boundaries closer than ``merge_tol_s`` (keep the earlier)."""
+    s = np.sort(np.asarray(starts, dtype=float))
+    if s.size == 0:
+        return s
+    keep = [s[0]]
+    for t in s[1:]:
+        if t - keep[-1] >= merge_tol_s:
+            keep.append(t)
+    return np.asarray(keep, dtype=float)
+
+
+def study_data_from_boundaries(
+    artifact_path: Path | str,
+    boundaries_s: np.ndarray | list[float] | tuple[float, ...],
+    *,
+    labeled_lo_s: float | None = None,
+    labeled_hi_s: float | None = None,
+    n_tokens: int = 24,
+    seed: int = 0,
+    merge_tol_s: float = 0.5,
+) -> StudyData:
+    """Build StudyData from a mix MERT artifact + an *explicit* boundary list.
+
+    Decouples the study from the hand-labelled GT YAML so the same significance
+    test can run against any boundary source — e.g. scraped *tracklist cue times*
+    for sets that have no manual Ableton labelling. ``labeled_lo_s/hi_s`` default
+    to the full bar grid (the tracklist spans the whole mix).
+    """
+    art, mert, centroids, tokens = _load_and_tokenize(
+        artifact_path, n_tokens=n_tokens, seed=seed
+    )
+    starts = _merge_boundaries(np.asarray(boundaries_s, dtype=float), merge_tol_s)
+    bar_start = np.asarray(art.bar_start_s, dtype=np.float64)
+    bar_end = np.asarray(art.bar_end_s, dtype=np.float64)
+    lo = float(bar_start[0]) if labeled_lo_s is None else float(labeled_lo_s)
+    hi = float(bar_end[-1]) if labeled_hi_s is None else float(labeled_hi_s)
+    return StudyData(
+        set_id=art.set_id,
+        artifact=art,
+        mert_clean=mert,
+        tokens=tokens.astype(np.int64),
+        centroids=l2_normalize(centroids.astype(np.float32)),
+        n_tokens=n_tokens,
+        bar_start_s=bar_start,
+        bar_end_s=bar_end,
+        gt_boundary_s=starts,
+        labeled_lo_s=lo,
+        labeled_hi_s=hi,
+    )
+
+
 def load_study_data(
     artifact_path: Path | str,
     gt_path: Path | str,
@@ -64,17 +131,9 @@ def load_study_data(
     seed: int = 0,
     merge_tol_s: float = 0.5,
 ) -> StudyData:
-    art = load_mix_mert_artifact(Path(artifact_path))
-
-    # Sanitize any non-finite MERT bars (float16 accumulate overflow, see
-    # findings.md note on bar 36) before clustering.
-    mert = np.asarray(art.mert, dtype=np.float32).copy()
-    bad = ~np.isfinite(mert).all(axis=1)
-    if bad.any():
-        finite_mean = np.nanmean(mert[~bad], axis=0)
-        mert[bad] = finite_mean
-
-    centroids, tokens = fit_vq_kmeans(mert, n_tokens, seed=seed)
+    art, mert, centroids, tokens = _load_and_tokenize(
+        artifact_path, n_tokens=n_tokens, seed=seed
+    )
 
     gt_res = load_gt(Path(gt_path))
     if not gt_res.is_ok():

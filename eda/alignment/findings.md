@@ -278,3 +278,38 @@ section starts. The unit of replication for a population claim is the **set**, n
 the bar-frame (frames are not exchangeable across mixes), so no permutation count
 upgrades this to "info-dynamics is a transition detector." Replicating across
 ≥3–5 hand-labeled sets — treating *set* as the unit — is the only thing that does.
+
+## v6 — first cross-set replication: BB11 vs its tracklist (2026-06-12)
+
+Reproduce: `info_dynamics.run_bb11`. The first step toward the v5 ceiling — a
+*second* set, **BB11** (`2nvzlh2k`), scored against an **independent** boundary
+source: the 142 scraped 1001tracklists **cue times** (BB11 has no hand-labelled
+Ableton GT). Aligning model surprise to a human-but-independent boundary signal is
+*stronger* evidence than BB12-vs-its-own-hand-labels — the boundaries weren't made
+by us. Only the **full-mix** MERT artifact exists for BB11 today; the stem cells
+need Demucs+MERT on the BB11 mix (GPU) and are pending.
+
+**±3 s and ±10 s localization vs tracklist cues (1000-perm p, FDR q over 4 cells):**
+
+| repr. | tol | F1 | lift [95% CI] | p | q | verdict |
+|-------|-----|----|----|----|----|----|
+| codebook | ±10 s | 0.496 | +0.064 [-0.003, +0.128] | .161 | .161 | ❌ |
+| codebook | ±3 s | 0.319 | +0.156 [+0.093, +0.216] | .001 | .004 | ✅ |
+| continuous | ±10 s | 0.428 | +0.099 [+0.019, +0.173] | .007 | .009 | ✅ |
+| **continuous** | **±3 s** | 0.297 | **+0.164 [+0.092, +0.230]** | .004 | .008 | ✅ |
+
+**Result — the effect replicates.** Full-mix continuous localizes BB11's
+independent tracklist boundaries at q = .008 (±3 s) — lift +0.164, CI excludes 0 —
+matching BB12's full-mix continuous (+0.201). Even the codebook clears at ±3 s.
+Tolerance note: ±10 s is *less* powerful here, not more — GT is dense (~1/24 s) so
+the wide window saturates (random phase hits a boundary most of the time, z drops
+to 1.2 for codebook). **±3 s is the discriminating tolerance**, and the cue times
+turn out precise enough to be hit within 3 s above chance.
+
+**Where this leaves the claim:** two sets now agree that **full-mix continuous
+surprise localizes section starts** above chance — BB12 (hand-labels) and BB11
+(independent tracklist). That is the first genuine cross-set signal. Caveats still
+binding: (1) n = 2, not a population — keep adding sets; (2) BB11's stem cells are
+untested, so the BB12 finding that *no stem is privileged* is not yet checked on
+BB11 (needs the Demucs+MERT artifacts); (3) tracklist cues carry their own (small)
+error, partially absorbed by the ±3 s window.
