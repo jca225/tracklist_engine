@@ -26,7 +26,7 @@ tracks:
     set_end_s:   129.767
     ref_start_s: 30.7515
     ref_end_s:   206.514
-    tempo_ratio: 2.69073
+    tempo_ratio: 1
     is_loop:     true
     ref_segments:
       - mix_start_s: 64.4457
@@ -47,6 +47,7 @@ tracks:
     set_end_s:   136.687
     ref_start_s: 153.248
     ref_end_s:   65.4282
+    tempo_ratio: 0.944961
     pitch_shift_semi: 1
     is_loop:     true
     ref_segments:
@@ -72,7 +73,7 @@ tracks:
     set_end_s:   222.571
     ref_start_s: 59.9414
     ref_end_s:   241.877
-    tempo_ratio: 1.90675
+    tempo_ratio: 0.984375
     is_loop:     true
     ref_segments:
       - mix_start_s: 125.368
@@ -95,7 +96,7 @@ tracks:
     set_end_s:   192.184
     ref_start_s: 0.297207
     ref_end_s:   62.3044
-    tempo_ratio: 1.31034
+    tempo_ratio: 1.01585
     is_loop:     true
     ref_segments:
       - mix_start_s: 131.157
@@ -119,7 +120,7 @@ tracks:
     set_end_s:   247.764
     ref_start_s: 0
     ref_end_s:   16.3322
-    tempo_ratio: 0.42676
+    tempo_ratio: 1.02255
     pitch_shift_semi: 1
     is_loop:     true
     ref_segments:
@@ -150,7 +151,7 @@ tracks:
     set_end_s:   290.889
     ref_start_s: 0.121056
     ref_end_s:   143.383
-    tempo_ratio: 2.09788
+    tempo_ratio: 0.999605
     is_loop:     true
     ref_segments:
       - mix_start_s: 222.6
@@ -168,7 +169,7 @@ tracks:
     set_end_s:   291.482
     ref_start_s: -3.23886e-08
     ref_end_s:   45.4949
-    tempo_ratio: 1.00413
+    tempo_ratio: 0.926746
     pitch_shift_semi: -1
     is_loop:     true
     ref_segments:
@@ -197,7 +198,7 @@ tracks:
     set_end_s:   328.138
     ref_start_s: 45.2354
     ref_end_s:   209.22
-    tempo_ratio: 2.77176
+    tempo_ratio: 0.99699
     is_loop:     true
     ref_segments:
       - mix_start_s: 268.975
@@ -217,7 +218,7 @@ tracks:
     set_end_s:   359.526
     ref_start_s: 0
     ref_end_s:   50.2222
-    tempo_ratio: 1.33719
+    tempo_ratio: 0.956179
     pitch_shift_semi: 1
     is_loop:     true
     ref_segments:
@@ -258,7 +259,7 @@ tracks:
     set_end_s:   475.363
     ref_start_s: 27.2075
     ref_end_s:   185.92
-    tempo_ratio: 1.52403
+    tempo_ratio: 1.01192
     is_loop:     true
     ref_segments:
       - mix_start_s: 371.223
@@ -318,7 +319,7 @@ tracks:
     set_end_s:   512.882
     ref_start_s: 179.913
     ref_end_s:   275.633
-    tempo_ratio: 1.85195
+    tempo_ratio: 0.981226
     is_loop:     true
     ref_segments:
       - mix_start_s: 461.196
@@ -348,7 +349,7 @@ tracks:
     set_end_s:   560.446
     ref_start_s: 30.509
     ref_end_s:   180.004
-    tempo_ratio: 2.45534
+    tempo_ratio: 0.984375
     is_loop:     true
     ref_segments:
       - mix_start_s: 507.626
@@ -369,7 +370,7 @@ tracks:
     set_end_s:   560.453
     ref_start_s: 82.358
     ref_end_s:   158.641
-    tempo_ratio: 1.67616
+    tempo_ratio: 1.04507
     is_loop:     true
     ref_segments:
       - mix_start_s: 514.322
@@ -472,7 +473,7 @@ tracks:
     set_end_s:   759.308
     ref_start_s: 0
     ref_end_s:   203.848
-    tempo_ratio: 2.37483
+    tempo_ratio: 1.00934
     is_loop:     true
     ref_segments:
       - mix_start_s: 673.471
@@ -490,7 +491,7 @@ tracks:
     set_end_s:   710.491
     ref_start_s: 8.75466
     ref_end_s:   44.9674
-    tempo_ratio: 1.4418
+    tempo_ratio: 0.994781
     is_loop:     true
     ref_segments:
       - mix_start_s: 685.244
@@ -527,7 +528,7 @@ tracks:
     set_end_s:   813.001
     ref_start_s: 0
     ref_end_s:   59.0551
-    tempo_ratio: 0.813466
+    tempo_ratio: 0.91759
     is_loop:     true
     ref_segments:
       - mix_start_s: 740.404
@@ -543,7 +544,7 @@ tracks:
     set_end_s:   851.64
     ref_start_s: 94.7832
     ref_end_s:   204.647
-    tempo_ratio: 1.15981
+    tempo_ratio: 0.998921
     is_loop:     true
     ref_segments:
       - mix_start_s: 756.914
@@ -563,7 +564,7 @@ tracks:
     set_end_s:   791.394
     ref_start_s: 9.9569
     ref_end_s:   62.0043
-    tempo_ratio: 1.59271
+    tempo_ratio: 1.08379
     is_loop:     true
     ref_segments:
       - mix_start_s: 758.537
@@ -581,7 +582,7 @@ tracks:
     set_end_s:   806.624
     ref_start_s: 44.8819
     ref_end_s:   52.4631
-    tempo_ratio: 0.497031
+    tempo_ratio: 0.992126
     is_loop:     true
     ref_segments:
       - mix_start_s: 791.371
@@ -609,7 +610,7 @@ tracks:
     set_end_s:   920.814
     ref_start_s: 0.501484
     ref_end_s:   223.239
-    tempo_ratio: 2.57018
+    tempo_ratio: 1.00038
     is_loop:     true
     ref_segments:
       - mix_start_s: 834.171
@@ -627,7 +628,7 @@ tracks:
     set_end_s:   885.835
     ref_start_s: 7.2904
     ref_end_s:   65.6249
-    tempo_ratio: 2.48864
+    tempo_ratio: 1.00309
     is_loop:     true
     ref_segments:
       - mix_start_s: 836.172
@@ -651,7 +652,7 @@ tracks:
     set_end_s:   881.965
     ref_start_s: 5.87206e-08
     ref_end_s:   63.7481
-    tempo_ratio: 1.41826
+    tempo_ratio: 1.05408
     is_loop:     true
     ref_segments:
       - mix_start_s: 836.781
@@ -679,7 +680,7 @@ tracks:
     set_end_s:   1011.54
     ref_start_s: 25.4617
     ref_end_s:   138.548
-    tempo_ratio: 1.01583
+    tempo_ratio: 0.986362
     is_loop:     true
     ref_segments:
       - mix_start_s: 911.936
@@ -706,7 +707,7 @@ tracks:
     set_end_s:   960.164
     ref_start_s: 7.15909
     ref_end_s:   59.6469
-    tempo_ratio: 1.16484
+    tempo_ratio: 1.16561
     is_loop:     true
     ref_segments:
       - mix_start_s: 915.104
@@ -734,7 +735,7 @@ tracks:
     set_end_s:   1006.01
     ref_start_s: 18.9124
     ref_end_s:   26.6414
-    tempo_ratio: 0.514761
+    tempo_ratio: 1.03051
     is_loop:     true
     ref_segments:
       - mix_start_s: 990.991
@@ -750,7 +751,7 @@ tracks:
     set_end_s:   1078.25
     ref_start_s: 60.5622
     ref_end_s:   354.551
-    tempo_ratio: 3.96618
+    tempo_ratio: 1.01309
     is_loop:     true
     ref_segments:
       - mix_start_s: 1004.12
@@ -784,7 +785,7 @@ tracks:
     set_end_s:   1138.39
     ref_start_s: 70.2548
     ref_end_s:   146.134
-    tempo_ratio: 1.11889
+    tempo_ratio: 0.999737
     is_loop:     true
     ref_segments:
       - mix_start_s: 1070.56
@@ -834,7 +835,7 @@ tracks:
     set_end_s:   1218.66
     ref_start_s: 28.5696
     ref_end_s:   106.877
-    tempo_ratio: 0.91137
+    tempo_ratio: 1
     pitch_shift_semi: 1
     is_loop:     true
     ref_segments:
@@ -856,7 +857,7 @@ tracks:
     set_end_s:   1179.61
     ref_start_s: 0
     ref_end_s:   66.261
-    tempo_ratio: 1.74065
+    tempo_ratio: 0.969231
     pitch_shift_semi: -1
     is_loop:     true
     ref_segments:
@@ -883,6 +884,7 @@ tracks:
     set_end_s:   1290.06
     ref_start_s: 91.4476
     ref_end_s:   76.1947
+    tempo_ratio: 1
     is_loop:     true
     ref_segments:
       - mix_start_s: 1210.06
@@ -901,7 +903,7 @@ tracks:
     set_end_s:   1262.47
     ref_start_s: 21
     ref_end_s:   138.45
-    tempo_ratio: 3.86894
+    tempo_ratio: 1.25741
     pitch_shift_semi: 1
     is_loop:     true
     ref_segments:
@@ -920,7 +922,7 @@ tracks:
     set_end_s:   1259.79
     ref_start_s: 41.3086
     ref_end_s:   69.0014
-    tempo_ratio: 0.906897
+    tempo_ratio: 1.20869
     pitch_shift_semi: 1
     is_loop:     true
     ref_segments:
@@ -952,7 +954,7 @@ tracks:
     set_end_s:   1388.81
     ref_start_s: 150.022
     ref_end_s:   262.727
-    tempo_ratio: 1.15319
+    tempo_ratio: 0.999663
     is_loop:     true
     ref_segments:
       - mix_start_s: 1291.07
@@ -970,7 +972,7 @@ tracks:
     set_end_s:   1343.51
     ref_start_s: 0.00126141
     ref_end_s:   64.6208
-    tempo_ratio: 1.3539
+    tempo_ratio: 1.03401
     is_loop:     true
     ref_segments:
       - mix_start_s: 1295.96
@@ -998,7 +1000,7 @@ tracks:
     set_end_s:   1389.23
     ref_start_s: 41.9792
     ref_end_s:   59.3724
-    tempo_ratio: 1.10287
+    tempo_ratio: 0.88826
     is_loop:     true
     ref_segments:
       - mix_start_s: 1373.44
@@ -1014,7 +1016,7 @@ tracks:
     set_end_s:   1456.91
     ref_start_s: 1.42857
     ref_end_s:   85
-    tempo_ratio: 1.22317
+    tempo_ratio: 1
     is_loop:     true
     ref_segments:
       - mix_start_s: 1388.59
@@ -1065,7 +1067,7 @@ tracks:
     set_end_s:   1599.15
     ref_start_s: -5.11091e-08
     ref_end_s:   56.2703
-    tempo_ratio: 1.20569
+    tempo_ratio: 1.00403
     is_loop:     true
     ref_segments:
       - mix_start_s: 1552.48
@@ -1125,7 +1127,7 @@ tracks:
     set_end_s:   1704.72
     ref_start_s: -4.49295e-08
     ref_end_s:   16.3636
-    tempo_ratio: 0.61708
+    tempo_ratio: 1.27273
     is_loop:     true
     ref_segments:
       - mix_start_s: 1650.69
@@ -1153,7 +1155,7 @@ tracks:
     set_end_s:   1733.89
     ref_start_s: 14.4587
     ref_end_s:   109.807
-    tempo_ratio: 3.18041
+    tempo_ratio: 1.08064
     is_loop:     true
     ref_segments:
       - mix_start_s: 1703.9
@@ -1179,6 +1181,7 @@ tracks:
     set_end_s:   1784.52
     ref_start_s: 88.6118
     ref_end_s:   57.6463
+    tempo_ratio: 0.984615
     is_loop:     true
     ref_segments:
       - mix_start_s: 1733.47
@@ -1199,7 +1202,7 @@ tracks:
     set_end_s:   1771.39
     ref_start_s: 58.922
     ref_end_s:   88.2427
-    tempo_ratio: 0.932725
+    tempo_ratio: 0.932547
   - track:       "Frozen - Let It Go  Official Studio Acapella  Vocal Only HQ  Idina Menzel"
     slot_label:  "073"
     track_id:    252ys8cx
@@ -1227,7 +1230,7 @@ tracks:
     set_end_s:   1816.4
     ref_start_s: 60.9395
     ref_end_s:   121.411
-    tempo_ratio: 1.38707
+    tempo_ratio: 1
     is_loop:     true
     ref_segments:
       - mix_start_s: 1770.92
@@ -1248,7 +1251,7 @@ tracks:
     set_end_s:   1914.16
     ref_start_s: 96.9339
     ref_end_s:   210.833
-    tempo_ratio: 1.07221
+    tempo_ratio: 0.999812
     is_loop:     true
     ref_segments:
       - mix_start_s: 1815.42
@@ -1269,7 +1272,7 @@ tracks:
     set_end_s:   1885.77
     ref_start_s: 46.3223
     ref_end_s:   77.1278
-    tempo_ratio: 0.829133
+    tempo_ratio: 0.948148
     pitch_shift_semi: -1
     is_loop:     true
     ref_segments:
@@ -1288,7 +1291,7 @@ tracks:
     set_end_s:   1878.97
     ref_start_s: 43.4258
     ref_end_s:   165.465
-    tempo_ratio: 4.3122
+    tempo_ratio: 1.42766
     pitch_shift_semi: -1
     is_loop:     true
     ref_segments:
@@ -1317,7 +1320,7 @@ tracks:
     set_end_s:   1964.63
     ref_start_s: 0
     ref_end_s:   83.7112
-    tempo_ratio: 1.58533
+    tempo_ratio: 1.00366
     is_loop:     true
     ref_segments:
       - mix_start_s: 1911.82
@@ -1346,7 +1349,7 @@ tracks:
     set_end_s:   1997.25
     ref_start_s: 91.6223
     ref_end_s:   270.038
-    tempo_ratio: 3.45336
+    tempo_ratio: 1.42105
     is_loop:     true
     ref_segments:
       - mix_start_s: 1945.58
@@ -1414,7 +1417,7 @@ tracks:
     set_end_s:   2090.72
     ref_start_s: 73.7164
     ref_end_s:   123.873
-    tempo_ratio: 1.03632
+    tempo_ratio: 1
     is_loop:     true
     ref_segments:
       - mix_start_s: 2040.56
@@ -1432,7 +1435,7 @@ tracks:
     set_end_s:   2141.34
     ref_start_s: 108.526
     ref_end_s:   170.52
-    tempo_ratio: 1.13797
+    tempo_ratio: 1
     is_loop:     true
     ref_segments:
       - mix_start_s: 2086.86
@@ -1469,7 +1472,7 @@ tracks:
     set_end_s:   2176.61
     ref_start_s: 46.1956
     ref_end_s:   110.422
-    tempo_ratio: 1.29146
+    tempo_ratio: 0.985045
     is_loop:     true
     ref_segments:
       - mix_start_s: 2126.87
@@ -1498,7 +1501,7 @@ tracks:
     set_end_s:   2222.24
     ref_start_s: 47.1482
     ref_end_s:   110.933
-    tempo_ratio: 1.30071
+    tempo_ratio: 1.056
     is_loop:     true
     ref_segments:
       - mix_start_s: 2173.19
@@ -1535,7 +1538,7 @@ tracks:
     set_end_s:   2288.52
     ref_start_s: 141.237
     ref_end_s:   352.511
-    tempo_ratio: 3.89061
+    tempo_ratio: 0.990254
     is_loop:     true
     ref_segments:
       - mix_start_s: 2234.21
@@ -1613,7 +1616,7 @@ tracks:
     set_end_s:   2364.2
     ref_start_s: 103.451
     ref_end_s:   105.589
-    tempo_ratio: 0.066078
+    tempo_ratio: 2.84814
     is_loop:     true
     ref_segments:
       - mix_start_s: 2331.83
@@ -1649,7 +1652,7 @@ tracks:
     set_end_s:   2446.53
     ref_start_s: 98.4219
     ref_end_s:   180.095
-    tempo_ratio: 1.54115
+    tempo_ratio: 0.793167
     is_loop:     true
     ref_segments:
       - mix_start_s: 2393.53
@@ -1681,7 +1684,7 @@ tracks:
     set_end_s:   2493.96
     ref_start_s: 7.38161
     ref_end_s:   71.8754
-    tempo_ratio: 1.38043
+    tempo_ratio: 1.03946
     is_loop:     true
     ref_segments:
       - mix_start_s: 2447.24
@@ -1708,7 +1711,7 @@ tracks:
     set_end_s:   2508.45
     ref_start_s: 51.1537
     ref_end_s:   59.6161
-    tempo_ratio: 0.557522
+    tempo_ratio: 1.11504
     pitch_shift_semi: 1
     is_loop:     true
     ref_segments:
@@ -1735,7 +1738,7 @@ tracks:
     set_end_s:   2660.83
     ref_start_s: 0.194453
     ref_end_s:   78.9212
-    tempo_ratio: 0.591594
+    tempo_ratio: 0.999844
     is_loop:     true
     ref_segments:
       - mix_start_s: 2527.76
@@ -1758,7 +1761,7 @@ tracks:
     set_end_s:   2591.44
     ref_start_s: 0.173804
     ref_end_s:   47.9277
-    tempo_ratio: 0.864263
+    tempo_ratio: 1
     is_loop:     true
     ref_segments:
       - mix_start_s: 2536.19
@@ -1815,7 +1818,7 @@ tracks:
     set_end_s:   2673.96
     ref_start_s: 14.7642
     ref_end_s:   210.467
-    tempo_ratio: 6.54902
+    tempo_ratio: 0.842105
     is_loop:     true
     ref_segments:
       - mix_start_s: 2644.08
@@ -1833,7 +1836,7 @@ tracks:
     set_end_s:   2689.49
     ref_start_s: 31
     ref_end_s:   117
-    tempo_ratio: 5.09188
+    tempo_ratio: 1.06667
     is_loop:     true
     ref_segments:
       - mix_start_s: 2672.6
@@ -1901,6 +1904,7 @@ tracks:
     set_end_s:   3616.85
     ref_start_s: 54.3344
     ref_end_s:   34.4079
+    tempo_ratio: 1.04394
     is_loop:     true
     ref_segments:
       - mix_start_s: 2778.02
@@ -1921,7 +1925,7 @@ tracks:
     set_end_s:   2879.8
     ref_start_s: 14.9794
     ref_end_s:   176.263
-    tempo_ratio: 1.87504
+    tempo_ratio: 1.00311
     is_loop:     true
     ref_segments:
       - mix_start_s: 2793.78
@@ -1939,7 +1943,7 @@ tracks:
     set_end_s:   2829.32
     ref_start_s: 34.1576
     ref_end_s:   49.5679
-    tempo_ratio: 0.557207
+    tempo_ratio: 1.11441
     pitch_shift_semi: -1
     is_loop:     true
     ref_segments:
@@ -1999,7 +2003,7 @@ tracks:
     set_end_s:   2912.98
     ref_start_s: 26.9048
     ref_end_s:   157.288
-    tempo_ratio: 4.16502
+    tempo_ratio: 0.98948
     is_loop:     true
     ref_segments:
       - mix_start_s: 2881.67
@@ -2035,7 +2039,7 @@ tracks:
     set_end_s:   3036.52
     ref_start_s: 27.0932
     ref_end_s:   176.624
-    tempo_ratio: 2.10802
+    tempo_ratio: 0.997841
     is_loop:     true
     ref_segments:
       - mix_start_s: 2965.58
@@ -2064,7 +2068,7 @@ tracks:
     set_end_s:   3051.52
     ref_start_s: 65.6753
     ref_end_s:   202.58
-    tempo_ratio: 3.02632
+    tempo_ratio: 1.00526
     is_loop:     true
     ref_segments:
       - mix_start_s: 3006.28
@@ -2082,7 +2086,7 @@ tracks:
     set_end_s:   3156.81
     ref_start_s: 1.4126
     ref_end_s:   127.847
-    tempo_ratio: 1.13301
+    tempo_ratio: 0.998589
     is_loop:     true
     ref_segments:
       - mix_start_s: 3045.22
@@ -2102,7 +2106,7 @@ tracks:
     set_end_s:   3118.94
     ref_start_s: 123.31
     ref_end_s:   187.566
-    tempo_ratio: 0.89462
+    tempo_ratio: 0.999042
     is_loop:     true
     ref_segments:
       - mix_start_s: 3047.11
@@ -2125,7 +2129,7 @@ tracks:
     set_end_s:   3096.75
     ref_start_s: 34.3481
     ref_end_s:   93.9445
-    tempo_ratio: 1.49191
+    tempo_ratio: 0.847682
     is_loop:     true
     ref_segments:
       - mix_start_s: 3056.79
@@ -2143,7 +2147,7 @@ tracks:
     set_end_s:   3119.07
     ref_start_s: 34.3263
     ref_end_s:   52.3508
-    tempo_ratio: 0.564695
+    tempo_ratio: 1.11304
     is_loop:     true
     ref_segments:
       - mix_start_s: 3087.86
@@ -2206,7 +2210,7 @@ tracks:
     set_end_s:   3297.27
     ref_start_s: 0
     ref_end_s:   231.6
-    tempo_ratio: 2.64176
+    tempo_ratio: 1.06081
     is_loop:     true
     ref_segments:
       - mix_start_s: 3209.6
@@ -2225,7 +2229,7 @@ tracks:
     set_end_s:   3258.55
     ref_start_s: -1.42041e-08
     ref_end_s:   172.869
-    tempo_ratio: 3.59738
+    tempo_ratio: 1.0003
     is_loop:     true
     ref_segments:
       - mix_start_s: 3210.5
@@ -2256,7 +2260,7 @@ tracks:
     set_end_s:   3311.92
     ref_start_s: 1.5
     ref_end_s:   59.3796
-    tempo_ratio: 1.47287
+    tempo_ratio: 1.05016
     is_loop:     true
     ref_segments:
       - mix_start_s: 3272.58
@@ -2272,7 +2276,7 @@ tracks:
     set_end_s:   3345.68
     ref_start_s: 121.924
     ref_end_s:   190.157
-    tempo_ratio: 1.00444
+    tempo_ratio: 1
     is_loop:     true
     ref_segments:
       - mix_start_s: 3277.75
@@ -2291,7 +2295,7 @@ tracks:
     set_end_s:   3339.31
     ref_start_s: 60.8302
     ref_end_s:   77.2513
-    tempo_ratio: 0.594796
+    tempo_ratio: 1.32632
     is_loop:     true
     ref_segments:
       - mix_start_s: 3311.71
@@ -2307,7 +2311,7 @@ tracks:
     set_end_s:   3374.06
     ref_start_s: 57.6147
     ref_end_s:   112.301
-    tempo_ratio: 1.01448
+    tempo_ratio: 1
     is_loop:     true
     ref_segments:
       - mix_start_s: 3319.38
@@ -2336,7 +2340,7 @@ tracks:
     set_end_s:   3414.06
     ref_start_s: 0
     ref_end_s:   51.3029
-    tempo_ratio: 1.50804
+    tempo_ratio: 1.03279
     pitch_shift_semi: 1
     is_loop:     true
     ref_segments:
@@ -2374,7 +2378,7 @@ tracks:
     set_end_s:   3607.67
     ref_start_s: 0
     ref_end_s:   112.723
-    tempo_ratio: 0.909701
+    tempo_ratio: 0.992709
     is_loop:     true
     ref_segments:
       - mix_start_s: 3456.23
@@ -2395,7 +2399,7 @@ tracks:
     set_end_s:   3600.8
     ref_start_s: 8.61542e-08
     ref_end_s:   24.593
-    tempo_ratio: 0.423028
+    tempo_ratio: 1.22033
     pitch_shift_semi: -1
     is_loop:     true
     ref_segments:
@@ -2428,7 +2432,7 @@ tracks:
     set_end_s:   3658.25
     ref_start_s: 35.852
     ref_end_s:   63.3823
-    tempo_ratio: 0.657104
+    tempo_ratio: 1.30624
     pitch_shift_semi: 1
     is_loop:     true
     ref_segments:

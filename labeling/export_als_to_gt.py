@@ -284,7 +284,14 @@ def _detect_loops(rows: list[ClipRow]) -> list[ClipRow]:
         set_span = sum(
             max(0.0, row.set_end_s - row.set_start_s) for row in key_rows
         )
-        ref_span = last.ref_end_s - first.ref_start_s
+        # tempo_ratio is the PLAYBACK SPEED: sum of the segment ref-durations
+        # actually played, NOT the outer ref envelope. The envelope counts the
+        # ref region the DJ JUMPED OVER between non-contiguous segments — that
+        # inflated Emily's instrumental (slot 003) to 2.69x when its 3 segments
+        # each played at 1.0x (65.3s song played over 65.3s of mix).
+        ref_span = sum(
+            max(0.0, row.ref_end_s - row.ref_start_s) for row in key_rows
+        )
         out.append(replace(
             first,
             set_start_s=min(row.set_start_s for row in key_rows),
