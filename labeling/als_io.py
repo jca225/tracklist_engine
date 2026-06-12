@@ -354,28 +354,59 @@ def match_manifest_for_path(path: str, manifest: ManifestIndex) -> ManifestSlot 
     return None
 
 
+def _filename_stem_marker(fname: str) -> str | None:
+    """Explicit stem qualifier in a master filename, e.g. ``... (Acappella).m4a``
+    or ``... (Instrumental Mix).m4a``. A downloaded acappella/instrumental master
+    lives in ``tracks/`` too — the qualifier, not the folder, names the stem."""
+    if "acappella" in fname or "acapella" in fname:
+        return "acappella"
+    if "instrumental" in fname:
+        return "instrumental"
+    return None
+
+
 def classify_path(path: str) -> tuple[str, str]:
-    """Return (claimed_stem, ref_source)."""
+    """Return (claimed_stem, ref_source) from the clip's referenced AUDIO FILE.
+
+    The ``.als`` is the canonical stem oracle: the file the human placed decides
+    the stem, in precedence order — Demucs stems and candidate downloads are
+    unambiguous; a master is ``regular`` UNLESS its filename carries an explicit
+    ``(Acappella)`` / ``(Instrumental)`` qualifier.
+
+    The folder is NOT authoritative: the old code returned ``regular`` for
+    everything under ``/tracks/`` *before* reading the filename, silently
+    dropping the stem of every ``tracks/... (Acappella).m4a`` master (45 BB12 GT
+    rows landed as untagged-regular, incl. the real ``Bad Day (Acappella)``).
+    See ``test_classify_path_tracks_master_stem_marker``.
+    """
     p = path.replace("\\", "/").lower()
-    if "/tracks/" in p:
-        return "regular", "reference"
+    fname = p.rsplit("/", 1)[-1]
+
+    # 1. Demucs separated stems — unambiguous, regardless of parent folder name.
+    if p.endswith("/vocals.flac"):
+        return "acappella", "demucs"
+    if p.endswith("/instrumental.flac"):
+        return "instrumental", "demucs"
+    # 2. Downloaded candidate stems.
     if "/candidates/vocals/" in p:
         return "acappella", "online_candidate"
     if "/candidates/instrumental/" in p:
         return "instrumental", "online_candidate"
     if "/candidates/" in p:
-        fname = p.rsplit("/", 1)[-1]
         if "instrumental" in fname:
             return "instrumental", "online_candidate"
         return "acappella", "online_candidate"
-    if p.endswith("/vocals.flac"):
-        return "acappella", "demucs"
-    if p.endswith("/instrumental.flac"):
-        return "instrumental", "demucs"
+    # 3. Phase-cancel extractions.
     if "/phase_cancel/" in p or "phase_cancel" in p:
         if "vocals" in p or "acap" in p:
             return "acappella", "phase_cancel"
         return "instrumental", "phase_cancel"
+    # 4. Master file (tracks/ or anywhere else): the filename qualifier is the
+    #    oracle; default regular. Version tags like (Remix)/(Rework) do NOT flip
+    #    the stem.
+    marker = _filename_stem_marker(fname)
+    if marker:
+        return marker, "reference"
     return "regular", "reference"
 
 

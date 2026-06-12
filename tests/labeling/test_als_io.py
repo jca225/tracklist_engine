@@ -38,6 +38,10 @@ def test_slot_from_path():
 def test_classify_path():
     assert classify_path("/aligning/set/tracks/001__A - B.m4a") == ("regular", "reference")
     assert classify_path("/aligning/set/stems/001__A/vocals.flac") == ("acappella", "demucs")
+    assert classify_path("/aligning/set/stems/001__A/instrumental.flac") == (
+        "instrumental",
+        "demucs",
+    )
     assert classify_path("/aligning/set/stems/001__A/candidates/vocals/x.m4a") == (
         "acappella",
         "online_candidate",
@@ -45,6 +49,40 @@ def test_classify_path():
     assert classify_path(
         "/aligning/set/stems/002__Post Malone/candidates/cand1__Post Malone - X.m4a"
     ) == ("acappella", "online_candidate")
+    assert classify_path(
+        "/aligning/set/stems/002__X/candidates/instrumental/cand1__X (Instrumental).m4a"
+    ) == ("instrumental", "online_candidate")
+
+
+def test_classify_path_tracks_master_stem_marker():
+    """REGRESSION: a master in tracks/ with an explicit stem qualifier must be
+    classified by the qualifier, NOT blindly 'regular'. The old code returned
+    'regular' for everything under /tracks/ before reading the filename, which
+    dropped the stem of 45 BB12 GT rows (e.g. the real Bad Day (Acappella)).
+    The .als clip's referenced FILE is the canonical stem oracle."""
+    # the exact bug: a downloaded acappella master living in tracks/
+    assert classify_path(
+        "/aligning/set/tracks/127__Daniel Powter - Bad Day (Acappella).m4a"
+    ) == ("acappella", "reference")
+    assert classify_path(
+        "/aligning/set/tracks/002__Manse ft. Alice Berg - Freeze Time (Instrumental Mix).m4a"
+    ) == ("instrumental", "reference")
+    # single-p spelling seen in candidate filenames
+    assert classify_path("/aligning/set/tracks/x - y (Acapella).m4a") == (
+        "acappella",
+        "reference",
+    )
+    # version qualifiers must NOT flip the stem — these stay regular
+    for ver in ("(Rework)", "(Remix)", "(AltVersion)", "(Two Friends Remix)"):
+        assert classify_path(f"/aligning/set/tracks/145__Don Diablo - Momentum {ver}.m4a") == (
+            "regular",
+            "reference",
+        ), ver
+    # demucs stem inside an "(Acappella)"-named folder is decided by the FILE,
+    # not the folder: instrumental.flac there is the instrumental stem
+    assert classify_path(
+        "/aligning/set/stems/104__Mako - Smoke Filled Room (Acappella)/instrumental.flac"
+    ) == ("instrumental", "demucs")
 
 
 def test_display_from_path_and_labels_overlap():
