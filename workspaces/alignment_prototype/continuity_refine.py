@@ -187,11 +187,14 @@ def _job(args: tuple) -> dict:
 
 
 def _stack_best(windows, ref_f, stretches, band_frames):
-    """(err-free) best stack over stretches: (r0_s, peak, prominence, stretch).
+    """(err-free) best stack over stretches:
+    (r0_s, peak, prominence, stretch, zscore).
 
-    prominence = peak - median(joint curve): how much the line stands out from
-    the channel's own background — a label-free confidence usable without GT
-    (raw peak is biased across channels; prominence is comparable)."""
+    prominence = peak - median(curve) (raw, biased across channels). zscore =
+    (peak - mean(curve)) / std(curve) — the peak in units of the channel's OWN
+    score noise, a debiased confidence: a sparse vocal stem and a dense
+    instrumental stem become comparable, fixing the prominence bias that made
+    raw cross-channel arbitration unreliable (8/27)."""
     best = None
     for st in stretches:
         curves, shifts = [], []
@@ -208,7 +211,8 @@ def _stack_best(windows, ref_f, stretches, band_frames):
         k = int(j.argmax())
         pk = float(j[k])
         if best is None or pk > best[1]:
-            best = (k * HOP / SR, pk, pk - float(np.median(j)), st)
+            z = (pk - float(j.mean())) / (float(j.std()) + 1e-9)
+            best = (k * HOP / SR, pk, pk - float(np.median(j)), st, z)
     return best
 
 
@@ -226,12 +230,12 @@ def _xchan_job(args: tuple) -> dict:
         b = _stack_best(windows, ref_f, tuple(stretches), band)
         if b is None:
             out.append({"ch": name, "err": float("nan"), "peak": float("nan"),
-                        "prom": float("nan"), "r0": float("nan")})
+                        "prom": float("nan"), "z": float("nan"), "r0": float("nan")})
         else:
-            r0, pk, prom, _st = b
+            r0, pk, prom, _st, z = b
             out.append({"ch": name, "err": abs(r0 - gt_ref_start),
                         "peak": round(pk, 3), "prom": round(prom, 3),
-                        "r0": round(r0, 3)})
+                        "z": round(z, 3), "r0": round(r0, 3)})
     return {"idx": idx, "channels": out}
 
 
