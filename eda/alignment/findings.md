@@ -120,3 +120,53 @@ venvs/audio/bin/python -m eda.alignment.mix_structure_probe \
   --gt labeling/fixtures/bb12_ground_truth.yaml \
   --out data/analysis/1fsnxchk_structure_probe_v2.json
 ```
+
+---
+
+## v3 — model ladder M0/M1/M2 + chance baseline (2026-06-11)
+
+Full code + caveats: [`info_dynamics/README.md`](info_dynamics/README.md).
+Built a memoryless null (**M0**), kept the adaptive Markov as **M1**, and added a
+strictly-prequential causal sequence model (**M2**: Transformer / GRU, discrete
+softmax over the same K=24 codebook, expanding-window predict-then-update). Scored
+in **seconds** (±3 s / ±10 s) with a **random-peak chance baseline** and a
+**temporal-shuffle control** — neither of which the v1/v2 probe had.
+
+**Reproduce:**
+```bash
+venvs/audio/bin/python -m eda.alignment.info_dynamics.run \
+  --artifact data/analysis/1fsnxchk_mix_mert.npz \
+  --gt labeling/fixtures/bb12_ground_truth.yaml \
+  --out data/analysis/info_dynamics
+```
+
+### Prediction — memory clearly helps (prequential NLL, nats; lower better)
+
+| M0 | M1 | M2-gru | M2-attn | uniform (log 24) |
+|----|----|--------|---------|------------------|
+| 2.92 | **2.26** | 2.29 | 2.66 | 3.18 |
+
+An evolving prior predicts the mix far better than memoryless; most gain is at
+**order 1** (GRU ≈ Markov; the Transformer is data-starved on one ~2 k-token mix).
+
+### Boundary localization — mostly chance (lift = F1 − random-peak F1, ±3 s)
+
+| Signal | F1@3s | chance | lift | shuffled F1@3s |
+|--------|-------|--------|------|----------------|
+| **M0 persist `1−cos`** | **0.284** | 0.160 | **+0.125** | 0.142 ✅ collapses |
+| M2-gru surprisal | 0.241 | 0.145 | +0.096 | 0.225 ⚠️ barely moves |
+| M1 surprisal | 0.207 | 0.166 | +0.033 | 0.235 ❌ |
+| M1 MIR | 0.199 | 0.166 | +0.034 | 0.195 ❌ |
+| M1 PIR | 0.199 | — | −0.007 | 0.234 ❌ |
+
+Only **local acoustic novelty** (cosine distance between adjacent bars) beats its
+shuffle. The information-dynamics *surprise* signals (surprisal / MIR / PIR) are at
+chance once boundary density is controlled.
+
+### ⚠️ This revises the v1/v2 headline
+
+The v1 **F1≈0.45** was scored at ±2 bars with **no chance baseline**. At BB12's
+GT density (~1 boundary / 20 s) a ±10 s window tiles the timeline — *random* peaks
+score ~0.40 and every model's ±10 s lift is ≈0. So v1/v2's "finds ~half the
+section starts" reflects **density, not localization**. MERT + information
+dynamics gives a good *predictive* model but **not** a transition detector here.
