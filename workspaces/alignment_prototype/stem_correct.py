@@ -54,8 +54,18 @@ ZMARGIN = 1.0  # ...and beat the structural default by this, to override it
 STEMS = ("regular", "acappella", "instrumental")
 
 
-def _truth_stem(t) -> str:
-    return (getattr(t, "claimed_stem", None) or "regular")
+def resolve_stems(local_path: str | None, set_dir: Path) -> tuple:
+    """(vocals, instrumental) stem paths from DISK, not the manifest (whose
+    `stems` field is often empty). Stem dir = stems/<track basename>/."""
+    if not local_path:
+        return None, None
+    base = Path(local_path).stem
+    d = set_dir / "stems" / base
+    if not d.is_dir():
+        hits = sorted((set_dir / "stems").glob(f"{base}*"))
+        d = hits[0] if hits else d
+    v, i = d / "vocals.flac", d / "instrumental.flac"
+    return (v if v.is_file() else None), (i if i.is_file() else None)
 
 
 def correct_stem(is_conc: bool, full_name: str, z: dict) -> tuple[str, str]:
@@ -124,6 +134,20 @@ def main(argv: list[str] | None = None) -> int:
 
     slots = json.loads(args.slots_json.read_text())
     scrape_by_tid = {s["track_id"]: s for s in slots if s.get("track_id")}
+
+    # truth from RAW GT (None-preserving): the human tagged only acappella /
+    # instrumental; everything else is None (untagged) — NOT regular. Defaulting
+    # None->regular fabricated the regular class, so score explicit rows only.
+    import yaml as _yaml
+    raw = _yaml.safe_load(args.gt.read_text())
+    truth_by_tid: dict[str, str | None] = {}
+    for r in raw.get("tracks", []):
+        tid = r.get("track_id")
+        if not tid:
+            continue
+        cs = r.get("claimed_stem")
+        if cs or tid not in truth_by_tid:  # prefer an explicit tag over None
+            truth_by_tid[tid] = cs
     print(f"set={gt.set_id} GT spans={len(targets)} scrape slots={len(slots)}")
 
     set_dir = find_aligning_dir(gt.set_id)
@@ -155,13 +179,16 @@ def main(argv: list[str] | None = None) -> int:
         span_len = max(0.0, t.set_end_s - t.set_start_s)
         dts = _probe_offsets(span_len, args.window_s, args.probes)
         stretches = _grid_stretches(t, mix_series, ref_series)
+        voc_stem, ins_stem = resolve_stems(track.get("local_path"), set_dir)
         chans = []
         for name, mix_key, ref_stem in _CHANNELS:
             mc = mix_chroma.get(mix_key)
             if mc is None:
                 continue
-            ref_path = (track.get("local_path") if ref_stem is None
-                        else (track.get("stems") or {}).get(ref_stem))
+            if ref_stem is None:
+                ref_path = track.get("local_path")
+            else:
+                ref_path = voc_stem if ref_stem == "vocals" else ins_stem
             if not ref_path or not Path(ref_path).is_file():
                 continue
             wl = _windows_from(mc, t.set_start_s, dts, n)
@@ -178,10 +205,10 @@ def main(argv: list[str] | None = None) -> int:
             if (k + 1) % 25 == 0:
                 print(f"  {k + 1}/{len(jobs)}")
 
-    # evaluate: B0 raw scrape, B1 structural-only, B2 structural+audio
+    # evaluate. truth is None-preserving: explicit (acap/instr) vs untagged.
     rows = []
     for (i, _g, _c), (t, scr) in zip(jobs, meta):
-        truth = _truth_stem(t)
+        truth = truth_by_tid.get(t.recording_id)  # None = untagged, unknown
         is_conc = bool(scr.get("is_concurrent"))
         z = {c["ch"]: c["z"] for c in res[i]["channels"]}
         b0 = scr["claimed_stem"]
@@ -189,44 +216,47 @@ def main(argv: list[str] | None = None) -> int:
         b2, why = correct_stem(is_conc, scr.get("full_name") or "", z)
         rows.append((t, scr, truth, is_conc, b0, b1, b2, why, z))
 
-    def acc(idx, sel=None):
-        rr = sel if sel is not None else rows
-        return sum(1 for r in rr if r[idx] == r[2]) / len(rr) if rr else 0.0
+    explicit = [r for r in rows if r[2] in STEMS]   # known truth (acap/instr)
+    untagged = [r for r in rows if r[2] is None]    # unknown truth
 
-    # explicitly-tagged truth only (untagged GT rows default to 'regular' and
-    # pollute the regular class — a high-vocal/low-instr audio sig on a
-    # "regular" truth is often an untagged acappella)
-    explicit = [r for r in rows if getattr(r[0], "claimed_stem", None)]
-    print(f"\n=== stem accuracy vs GT (n={len(rows)} tracks) ===")
-    print(f"  B0 raw scrape            : {100*acc(4):.0f}%")
-    print(f"  B1 structural prior only : {100*acc(5):.0f}%")
-    print(f"  B2 structural + audio    : {100*acc(6):.0f}%")
-    print(f"  -- on explicitly-tagged truth only (n={len(explicit)}): "
-          f"B0 {100*acc(4,explicit):.0f}%  B1 {100*acc(5,explicit):.0f}%  "
-          f"B2 {100*acc(6,explicit):.0f}%")
+    def acc(idx, sel):
+        return sum(1 for r in sel if r[idx] == r[2]) / len(sel) if sel else 0.0
+
+    print(f"\n=== stem accuracy on EXPLICITLY-TAGGED truth (n={len(explicit)}; "
+          f"{len(untagged)} untagged held out) ===")
+    print(f"  B0 raw scrape            : {100*acc(4,explicit):.0f}%")
+    print(f"  B1 structural prior only : {100*acc(5,explicit):.0f}%")
+    print(f"  B2 structural + audio    : {100*acc(6,explicit):.0f}%")
 
     def prf(idx, cls):
-        tp = sum(1 for r in rows if r[idx] == cls and r[2] == cls)
-        fp = sum(1 for r in rows if r[idx] == cls and r[2] != cls)
-        fn = sum(1 for r in rows if r[idx] != cls and r[2] == cls)
+        tp = sum(1 for r in explicit if r[idx] == cls and r[2] == cls)
+        fp = sum(1 for r in explicit if r[idx] == cls and r[2] != cls)
+        fn = sum(1 for r in explicit if r[idx] != cls and r[2] == cls)
         pr = tp / (tp + fp) if tp + fp else 0.0
         rc = tp / (tp + fn) if tp + fn else 0.0
         return pr, rc, tp, fp, fn
 
-    print("\nper-class (priority = acappella):")
-    for cls in STEMS:
+    print("\nper-class on explicit truth (priority = acappella):")
+    for cls in ("acappella", "instrumental"):
         for name, idx in (("B0", 4), ("B2", 6)):
             pr, rc, tp, fp, fn = prf(idx, cls)
             print(f"  {cls:12} {name}  prec {100*pr:3.0f}%  recall {100*rc:3.0f}% "
                   f" (tp{tp} fp{fp} fn{fn})")
 
-    flips_fixed = [r for r in rows if r[4] != r[2] and r[6] == r[2]]
-    flips_broke = [r for r in rows if r[4] == r[2] and r[6] != r[2]]
-    print(f"\nB2 fixed {len(flips_fixed)} scrape errors, broke {len(flips_broke)}:")
-    for t, scr, truth, ic, b0, b1, b2, why, z in flips_broke:
-        zs = " ".join(f"{k}={z[k]:.1f}" for k in z if not math.isnan(z[k]))
-        print(f"  BROKE {scr['slot_label']:6} scrape={b0:11} truth={truth:11} "
-              f"pred={b2:11} via {why}  [{zs}]  {(scr.get('full_name') or '')[:34]}")
+    # untagged: surface likely human-missed acappellas (strong vocal, weak instr)
+    miss_acap = [r for r in untagged if r[6] == "acappella"
+                 and not math.isnan(r[8].get("acappella", float("nan")))
+                 and r[8].get("acappella", -9) >= ZABS
+                 and r[8].get("instrumental", 9) < ZABS]
+    print(f"\nUNTAGGED rows (truth unknown): {len(untagged)}; corrector predicts "
+          f"{dict(Counter(r[6] for r in untagged))}")
+    print(f"  -> {len(miss_acap)} flagged as LIKELY HUMAN-MISSED ACAPPELLA "
+          f"(vocal z>={ZABS}, instr z<{ZABS}) — candidates to confirm:")
+    for t, scr, _tr, ic, b0, b1, b2, why, z in sorted(
+            miss_acap, key=lambda r: -r[8].get("acappella", 0))[:12]:
+        print(f"    {scr['slot_label']:6} scrape={b0:10} "
+              f"vocal_z={z.get('acappella',0):4.1f} instr_z={z.get('instrumental',0):4.1f}"
+              f"  {(scr.get('full_name') or '')[:38]}")
     return 0
 
 
