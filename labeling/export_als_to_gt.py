@@ -279,12 +279,25 @@ def _detect_loops(rows: list[ClipRow]) -> list[ClipRow]:
                 ref_end_s=row.ref_end_s,
                 mix_start_s=row.set_start_s,
             ))
-        # LOOP = a bit-identical ref segment replayed >=2x (MJ "Just Beat It").
-        # Distinct non-contiguous segments = a SPLIT/CUT (section-swap, e.g.
-        # Emily-instr, Freeze-Time-x-Weak) — NOT a loop. The old
-        # `is_loop = len(segments)>1` mislabeled every split as a loop.
-        _seg_keys = [(round(s.ref_start_s, 1), round(s.ref_end_s, 1)) for s in segments]
-        looped = any(_seg_keys.count(kk) >= 2 for kk in set(_seg_keys))
+        # LOOP = a bit-identical ref segment re-triggered BACK-TO-BACK more than
+        # once (>=2 identical, temporally-ADJACENT plays — the repeat starts
+        # ~where it ended; Avicii ref 153-157 at mix 79/83/87, MJ "Just Beat It").
+        # NOT a loop: distinct sections (SPLIT/CUT, Emily); or the SAME section
+        # replayed far apart with other content between (reprise/callback, Beach
+        # Boys "Wouldn't It Be Nice" ending at mix 851 then 882, ~30s gap).
+        # Adjacency — not occurrence count — is the discriminator.
+        _by_mix = sorted(segments, key=lambda s: s.mix_start_s)
+        looped = False
+        for a, b in zip(_by_mix, _by_mix[1:]):
+            # tolerance, not exact: warp jitter gives the same loop iteration
+            # ref_end 157.1 vs 157.0 — rounding would split them.
+            same = (abs(a.ref_start_s - b.ref_start_s) < 1.5
+                    and abs(a.ref_end_s - b.ref_end_s) < 1.5)
+            dur = a.ref_end_s - a.ref_start_s
+            adjacent = abs((b.mix_start_s - a.mix_start_s) - dur) < max(2.0, 0.4 * dur)
+            if same and adjacent:        # one back-to-back identical repeat = a loop
+                looped = True
+                break
         first = key_rows[0]
         set_span = sum(
             max(0.0, row.set_end_s - row.set_start_s) for row in key_rows

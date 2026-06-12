@@ -42,6 +42,22 @@ def test_loop_tempo_uses_played_segments_not_envelope():
     assert abs(m.tempo_ratio - 1.0) < 0.05, m.tempo_ratio
 
 
+def test_loop_requires_back_to_back_not_reprise():
+    # same ref section played BACK-TO-BACK (repeat starts where it ended) = loop
+    bb = _detect_loops([
+        _row("/s/x/v.flac", 0, 10.0, 14.0, 61.0, 65.0),
+        _row("/s/x/v.flac", 4, 14.0, 18.0, 61.0, 65.0),
+    ])[0]
+    assert bb.is_loop
+    # same ref section replayed far apart (other content between) = reprise, NOT a
+    # loop (Beach Boys "Wouldn't It Be Nice": ending at mix 851 then 882, ~30s gap)
+    reprise = _detect_loops([
+        _row("/s/x/v.flac", 0,  10.0, 14.0, 61.0, 65.0),
+        _row("/s/x/v.flac", 40, 40.0, 44.0, 61.0, 65.0),
+    ])[0]
+    assert not reprise.is_loop and len(reprise.ref_segments) == 2
+
+
 def test_loop_is_bit_identical_repeat_not_split():
     # repeated identical segment (ref 153-157 x3) => LOOP
     loop = _detect_loops([
