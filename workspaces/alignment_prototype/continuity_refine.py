@@ -72,7 +72,8 @@ TRIM = 1  # drop this many lowest-scoring probes per r0 (robust to 1 bad probe)
 
 
 def stack_curves(
-    curves: list[np.ndarray], shifts: list[int], trim: int = TRIM
+    curves: list[np.ndarray], shifts: list[int], trim: int = TRIM,
+    band_frames: int = 0,
 ) -> tuple[np.ndarray, int]:
     """Shift-and-add probe curves onto the shared clip-start (r0) axis.
 
@@ -83,11 +84,20 @@ def stack_curves(
     single blended/wrong probe from dragging the consensus off the true line
     (the Martin Garrix regression); kept >= 2 probes so a real line still needs
     agreement. Mean keeps J comparable to a single-probe peak.
+
+    band_frames > 0 relaxes the constant-slope assumption: each probe takes its
+    best score within +/-band of the predicted position (a 1-D max-filter before
+    stacking) so a sub-track-WARPED clip — acappellas are warped phrase-by-phrase
+    to lock to the beat — still reinforces. Use for acappella spans only; a band
+    on rigid (regular) spans only buys spurious agreement.
     """
     max_shift = max(shifts) if shifts else 0
     aligned = [(c, s) for c, s in zip(curves, shifts) if c.size and c.shape[0] - s > 0]
     if not aligned:
         return np.zeros(0, np.float32), max_shift
+    if band_frames > 0:
+        from scipy.ndimage import maximum_filter1d
+        aligned = [(maximum_filter1d(c, 2 * band_frames + 1), s) for c, s in aligned]
     L = min(c.shape[0] - s for c, s in aligned)
     if L <= 0:
         return np.zeros(0, np.float32), max_shift
@@ -101,7 +111,7 @@ def stack_curves(
 
 def _stack_offset(
     windows: list[tuple[int, np.ndarray]], ref_f: np.ndarray,
-    stretches: tuple[float, ...],
+    stretches: tuple[float, ...], band_frames: int = 0,
 ) -> tuple[float, float, float]:
     """(clip_ref_start_s, joint_peak, stretch) over the stretch band."""
     best = (0.0, -2.0, 1.0)
@@ -115,7 +125,7 @@ def _stack_offset(
             shifts.append(int(round(dt_frames * st)))
         if not curves:
             continue
-        j, _ = stack_curves(curves, shifts)
+        j, _ = stack_curves(curves, shifts, band_frames=band_frames)
         if j.size == 0:
             continue
         k = int(j.argmax())
@@ -126,7 +136,7 @@ def _stack_offset(
 
 def _stack_score_at(
     windows: list[tuple[int, np.ndarray]], ref_f: np.ndarray,
-    stretch: float, r0_s: float,
+    stretch: float, r0_s: float, band_frames: int = 0,
 ) -> float:
     """Joint (mean) score of the line with intercept r0_s at a fixed stretch."""
     curves, shifts = [], []
@@ -138,14 +148,14 @@ def _stack_score_at(
         shifts.append(int(round(dt_frames * stretch)))
     if not curves:
         return float("nan")
-    j, _ = stack_curves(curves, shifts)
+    j, _ = stack_curves(curves, shifts, band_frames=band_frames)
     r0 = int(round(r0_s * SR / HOP))
     return float(j[r0]) if 0 <= r0 < j.size else float("nan")
 
 
 def _job(args: tuple) -> dict:
     """Worker: baseline (mid probe argmax) + stacked decode for one span."""
-    idx, ref_path, win_list, mid_k, stretches, gt_ref_start = args
+    idx, ref_path, win_list, mid_k, stretches, gt_ref_start, band_frames = args
     import librosa
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -160,12 +170,12 @@ def _job(args: tuple) -> dict:
     win_ref_start, peak, b_stretch = detect_offset(mid_win, ref_f, tuple(stretches))
     base_r0 = win_ref_start - (mid_dt * HOP / SR) * b_stretch
 
-    # stacked decode
-    r0, jpeak, s_stretch = _stack_offset(windows, ref_f, tuple(stretches))
+    # stacked decode (band_frames > 0 only for warped acappella spans)
+    r0, jpeak, s_stretch = _stack_offset(windows, ref_f, tuple(stretches), band_frames)
     base_gt = _scores_at_stretch(mid_win, ref_f, b_stretch)
     kg = int(round((gt_ref_start + (mid_dt * HOP / SR) * b_stretch) * SR / HOP))
     base_score_gt = float(base_gt[kg]) if 0 <= kg < base_gt.size else float("nan")
-    stack_score_gt = _stack_score_at(windows, ref_f, s_stretch, gt_ref_start)
+    stack_score_gt = _stack_score_at(windows, ref_f, s_stretch, gt_ref_start, band_frames)
 
     return {
         "idx": idx, "n_probes": len(windows),
@@ -224,6 +234,10 @@ def main(argv: list[str] | None = None) -> int:
                    default=_REPO / "labeling/fixtures/bb12_ground_truth.yaml")
     p.add_argument("--window-s", type=float, default=12.0)
     p.add_argument("--probes", type=int, default=5, help="max probe windows/span")
+    p.add_argument("--acap-band-s", type=float, default=0.0,
+                   help="warp tolerance (s) applied to ACAPPELLA spans only — each "
+                        "probe may slip +/- this off the line (heuristic #7: acaps "
+                        "are sub-track warped). 0 = rigid stack everywhere.")
     p.add_argument("--workers", type=int, default=8)
     args = p.parse_args(argv)
 
@@ -316,7 +330,10 @@ def main(argv: list[str] | None = None) -> int:
         # baseline probe = the one nearest mid-span (strongest single-probe)
         mid_k = int(np.argmin([abs(dt - span_len / 2) for dt in dts][:len(win_list)]))
         stretches = _grid_stretches(t, mix_series, ref_series)
-        jobs.append((i, str(ref_path), win_list, mid_k, stretches, t.ref_start_s))
+        band_frames = (int(round(args.acap_band_s * SR / HOP))
+                       if stem == "acappella" else 0)
+        jobs.append((i, str(ref_path), win_list, mid_k, stretches,
+                     t.ref_start_s, band_frames))
         meta.append(t)
 
     print(f"evaluating {len(jobs)} linear spans "
