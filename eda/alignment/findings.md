@@ -286,30 +286,41 @@ Reproduce: `info_dynamics.run_bb11`. The first step toward the v5 ceiling — a
 source: the 142 scraped 1001tracklists **cue times** (BB11 has no hand-labelled
 Ableton GT). Aligning model surprise to a human-but-independent boundary signal is
 *stronger* evidence than BB12-vs-its-own-hand-labels — the boundaries weren't made
-by us. Only the **full-mix** MERT artifact exists for BB11 today; the stem cells
-need Demucs+MERT on the BB11 mix (GPU) and are pending.
+by us. **Full 3×2 grid** now run: the BB11 mix Demucs stems already existed on
+pi-storage (`/mnt/storage/stems/set/6/{instrumental,vocals}.flac`), MERT-embedded
+onto the full-mix bar grid (1919 bars) via `prepare_mix_artifact`.
 
-**±3 s and ±10 s localization vs tracklist cues (1000-perm p, FDR q over 4 cells):**
+**±3 s localization vs tracklist cues (1000-perm p, FDR q over all 12 cells; ±3 s
+is the discriminating tolerance — wide ±10 s saturates on the dense ~1/24 s GT):**
 
-| repr. | tol | F1 | lift [95% CI] | p | q | verdict |
-|-------|-----|----|----|----|----|----|
-| codebook | ±10 s | 0.496 | +0.064 [-0.003, +0.128] | .161 | .161 | ❌ |
-| codebook | ±3 s | 0.319 | +0.156 [+0.093, +0.216] | .001 | .004 | ✅ |
-| continuous | ±10 s | 0.428 | +0.099 [+0.019, +0.173] | .007 | .009 | ✅ |
-| **continuous** | **±3 s** | 0.297 | **+0.164 [+0.092, +0.230]** | .004 | .008 | ✅ |
+| source | repr. | F1 | lift [95% CI] | p | q | verdict |
+|--------|-------|----|----|----|----|----|
+| full | codebook | 0.319 | +0.156 [+0.093, +0.216] | .001 | .010 | ✅ |
+| full | continuous | 0.297 | +0.164 [+0.092, +0.230] | .004 | .010 | ✅ |
+| acappella | codebook | 0.316 | +0.145 [+0.084, +0.200] | .004 | .010 | ✅ |
+| acappella | continuous | 0.225 | +0.081 [+0.017, +0.141] | .038 | .057 | ~ marginal |
+| **instrumental** | **codebook** | 0.385 | **+0.214 [+0.150, +0.271]** | .003 | .010 | ✅ strongest |
+| instrumental | continuous | 0.253 | +0.113 [+0.041, +0.172] | .006 | .012 | ✅ |
 
-**Result — the effect replicates.** Full-mix continuous localizes BB11's
-independent tracklist boundaries at q = .008 (±3 s) — lift +0.164, CI excludes 0 —
-matching BB12's full-mix continuous (+0.201). Even the codebook clears at ±3 s.
-Tolerance note: ±10 s is *less* powerful here, not more — GT is dense (~1/24 s) so
-the wide window saturates (random phase hits a boundary most of the time, z drops
-to 1.2 for codebook). **±3 s is the discriminating tolerance**, and the cue times
-turn out precise enough to be hit within 3 s above chance.
+**Result — the effect replicates, broadly.** 5 of 6 cells clear FDR at ±3 s (only
+acappella-continuous is marginal, q = .057). Boundaries are localizable above
+chance from **every** stream — full, acappella, and instrumental — on an
+independent boundary source. The effect is real and not stem-exclusive.
 
-**Where this leaves the claim:** two sets now agree that **full-mix continuous
-surprise localizes section starts** above chance — BB12 (hand-labels) and BB11
-(independent tracklist). That is the first genuine cross-set signal. Caveats still
-binding: (1) n = 2, not a population — keep adding sets; (2) BB11's stem cells are
-untested, so the BB12 finding that *no stem is privileged* is not yet checked on
-BB11 (needs the Demucs+MERT artifacts); (3) tracklist cues carry their own (small)
-error, partially absorbed by the ±3 s window.
+**But none of the *finer* claims survive the cross-set test:**
+1. **No privileged stem.** Best cell is **full-continuous on BB12** (+0.201) vs
+   **instrumental-codebook on BB11** (+0.214). The winner flips by set; there is no
+   stable "best stem." The v4 "instrumental only" claim is doubly dead — and note
+   the instrumental is *strongest* on BB11, the opposite of weak.
+2. **Codebook vs continuous flips too.** BB12 had continuous ≫ codebook ("drop the
+   VQ"); BB11 has codebook competitive-to-winning (instrumental-codebook is the top
+   cell, continuous loses to codebook in 2 of 3 sources). The v4/v5 "continuous is
+   necessary" conclusion was *also* a BB12 single-set artifact.
+
+**Honest synthesis (n = 2).** What replicates: **surprise localizes section
+boundaries above chance, robustly across stems and representations.** What does
+*not* replicate: any ranking *among* stems or representations — those were
+set-specific. The aligner should treat all stem channels as informative boundary
+signals, not bet on one. Still n = 2; the v5 ceiling (set as unit, ≥3–5 sets)
+stands. Caveat: tracklist cues carry their own small error, partially absorbed by
+the ±3 s window.
