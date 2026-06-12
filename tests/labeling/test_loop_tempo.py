@@ -36,9 +36,26 @@ def test_loop_tempo_uses_played_segments_not_envelope():
     merged = _detect_loops(rows)
     assert len(merged) == 1
     m = merged[0]
-    assert m.is_loop and len(m.ref_segments) == 3
+    # 3 DISTINCT segments = a SPLIT/CUT, NOT a loop (no bit-identical repeat)
+    assert not m.is_loop and len(m.ref_segments) == 3
     # played 65.3s of song over 65.4s of mix => ~1.0x, NOT 175.7/65.4 = 2.69
     assert abs(m.tempo_ratio - 1.0) < 0.05, m.tempo_ratio
+
+
+def test_loop_is_bit_identical_repeat_not_split():
+    # repeated identical segment (ref 153-157 x3) => LOOP
+    loop = _detect_loops([
+        _row("/s/x/vocals.flac", 0, 79.0, 82.9, 153.2, 157.1),
+        _row("/s/x/vocals.flac", 4, 82.9, 86.6, 153.2, 157.1),
+        _row("/s/x/vocals.flac", 8, 86.6, 90.3, 153.2, 157.1),
+    ])[0]
+    assert loop.is_loop
+    # distinct sections played in sequence => SPLIT, not a loop
+    split = _detect_loops([
+        _row("/s/x/vocals.flac", 0, 79.0, 90.0, 10.0, 21.0),
+        _row("/s/x/vocals.flac", 4, 90.0, 99.0, 80.0, 89.0),
+    ])[0]
+    assert not split.is_loop and len(split.ref_segments) == 2
 
 
 def test_loop_envelope_handles_backward_jump():

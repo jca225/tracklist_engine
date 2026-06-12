@@ -221,3 +221,14 @@ def test_audible_span_full_and_muted():
     assert 0.0 < fade.fraction < 1.0
     assert fade.arr_start >= 0.0
     assert fade.arr_end <= 10.0
+
+
+def test_beat_to_sec_extrapolates_past_duplicated_markers():
+    """Clustered/duplicated warp markers (Aftershock: 2 pairs at beats 0 &
+    0.03125) must EXTRAPOLATE on the real slope, not clamp to the last sec
+    (which gave a zero-span ref). 0.022s over 0.03125 beats -> ~0.7 s/beat."""
+    from labeling.als_io import WarpMarkers
+    w = WarpMarkers(points=((0.0, 0.366), (0.0, 0.366), (0.03125, 0.388), (0.03125, 0.388)))
+    assert w.beat_to_sec(3.475) > 2.0          # was clamped to 0.388
+    assert w.beat_to_sec(93.5) > 60.0          # was clamped to 0.388
+    assert w.beat_to_sec(93.5) > w.beat_to_sec(3.475)

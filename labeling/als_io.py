@@ -43,11 +43,15 @@ class WarpMarkers:
             return self.points[0][1]
         pts = self.points
         if beat <= pts[0][0]:
+            # extrapolate before the first marker — use the first marker and the
+            # nearest one with a DISTINCT beat for the slope (duplicated/clustered
+            # warp markers, e.g. Aftershock's 2 pairs at beats 0 & 0.03125, would
+            # otherwise give b1==b0 → a clamped, zero-span ref).
             b0, s0 = pts[0]
-            b1, s1 = pts[1]
+            b1, s1 = next(((b, s) for b, s in pts if b > b0), (b0, s0))
         elif beat >= pts[-1][0]:
-            b0, s0 = pts[-2]
             b1, s1 = pts[-1]
+            b0, s0 = next(((b, s) for b, s in reversed(pts) if b < b1), (b1, s1))
         else:
             for i in range(len(pts) - 1):
                 if pts[i][0] <= beat <= pts[i + 1][0]:

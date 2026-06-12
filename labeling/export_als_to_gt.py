@@ -279,6 +279,12 @@ def _detect_loops(rows: list[ClipRow]) -> list[ClipRow]:
                 ref_end_s=row.ref_end_s,
                 mix_start_s=row.set_start_s,
             ))
+        # LOOP = a bit-identical ref segment replayed >=2x (MJ "Just Beat It").
+        # Distinct non-contiguous segments = a SPLIT/CUT (section-swap, e.g.
+        # Emily-instr, Freeze-Time-x-Weak) — NOT a loop. The old
+        # `is_loop = len(segments)>1` mislabeled every split as a loop.
+        _seg_keys = [(round(s.ref_start_s, 1), round(s.ref_end_s, 1)) for s in segments]
+        looped = any(_seg_keys.count(kk) >= 2 for kk in set(_seg_keys))
         first = key_rows[0]
         set_span = sum(
             max(0.0, row.set_end_s - row.set_start_s) for row in key_rows
@@ -305,7 +311,7 @@ def _detect_loops(rows: list[ClipRow]) -> list[ClipRow]:
             ref_start_s=ref_lo,
             ref_end_s=ref_hi,
             tempo_ratio=tempo_ratio(set_span, ref_span),
-            is_loop=len(segments) > 1,
+            is_loop=looped,
             ref_segments=tuple(segments),
             audible_frac=_min_frac(*(row.audible_frac for row in key_rows)),
             audible_start_s=_min_optional(
