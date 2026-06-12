@@ -42,8 +42,10 @@ def test_unalignable_placeholder_detection():
     assert _placeholder_note("/s/mix.flac", "g")
     note = _placeholder_note("/s/mix_instrumental.flac", "Lux x Spaceman")
     assert note and "unavailable" in note                  # Lux Omega outsourced-host case
-    assert _placeholder_note("/s/Imported/instrumental-2.flac", "g")
-    # real placements are NOT placeholders
+    # real placements are NOT placeholders — incl. an imported instrumental-N.flac,
+    # which is a real instrumental the human dragged in (Mako at lane 202), not the
+    # set's own mix audio
+    assert _placeholder_note("/s/Imported/instrumental-2.flac", "g") is None
     assert _placeholder_note("/s/tracks/154__Honest (Virtu Remix).m4a", "g") is None
     assert _placeholder_note("/s/stems/053__Honest/vocals.flac", "g") is None
     assert _placeholder_note("/s/stems/072__X/instrumental.flac", "g") is None  # real demucs stem

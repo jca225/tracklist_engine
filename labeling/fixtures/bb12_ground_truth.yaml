@@ -90,6 +90,7 @@ tracks:
         ref_end_s:   241.877
   - track:       "Weak (Filtered Vocals) - Original Song By AJR"
     slot_label:  "005"
+    track_id:    1wvvqwsf
     claimed_stem: acappella
     ref_source:  online_candidate
     set_start_s: 131.157
@@ -226,6 +227,7 @@ tracks:
         ref_start_s: 34.6667
         ref_end_s:   50.2222
   - track:       "instrumental-2"
+    track_id:    lvzr9s5
     claimed_stem: instrumental
     set_start_s: 322.06
     set_end_s:   431.869
@@ -235,8 +237,6 @@ tracks:
     audible_frac: 0.883
     audible_start_s: 323.918
     audible_end_s: 420.524
-    unalignable: true
-    source_note: "imported placeholder instrumental-2.flac (Our Story x Name of Love)"
   - track:       "Everytime We Touch - Cascada (Acapella)"
     slot_label:  "013"
     track_id:    scsk9cx
@@ -288,6 +288,7 @@ tracks:
     tempo_ratio: 1.46642
   - track:       "Good Riddance Vocals Only (Acapella World)"
     slot_label:  "016"
+    track_id:    zxuqpkf
     claimed_stem: acappella
     ref_source:  online_candidate
     set_start_s: 423.31
@@ -593,6 +594,7 @@ tracks:
     pitch_shift_semi: -1
   - track:       "Vicetone - Nothing Stopping Me"
     slot_label:  "034"
+    track_id:    j2dbhzf
     claimed_stem: instrumental
     ref_source:  demucs
     set_start_s: 834.171
@@ -661,6 +663,7 @@ tracks:
     pitch_shift_semi: -1
   - track:       "Krewella Alive (OFFICIAL INSTRUMENTAL)"
     slot_label:  "038"
+    track_id:    8upwr0x
     claimed_stem: instrumental
     ref_source:  online_candidate
     set_start_s: 911.936
@@ -877,6 +880,7 @@ tracks:
     audible_start_s: 1210.66
   - track:       "The Chainsmokers - Honest (Acappella)"
     slot_label:  "053"
+    track_id:    dgrjwux
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1211.1
@@ -1280,6 +1284,7 @@ tracks:
     pitch_shift_semi: -1
   - track:       "Coldplay A Sky Full Of Stars Instrumental Official"
     slot_label:  "080"
+    track_id:    1xnqbffp
     claimed_stem: instrumental
     ref_source:  online_candidate
     set_start_s: 1911.82
@@ -1651,6 +1656,7 @@ tracks:
         ref_end_s:   71.8754
   - track:       "Mako - Smoke Filled Room (Acappella)"
     slot_label:  "104"
+    track_id:    lvzr9s5
     claimed_stem: instrumental
     ref_source:  demucs
     set_start_s: 2447.98
@@ -1710,6 +1716,7 @@ tracks:
     skip_training: true
   - track:       "Calvin Harris - Sweet Nothing"
     slot_label:  "108"
+    track_id:    860w28f
     claimed_stem: instrumental
     ref_source:  demucs
     set_start_s: 2536.19
@@ -1747,6 +1754,7 @@ tracks:
     audible_start_s: 2585.71
   - track:       "Maroon 5 - Payphone (Acapella)"
     slot_label:  "110"
+    track_id:    2ysyh5f
     claimed_stem: acappella
     ref_source:  online_candidate
     set_start_s: 2575.48
@@ -1850,6 +1858,7 @@ tracks:
     tempo_ratio: 1
   - track:       "Calvin Harris Slide (Voclr studio acapella)"
     slot_label:  "120"
+    track_id:    13ruhr5p
     claimed_stem: acappella
     ref_source:  online_candidate
     set_start_s: 2778.02
@@ -2111,6 +2120,7 @@ tracks:
     pitch_shift_semi: 1
   - track:       "Swedish House Mafia - Save The World"
     slot_label:  "137"
+    track_id:    68m610x
     claimed_stem: instrumental
     ref_source:  online_candidate
     set_start_s: 3148.32
@@ -2130,6 +2140,7 @@ tracks:
     tempo_ratio: 0.976923
   - track:       "Swedish House Mafia - Save The World"
     slot_label:  "137"
+    track_id:    68m610x
     set_start_s: 3179.25
     set_end_s:   3219.67
     ref_start_s: 82.2047
@@ -2164,6 +2175,7 @@ tracks:
     audible_end_s: 3280.09
   - track:       "Porter Robinson & Madeon - Shelter (Instrumental)"
     slot_label:  "140"
+    track_id:    pr18kmx
     claimed_stem: instrumental
     set_start_s: 3210.5
     set_end_s:   3258.55
@@ -2306,6 +2318,7 @@ tracks:
     tempo_ratio: 1.0678
   - track:       "The Chainsmokers - Honest (Official Original Instrumental)100%"
     slot_label:  "149"
+    track_id:    dgrjwux
     claimed_stem: instrumental
     ref_source:  online_candidate
     set_start_s: 3456.23

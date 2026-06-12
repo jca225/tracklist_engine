@@ -329,23 +329,22 @@ def _detect_loops(rows: list[ClipRow]) -> list[ClipRow]:
 
 import re as _re
 
-# A clip whose audio IS the set's own mix / mix-instrumental (or an imported
-# placeholder) is the human's UNALIGNABLE marker: too hard to align OR the
-# source doesn't exist anywhere (e.g. Lux Omega). Not a song placement — a
-# positive abstain LABEL for the aligner to learn to predict.
-_PLACEHOLDER_RE = _re.compile(r"(^mix\.(m4a|flac|wav)$|^mix_instrumental\.|^instrumental-\d+\.)")
+# A clip whose audio IS the set's OWN mix / mix-instrumental is the human's
+# UNALIGNABLE marker: too hard to align OR the source doesn't exist anywhere
+# (e.g. Lux Omega). Not a song placement — a positive abstain LABEL.
+# NOTE: an imported `instrumental-N.flac` is a REAL instrumental the human
+# dragged in (e.g. Mako - Smoke Filled Room at lane 202), NOT a placeholder —
+# its identity just isn't encoded in the generic filename (needs a manual map).
+_PLACEHOLDER_RE = _re.compile(r"^(mix\.(m4a|flac|wav)|mix_instrumental\.(m4a|flac|wav))$")
 
 
 def _placeholder_note(path: str, group: str) -> str | None:
     fname = Path(path).name.lower()
     if not _PLACEHOLDER_RE.match(fname):
         return None
-    base = Path(path).name
     if fname.startswith("mix_instrumental"):
         return f"mix_instrumental substituted as host — original unavailable ({group})"
-    if fname.startswith("mix."):
-        return f"mix self-reference — too difficult to align ({group})"
-    return f"imported placeholder {base} ({group})"
+    return f"mix self-reference — too difficult to align ({group})"
 
 
 def _to_gt_track(row: ClipRow) -> GroundTruthTrack:
