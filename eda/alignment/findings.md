@@ -208,3 +208,73 @@ continuous stream (the instrumental), vindicating both the paper and the
 "flatten to a stem" intuition. Caveat: effect is **robust but modest** (absolute
 F1@3s ≈ 0.23), n = 1 mix, one bar grid — needs replication across sets before it
 is a detector rather than a characterisation.
+
+## v5 — proper significance test + the v4 exclusivity claim fails to reproduce (2026-06-12)
+
+Reproduce: `info_dynamics.run_robustness` (rewritten). Two upgrades over v4's
+"~4.5σ", which was an *inferred* descriptor `(real − shuf_mean)/σ` over only 4
+continuous shuffle seeds — too few to estimate σ, let alone claim a p-value
+(4 permutations floor the achievable p at ~0.2). v5 fixes the statistics **and**
+re-runs on the current MERT artifacts (regenerated 2026-06-08…11).
+
+**What changed in the method:**
+1. **Exact permutation p-value (primary null).** Take the real model's best-lift
+   signal, hold its peak *pattern* fixed (count + spacing), and circularly shift
+   its phase within the labeled window 1000× → null F1 distribution.
+   `p = (1+#{null≥real})/(N+1)`, one-sided. Tests "do these peaks land on GT
+   boundaries better than an arbitrary phase?" — preserving the signal's own peak
+   structure, so it is stricter than the uniform-random `random_chance_f1` floor.
+2. **Bootstrap 95% CI on the lift** (1000 draws, resampling per-event hit/miss
+   indicators — *not* GT timestamps, which would duplicate boundaries the
+   one-to-one matcher can't hit and bias the CI down).
+3. **Benjamini–Hochberg FDR** across all 6 grid cells; **instrumental × continuous
+   pre-registered** as the primary hypothesis.
+
+**±3 s localization, current artifacts (best signal per cell):**
+
+| Source | repr. | F1 | lift [95% CI] | p (perm) | q (FDR) |
+|--------|-------|----|----|----|----|
+| full | codebook | 0.291 | +0.114 [+0.053, +0.169] | .0020 | .002 |
+| full | continuous | 0.342 | **+0.201 [+0.132, +0.262]** | .0010 | .002 |
+| acappella | codebook | 0.280 | +0.094 [+0.038, +0.149] | .0030 | .003 |
+| acappella | continuous | 0.321 | +0.161 [+0.098, +0.226] | .0010 | .002 |
+| instrumental | codebook | 0.336 | +0.157 [+0.094, +0.215] | .0020 | .002 |
+| **instrumental ⭐** | continuous | 0.287 | +0.135 [+0.068, +0.193] | .0010 | .002 |
+
+**Primary hypothesis survives:** instrumental × continuous lift +0.135
+(CI [+0.068, +0.193] excludes 0), permutation p = .001, FDR q = .002 →
+significant. The instrumental's surprise peaks localize its section starts.
+
+**But the v4 *exclusivity* claim does NOT reproduce.** v4 said instrumental +
+continuous was "the **one** robust win" (full = suggestive, acappella = fail). On
+the current artifacts **all six cells are significant** under the permutation null,
+and full-mix continuous is in fact the *strongest* (+0.201, z = 6.1) — not the
+instrumental. The secondary model-level input-shuffle null (retrain on scrambled
+frames, 10 disc / 4 cont seeds) agrees: every continuous cell now clears its
+shuffle-max (full +0.201>.085, acap +0.161>.090, instr +0.135>.059), whereas in
+v4 only instrumental did. Two things drove the shift:
+- **Artifacts were regenerated.** v4's instrumental-cont lift was +0.104; it is now
+  +0.135, full-cont jumped +0.098→+0.201. The MERT/Demucs inputs changed under the
+  analysis — the old numbers are stale, and the conclusion was sitting on ±0.05
+  margins that didn't survive re-extraction. **Flagged for follow-up:** diff the
+  artifact provenance before trusting either set of absolute lifts.
+- **The permutation null is more lenient than the input-shuffle null** by design —
+  it asks "are these peaks well-phased?" not "did the model learn boundary
+  structure from real (vs scrambled) data?" Passing it for full-mix is weaker
+  evidence than the v4 input-shuffle test that originally singled out instrumental.
+
+**Honest takeaway:** the *significance machinery* is now sound (real p-values,
+valid CIs, FDR) and the headline that info-dynamics localizes transitions on a
+single continuous stream holds with q < .01. The sharper claim — that the
+**instrumental stem specifically** is privileged — is **not** supported on current
+data; full-mix continuous does at least as well. The stem-wise design rationale
+([[project_stemwise_alignment]]) now rests on the *prequential-predictability*
+argument (instrumental is the most forecastable stream) rather than on a
+localization advantage, which has evaporated.
+
+**Scope ceiling (unchanged and decisive): n = 1 mix.** Every test above is
+*within-mix* — it shows BB12's surprise is non-randomly aligned to BB12's own
+section starts. The unit of replication for a population claim is the **set**, not
+the bar-frame (frames are not exchangeable across mixes), so no permutation count
+upgrades this to "info-dynamics is a transition detector." Replicating across
+≥3–5 hand-labeled sets — treating *set* as the unit — is the only thing that does.
