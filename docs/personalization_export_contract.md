@@ -34,9 +34,22 @@ Two sources of embeddings coexist **in the same space**:
 SoundCloud rip vs the catalog yields near-identical MERT vectors, so the embedding
 space itself bridges the two — *no hard `sc_track_id ↔ recording_id` join is
 required to train*. The hard constraint is that **both sides use one pinned
-`mert_version` (1024-dim / MERT-330M)**. The catalog currently holds a mixed
-768/1024 population; the 768 subset is **out of contract** and must be re-embedded
-at 1024 before it can supply response tokens.
+`mert_version` = the MODEL/checkpoint (MERT-330M, 1024-dim)**. The catalog
+currently holds a mixed 768/1024 population; the 768 (95M) subset is **out of
+contract** and must be re-embedded with MERT-330M before it can supply tokens.
+
+**`mert_version` pins the model, NOT the layer or pooling.** Which MERT layer
+carries the taste→selection signal is an *empirical* question, not an a-priori one
+(low layers ≈ timbre/acoustics, high layers ≈ structure/semantics; the chain's
+legacy layer-6 default is for alignment, not necessarily this). So the producer
+**retains all transformer layers, whole-song mean-pooled**, and **layer selection
+is a consumer hyperparameter** — the learning repo either sweeps a single best
+layer or learns a weighted sum over layers (SUPERB-style). This is nearly free at
+whole-song granularity: all 25 layers × 1024 × fp16 ≈ **51 KB/track** (~0.4 GB for
+the BB-cohort, ~6 GB for the full 120k corpus) vs a single-layer vector at 2 KB.
+Pooling-strategy exploration (mean vs attention-pool) needs *pre-pool* features and
+is out of the default token contract — retain per-measure all-layer for the cohort
+only if/when that sweep is wanted (~5 MB/track).
 
 Id-resolution (`sc_track_id ↔ recording_id`) is still wanted, but only as a
 **dedup / eval** nicety (vocabulary stats, leakage checks), never as a training
@@ -56,10 +69,13 @@ token_id      TEXT   -- stable id: 'rec:<recording_id>:<stem>' or 'sc:<sc_track_
 source        TEXT   -- 'catalog' | 'soundcloud'
 recording_id  TEXT   -- nullable (set for catalog; for sc only if resolved)
 stem          TEXT   -- regular | acappella | instrumental
-mert_version  TEXT   -- must equal manifest.mert_version
+mert_version  TEXT   -- = manifest.mert_version; pins the MODEL (330M), not the layer
+n_layers      INT    -- ALL MERT-330M transformer layers retained (e.g. 25)
 dim           INT    -- 1024
-embedding     BLOB   -- float16[dim], whole-song mean-pool
+embedding     BLOB   -- float16[n_layers, dim], per-layer whole-song mean-pool
 ```
+The consumer selects/learns the layer at train time; the producer never collapses
+to one layer.
 
 ### `set_sequences`  — the response targets (one row per token-appearance)
 Projection rule: **one token per contiguous mix-appearance of the same song+stem**;
@@ -130,8 +146,11 @@ timeline, not just the 3 fully-enriched mixes — see the bottleneck note in
 ## 4. Open gaps the contract makes explicit
 
 1. **MERT coverage ≈ 0.3%** of referenced tracks are embedded. `token_catalog` is
-   near-empty until the embed job runs; this is the first producer task.
-2. **768 vs 1024 split** — re-embed the 768 catalog subset at the pinned version.
+   near-empty until the embed job runs; this is the first producer task. The job
+   must emit **all-layer whole-song-pooled** MERT-330M (not the legacy single-layer
+   per-measure `track_mert_measures`), so layer choice stays open downstream.
+2. **768 vs 1024 split** — the 95M/768 catalog subset is out of contract (wrong
+   model *and* single-layer); re-embed with MERT-330M, all layers.
 3. **sc↔recording resolution** — optional, for dedup/eval only; not a blocker.
 4. **Cut coverage** — `cut_source='engagement'` for ~83% (BB12); rest fall back to
    release date. Recorded per row so the consumer can weight/filter.
