@@ -16,6 +16,8 @@ tracks:
     ref_end_s:   200.728
     tempo_ratio: 1.02573
     pitch_shift_semi: 1
+    audible_frac: 0.983
+    audible_end_s: 93.8785
   - track:       "Two Friends - Emily (Remix)"
     slot_label:  "003"
     claimed_stem: instrumental
@@ -60,6 +62,8 @@ tracks:
       - mix_start_s: 111.071
         ref_start_s: 39.6076
         ref_end_s:   65.4282
+    audible_frac: 0.683
+    audible_end_s: 128.438
   - track:       "Manse ft"
     slot_label:  "155"
     claimed_stem: instrumental
@@ -202,6 +206,8 @@ tracks:
       - mix_start_s: 321.544
         ref_start_s: 202.626
         ref_end_s:   209.22
+    audible_frac: 0.733
+    audible_start_s: 283.294
   - track:       "Martin Garrix & Bebe Rexha - In The Name Of Love (Acappella)"
     slot_label:  "012"
     track_id:    2p25k23p
@@ -227,6 +233,9 @@ tracks:
     ref_start_s: 98.5211
     ref_end_s:   208.132
     tempo_ratio: 0.998194
+    audible_frac: 0.883
+    audible_start_s: 323.918
+    audible_end_s: 420.524
   - track:       "Everytime We Touch - Cascada (Acapella)"
     slot_label:  "013"
     track_id:    scsk9cx
@@ -264,6 +273,8 @@ tracks:
       - mix_start_s: 438.555
         ref_start_s: 149.112
         ref_end_s:   185.92
+    audible_frac: 0.083
+    audible_start_s: 419.786
   - track:       "Chromeo - Jealous (Acappella)"
     slot_label:  "014"
     track_id:    1b4hd9lp
@@ -294,6 +305,9 @@ tracks:
     ref_start_s: 197.651
     ref_end_s:   236.148
     tempo_ratio: 1.09521
+    audible_frac: 0.867
+    audible_start_s: 445.483
+    audible_end_s: 475.891
   - track:       "Dropgun - Ninja"
     slot_label:  "018"
     track_id:    13n64sf5
@@ -310,6 +324,8 @@ tracks:
       - mix_start_s: 507.085
         ref_start_s: 269.971
         ref_end_s:   275.633
+    audible_frac: 0.9
+    audible_start_s: 465.887
   - track:       "Eminem - Just Lose It (Acappella)"
     slot_label:  "019"
     track_id:    1v0zv1s5
@@ -338,6 +354,9 @@ tracks:
       - mix_start_s: 514.739
         ref_start_s: 135.011
         ref_end_s:   180.004
+    audible_frac: 0.683
+    audible_start_s: 507.883
+    audible_end_s: 518.174
   - track:       "twenty one pilots - Tear In My Heart (Official Acapella-Vocals Only)"
     slot_label:  "021"
     track_id:    nrtk415
@@ -367,6 +386,8 @@ tracks:
     ref_start_s: 47.6468
     ref_end_s:   86.7233
     tempo_ratio: 0.906338
+    audible_frac: 0.817
+    audible_end_s: 592.886
   - track:       "Blink-182 - What's My Age Again (Vocals Only)"
     slot_label:  "024"
     track_id:    2fj43sgf
@@ -394,6 +415,9 @@ tracks:
       - mix_start_s: 590.84
         ref_start_s: 0.38806
         ref_end_s:   0.38806
+    audible_frac: 0.283
+    audible_start_s: 598.766
+    audible_end_s: 602.003
   - track:       "Blink-182 - What's My Age Again (Vocals Only)"
     slot_label:  "024"
     track_id:    2fj43sgf
@@ -424,6 +448,8 @@ tracks:
     ref_start_s: 54.4515
     ref_end_s:   78.275
     tempo_ratio: 1.01176
+    audible_frac: 0.983
+    audible_start_s: 650.542
   - track:       "Drake - Forever Acapella - Featuring Kanye West, Lil Wayne & Eminem"
     slot_label:  "026"
     track_id:    1qbbnpkp
@@ -523,6 +549,8 @@ tracks:
       - mix_start_s: 834.376
         ref_start_s: 187.272
         ref_end_s:   204.647
+    audible_frac: 0.983
+    audible_start_s: 758.436
   - track:       "Creedence Clearwater Revival - Have You Ever Seen The Rain (Vocals Only)"
     slot_label:  "031"
     track_id:    1q8nc02p
@@ -663,6 +691,9 @@ tracks:
       - mix_start_s: 958.179
         ref_start_s: 86.6916
         ref_end_s:   138.548
+    audible_frac: 0.833
+    audible_start_s: 961.694
+    audible_end_s: 1010.29
   - track:       "Halsey - Now Or Never"
     slot_label:  "039"
     track_id:    2qy7u05p
@@ -731,6 +762,8 @@ tracks:
       - mix_start_s: 1070.56
         ref_start_s: 346.885
         ref_end_s:   354.551
+    audible_frac: 0.867
+    audible_start_s: 1006.57
   - track:       "Ludacris Get Back Acapella"
     slot_label:  "043"
     track_id:    2km1b5p5
@@ -808,6 +841,9 @@ tracks:
       - mix_start_s: 1148.12
         ref_start_s: 36.3449
         ref_end_s:   106.877
+    audible_frac: 0.9
+    audible_start_s: 1132.99
+    audible_end_s: 1211.48
   - track:       "The Killers - When You Were Young (Acapella - Vocals only)"
     slot_label:  "049"
     track_id:    1q8nc02p
@@ -852,6 +888,8 @@ tracks:
       - mix_start_s: 1245.27
         ref_start_s: 31.4058
         ref_end_s:   76.1947
+    audible_frac: 0.983
+    audible_start_s: 1210.66
   - track:       "The Chainsmokers - Honest (Acappella)"
     slot_label:  "053"
     claimed_stem: acappella
@@ -902,6 +940,8 @@ tracks:
     ref_start_s: 6.4375
     ref_end_s:   23.5405
     tempo_ratio: 0.984375
+    audible_frac: 0.983
+    audible_end_s: 1291.64
   - track:       "ASTRVL - Elevate"
     slot_label:  "056"
     track_id:    14pm0srf
@@ -980,6 +1020,8 @@ tracks:
       - mix_start_s: 1452.74
         ref_start_s: 80.8305
         ref_end_s:   85
+    audible_frac: 0.367
+    audible_end_s: 1454.22
   - track:       "Mike Posner - Cooler Than Me (Studio Acapella)"
     slot_label:  "061"
     track_id:    62f04m5
@@ -1007,6 +1049,8 @@ tracks:
     ref_start_s: 2109.06
     ref_end_s:   2200.72
     tempo_ratio: 0.896152
+    audible_frac: 0.983
+    audible_end_s: 1553.49
   - track:       "Passion Pit - Sleepyhead (Remix)"
     slot_label:  "066"
     track_id:    22gqmxm5
@@ -1025,6 +1069,8 @@ tracks:
       - mix_start_s: 1580.32
         ref_start_s: 37.4468
         ref_end_s:   56.2703
+    audible_frac: 0
+    skip_training: true
   - track:       "Lauv - I Like Me Better (Studio Acapella)"
     slot_label:  "067"
     track_id:    1hutuwzf
@@ -1052,6 +1098,9 @@ tracks:
       - mix_start_s: 1617.97
         ref_start_s: 140.978
         ref_end_s:   162.154
+    audible_frac: 0
+    audible_start_s: 1637.66
+    skip_training: true
   - track:       "Fifth Harmony - Work From Home (Remix)"
     slot_label:  "068"
     track_id:    sjwvyqx
@@ -1203,6 +1252,9 @@ tracks:
       - mix_start_s: 1817.34
         ref_start_s: 114.036
         ref_end_s:   210.833
+    audible_frac: 0.883
+    audible_start_s: 1822.26
+    audible_end_s: 1912.5
   - track:       "Ed Sheeran - Castle On The Hill (Studio Acapella)"
     slot_label:  "077"
     track_id:    1wx0v09f
@@ -1269,6 +1321,8 @@ tracks:
       - mix_start_s: 1928.18
         ref_start_s: 47.1112
         ref_end_s:   83.7112
+    audible_frac: 0.85
+    audible_end_s: 1959.18
   - track:       "Two Friends - Emily (Remix)"
     slot_label:  "003"
     track_id:    2uq9800f
@@ -1296,6 +1350,8 @@ tracks:
       - mix_start_s: 1989.35
         ref_start_s: 240.09
         ref_end_s:   270.038
+    audible_frac: 0.9
+    audible_start_s: 1950.11
   - track:       "Vicetone - Nothing Stopping Me (Acappella)"
     slot_label:  "082"
     track_id:    2tscznp5
@@ -1362,6 +1418,8 @@ tracks:
       - mix_start_s: 2056.85
         ref_start_s: 90.0055
         ref_end_s:   123.873
+    audible_frac: 0.983
+    audible_end_s: 2090.15
   - track:       "Martin Garrix - Pizza"
     slot_label:  "086"
     track_id:    1v0nypb5
@@ -1415,6 +1473,9 @@ tracks:
       - mix_start_s: 2172.27
         ref_start_s: 107.089
         ref_end_s:   110.422
+    audible_frac: 0.9
+    audible_start_s: 2131.44
+    audible_end_s: 2176.43
   - track:       "Eminem - Cleanin' Out My Closet (Acapella - Vocals only)"
     slot_label:  "026w1"
     track_id:    tlp2852999
@@ -1441,6 +1502,9 @@ tracks:
       - mix_start_s: 2214.51
         ref_start_s: 102.027
         ref_end_s:   110.933
+    audible_frac: 0.783
+    audible_start_s: 2173.66
+    audible_end_s: 2220.97
   - track:       "Pat Benatar - Hit Me With Your Best Shot (Acapella)"
     slot_label:  "092"
     track_id:    91r659f5
@@ -1475,6 +1539,8 @@ tracks:
       - mix_start_s: 2265.62
         ref_start_s: 329.616
         ref_end_s:   352.511
+    audible_frac: 0.783
+    audible_start_s: 2241.24
   - track:       "Avril Lavigne - Here's To Never Growing Up (Official Acapella)"
     slot_label:  "093"
     track_id:    1hn0wlpx
@@ -1587,6 +1653,8 @@ tracks:
       - mix_start_s: 2429.53
         ref_start_s: 167.956
         ref_end_s:   180.095
+    audible_frac: 0.983
+    audible_start_s: 2394.14
   - track:       "The Black Eyed Peas I Gotta Feeling Vocals Only!!! (Download!!!)"
     slot_label:  "103"
     track_id:    67z8kmp
@@ -1598,6 +1666,7 @@ tracks:
     ref_end_s:   64.076
     tempo_ratio: 1.63001
     pitch_shift_semi: -1
+    audible_frac: 0.983
   - track:       "Clean Bandit feat. Jess Glynne - Rather Be (Studio Acapella)"
     slot_label:  "105"
     track_id:    2l4gzr8x
@@ -1652,6 +1721,8 @@ tracks:
     ref_start_s: 54.4263
     ref_end_s:   99.4263
     tempo_ratio: 0.995392
+    audible_frac: 0.917
+    audible_start_s: 2499.5
   - track:       "Galantis - You"
     slot_label:  "112"
     track_id:    27w2d10f
@@ -1671,6 +1742,9 @@ tracks:
       - mix_start_s: 2655.21
         ref_start_s: 73.297
         ref_end_s:   78.9212
+    audible_frac: 0
+    audible_start_s: 2592.54
+    skip_training: true
   - track:       "Calvin Harris - Sweet Nothing"
     slot_label:  "108"
     claimed_stem: instrumental
@@ -1707,6 +1781,8 @@ tracks:
     ref_start_s: 105.124
     ref_end_s:   213.98
     tempo_ratio: 1
+    audible_frac: 0.883
+    audible_start_s: 2585.71
   - track:       "Maroon 5 - Payphone (Acapella)"
     slot_label:  "110"
     claimed_stem: acappella
@@ -1766,6 +1842,8 @@ tracks:
     ref_start_s: 78.7225
     ref_end_s:   108.84
     tempo_ratio: 1
+    audible_frac: 0.983
+    audible_end_s: 2718.45
   - track:       "HD Stop And Stare - OneRepublic Studio Acapella"
     slot_label:  "116"
     track_id:    ms7blu5
@@ -1784,6 +1862,8 @@ tracks:
     ref_start_s: 28.2325
     ref_end_s:   108.857
     tempo_ratio: 1
+    audible_frac: 0.983
+    audible_end_s: 2796.34
   - track:       "Till The World Ends Britney Spears Acapella (Studio Version)"
     slot_label:  "118"
     track_id:    65usc75
@@ -1900,6 +1980,8 @@ tracks:
       - mix_start_s: 2938.74
         ref_start_s: 146.053
         ref_end_s:   175.075
+    audible_frac: 0.983
+    audible_end_s: 2967.31
   - track:       "Alesso & One Republic  If I Lose Myself Tonight  Studio Acapella"
     slot_label:  "126"
     track_id:    1dx4nn2f
@@ -1953,6 +2035,9 @@ tracks:
       - mix_start_s: 2989.52
         ref_start_s: 129.867
         ref_end_s:   176.624
+    audible_frac: 0.617
+    audible_start_s: 2965.96
+    audible_end_s: 3018.05
   - track:       "Linkin Park - Heavy (Vocals Only - Acapella)"
     slot_label:  "130"
     track_id:    257v8xqx
@@ -1979,6 +2064,8 @@ tracks:
       - mix_start_s: 3047.11
         ref_start_s: 198.175
         ref_end_s:   202.58
+    audible_frac: 0.9
+    audible_start_s: 3010.39
   - track:       "Bassjackers & Brooks - Joyride"
     slot_label:  "135"
     track_id:    fclk03p
@@ -1995,6 +2082,8 @@ tracks:
       - mix_start_s: 3130.97
         ref_start_s: 102.066
         ref_end_s:   127.847
+    audible_frac: 0.4
+    audible_start_s: 3097.58
   - track:       "Heiress of Valentina (Alesso Radio Edit Instrumental)"
     slot_label:  "132"
     track_id:    94tc2y5
@@ -2016,6 +2105,8 @@ tracks:
       - mix_start_s: 3066.4
         ref_start_s: 135.029
         ref_end_s:   187.566
+    audible_frac: 0.833
+    audible_start_s: 3049.13
   - track:       "Oasis - Champagne Supernova(vocals only isolated)"
     slot_label:  "133"
     track_id:    lpmk45
@@ -2097,6 +2188,8 @@ tracks:
       - mix_start_s: 3194.13
         ref_start_s: 189.751
         ref_end_s:   213.345
+    audible_frac: 0.983
+    audible_start_s: 3179.51
   - track:       "Porter Robinson & Madeon - Shelter (Rvmor Remix)"
     slot_label:  "140w1"
     track_id:    tlp2853054
@@ -2113,6 +2206,9 @@ tracks:
       - mix_start_s: 3277.3
         ref_start_s: 206.554
         ref_end_s:   231.6
+    audible_frac: 0.15
+    audible_start_s: 3256.57
+    audible_end_s: 3280.09
   - track:       "Porter Robinson & Madeon - Shelter (Instrumental)"
     slot_label:  "140"
     set_start_s: 3210.5
@@ -2175,6 +2271,7 @@ tracks:
       - mix_start_s: 3281.2
         ref_start_s: 125.678
         ref_end_s:   190.157
+    audible_frac: 0.983
   - track:       "Snakehips - All My Friends (Acappella)"
     slot_label:  "144"
     track_id:    2uq9800f
@@ -2209,6 +2306,8 @@ tracks:
       - mix_start_s: 3342.22
         ref_start_s: 80.4621
         ref_end_s:   112.301
+    audible_frac: 0.333
+    audible_start_s: 3334.34
   - track:       "Lucas & Steve & Mike Williams x Curbi - Let's Go"
     slot_label:  "146"
     track_id:    2n51zgwf
@@ -2274,6 +2373,9 @@ tracks:
       - mix_start_s: 3555.7
         ref_start_s: 61.3929
         ref_end_s:   112.723
+    audible_frac: 0.85
+    audible_start_s: 3556.61
+    audible_end_s: 3600.37
   - track:       "Taylor Swift - Mean (Taylor's Version) (Acapella - Vocal Only)"
     slot_label:  "150"
     track_id:    lyu6xx5
@@ -2304,6 +2406,9 @@ tracks:
     ref_start_s: 0.0971514
     ref_end_s:   96.9778
     tempo_ratio: 1.02846
+    audible_frac: 0.417
+    audible_start_s: 3521.67
+    audible_end_s: 3561.07
   - track:       "Macy Gray - I Try (Acapella)"
     slot_label:  "151"
     track_id:    17pu9hk5
@@ -2341,3 +2446,5 @@ tracks:
     ref_start_s: 140.758
     ref_end_s:   228.066
     tempo_ratio: 1.00184
+    audible_frac: 0.983
+    audible_start_s: 3598.69

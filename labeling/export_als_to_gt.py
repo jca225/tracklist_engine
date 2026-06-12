@@ -30,7 +30,9 @@ if str(_REPO) not in sys.path:
 
 from labeling.als_io import (
     ArrangementMapper,
+    MUTE_THR,
     ParsedClip,
+    audible_span,
     build_manifest_index,
     classify_path,
     load_als_xml,
@@ -51,6 +53,31 @@ SLIVER_MAX_S = 3.0
 MICRO_SLIVER_DROP_S = 0.01   # clip-boundary specks (e.g. slot 107)
 LOOP_OVERLAP_MIN = 0.35
 BLINK_182_SLOTS = frozenset({"024", "024w1", "029"})
+AUDIBLE_EPS_S = 0.05
+
+
+def _min_frac(*values: float | None) -> float | None:
+    nums = [v for v in values if v is not None]
+    if not nums:
+        return None
+    m = min(nums)
+    return None if m >= 1.0 else m
+
+
+def _min_optional(*values: float | None, default: float) -> float | None:
+    nums = [v for v in values if v is not None]
+    if not nums:
+        return None
+    m = min(nums)
+    return None if abs(m - default) < AUDIBLE_EPS_S else m
+
+
+def _max_optional(*values: float | None, default: float) -> float | None:
+    nums = [v for v in values if v is not None]
+    if not nums:
+        return None
+    m = max(nums)
+    return None if abs(m - default) < AUDIBLE_EPS_S else m
 
 
 @dataclass(frozen=True)
@@ -81,6 +108,10 @@ class ClipRow:
     pitch_shift_semi: int
     is_loop: bool = False
     ref_segments: tuple[RefSegment, ...] = ()
+    audible_frac: float | None = None
+    audible_start_s: float | None = None
+    audible_end_s: float | None = None
+    skip_training: bool = False
 
 
 def _mix_track(root) -> object | None:
@@ -103,6 +134,17 @@ def _clip_row(clip: ParsedClip, mapper: ArrangementMapper, manifest) -> ClipRow 
     ref_end = clip.ref_end_s()
     set_span = set_end - set_start
     ref_span = ref_end - ref_start
+    aud = audible_span(clip.vol_points, clip.arr_start, clip.arr_end)
+    audible_start = mapper.arr_to_set_sec(aud.arr_start) if aud.fraction > 0 else None
+    audible_end = mapper.arr_to_set_sec(aud.arr_end) if aud.fraction > 0 else None
+    skip = aud.fraction < MUTE_THR
+    aud_start_out = audible_start
+    aud_end_out = audible_end
+    if aud_start_out is not None and abs(aud_start_out - set_start) < AUDIBLE_EPS_S:
+        aud_start_out = None
+    if aud_end_out is not None and abs(aud_end_out - set_end) < AUDIBLE_EPS_S:
+        aud_end_out = None
+    aud_frac_out = None if aud.fraction >= 1.0 else round(aud.fraction, 3)
     return ClipRow(
         clip=clip,
         set_start_s=set_start,
@@ -116,6 +158,10 @@ def _clip_row(clip: ParsedClip, mapper: ArrangementMapper, manifest) -> ClipRow 
         ref_source=ref_source,
         tempo_ratio=tempo_ratio(set_span, ref_span),
         pitch_shift_semi=clip.pitch_coarse,
+        audible_frac=aud_frac_out,
+        audible_start_s=aud_start_out,
+        audible_end_s=aud_end_out,
+        skip_training=skip,
     )
 
 
@@ -160,6 +206,14 @@ def _merge_slivers(rows: list[ClipRow]) -> tuple[list[ClipRow], list[ReviewRow]]
                     max(prev.set_end_s, row.set_end_s) - prev.set_start_s,
                     max(prev.ref_end_s, row.ref_end_s) - prev.ref_start_s,
                 ),
+                audible_frac=_min_frac(prev.audible_frac, row.audible_frac),
+                audible_start_s=_min_optional(
+                    prev.audible_start_s, row.audible_start_s, default=prev.set_start_s,
+                ),
+                audible_end_s=_max_optional(
+                    prev.audible_end_s, row.audible_end_s, default=row.set_end_s,
+                ),
+                skip_training=prev.skip_training or row.skip_training,
             )
             kept[-1] = merged
             review.append(ReviewRow(
@@ -239,6 +293,16 @@ def _detect_loops(rows: list[ClipRow]) -> list[ClipRow]:
             tempo_ratio=tempo_ratio(set_span, ref_span),
             is_loop=len(segments) > 1,
             ref_segments=tuple(segments),
+            audible_frac=_min_frac(*(row.audible_frac for row in key_rows)),
+            audible_start_s=_min_optional(
+                *(row.audible_start_s for row in key_rows),
+                default=min(row.set_start_s for row in key_rows),
+            ),
+            audible_end_s=_max_optional(
+                *(row.audible_end_s for row in key_rows),
+                default=max(row.set_end_s for row in key_rows),
+            ),
+            skip_training=any(row.skip_training for row in key_rows),
         ))
     return sorted(out, key=lambda r: (r.set_start_s, r.slot_label, r.claimed_stem))
 
@@ -258,6 +322,10 @@ def _to_gt_track(row: ClipRow) -> GroundTruthTrack:
         pitch_shift_semi=row.pitch_shift_semi,
         is_loop=row.is_loop,
         ref_segments=row.ref_segments,
+        audible_frac=row.audible_frac,
+        audible_start_s=row.audible_start_s,
+        audible_end_s=row.audible_end_s,
+        skip_training=row.skip_training,
     )
 
 

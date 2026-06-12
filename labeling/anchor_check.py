@@ -67,14 +67,14 @@ def _norm_slot(slot: str) -> str:
     return s
 
 
-def _track_key(t: GroundTruthTrack) -> tuple[str, str, float]:
+def _track_key(t: GroundTruthTrack) -> tuple[str, str, float, float]:
     stem = t.claimed_stem or "regular"
     slot = _norm_slot(t.slot_label or t.label)
-    return slot, stem, round(t.set_start_s, 1)
+    return slot, stem, round(t.set_start_s, 3), round(t.set_end_s, 3)
 
 
-def _index_gt(gt: GroundTruthSet) -> dict[tuple[str, str, float], GroundTruthTrack]:
-    out: dict[tuple[str, str, float], GroundTruthTrack] = {}
+def _index_gt(gt: GroundTruthSet) -> dict[tuple[str, str, float, float], GroundTruthTrack]:
+    out: dict[tuple[str, str, float, float], GroundTruthTrack] = {}
     for t in gt.tracks:
         out[_track_key(t)] = t
     return out
@@ -82,7 +82,7 @@ def _index_gt(gt: GroundTruthSet) -> dict[tuple[str, str, float], GroundTruthTra
 
 def _find_fresh(
     t: GroundTruthTrack,
-    fresh_index: dict[tuple[str, str, float], GroundTruthTrack],
+    fresh_index: dict[tuple[str, str, float, float], GroundTruthTrack],
 ) -> GroundTruthTrack | None:
     key = _track_key(t)
     if key in fresh_index:
@@ -147,17 +147,30 @@ def compare_anchors(
     return results
 
 
-def summarize_drift(yaml_gt: GroundTruthSet, fresh_gt: GroundTruthSet) -> tuple[int, int, float]:
+def summarize_drift(yaml_gt: GroundTruthSet, fresh_gt: GroundTruthSet) -> tuple[int, int, float, float]:
     fresh_index = _index_gt(fresh_gt)
     matched = 0
-    max_delta = 0.0
+    max_start_delta = 0.0
+    max_ref_delta = 0.0
     for t in yaml_gt.tracks:
         fresh = _find_fresh(t, fresh_index)
         if fresh is None:
             continue
         matched += 1
-        max_delta = max(max_delta, abs(fresh.set_start_s - t.set_start_s))
-    return matched, len(yaml_gt.tracks), max_delta
+        max_start_delta = max(max_start_delta, abs(fresh.set_start_s - t.set_start_s))
+        max_ref_delta = max(max_ref_delta, abs(fresh.ref_start_s - t.ref_start_s))
+    return matched, len(yaml_gt.tracks), max_start_delta, max_ref_delta
+
+
+def summarize_audible(gt: GroundTruthSet) -> tuple[int, int]:
+    """Return (muted, partial) counts."""
+    muted = partial = 0
+    for t in gt.tracks:
+        if t.skip_training:
+            muted += 1
+        elif t.audible_frac is not None and t.audible_frac < 1.0:
+            partial += 1
+    return muted, partial
 
 
 def print_report(
@@ -165,12 +178,17 @@ def print_report(
     *,
     matched: int,
     total: int,
-    max_delta: float,
+    max_start_delta: float,
+    max_ref_delta: float,
+    muted: int,
+    partial: int,
 ) -> None:
     beat_s = 60.0 / DEFAULT_BPM
     tol_s = BEAT_TOL * beat_s
-    print(f"corpus drift: matched {matched}/{total} yaml rows; max |Δstart|={max_delta:.3f}s")
+    print(f"corpus drift: matched {matched}/{total} yaml rows; "
+          f"max |Δstart|={max_start_delta:.3f}s; max |Δref_start|={max_ref_delta:.3f}s")
     print(f"tolerance line: ±{BEAT_TOL} beat @ {DEFAULT_BPM:.0f}bpm ≈ ±{tol_s:.3f}s")
+    print(f"audible metadata: muted={muted} partial={partial}")
     print()
     print("Manual Ableton check — park playhead on 1-mix at mix time, compare to YAML:")
     print(f"{'slot':6} {'stem':12} {'yaml mix span':24} {'Δstart':8} {'ok':3}  track")
@@ -188,6 +206,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--set-dir", type=Path, default=DEFAULT_SET_DIR)
     p.add_argument("--anchors", default=",".join(DEFAULT_ANCHORS),
                    help="Comma-separated slot labels; optional slot:stem (e.g. 003:instrumental)")
+    p.add_argument("--strict-ref", action="store_true",
+                   help="exit non-zero when ref_start drift exceeds tolerance")
     args = p.parse_args(argv)
 
     match load(args.yaml):
@@ -205,13 +225,28 @@ def main(argv: list[str] | None = None) -> int:
 
     slots = tuple(s.strip() for s in args.anchors.split(",") if s.strip())
     results = compare_anchors(yaml_gt, fresh_gt, slots)
-    matched, total, max_delta = summarize_drift(yaml_gt, fresh_gt)
-    print_report(results, matched=matched, total=total, max_delta=max_delta)
+    matched, total, max_start_delta, max_ref_delta = summarize_drift(yaml_gt, fresh_gt)
+    muted, partial = summarize_audible(yaml_gt)
+    print_report(
+        results,
+        matched=matched,
+        total=total,
+        max_start_delta=max_start_delta,
+        max_ref_delta=max_ref_delta,
+        muted=muted,
+        partial=partial,
+    )
 
     if not all(r.ok for r in results):
         return 1
-    if max_delta > BEAT_TOL * (60.0 / DEFAULT_BPM):
+    tol_s = BEAT_TOL * (60.0 / DEFAULT_BPM)
+    if max_start_delta > tol_s:
         print("\nnote: full-corpus drift is higher (loops/merges); anchor spots are OK.", file=sys.stderr)
+    if max_ref_delta > tol_s:
+        print(f"\nwarning: ref_start drift up to {max_ref_delta:.3f}s — re-export GT yaml recommended.",
+              file=sys.stderr)
+        if args.strict_ref:
+            return 1
     return 0
 
 

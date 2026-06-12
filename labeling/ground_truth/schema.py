@@ -75,6 +75,10 @@ class GroundTruthTrack:
     is_loop: bool = False
     ref_segments: tuple[RefSegment, ...] = ()
     media_links: MediaLinks = field(default_factory=MediaLinks)
+    audible_frac: float | None = None
+    audible_start_s: float | None = None
+    audible_end_s: float | None = None
+    skip_training: bool = False
 
 
 @dataclass(frozen=True)
@@ -146,6 +150,13 @@ def _parse_track(idx: int, t: dict[str, Any], path: Path) -> Result[GroundTruthT
     tempo_ratio = float(tempo_raw) if isinstance(tempo_raw, (int, float)) else None
     pitch_raw = t.get("pitch_shift_semi")
     pitch_shift_semi = int(pitch_raw) if isinstance(pitch_raw, (int, float)) else 0
+    audible_raw = t.get("audible_frac")
+    audible_frac = float(audible_raw) if isinstance(audible_raw, (int, float)) else None
+    aud_start_raw = t.get("audible_start_s")
+    audible_start_s = float(aud_start_raw) if isinstance(aud_start_raw, (int, float)) else None
+    aud_end_raw = t.get("audible_end_s")
+    audible_end_s = float(aud_end_raw) if isinstance(aud_end_raw, (int, float)) else None
+    skip_training = bool(t.get("skip_training", False))
     return Ok(GroundTruthTrack(
         label=label,
         track_id=track_id,
@@ -168,6 +179,10 @@ def _parse_track(idx: int, t: dict[str, Any], path: Path) -> Result[GroundTruthT
             soundcloud=str(ml.get("soundcloud") or "").strip(),
             other=str(ml.get("other") or "").strip(),
         ),
+        audible_frac=audible_frac,
+        audible_start_s=audible_start_s,
+        audible_end_s=audible_end_s,
+        skip_training=skip_training,
     ))
 
 
@@ -277,6 +292,14 @@ def dump(gt: GroundTruthSet, *, title: str | None = None) -> str:
                 out.append(f"      - mix_start_s: {_fmt_num(s.mix_start_s)}")
                 out.append(f"        ref_start_s: {_fmt_num(s.ref_start_s)}")
                 out.append(f"        ref_end_s:   {_fmt_num(s.ref_end_s)}")
+        if t.audible_frac is not None and t.audible_frac < 1.0:
+            out.append(f"    audible_frac: {_fmt_num(t.audible_frac)}")
+        if t.audible_start_s is not None:
+            out.append(f"    audible_start_s: {_fmt_num(t.audible_start_s)}")
+        if t.audible_end_s is not None:
+            out.append(f"    audible_end_s: {_fmt_num(t.audible_end_s)}")
+        if t.skip_training:
+            out.append("    skip_training: true")
         if t.media_links.any():
             out.append("    media_links:")
             for k, v in t.media_links.as_dict().items():

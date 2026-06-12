@@ -8,9 +8,11 @@ from labeling.als_io import (
     ManifestSlot,
     ParsedClip,
     WarpMarkers,
+    audible_span,
     build_manifest_index,
     classify_path,
     display_from_path,
+    envelope_value,
     labels_overlap,
     match_manifest_for_path,
     resolve_identity,
@@ -159,3 +161,25 @@ def test_arrangement_mapper_gap_bridge():
     mapper = ArrangementMapper(spans=spans, mix_duration_s=200.0)  # type: ignore[arg-type]
     assert mapper.arr_to_set_sec(50.0) == 50.0
     assert mapper.arr_to_set_sec(105.0) == 110.0
+
+
+def test_envelope_value_interpolates():
+    pts = ((0.0, 1.0), (10.0, 0.0))
+    assert envelope_value(pts, 0.0) == 1.0
+    assert envelope_value(pts, 10.0) == 0.0
+    assert envelope_value(pts, 5.0) == 0.5
+
+
+def test_audible_span_full_and_muted():
+    full = audible_span((), 0.0, 10.0)
+    assert full.fraction == 1.0
+    assert full.arr_start == 0.0
+    assert full.arr_end == 10.0
+
+    muted = audible_span(((0.0, 0.0), (10.0, 0.0)), 0.0, 10.0)
+    assert muted.fraction == 0.0
+
+    fade = audible_span(((0.0, 0.0), (5.0, 0.0), (10.0, 1.0)), 0.0, 10.0)
+    assert 0.0 < fade.fraction < 1.0
+    assert fade.arr_start >= 0.0
+    assert fade.arr_end <= 10.0

@@ -124,6 +124,18 @@ class ArrangementMapper:
         return None
 
 
+MUTE_THR = 0.05  # track-volume below this is effectively silent (≈ -26 dB)
+
+
+@dataclass(frozen=True)
+class AudibleSpan:
+    """Audible portion of a clip's arrangement span (from volume automation)."""
+
+    fraction: float
+    arr_start: float
+    arr_end: float
+
+
 @dataclass(frozen=True)
 class ParsedClip:
     group_name: str
@@ -136,6 +148,7 @@ class ParsedClip:
     pitch_coarse: int
     pitch_fine: int
     warp: WarpMarkers
+    vol_points: tuple[tuple[float, float], ...] = ()
 
     @property
     def content_beat_start(self) -> float:
@@ -408,7 +421,71 @@ def labels_overlap(left: str, right: str, *, min_tokens: int = 2) -> bool:
     return shorter > 0 and len(shared) / shorter >= 0.4
 
 
+def build_vol_envelopes(root: etree._Element) -> dict[str, list[tuple[float, float]]]:
+    """PointeeId -> sorted (arr-beat, value) breakpoints for volume automation."""
+    envs: dict[str, list[tuple[float, float]]] = {}
+    for env_el in root.xpath(".//AutomationEnvelope"):
+        pid = env_el.find(".//PointeeId")
+        if pid is None:
+            continue
+        envs[pid.get("Value")] = sorted(
+            (max(float(fe.get("Time")), -1e6), float(fe.get("Value")))
+            for fe in env_el.xpath(".//FloatEvent")
+        )
+    return envs
+
+
+def volume_automation_id(track_el: etree._Element) -> str | None:
+    at = track_el.find(".//DeviceChain/Mixer/Volume/AutomationTarget")
+    return at.get("Id") if at is not None else None
+
+
+def envelope_value(pts: tuple[tuple[float, float], ...] | list[tuple[float, float]], x: float) -> float:
+    if not pts:
+        return 1.0
+    if x <= pts[0][0]:
+        return pts[0][1]
+    if x >= pts[-1][0]:
+        return pts[-1][1]
+    for i in range(len(pts) - 1):
+        (b0, v0), (b1, v1) = pts[i], pts[i + 1]
+        if b0 <= x <= b1:
+            return v0 if b1 == b0 else v0 + (x - b0) / (b1 - b0) * (v1 - v0)
+    return pts[-1][1]
+
+
+def audible_span(
+    pts: tuple[tuple[float, float], ...],
+    arr_lo: float,
+    arr_hi: float,
+    *,
+    thr: float = MUTE_THR,
+    n: int = 60,
+) -> AudibleSpan:
+    """Fraction of [arr_lo, arr_hi] where track volume exceeds the mute floor."""
+    if not pts or arr_hi <= arr_lo:
+        return AudibleSpan(1.0, arr_lo, arr_hi)
+    step = (arr_hi - arr_lo) / max(n - 1, 1)
+    audible = 0
+    arr_a = arr_hi
+    arr_b = arr_lo
+    t = arr_lo
+    for _ in range(n):
+        if envelope_value(pts, t) > thr:
+            audible += 1
+            arr_a = min(arr_a, t)
+            arr_b = max(arr_b, t)
+        t += step
+    frac = audible / n
+    if frac == 0:
+        return AudibleSpan(0.0, arr_lo, arr_lo)
+    if frac >= 1.0 - 1e-9:
+        return AudibleSpan(1.0, arr_lo, arr_hi)
+    return AudibleSpan(frac, arr_a, arr_b)
+
+
 def parse_layer_clips(root: etree._Element) -> list[ParsedClip]:
+    vol_envs = build_vol_envelopes(root)
     tracks = root.xpath(".//LiveSet/Tracks/*")
     current_group: str | None = None
     out: list[ParsedClip] = []
@@ -433,6 +510,8 @@ def parse_layer_clips(root: etree._Element) -> list[ParsedClip]:
                 continue
             pc_el = clip_el.find("PitchCoarse")
             pf_el = clip_el.find("PitchFine")
+            vol_id = volume_automation_id(track_el)
+            vol_pts = tuple(vol_envs.get(vol_id, ())) if vol_id else ()
             out.append(ParsedClip(
                 group_name=current_group or "",
                 track_name=track_name,
@@ -444,6 +523,7 @@ def parse_layer_clips(root: etree._Element) -> list[ParsedClip]:
                 pitch_coarse=int(pc_el.get("Value") or 0) if pc_el is not None else 0,
                 pitch_fine=int(pf_el.get("Value") or 0) if pf_el is not None else 0,
                 warp=WarpMarkers.from_clip(clip_el),
+                vol_points=vol_pts,
             ))
     return out
 
