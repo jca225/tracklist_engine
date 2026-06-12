@@ -35,6 +35,20 @@ Sub-bar placement needs a different emission signal (stem-aware chroma /
 DTW or stretch-tolerant fingerprinting — `set_fingerprint_hits` exists but
 is empty corpus-wide), not a better MERT head.
 
+**Design decision (2026-06-11) — stem-wise alignment.** A mix moment is a
+sum of layers (host instrumental + overlaid acappellas), so full-mix-only
+matching entangles them and matches no single ref — the root cause of the
+localization failure above, on BB12 too. Alignment is computed per stem
+channel (mix_vocals↔ref vocals stem, mix_instrumental↔ref instrumental
+stem) AND on the full mix, as separate channels fused at decode. Division
+of labor: identity = MERT head (100% BB12 held-out); ref-offset placement =
+matched-filter correlation (`refine_ref_offsets.py` — BB11 151/151
+relocated, median move 100 s vs decode, peak median 0.83); tempo = the
+instrumental-BPM-anchor heuristic (host grid never changes within a span;
+acappellas beat-synced to it ⇒ stretch = ref_bpm / mix_local_bpm from
+set_measures × track_measures, search in beat space with bar-quantized
+offsets — v1's seconds-space stretch grid saturated at its 0.92/1.08 edges).
+
 ## Not wired yet
 
 - PyTorch training loop beyond the small `MertAlignHead` (`--train-mert`)
