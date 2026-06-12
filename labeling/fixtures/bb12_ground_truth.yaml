@@ -228,6 +228,7 @@ tracks:
         ref_start_s: 34.6667
         ref_end_s:   50.2222
   - track:       "instrumental-2"
+    claimed_stem: instrumental
     set_start_s: 322.06
     set_end_s:   431.869
     ref_start_s: 98.5211
@@ -236,6 +237,8 @@ tracks:
     audible_frac: 0.883
     audible_start_s: 323.918
     audible_end_s: 420.524
+    unalignable: true
+    source_note: "imported placeholder instrumental-2.flac (Our Story x Name of Love)"
   - track:       "Everytime We Touch - Cascada (Acapella)"
     slot_label:  "013"
     track_id:    scsk9cx
@@ -1051,6 +1054,8 @@ tracks:
     tempo_ratio: 0.896152
     audible_frac: 0.983
     audible_end_s: 1553.49
+    unalignable: true
+    source_note: "mix self-reference — too difficult to align (Sleepy Head x I Like me Better)"
   - track:       "Passion Pit - Sleepyhead (Remix)"
     slot_label:  "066"
     track_id:    22gqmxm5
@@ -1189,7 +1194,7 @@ tracks:
     slot_label:  "073"
     track_id:    252ys8cx
     claimed_stem: acappella
-    ref_source:  demucs
+    ref_source:  online_candidate
     set_start_s: 1739.96
     set_end_s:   1771.39
     ref_start_s: 58.922
@@ -1793,11 +1798,14 @@ tracks:
     ref_end_s:   87.5147
     tempo_ratio: 1.16364
   - track:       "mix_instrumental"
+    claimed_stem: instrumental
     set_start_s: 2636.46
     set_end_s:   2688.84
     ref_start_s: 3800.14
     ref_end_s:   3848.72
     tempo_ratio: 0.927536
+    unalignable: true
+    source_note: "mix_instrumental substituted as host — original unavailable (Lux x Spaceman)"
   - track:       "The Killers - Spaceman"
     slot_label:  "113"
     track_id:    1b52k3xx
@@ -2003,6 +2011,7 @@ tracks:
   - track:       "Daniel Powter - Bad Day (Acappella)"
     slot_label:  "127"
     track_id:    dkg1c995
+    claimed_stem: acappella
     set_start_s: 2909.33
     set_end_s:   2937.27
     ref_start_s: 54.1071
@@ -2211,6 +2220,7 @@ tracks:
     audible_end_s: 3280.09
   - track:       "Porter Robinson & Madeon - Shelter (Instrumental)"
     slot_label:  "140"
+    claimed_stem: instrumental
     set_start_s: 3210.5
     set_end_s:   3258.55
     ref_start_s: -1.42041e-08
