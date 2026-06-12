@@ -9,17 +9,17 @@ import time
 from pathlib import Path
 
 from core.result import Err, Ok
-from workspaces.taste_prior.bot_heuristics import score_mix_listeners
-from workspaces.taste_prior.collect import collect_tick
-from workspaces.taste_prior.comment_heatmap import run_heatmap_analysis
-from workspaces.taste_prior.config import load_mixes, load_settings, mix_by_id
-from workspaces.taste_prior.enrich import enrich_batch
-from workspaces.taste_prior.enrich_playlists import enrich_playlists_batch
-from workspaces.taste_prior.import_archive import import_archive_dir
-from workspaces.taste_prior.persistence import connect, init_db, migrate_db, status_counts
-from workspaces.taste_prior.pipeline import run_analysis_pipeline
-from workspaces.taste_prior.prior_mert import run_prior_pipeline
-from workspaces.taste_prior.taste_cluster import cluster_mix
+from personalization.bot_heuristics import score_mix_listeners
+from personalization.collect import collect_tick
+from personalization.comment_heatmap import run_heatmap_analysis
+from personalization.config import load_mixes, load_settings, mix_by_id
+from personalization.enrich import enrich_batch
+from personalization.enrich_playlists import enrich_playlists_batch
+from personalization.import_archive import import_archive_dir
+from personalization.persistence import connect, init_db, migrate_db, status_counts
+from personalization.pipeline import run_analysis_pipeline
+from personalization.prior_mert import run_prior_pipeline
+from personalization.taste_cluster import cluster_mix
 
 logging.basicConfig(
     level=logging.INFO,
@@ -178,7 +178,7 @@ def cmd_import_archive(args: argparse.Namespace) -> int:
 
 
 def _collect_done(settings, mix_id: str) -> bool:
-    from workspaces.taste_prior.persistence import load_checkpoint
+    from personalization.persistence import load_checkpoint
 
     with connect(settings.db_path) as conn:
         ck = load_checkpoint(conn, mix_id, "collect")
@@ -186,7 +186,7 @@ def _collect_done(settings, mix_id: str) -> bool:
 
 
 def _enrich_likes_done(settings, mix_id: str) -> bool:
-    from workspaces.taste_prior.persistence import listener_sc_ids, load_checkpoint
+    from personalization.persistence import listener_sc_ids, load_checkpoint
 
     with connect(settings.db_path) as conn:
         ck = load_checkpoint(conn, mix_id, "enrich_likes")

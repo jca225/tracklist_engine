@@ -4,10 +4,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from workspaces.taste_prior.bot_heuristics import score_mix_listeners
-from workspaces.taste_prior.collect import make_user_id
-from workspaces.taste_prior.comment_heatmap import build_heatmap
-from workspaces.taste_prior.persistence import (
+from personalization.bot_heuristics import score_mix_listeners
+from personalization.collect import make_user_id
+from personalization.comment_heatmap import build_heatmap
+from personalization.persistence import (
     connect,
     init_db,
     insert_comments,
@@ -16,8 +16,8 @@ from workspaces.taste_prior.persistence import (
     migrate_db,
     upsert_listener,
 )
-from workspaces.taste_prior.records import ListenerRow, ScLikeRow, ScMixCommentRow, ScPlaylistRow
-from workspaces.taste_prior.taste_cluster import cluster_mix
+from personalization.records import ListenerRow, ScLikeRow, ScMixCommentRow, ScPlaylistRow
+from personalization.taste_cluster import cluster_mix
 
 
 def test_bot_flags_generic_user(tmp_path: Path):

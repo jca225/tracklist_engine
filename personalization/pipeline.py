@@ -7,12 +7,12 @@ import sqlite3
 from pathlib import Path
 
 from core.result import Err, Ok
-from workspaces.taste_prior.bot_heuristics import score_mix_listeners
-from workspaces.taste_prior.comment_heatmap import run_heatmap_analysis
-from workspaces.taste_prior.config import TasteSettings
-from workspaces.taste_prior.persistence import connect, migrate_db
-from workspaces.taste_prior.prior_mert import run_prior_pipeline
-from workspaces.taste_prior.taste_cluster import cluster_mix
+from personalization.bot_heuristics import score_mix_listeners
+from personalization.comment_heatmap import run_heatmap_analysis
+from personalization.config import TasteSettings
+from personalization.persistence import connect, migrate_db
+from personalization.prior_mert import run_prior_pipeline
+from personalization.taste_cluster import cluster_mix
 
 logger = logging.getLogger(__name__)
 

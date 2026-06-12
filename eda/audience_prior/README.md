@@ -11,7 +11,7 @@ recognition "payload"; its effect is "oh, I know this vocal!" — which a MERT
 embedding cannot see (and is exactly why acappella *audio* surprise was at
 chance, info_dynamics §v4). The recognition lives in the **listener prior**, and
 we have it: the SoundCloud per-user like graph collected in
-[`workspaces/taste_prior`](../../workspaces/taste_prior) (`taste_warehouse.db`).
+[`personalization`](../../personalization) (`taste_warehouse.db`).
 
 ## Run
 

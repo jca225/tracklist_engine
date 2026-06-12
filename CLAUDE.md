@@ -36,6 +36,12 @@ Everything outside this chain is one of:
 - Experimental forks of chain modules: `workspaces/` (e.g.
   `workspaces/alignment_workbench`). Promote a fork out of `workspaces/`
   when it stabilizes.
+- The **personalization layer**: `personalization/` (promoted out of
+  `workspaces/taste_prior` on 2026-06-12) — SoundCloud listener cohorts +
+  per-user taste priors, the *producer* side of the step-2 generation-pretrain
+  boundary. Consumes nothing from the chain; exports a read-only bundle
+  ([docs/personalization_export_contract.md](docs/personalization_export_contract.md))
+  that the future learning repo trains on. Not part of the alignment DAG.
 
 New features land inside one of the chain modules. New top-level folders
 require explicit justification.

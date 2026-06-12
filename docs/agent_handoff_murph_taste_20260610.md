@@ -2,7 +2,7 @@
 
 ## Objective
 
-Replicate the BB11/BB12 listener-cohort work in `workspaces/taste_prior/` for
+Replicate the BB11/BB12 listener-cohort work in `personalization/` for
 **it's murph @ Club Space Miami 2024** — i.e. collect the SoundCloud listener
 cohort, enrich with likes + playlists, bot-score, cluster, and write findings.
 `prior-mert` stays **deferred** (blocked on aligner pretrain, same as BB).
@@ -16,7 +16,7 @@ cohort, enrich with likes + playlists, bot-score, cluster, and write findings.
 | SC URL | https://soundcloud.com/its-murph-987074444/club-its-murph-live-space-miami-2024 |
 | SC account | murph's own (confirmed — NOT Club Space's) |
 | Upload stats at collect time | 90,556 plays · 2,941 likes · 72 reposts · 129 comments · 120.3 min |
-| Mix registry | `workspaces/taste_prior/config/mixes.yaml` (entry added) |
+| Mix registry | `personalization/config/mixes.yaml` (entry added) |
 | Warehouse | `data/taste/taste_warehouse.db` (Mac-local, gitignored) |
 
 ## State at handoff
@@ -61,14 +61,14 @@ checkpoint covers all listeners:
 ```bash
 export TASTE_SC_RPM=30   # 45 default was fine too; resets were keepalive, not rate
 while :; do
-  out=$(venvs/audio/bin/python -m workspaces.taste_prior.main enrich --mix pwgrrb1 --batch 10 2>&1)
+  out=$(venvs/audio/bin/python -m personalization.main enrich --mix pwgrrb1 --batch 10 2>&1)
   echo "$out" | tail -1
   echo "$out" | grep -q "enrich complete" && break
   echo "$out" | grep -q "likes inserted" || sleep 60
 done
 total=$(sqlite3 data/taste/taste_warehouse.db "SELECT COUNT(DISTINCT sc_user_id) FROM listeners WHERE mix_id='pwgrrb1'")
 while :; do
-  venvs/audio/bin/python -m workspaces.taste_prior.main enrich-playlists --mix pwgrrb1 --batch 10 2>&1 | tail -1
+  venvs/audio/bin/python -m personalization.main enrich-playlists --mix pwgrrb1 --batch 10 2>&1 | tail -1
   done_n=$(sqlite3 data/taste/taste_warehouse.db "SELECT json_array_length(checkpoint_json,'\$.completed_sc_user_ids') FROM scrape_checkpoints WHERE mix_id='pwgrrb1' AND phase='enrich_playlists'")
   echo "playlists: ${done_n:-0}/$total"
   [ "${done_n:-0}" -ge "$total" ] && break
@@ -91,7 +91,7 @@ already running: `pgrep -fl "taste_prior.main enrich"`.
 5. **Cross-cohort overlap vs BB11/BB12** — the most interesting new analysis:
    shared `sc_user_id`s and shared liked tracks across `mix_id` values
    (`2nvzlh2k`, `1fsnxchk`, `pwgrrb1`). Different scene (house/tech vs mashup).
-6. Append to `workspaces/taste_prior/findings.md`: cohort size, bot rate,
+6. Append to `personalization/findings.md`: cohort size, bot rate,
    clusters, overlap.
 7. Commit. **Deploy caveat:** once committed + `make deploy`, pi-worker's
    `loop --all-mixes` (`tracklist-taste-scrape.service`) will pick up

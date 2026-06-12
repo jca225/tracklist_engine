@@ -6,16 +6,16 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
-from workspaces.taste_prior.config import MixTarget, TasteSettings
-from workspaces.taste_prior.enrich import make_user_id
-from workspaces.taste_prior.persistence import (
+from personalization.config import MixTarget, TasteSettings
+from personalization.enrich import make_user_id
+from personalization.persistence import (
     connect,
     insert_comments,
     insert_likes,
     insert_playlists,
     upsert_listener,
 )
-from workspaces.taste_prior.records import ListenerRow, ScLikeRow, ScMixCommentRow, ScPlaylistRow
+from personalization.records import ListenerRow, ScLikeRow, ScMixCommentRow, ScPlaylistRow
 
 logger = logging.getLogger(__name__)
 

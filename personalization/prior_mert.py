@@ -15,7 +15,7 @@ import numpy as np
 from core.result import Err, Ok
 from analysis.adapters import audio_io, mert_adapter
 from analysis.adapters.mert_adapter import MERT_DEFAULT_LAYER, MERT_MODEL
-from workspaces.taste_prior.persistence import (
+from personalization.persistence import (
     clean_user_ids,
     get_track_mert,
     upsert_track_mert,
@@ -35,7 +35,7 @@ class TrackRef:
 
 
 def _yt_dlp() -> str:
-    root = Path(__file__).resolve().parents[2]
+    root = Path(__file__).resolve().parents[1]
     candidate = root / "venvs" / "audio" / "bin" / "yt-dlp"
     return str(candidate) if candidate.is_file() else "yt-dlp"
 

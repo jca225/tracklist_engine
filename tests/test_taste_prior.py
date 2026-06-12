@@ -3,9 +3,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from workspaces.taste_prior.collect import make_user_id
-from workspaces.taste_prior.persistence import connect, init_db, insert_comments, insert_likes, status_counts, upsert_listener
-from workspaces.taste_prior.records import ListenerRow, ScLikeRow, ScMixCommentRow
+from personalization.collect import make_user_id
+from personalization.persistence import connect, init_db, insert_comments, insert_likes, status_counts, upsert_listener
+from personalization.records import ListenerRow, ScLikeRow, ScMixCommentRow
 
 
 def test_make_user_id_stable():

@@ -9,7 +9,7 @@ User=johncabrahams
 WorkingDirectory=/home/johncabrahams/tracklist_engine
 Environment=TASTE_DATA_DIR=/home/johncabrahams/tracklist_engine/data/taste
 Environment=TASTE_SC_RPM=45
-ExecStart=/home/johncabrahams/tracklist_engine/venvs/web_crawler/bin/python -m workspaces.taste_prior.main loop --all-mixes --batch 15 --sleep 300
+ExecStart=/home/johncabrahams/tracklist_engine/venvs/web_crawler/bin/python -m personalization.main loop --all-mixes --batch 15 --sleep 300
 Restart=on-failure
 RestartSec=60
 

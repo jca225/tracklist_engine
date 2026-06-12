@@ -11,7 +11,7 @@ import numpy as np
 from scipy.sparse import csr_matrix
 from sklearn.cluster import MiniBatchKMeans
 
-from workspaces.taste_prior.persistence import clean_user_ids, replace_taste_clusters
+from personalization.persistence import clean_user_ids, replace_taste_clusters
 
 logger = logging.getLogger(__name__)
 

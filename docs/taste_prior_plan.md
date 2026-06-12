@@ -1,7 +1,7 @@
 # Taste prior — subjective listener experience (IN PROGRESS)
 
 **Status:** Phase 1 scaffold — SoundCloud cohort + likes on **pi-worker**.  
-**Home:** [workspaces/taste_prior/](../workspaces/taste_prior/)  
+**Home:** [personalization/](../personalization/)  
 **Sibling:** [aligner_attention_design.md](aligner_attention_design.md) (structure probe),
 [eda/corpus_empirics/findings.md](../eda/corpus_empirics/findings.md) §7 (user-history is
 per-user, not aggregate).
@@ -71,7 +71,7 @@ as weak engagement labels for fine-tune.
 
 ### P1 — Cohort + likes + comments (this PR)
 
-- [x] `workspaces/taste_prior/` module (config, SC client, collect, enrich, SQLite)
+- [x] `personalization/` module (config, SC client, collect, enrich, SQLite)
 - [x] `mixes.yaml` for `1fsnxchk` (BB12) + `2nvzlh2k` (BB11)
 - [x] `main loop` CLI + systemd unit for pi-worker
 - [x] `import-archive` from dj-listener-pipeline JSONL (listeners, likes, **comments**)
@@ -99,8 +99,8 @@ make deploy-worker
 make install-taste-scrape   # copies systemd unit, enables timer
 
 # Manual
-ssh pi-worker 'cd ~/tracklist_engine && venvs/web_crawler/bin/python -m workspaces.taste_prior.main status'
-ssh pi-worker 'cd ~/tracklist_engine && venvs/web_crawler/bin/python -m workspaces.taste_prior.main loop --once'
+ssh pi-worker 'cd ~/tracklist_engine && venvs/web_crawler/bin/python -m personalization.main status'
+ssh pi-worker 'cd ~/tracklist_engine && venvs/web_crawler/bin/python -m personalization.main loop --once'
 
 make logs-taste-scrape
 ```

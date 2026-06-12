@@ -8,8 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from workspaces.taste_prior.config import MixTarget, TasteSettings
-from workspaces.taste_prior.persistence import (
+from personalization.config import MixTarget, TasteSettings
+from personalization.persistence import (
     connect,
     insert_comments,
     load_checkpoint,
@@ -17,8 +17,8 @@ from workspaces.taste_prior.persistence import (
     save_checkpoint,
     upsert_listener,
 )
-from workspaces.taste_prior.records import ListenerRow, ScMixCommentRow
-from workspaces.taste_prior.soundcloud_client import (
+from personalization.records import ListenerRow, ScMixCommentRow
+from personalization.soundcloud_client import (
     SC_API,
     RateLimiter,
     extract_client_id,

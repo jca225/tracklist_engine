@@ -10,8 +10,8 @@ from typing import Any
 
 import httpx
 
-from workspaces.taste_prior.config import MixTarget, TasteSettings
-from workspaces.taste_prior.persistence import (
+from personalization.config import MixTarget, TasteSettings
+from personalization.persistence import (
     connect,
     insert_likes,
     listener_sc_ids,
@@ -19,8 +19,8 @@ from workspaces.taste_prior.persistence import (
     log_run,
     save_checkpoint,
 )
-from workspaces.taste_prior.records import ScLikeRow
-from workspaces.taste_prior.soundcloud_client import (
+from personalization.records import ScLikeRow
+from personalization.soundcloud_client import (
     SC_API,
     SKIP_STATUS_CODES,
     RateLimiter,

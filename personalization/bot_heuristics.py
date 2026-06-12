@@ -8,8 +8,8 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from workspaces.taste_prior.persistence import upsert_bot_scores
-from workspaces.taste_prior.records import ListenerBotScoreRow
+from personalization.persistence import upsert_bot_scores
+from personalization.records import ListenerBotScoreRow
 
 DEFAULT_BOT_THRESHOLD = 0.55
 
