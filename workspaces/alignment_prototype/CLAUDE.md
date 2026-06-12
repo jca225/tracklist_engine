@@ -27,6 +27,18 @@ All-span identity (train+eval) is 147/147 after the assignment sweep
 report — watch it on new sets; within-slot swaps don't show in held-out
 metrics.
 
+> **⚠ Label corruption (fixed 2026-06-11, commit a450005):** the GT export
+> read the warp anchor instead of the clip trim, so most ref_start labels
+> were ≈0 — the 0.84 s ref MAE above was self-consistent-but-wrong, and any
+> head trained before the bb12_ground_truth.yaml regeneration learned to
+> predict ~0 ref offsets. **Retrain on the regenerated yaml** before
+> trusting decode ref offsets. Set placement + identity metrics unaffected.
+> Detector eval vs corrected GT (`eval_ref_detection.py`, n=20 straight
+> clips): regular 42% exact <2 s / 67% repeat-equivalent, acappella 0%/14%
+> (vocal chroma weak — needs a vocal-specific signal), stretch err 1.2%
+> median (grid heuristic validated). Loops/segments (83/166 GT rows!) are
+> outside linear scoring — span output must become segment lists.
+
 **Measured limitation:** pooled-MERT cosine does not *localize* content in
 the mix — with the oracle ref segment, the unconstrained argmax is ~900 s
 off at every layer (0–24), raw or learned, centered or whitened. The 39 s
