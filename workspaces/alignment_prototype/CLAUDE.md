@@ -38,6 +38,13 @@ metrics.
 > (vocal chroma weak — needs a vocal-specific signal), stretch err 1.2%
 > median (grid heuristic validated). Loops/segments (83/166 GT rows!) are
 > outside linear scoring — span output must become segment lists.
+>
+> End-to-end pipeline on BB12 vs corrected GT (`score_timeline_vs_gt.py`,
+> retrained head, in-domain upper bound, 2026-06-11): identity 66% (time-
+> overlap matching — placement error >5 s can mark correct ids wrong),
+> set placement median 30 s / p90 76 s (cue-anchored), ref offsets median
+> 50 s on straight clips (repeat ambiguity dominates; needs continuity
+> decode). The mix-side timebase bug (c43fa62) is fixed in this number.
 
 **Measured limitation:** pooled-MERT cosine does not *localize* content in
 the mix — with the oracle ref segment, the unconstrained argmax is ~900 s
