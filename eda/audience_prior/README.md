@@ -46,12 +46,35 @@ right home for the acappella "payload" term in the selection model. It is *not* 
 transition detector (listener attention isn't at the seams; comment density vs GT
 boundaries was at chance).
 
+## De-circularized: cross-audience transfer (`run_cross.py`)
+
+```bash
+venvs/audio/bin/python -m eda.audience_prior.run_cross
+```
+
+Scores BB12's tracklist with the **disjoint BB11 audience** (2,936 listeners, **0
+shared users** with BB12, but 154k shared liked tracks). This removes the
+endogeneity: BB11's listeners never engaged with BB12, so their familiarity with
+BB12's tracks comes purely from their own history.
+
+**Result: familiarity transfers almost perfectly — Spearman ρ = 0.956, Pearson r
+= 0.946** (n=140 tracks known to ≥1 audience). BB12's top hooks are independently
+known by the disjoint audience at comparable rates (Congratulations 12.6% own /
+11.4% disjoint; In The Name Of Love 12.4% / 9.2%). So a track's recognizability is
+an **intrinsic, transferable property**, not a BB12-engagement artifact — which is
+precisely what lets a DJ *anticipate* it and what makes the prior reusable for
+personalization across sets/audiences.
+
 ## Caveats / clean next version
 
-- **Endogeneity.** These listeners engaged with the BB12 upload, so familiarity is
-  partly circular. The causal version builds each listener's prior from history
-  **excluding this set** and tests whether the DJ *anticipated* familiarity, ideally
-  generalizing across sets (BB11's audience is user-disjoint but track-overlapping).
+- **Endogeneity — resolved** by `run_cross.py` above (ρ=0.956 across user-disjoint
+  audiences).
+- **Selection test still owed.** Transfer + magnitude show the chosen tracks are
+  familiar; a full *selection* test (did the DJ pick familiar tracks over
+  equally-available unfamiliar ones?) needs a **negative candidate pool** —
+  other DJs' tracklists as non-chosen alternatives, or popularity-matched
+  controls (aux.db charts/Last.fm) to isolate audience-specific familiarity from
+  generic global popularity. That is the next step.
 - **Match precision/recall unaudited.** Token-containment + artist guard; top
   matches eyeball-correct, but recall on obscure tracks is unknown — an obscure
   instrumental absent from the vocabulary correctly scores 0, but so does a
