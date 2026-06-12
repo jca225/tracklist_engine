@@ -172,9 +172,20 @@ textarea:focus{border-color:var(--amber)}
 .saved{font-size:9.5px; color:var(--instr); margin-top:7px; opacity:0; transition:.2s}
 .saved.show{opacity:1}
 
-.refseg{padding:0 20px 16px}
-.refseg .rs{display:flex; gap:8px; align-items:center; font-size:10.5px; color:var(--dim); padding:5px 0; border-top:1px dashed var(--line)}
+.refseg{padding:14px 20px 16px; border-top:1px solid var(--line)}
+.rseg-head{display:flex; align-items:center; gap:8px; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); margin-bottom:10px}
+.rk{font-size:9px; font-weight:700; letter-spacing:.1em; padding:3px 7px; border-radius:4px}
+.rk.loop{background:rgba(245,177,61,.16); color:var(--amber)}
+.rk.split{background:rgba(63,217,201,.15); color:var(--instr)}
+.songbar{position:relative; height:26px; background:var(--bg); border:1px solid var(--line); border-radius:5px; margin-bottom:3px}
+.songseg{position:absolute; top:3px; bottom:3px; min-width:14px; background:linear-gradient(180deg,var(--instr),#2bb6a9);
+  border-radius:3px; display:grid; place-items:center; font-size:9px; font-weight:700; color:var(--bg); box-shadow:0 0 0 1px var(--bg)}
+.songseg.rep{background:linear-gradient(180deg,var(--amber),#d9962b)}
+.songbar-ax{display:flex; justify-content:space-between; font-size:9px; color:var(--faint); margin-bottom:11px}
+.refseg .rs{display:flex; gap:9px; align-items:center; font-size:11px; color:var(--dim); padding:6px 0; border-top:1px dashed var(--line)}
 .refseg .rs b{color:var(--ink); font-weight:500}
+.refseg .rs .sn{width:18px;height:18px;border-radius:4px;background:var(--instr);color:var(--bg);display:grid;place-items:center;font-weight:700;font-size:10px;flex:none}
+.refseg .rs .sn.rep{background:var(--amber)}
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-thumb{background:var(--line2); border-radius:6px; border:2px solid var(--bg)}
 .empty-list{padding:40px; text-align:center; color:var(--faint)}
@@ -332,6 +343,26 @@ function renderList(){
 }
 function esc(s){ return (s||'').replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m])); }
 
+/* segment view: where the track sits in BOTH the mix and the song, for every
+   multi-segment clip (loops AND splits) — not just loops. */
+function segHTML(c){
+  const segs = c.ref_segments || [];
+  if(segs.length <= 1) return '';
+  const lo = Math.min(...segs.map(s=>s.ref_start_s)), hi = Math.max(...segs.map(s=>s.ref_end_s));
+  const span = Math.max(1, hi-lo);
+  const counts = {};
+  segs.forEach(s=>{ const k=Math.round(s.ref_start_s)+'-'+Math.round(s.ref_end_s); counts[k]=(counts[k]||0)+1; });
+  const rep = s => counts[Math.round(s.ref_start_s)+'-'+Math.round(s.ref_end_s)] > 1;
+  const kind = c.is_loop ? 'LOOP' : 'SPLIT';
+  const desc = c.is_loop ? 'same section replayed (amber)' : 'different sections of the song';
+  return `<div class="refseg">
+    <div class="rseg-head"><span class="rk ${kind.toLowerCase()}">${kind}</span> ${segs.length} segments · ${desc} · numbered in mix order</div>
+    <div class="songbar">${segs.map((s,i)=>`<div class="songseg ${rep(s)?'rep':''}" style="left:${(s.ref_start_s-lo)/span*100}%;width:${Math.max(2,(s.ref_end_s-s.ref_start_s)/span*100)}%" title="seg ${i+1}: song ${fmt(s.ref_start_s)}–${fmt(s.ref_end_s)}">${i+1}</div>`).join('')}</div>
+    <div class="songbar-ax"><span>${fmt(lo)}</span><span>position in the SOURCE SONG →</span><span>${fmt(hi)}</span></div>
+    ${segs.map((s,i)=>`<div class="rs"><span class="sn ${rep(s)?'rep':''}">${i+1}</span> MIX <b>${fmt(s.mix_start_s)}</b> &nbsp;↔&nbsp; SONG <b>${fmt(s.ref_start_s)}–${fmt(s.ref_end_s)}</b> <small>(${(s.ref_end_s-s.ref_start_s).toFixed(1)}s)</small></div>`).join('')}
+  </div>`;
+}
+
 /* ---------- inspector ---------- */
 function select(idx){
   selIdx=idx; const c=GT.clips.find(x=>x.idx===idx);
@@ -384,10 +415,7 @@ function renderInspector(c){
       ${(c.audible_start_s!=null||c.audible_end_s!=null)?`<div class="cell full"><div class="k">audible window (volume-aware)</div><div class="v">${c.audible_start_s!=null?fmt(c.audible_start_s):'start'} → ${c.audible_end_s!=null?fmt(c.audible_end_s):'end'}</div></div>`:''}
     </div>
 
-    ${c.is_loop&&c.ref_segments&&c.ref_segments.length?`<div class="refseg">
-      <div class="cell" style="padding:10px 0 4px"><div class="k">ref segments (${c.ref_segments.length})</div></div>
-      ${c.ref_segments.map((s,i)=>`<div class="rs">seg ${i+1} · mix <b>${fmt(s.mix_start_s)}</b> · ref <b>${fmt(s.ref_start_s)}–${fmt(s.ref_end_s)}</b></div>`).join('')}
-    </div>`:''}
+    ${segHTML(c)}
 
     <div class="notebox">
       <div class="nh"><span>discrepancy note</span>
