@@ -10,10 +10,18 @@ If taste-CF >> popularity, taste predicts engagement (the signal audio lacked) a
 pivot is validated. ID-CF CANNOT generalize to unseen tracks (cold-start) — that gap
 is exactly what MERT embeddings would fill.
 
-  venvs/audio/bin/python -m personalization.taste_model_v0
+  venvs/audio/bin/python -m personalization.taste_model_v0            # all cohorts pooled
+  venvs/audio/bin/python -m personalization.taste_model_v0 --mix rlgrime_hw5   # one cohort
+
+Cohort scoping (--mix) is the diversification test: each enriched user's full
+like-history is tagged with the mix_id they were collected under, so filtering by
+mix_id isolates a single scene's cohort. The tail lift held at 6x across festival
+EDM (BB11/12), bass/trap (RL Grime) and melodic/auteur (Porter) — taste-CF is
+genre-general, not a Big Bootie artifact (see project_hrm_text_taste_pretrain).
 """
 from __future__ import annotations
 
+import argparse
 import sqlite3
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -28,9 +36,19 @@ K = 20               # recall@K
 
 
 def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--mix", default=None,
+                    help="scope to one cohort's mix_id (omit = all cohorts pooled)")
+    args = ap.parse_args()
     conn = sqlite3.connect(DB)
-    rows = conn.execute(
-        "SELECT user_id, track_id FROM sc_likes ORDER BY user_id, liked_at, rowid").fetchall()
+    if args.mix:
+        rows = conn.execute(
+            "SELECT user_id, track_id FROM sc_likes WHERE mix_id=? ORDER BY user_id, liked_at, rowid",
+            (args.mix,)).fetchall()
+        print(f"cohort: {args.mix}")
+    else:
+        rows = conn.execute(
+            "SELECT user_id, track_id FROM sc_likes ORDER BY user_id, liked_at, rowid").fetchall()
 
     vocab = {tid: i for i, (tid, _) in enumerate(Counter(t for _, t in rows).most_common(TOPK))}
     tl: dict[str, list[int]] = defaultdict(list)

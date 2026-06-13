@@ -13,3 +13,19 @@ mixes:
     set_id: "pwgrrb1"
     title: "it's murph @ Club Space Miami 2024"
     soundcloud_url: "https://soundcloud.com/its-murph-987074444/club-its-murph-live-space-miami-2024"
+
+  # --- cohort diversification (2026-06-13): non-festival-EDM scenes w/ large SC followings ---
+  # RL Grime "Halloween" = a recurring branded mix series (like Big Bootie) but bass/trap.
+  # Tests whether taste-CF generalizes outside the progressive-house bubble.
+  rlgrime_hw5:
+    set_id: "rlgrime_hw5"
+    title: "RL Grime - Halloween V"
+    soundcloud_url: "https://soundcloud.com/rlgrime/halloween-v"
+  rlgrime_hw4:
+    set_id: "rlgrime_hw4"
+    title: "RL Grime - Halloween IV"
+    soundcloud_url: "https://soundcloud.com/rlgrime/halloweeniv"
+  porter_essential:
+    set_id: "porter_essential"
+    title: "Porter Robinson - BBC Radio 1 Essential Mix"
+    soundcloud_url: "https://soundcloud.com/porter-robinson/porter-robinson-bbc-radio-1-2-hour-essential-mix"
