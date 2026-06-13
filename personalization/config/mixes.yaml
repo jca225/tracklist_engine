@@ -29,3 +29,25 @@ mixes:
     set_id: "porter_essential"
     title: "Porter Robinson - BBC Radio 1 Essential Mix"
     soundcloud_url: "https://soundcloud.com/porter-robinson/porter-robinson-bbc-radio-1-2-hour-essential-mix"
+
+  # --- scene expansion (2026-06-13): more distinct scenes for history->which-mix retrieval ---
+  hardwell_tml:        # festival-EDM mega-anchor (178k likes) — strong EDM-scene anchor vs BB
+    set_id: "hardwell_tml"
+    title: "Hardwell Live @ Tomorrowland 2013"
+    soundcloud_url: "https://soundcloud.com/hardwell/hardwell-live-at-tomorrowland-2013-download"
+  kygo_ultra:          # tropical house (48k) — new scene
+    set_id: "kygo_ultra"
+    title: "Kygo - Live At UMF 2016"
+    soundcloud_url: "https://soundcloud.com/kygo/kygo-live-at-umf-2016-full-set"
+  jauz_hard:           # bass house (52k) — new scene
+    set_id: "jauz_hard"
+    title: "Jauz - Live @ HARD Summer 2015"
+    soundcloud_url: "https://soundcloud.com/jauzofficial/hardsummer"
+  dom_dolla_edc:       # modern tech house (38k) — new scene
+    set_id: "dom_dolla_edc"
+    title: "Dom Dolla Live @ EDC Las Vegas 2024"
+    soundcloud_url: "https://soundcloud.com/domdolla/dom-dolla-live-edc-circuitgrounds-las-vegas-2024"
+  rufus_mayan:         # organic/melodic, Burning Man (28k) — very distinct scene
+    set_id: "rufus_mayan"
+    title: "RÜFÜS DU SOL (DJ Set) - Mayan Warrior, Burning Man 2024"
+    soundcloud_url: "https://soundcloud.com/mayanwarriorofficial/rufus-du-sol-dj-set-mayan-warrior-burning-man-2024"
