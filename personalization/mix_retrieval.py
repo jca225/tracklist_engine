@@ -31,11 +31,16 @@ K = 20
 
 # mix anchor track (its own SC upload) -> (label, scene)
 ANCHORS = {
-    341496235:  ("BB12",     "festival EDM"),
-    317238901:  ("BB11",     "festival EDM"),
+    341496235:  ("BB12",     "festival EDM"),   # Big Bootie + Hardwell are empirically one
+    317238901:  ("BB11",     "festival EDM"),   # scene (confusion matrix: indistinguishable crowd)
+    103828635:  ("Hardwell", "festival EDM"),
     1801876378: ("Murph",    "house/club"),
-    290335129:  ("RL Grime", "bass/trap"),
-    156449334:  ("Porter",   "melodic/auteur"),
+    290335129:  ("RL Grime", "trap/bass"),
+    218161077:  ("JAUZ",     "bass house"),
+    156449334:  ("Porter",   "melodic"),
+    254813618:  ("Kygo",     "tropical"),
+    1833302775: ("DomDolla", "tech house"),
+    2010642907: ("RUFUS",    "organic"),
 }
 
 
@@ -87,33 +92,64 @@ def main() -> int:
     anchor_pop = {ix: pop[ix] for ix in anchor_ixs}
     pop_order = sorted(anchor_ixs, key=lambda ix: -anchor_pop[ix])
 
+    # fan-lift fingerprint: per anchor, how OVER-represented each song is among its fans
+    # vs the global base rate. Cancels "Big Bootie gravity" (universally-liked tracks add
+    # nothing distinctive). score(prefix, a) = mean_p log( P(p | fans_a) / P(p) ).
+    Mcsc = M.tocsc()
+    n_train = M.shape[0]
+    base = pop / n_train                                      # global like-rate per song
+    fp = {}                                                   # anchor_ix -> log-lift vector (N,)
+    for ix in anchor_ixs:
+        fans = Mcsc.getcol(ix).nonzero()[0]                  # train users who liked this anchor
+        if len(fans) == 0:
+            fp[ix] = np.full(N, -1e9); continue
+        rate = np.asarray(M[fans].mean(0)).ravel()           # P(song | fans of a)
+        fp[ix] = np.log((rate + 1e-4) / (base + 1e-4))
+
     scene = {ix: ANCHORS[anchor_ix[ix]][1] for ix in anchor_ixs}   # vocab_ix -> scene
-    cf_top1, pop_top1, rnd, cf_mrr = [], [], [], []
-    cf_scene, pop_scene = [], []
-    confusion = defaultdict(lambda: defaultdict(int))
+    cf_top1, lift_top1, pop_top1, rnd, cf_mrr, lift_mrr = [], [], [], [], [], []
+    cf_scene, lift_scene, pop_scene = [], [], []
+    confusion = defaultdict(lambda: defaultdict(int))        # for the LIFT scorer
     for i in sorted(test):
         u, target_ix, prefix = examples[i]
-        cands = anchor_ixs                                   # rank all 5 mixes
+        cands = anchor_ixs
         if target_ix not in cands:
             continue
-        score = S[prefix][:, cands].sum(0)                   # CF: prefix co-occurrence w/ each anchor
-        order = [cands[j] for j in np.argsort(-score)]
-        cf_top1.append(int(order[0] == target_ix))
-        cf_mrr.append(1.0 / (1 + order.index(target_ix)))
-        pop_top1.append(int(pop_order[0] == target_ix))
-        rnd.append(1.0 / len(cands))
-        cf_scene.append(int(scene[order[0]] == scene[target_ix]))    # scene-level (BB11==BB12)
+        cf = S[prefix][:, cands].sum(0)                      # raw co-occurrence (BB-gravity prone)
+        lift = np.array([fp[ix][prefix].mean() for ix in cands])   # popularity-discounted fan-lift
+        cf_order = [cands[j] for j in np.argsort(-cf)]
+        lift_order = [cands[j] for j in np.argsort(-lift)]
+        cf_top1.append(int(cf_order[0] == target_ix)); cf_mrr.append(1.0 / (1 + cf_order.index(target_ix)))
+        lift_top1.append(int(lift_order[0] == target_ix)); lift_mrr.append(1.0 / (1 + lift_order.index(target_ix)))
+        pop_top1.append(int(pop_order[0] == target_ix)); rnd.append(1.0 / len(cands))
+        cf_scene.append(int(scene[cf_order[0]] == scene[target_ix]))
+        lift_scene.append(int(scene[lift_order[0]] == scene[target_ix]))
         pop_scene.append(int(scene[pop_order[0]] == scene[target_ix]))
-        confusion[ANCHORS[anchor_ix[target_ix]][0]][ANCHORS[anchor_ix[order[0]]][0]] += 1
+        confusion[ANCHORS[anchor_ix[target_ix]][0]][ANCHORS[anchor_ix[lift_order[0]]][0]] += 1
 
     n = len(cf_top1)
+    # macro scene-accuracy: average per-scene recall (each scene weighted equally, so the
+    # huge BB cohort can't dominate). Computed from the FAN-LIFT confusion (by-mix tallies).
+    scene_of = {lbl: ANCHORS[a][1] for a, (lbl, _) in ANCHORS.items()}
+    sc_correct, sc_total = defaultdict(int), defaultdict(int)
+    for true_lbl, guesses in confusion.items():
+        s = scene_of[true_lbl]
+        for guess_lbl, c in guesses.items():
+            sc_total[s] += c
+            if scene_of[guess_lbl] == s:
+                sc_correct[s] += c
+    macro = np.mean([sc_correct[s] / sc_total[s] for s in sc_total])
+
     print(f"history -> which-mix retrieval  ({n} held-out users, {len(ANCHORS)} candidate mixes)\n")
-    print(f"  RANDOM      mix-top-1 {np.mean(rnd):.3f}")
-    print(f"  POPULARITY  mix-top-1 {np.mean(pop_top1):.3f}   scene-top-1 {np.mean(pop_scene):.3f}")
-    print(f"  TASTE-CF    mix-top-1 {np.mean(cf_top1):.3f}   scene-top-1 {np.mean(cf_scene):.3f}   MRR {np.mean(cf_mrr):.3f}")
-    print(f"\n  CF lift over popularity:  mix {np.mean(cf_top1)/max(np.mean(pop_top1),1e-9):.2f}x"
-          f"   scene {np.mean(cf_scene)/max(np.mean(pop_scene),1e-9):.2f}x")
-    print("  (BB11 & BB12 are one scene — same crowd — so scene-top-1 is the honest mix-discrimination number)")
+    print(f"  RANDOM        mix-top-1 {np.mean(rnd):.3f}")
+    print(f"  POPULARITY    mix-top-1 {np.mean(pop_top1):.3f}   scene-top-1 {np.mean(pop_scene):.3f}")
+    print(f"  CO-OCCUR      mix-top-1 {np.mean(cf_top1):.3f}   scene-top-1 {np.mean(cf_scene):.3f}   MRR {np.mean(cf_mrr):.3f}")
+    print(f"  FAN-LIFT      mix-top-1 {np.mean(lift_top1):.3f}   scene-top-1 {np.mean(lift_scene):.3f}   MRR {np.mean(lift_mrr):.3f}")
+    print(f"  FAN-LIFT macro scene-top-1 {macro:.3f}   (per-scene recall, equal-weighted — the fair metric)")
+    print("\n  per-scene recall (FAN-LIFT):")
+    for s in sorted(sc_total, key=lambda s: -sc_correct[s] / sc_total[s]):
+        print(f"    {s:14s} {sc_correct[s]/sc_total[s]:.2f}  ({sc_correct[s]}/{sc_total[s]})")
+    print("  (BB11 & BB12 are one scene — same crowd. confusion below = FAN-LIFT.)")
     print("\nconfusion (row=true mix, col=CF's top guess):")
     labels = [ANCHORS[a][0] for a in ANCHORS]
     print("           " + "".join(f"{l:>9}" for l in labels))
