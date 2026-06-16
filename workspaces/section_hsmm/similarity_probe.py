@@ -70,7 +70,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--n-distractors", type=int, default=15)
     p.add_argument("--feature", choices=["mfcc", "chroma"], default="mfcc")
     p.add_argument("--max-win-s", type=float, default=15.0)
+    p.add_argument("--single-stretch", action="store_true",
+                   help="disable stretch search (fix 1.0) — isolates the warp effect")
     args = p.parse_args(argv)
+    from workspaces.alignment_prototype.refine_ref_offsets import STRETCHES
+    stretches = (1.0,) if args.single_stretch else STRETCHES
 
     import json
     import yaml
@@ -110,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
             rf = _feat(rp, f"ref_{c}_voc", args.feature)
             if rf.shape[1] <= win.shape[1]:
                 continue
-            _, peak, _ = detect_offset(win, rf)
+            _, peak, _ = detect_offset(win, rf, stretches)
             peaks[c] = peak
         if tid not in peaks or len(peaks) < 3:
             continue
