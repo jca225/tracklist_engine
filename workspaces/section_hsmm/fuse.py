@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""v5 — fuse bed + overlay NULL-state decodes into one layered timeline.
+"""v5+v9 — fuse bed (chroma) + vocal (windowed-MFCC) into one layered timeline.
 
-Runs the abstaining NULL-state Viterbi on both channels, collapses each per-frame
-path into contiguous (track, ref-offset) spans (abstained frames become gaps),
-and writes a single layered timeline JSON — the actual aligner output, with two
-layers (harmonic bed + acappella overlay) that abstain independently. Also prints
-a span-level scorecard vs GT and a readable timeline head.
+Two channels, each at its own resolution and feature, both abstaining via the
+NULL-state Viterbi:
+  bed     = chroma @ 2s, all instrumental/regular refs   (94% span-identity)
+  overlay = windowed multislope MFCC @ 1s, label-agnostic vocal refs (v9 —
+            55% event recall / 60% precision, warp-tolerant)
+Collapses each per-frame path into contiguous (track, ref-offset) spans
+(abstains -> gaps) and writes one layered timeline JSON.
 
 Output: workspaces/section_hsmm/out/<set_id>_fused_timeline.json
 
 Usage:
-    venvs/audio/bin/python -m workspaces.section_hsmm.fuse --set-id 1fsnxchk \
-        [--bed-beta -0.04] [--overlay-beta -0.04]
+    venvs/audio/bin/python -m workspaces.section_hsmm.fuse --set-id 1fsnxchk
 """
 from __future__ import annotations
 
@@ -28,18 +29,20 @@ if str(_REPO) not in sys.path:
 
 from workspaces.alignment_prototype.refine_ref_offsets import find_aligning_dir  # noqa: E402
 from workspaces.section_hsmm.decode_hsmm import _gt_track_ids  # noqa: E402
-from workspaces.section_hsmm.decode_null import PENS, _channel_emis, viterbi_null  # noqa: E402
-from workspaces.section_hsmm.decode_v2 import CHANNELS  # noqa: E402
+from workspaces.section_hsmm.decode_null import PENS, viterbi_null  # noqa: E402
+from workspaces.section_hsmm.decode_v2 import CHANNELS, _pooled, build_channel_vocab  # noqa: E402
+from workspaces.section_hsmm.decode_v7 import build_vocal_vocab  # noqa: E402
+from workspaces.section_hsmm.decode_v8 import event_score  # noqa: E402
+from workspaces.section_hsmm.decode_v9 import diag_smooth_multislope  # noqa: E402
+from workspaces.section_hsmm.mfcc_emit import pooled_mfcc  # noqa: E402
 
 OUT_DIR = Path(__file__).resolve().parent / "out"
+SLOPES = (0.7, 0.85, 1.0, 1.18, 1.4)
 
 
-def spans_from_path(path: np.ndarray, vocab, frame_s: float, channel: str,
-                    by_tid: dict) -> list[dict]:
+def spans_from_path(path, vocab, frame_s, channel, by_tid, min_frames=2):
     S = vocab.emit_ref.shape[0]
-    spans: list[dict] = []
-    T = len(path)
-    i = 0
+    spans, T, i = [], len(path), 0
     while i < T:
         st = int(path[i])
         if st == S:
@@ -54,45 +57,48 @@ def spans_from_path(path: np.ndarray, vocab, frame_s: float, channel: str,
                 jumped = True
             last_ref = rf
             j += 1
-        tid = vocab.tids[k]
-        t = by_tid.get(tid, {})
-        name = f"{t.get('artist','?')} - {t.get('title','?')}"
-        spans.append({
-            "channel": channel,
-            "recording_id": tid,
-            "name": name,
-            "claimed_stem": t.get("_stem", "regular"),
-            "set_start_s": round(i * frame_s, 1),
-            "set_end_s": round(j * frame_s, 1),
-            "ref_start_s": round(ref0, 1),
-            "ref_end_s": round(last_ref, 1),
-            "n_frames": j - i,
-            "had_section_jump": jumped,
-        })
+        if j - i >= min_frames:
+            t = by_tid.get(vocab.tids[k], {})
+            spans.append({
+                "channel": channel, "recording_id": vocab.tids[k],
+                "name": f"{t.get('artist','?')} - {t.get('title','?')}",
+                "claimed_stem": t.get("_stem", "regular"),
+                "set_start_s": round(i * frame_s, 1), "set_end_s": round(j * frame_s, 1),
+                "ref_start_s": round(ref0, 1), "ref_end_s": round(last_ref, 1),
+                "n_frames": j - i, "had_section_jump": jumped,
+            })
         i = j
     return spans
 
 
-def score_spans(spans: list[dict], gt_rows: list[dict], stems: tuple[str, ...]) -> tuple[int, int]:
-    rows = [r for r in gt_rows if (r.get("claimed_stem") or "regular") in stems]
-    ok = 0
-    for s in spans:
-        mid = 0.5 * (s["set_start_s"] + s["set_end_s"])
-        active = {str(r["track_id"]) for r in rows
-                  if float(r["set_start_s"]) - 3 <= mid <= float(r["set_end_s"]) + 3}
-        if s["recording_id"] in active:
-            ok += 1
-    return ok, len(spans)
+def _bed_spans(set_dir, by_tid, gt_tids, frame_s, beta, by_name) -> list[dict]:
+    vocab = build_channel_vocab("bed", by_tid, gt_tids, frame_s)
+    cfg = CHANNELS["bed"]
+    mix = _pooled(set_dir / cfg["mix_file"], f"1fsnxchk_{cfg['mix_key']}",
+                  f"1fsnxchk_{cfg['mix_key']}_pool{frame_s}", frame_s)
+    emis = (mix @ vocab.emit_ref.T).astype(np.float64)
+    path = viterbi_null(emis, vocab, beta=beta, null_enter_pen=0.05, **PENS)
+    return spans_from_path(path, vocab, frame_s, "bed", by_tid)
+
+
+def _vocal_spans(set_dir, by_tid, frame_s, win_frames, beta) -> list[dict]:
+    vocab = build_vocal_vocab(by_tid, frame_s)
+    mix = pooled_mfcc(set_dir / "mix_vocals.flac", "1fsnxchk_mix_vocals",
+                      f"1fsnxchk_mix_vocals_pool{frame_s}", frame_s)
+    emis = (mix @ vocab.emit_ref.T).astype(np.float32)
+    emis = diag_smooth_multislope(emis, vocab.slices, win_frames, SLOPES)
+    path = viterbi_null(emis, vocab, beta=beta, null_enter_pen=0.0, **PENS)
+    return spans_from_path(path, vocab, frame_s, "overlay", by_tid)
 
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--set-id", default="1fsnxchk")
-    p.add_argument("--frame-s", type=float, default=2.0)
-    p.add_argument("--mert-layer", type=int, default=6)
+    p.add_argument("--bed-frame-s", type=float, default=2.0)
     p.add_argument("--bed-beta", type=float, default=-0.04)
-    p.add_argument("--overlay-beta", type=float, default=-0.04)
-    p.add_argument("--null-enter-pen", type=float, default=0.05)
+    p.add_argument("--overlay-frame-s", type=float, default=1.0)
+    p.add_argument("--overlay-win-frames", type=int, default=6)
+    p.add_argument("--overlay-beta", type=float, default=-0.05)
     args = p.parse_args(argv)
 
     set_dir = find_aligning_dir(args.set_id)
@@ -113,42 +119,49 @@ def main(argv: list[str] | None = None) -> int:
         t["_stem"] = stem_by_tid.get(tid, "regular")
     gt_tids = _gt_track_ids(_REPO / "labeling/fixtures/bb12_ground_truth.yaml")
 
-    betas = {"bed": args.bed_beta, "overlay": args.overlay_beta}
-    all_spans: list[dict] = []
-    print(f"=== v5 fused layered timeline ({args.set_id}) ===")
-    for channel in ("bed", "overlay"):
-        vocab, emis = _channel_emis(channel, set_dir, by_tid, gt_tids,
-                                    args.frame_s, args.mert_layer)
-        path = viterbi_null(emis, vocab, beta=betas[channel],
-                            null_enter_pen=args.null_enter_pen, **PENS)
-        spans = spans_from_path(path, vocab, args.frame_s, channel, by_tid)
-        cov = 100 * (path != vocab.emit_ref.shape[0]).mean()
-        ok, n = score_spans(spans, gt_rows, CHANNELS[channel]["stems"])
-        jumps = sum(1 for s in spans if s["had_section_jump"])
-        print(f"  [{channel:7}] beta={betas[channel]:+.2f}  {n} spans  "
-              f"({jumps} w/ section-jump)  frame-coverage {cov:.0f}%  "
-              f"span-identity {ok}/{n} = {100*ok/max(n,1):.0f}%")
-        all_spans.extend(spans)
+    print(f"=== fused layered timeline ({args.set_id}) ===", file=sys.stderr)
+    bed = _bed_spans(set_dir, by_tid, gt_tids, args.bed_frame_s, args.bed_beta, by_tid)
+    voc = _vocal_spans(set_dir, by_tid, args.overlay_frame_s,
+                       args.overlay_win_frames, args.overlay_beta)
 
-    all_spans.sort(key=lambda s: (s["set_start_s"], s["channel"]))
+    # scorecards: bed span-identity, overlay event-level
+    bed_ok = sum(1 for s in bed if _span_correct(s, gt_rows, ("regular", "instrumental")))
+    print(f"=== fused layered timeline ({args.set_id}) ===")
+    print(f"  [bed    ] {len(bed)} spans  span-identity {bed_ok}/{len(bed)} = "
+          f"{100*bed_ok/max(len(bed),1):.0f}%")
+    vtuples = [(s["recording_id"], s["set_start_s"], s["set_end_s"]) for s in voc]
+    rec, prec, nev, nsp, onsets = event_score(vtuples, gt_rows)
+    om = f"{np.median(onsets):.1f}s" if onsets else "-"
+    print(f"  [overlay] {len(voc)} spans  event recall {100*rec:.0f}% / "
+          f"precision {100*prec:.0f}% / onset {om}  ({nev} GT vocal events)")
+
+    all_spans = sorted(bed + voc, key=lambda s: (s["set_start_s"], s["channel"]))
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out = OUT_DIR / f"{args.set_id}_fused_timeline.json"
     out.write_text(json.dumps({
         "set_id": args.set_id, "mix_duration_s": mix_dur,
-        "frame_s": args.frame_s, "betas": betas,
+        "bed": {"frame_s": args.bed_frame_s, "feature": "chroma", "beta": args.bed_beta},
+        "overlay": {"frame_s": args.overlay_frame_s, "feature": "mfcc-windowed",
+                    "win_frames": args.overlay_win_frames, "beta": args.overlay_beta},
         "n_spans": len(all_spans), "spans": all_spans,
     }, indent=2))
-    print(f"\nwrote {out}  ({len(all_spans)} spans)")
+    print(f"\nwrote {out}  ({len(all_spans)} spans: {len(bed)} bed + {len(voc)} vocal)")
 
     print("\ntimeline head (first 6 min):")
     for s in all_spans:
         if s["set_start_s"] > 360:
             break
-        m0, m1 = s["set_start_s"] / 60, s["set_end_s"] / 60
         jp = " [jump]" if s["had_section_jump"] else ""
-        print(f"  {m0:4.1f}-{m1:4.1f}m  {s['channel']:7} {s['name'][:44]:44} "
-              f"@ref {s['ref_start_s']:.0f}-{s['ref_end_s']:.0f}s{jp}")
+        print(f"  {s['set_start_s']/60:4.1f}-{s['set_end_s']/60:4.1f}m  {s['channel']:7} "
+              f"{s['name'][:42]:42} @ref {s['ref_start_s']:.0f}-{s['ref_end_s']:.0f}s{jp}")
     return 0
+
+
+def _span_correct(s, gt_rows, stems) -> bool:
+    rows = [r for r in gt_rows if (r.get("claimed_stem") or "regular") in stems]
+    mid = 0.5 * (s["set_start_s"] + s["set_end_s"])
+    return s["recording_id"] in {str(r["track_id"]) for r in rows
+                                 if float(r["set_start_s"]) - 3 <= mid <= float(r["set_end_s"]) + 3}
 
 
 if __name__ == "__main__":
