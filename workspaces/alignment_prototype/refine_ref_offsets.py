@@ -25,6 +25,7 @@ Usage:
     venvs/audio/bin/python -m workspaces.alignment_prototype.refine_ref_offsets \\
         --set-id 2nvzlh2k [--window-s 12] [--workers 8]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -56,6 +57,7 @@ _MIX_SOURCE = {  # claimed_stem -> (mix file, ref stem key)
 
 def chroma(y: np.ndarray) -> np.ndarray:
     import librosa
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         c = librosa.feature.chroma_cqt(y=y, sr=SR, hop_length=HOP)
@@ -65,6 +67,7 @@ def chroma(y: np.ndarray) -> np.ndarray:
 def correlate_window(wf: np.ndarray, rf: np.ndarray) -> tuple[int, float]:
     """Best (frame, normalized score) of window wf sliding over ref rf."""
     from scipy.signal import fftconvolve
+
     m = wf.shape[1]
     if rf.shape[1] <= m:
         return 0, 0.0
@@ -72,7 +75,7 @@ def correlate_window(wf: np.ndarray, rf: np.ndarray) -> tuple[int, float]:
     # correlation = convolution with time-reversed kernel, summed over chroma
     num = fftconvolve(rf, w[:, ::-1], mode="valid", axes=1).sum(axis=0)
     # sliding L2 norm of ref windows
-    e = np.concatenate([[0.0], np.cumsum((rf ** 2).sum(axis=0))])
+    e = np.concatenate([[0.0], np.cumsum((rf**2).sum(axis=0))])
     den = np.sqrt(np.maximum(e[m:] - e[:-m], 1e-9))
     scores = num / den
     k = int(scores.argmax())
@@ -80,7 +83,8 @@ def correlate_window(wf: np.ndarray, rf: np.ndarray) -> tuple[int, float]:
 
 
 def detect_offset(
-    win_f: np.ndarray, ref_f: np.ndarray,
+    win_f: np.ndarray,
+    ref_f: np.ndarray,
     stretches: tuple[float, ...] = STRETCHES,
 ) -> tuple[float, float, float]:
     """(ref_start_s, peak, stretch) — search the given stretch factors.
@@ -100,21 +104,41 @@ def detect_offset(
 
 
 def _span_job(args: tuple) -> dict:
-    """Worker: load ref audio, chroma, detect. Returns updates for the span."""
-    span, ref_path, win, stretches = args
+    """Worker: load ref audio, chroma, detect. Returns updates for the span.
+
+    When fp_cfg is set, ALSO run a landmark-fingerprint offset on the mix-audio
+    window vs the same ref audio — a high-vote fingerprint hit is a sharper,
+    higher-precision localizer than the chroma matched filter and recovers the
+    wrong-content errors it makes (validated by fp_fuse: +6pp fiber-aware)."""
+    span, ref_path, win, stretches, fp_cfg = args
     import librosa
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         ref_y, _ = librosa.load(ref_path, sr=SR, mono=True)
     ref_f = chroma(ref_y)
     win_f = np.asarray(win, dtype=np.float32)
     ref_start, peak, stretch = detect_offset(win_f, ref_f, tuple(stretches))
-    return {
+    out = {
         "slot_label": span["slot_label"],
         "ref_start_s": round(ref_start, 3),
         "ref_peak": round(peak, 3),
         "ref_stretch": stretch,
+        "fp_votes": 0,
     }
+    if fp_cfg is not None:
+        from workspaces.alignment_prototype.fp_probe import fp_offset
+
+        mix_audio, s0, fp_win, fp_stretches = fp_cfg
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            mw, _ = librosa.load(
+                mix_audio, sr=SR, mono=True, offset=s0, duration=fp_win
+            )
+        fp_off, votes, _ = fp_offset(mw, ref_y, tuple(fp_stretches))
+        out["fp_ref_start"] = round(fp_off, 3)
+        out["fp_votes"] = int(votes)
+    return out
 
 
 def find_aligning_dir(set_id: str) -> Path:
@@ -141,13 +165,39 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--set-id", required=True)
     p.add_argument("--window-s", type=float, default=12.0)
-    p.add_argument("--min-peak", type=float, default=0.55,
-                   help="below this, keep the decode offset and flag the span")
+    p.add_argument(
+        "--min-peak",
+        type=float,
+        default=0.55,
+        help="below this, keep the decode offset and flag the span",
+    )
     p.add_argument("--workers", type=int, default=8)
-    p.add_argument("--grid-stretch", action="store_true",
-                   help="fix stretch from beat grids (instrumental-BPM-anchor "
-                        "heuristic): ratio = ref bar dur / mix bar dur, "
-                        "searched only ±2%% + half/double-time octaves")
+    p.add_argument(
+        "--grid-stretch",
+        action="store_true",
+        help="fix stretch from beat grids (instrumental-BPM-anchor "
+        "heuristic): ratio = ref bar dur / mix bar dur, "
+        "searched only ±2%% + half/double-time octaves",
+    )
+    p.add_argument(
+        "--fingerprint",
+        action="store_true",
+        help="also run a landmark-fingerprint offset per span and OVERRIDE the "
+        "chroma match when its vote count is high (recovers wrong-content "
+        "errors the matched filter makes; fp_fuse validated +6pp fiber-aware)",
+    )
+    p.add_argument(
+        "--fp-votes",
+        type=int,
+        default=40,
+        help="min fingerprint votes to override the chroma offset",
+    )
+    p.add_argument(
+        "--fp-win-s",
+        type=float,
+        default=15.0,
+        help="mix-audio probe window for the fingerprint",
+    )
     args = p.parse_args(argv)
 
     import librosa
@@ -180,6 +230,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.grid_stretch:
         from core.result import Err, Ok
         from workspaces.alignment_prototype.mert_store import load_bb12_mert
+
         match load_bb12_mert(args.set_id):
             case Err(msg):
                 sys.exit(f"--grid-stretch needs the MERT bundle (beat grids): {msg}")
@@ -197,7 +248,7 @@ def main(argv: list[str] | None = None) -> int:
         a = int(s["set_start_s"] * SR / HOP)
         n = int(args.window_s * SR / HOP)
         a = min(a, max(0, mc.shape[1] - n))
-        win = mc[:, a:a + n]
+        win = mc[:, a : a + n]
         if win.shape[1] < n // 2:
             continue
         stretches = STRETCHES
@@ -205,7 +256,9 @@ def main(argv: list[str] | None = None) -> int:
             mix_series, ref_series = grids
             i = int(np.searchsorted(mix_series.start_s, s["set_start_s"]))
             lo, hi = max(0, i - 2), min(mix_series.n_measures, i + 3)
-            mix_bar = float(np.median(mix_series.end_s[lo:hi] - mix_series.start_s[lo:hi]))
+            mix_bar = float(
+                np.median(mix_series.end_s[lo:hi] - mix_series.start_s[lo:hi])
+            )
             rser = ref_series[s["recording_id"]]
             ref_bar = float(np.median(rser.end_s - rser.start_s))
             if mix_bar > 0 and ref_bar > 0:
@@ -221,12 +274,21 @@ def main(argv: list[str] | None = None) -> int:
                 while e < 0.7:
                     e *= 2.0
                 stretches = tuple(e * f for f in (0.96, 0.98, 1.0, 1.02, 1.04))
-        jobs.append((s, str(ref), win.tolist(), stretches))
+        fp_cfg = None
+        if args.fingerprint:
+            mix_file = set_dir / _MIX_SOURCE.get(stem, _MIX_SOURCE["regular"])[0]
+            if not mix_file.is_file():
+                mix_file = set_dir / "mix.m4a"
+            fp_win = min(args.fp_win_s, s["set_end_s"] - s["set_start_s"])
+            fp_cfg = (str(mix_file), s["set_start_s"], fp_win, (0.98, 1.0, 1.02))
+        jobs.append((s, str(ref), win.tolist(), stretches, fp_cfg))
         meta.append(s)
 
-    print(f"detecting ref offsets for {len(jobs)} spans "
-          f"(window={args.window_s:.0f}s, {len(STRETCHES)} stretches, "
-          f"{args.workers} workers)…")
+    print(
+        f"detecting ref offsets for {len(jobs)} spans "
+        f"(window={args.window_s:.0f}s, {len(STRETCHES)} stretches, "
+        f"{args.workers} workers)…"
+    )
     results: dict[str, dict] = {}
     with ProcessPoolExecutor(max_workers=args.workers) as ex:
         for i, r in enumerate(ex.map(_span_job, jobs, chunksize=2)):
@@ -234,28 +296,51 @@ def main(argv: list[str] | None = None) -> int:
             if (i + 1) % 25 == 0:
                 print(f"  {i + 1}/{len(jobs)}")
 
-    updated, weak = 0, []
+    updated, weak, fp_overrides = 0, [], 0
     for s in spans:
         r = results.get(s["slot_label"])
         if r is None:
             continue
-        s.setdefault("ref_start_decode", s["ref_start_s"])  # keep original provenance on re-runs
+        s.setdefault(
+            "ref_start_decode", s["ref_start_s"]
+        )  # keep original provenance on re-runs
         s["ref_peak"] = r["ref_peak"]
-        if r["ref_peak"] >= args.min_peak:
-            span_len = s["set_end_s"] - s["set_start_s"]
+        span_len = s["set_end_s"] - s["set_start_s"]
+        # high-vote fingerprint OVERRIDES the chroma match (sharper, recovers
+        # wrong-content); else fall back to the matched-filter offset.
+        if args.fingerprint and r.get("fp_votes", 0) >= args.fp_votes:
+            s["ref_start_fp"] = r["fp_ref_start"]
+            s["ref_fp_votes"] = r["fp_votes"]
+            s["ref_start_s"] = r["fp_ref_start"]
+            s["ref_end_s"] = round(r["fp_ref_start"] + span_len * r["ref_stretch"], 3)
+            s["ref_stretch"] = r["ref_stretch"]
+            s["ref_source_method"] = "fingerprint"
+            updated += 1
+            fp_overrides += 1
+        elif r["ref_peak"] >= args.min_peak:
             s["ref_start_s"] = r["ref_start_s"]
             s["ref_end_s"] = round(r["ref_start_s"] + span_len * r["ref_stretch"], 3)
             s["ref_stretch"] = r["ref_stretch"]
+            s["ref_source_method"] = "chroma"
             updated += 1
         else:
             weak.append((s["slot_label"], r["ref_peak"], s["name"][:45]))
 
-    timeline["ref_offsets"] = "matched-filter chroma detection (refine_ref_offsets)"
+    method = (
+        "matched-filter chroma + fingerprint override"
+        if args.fingerprint
+        else "matched-filter chroma detection"
+    )
+    timeline["ref_offsets"] = f"{method} (refine_ref_offsets)"
     timeline_path.write_text(json.dumps(timeline, indent=2))
 
     peaks = np.array([r["ref_peak"] for r in results.values()])
-    print(f"\nupdated {updated}/{len(results)} spans "
-          f"(peak median={np.median(peaks):.2f} p10={np.percentile(peaks, 10):.2f})")
+    print(
+        f"\nupdated {updated}/{len(results)} spans "
+        f"(peak median={np.median(peaks):.2f} p10={np.percentile(peaks, 10):.2f})"
+    )
+    if args.fingerprint:
+        print(f"  fingerprint overrode {fp_overrides} spans (votes >= {args.fp_votes})")
     if weak:
         print(f"{len(weak)} weak spans kept decode offsets (peak < {args.min_peak}):")
         for slot, pk, name in weak:
