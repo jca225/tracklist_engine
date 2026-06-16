@@ -100,7 +100,9 @@ def build_fibers(set_id, stem, feature, k, min_section, max_refs) -> dict:
         if not sp or not Path(sp).is_file():
             continue
         feat = np.load(_ensure_feat(sp, sp, feature, 9))
-        labels, hz = compute_fibers(feat, FPS, k=k, min_section_s=min_section)
+        labels, hz = compute_fibers(
+            feat, FPS, k=k, min_section_s=min_section, audio_path=sp
+        )
         ivs = fiber_intervals(labels, hz, min_len_s=min_section)
         by_lab: dict[int, list] = {}
         for s, e, lab in ivs:

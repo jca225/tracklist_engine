@@ -3,24 +3,28 @@
 
 Think of playback as a map ref-time -> audio-content. A repeated chorus means
 many ref positions share one content value; the *fiber* over that content is the
-set of repeat instances. Every "repeat error" the placement decoder makes (e.g.
-picking ref 147 s when GT is 48 s, cosine 0.99) is it landing on the wrong point
-of the RIGHT fiber. Knowing the fibers lets us (1) score within-fiber picks as
-correct, (2) collapse repeats so they don't compete as separate hypotheses, and
-(3) disambiguate the instance by context (monotonic progression) or abstain.
+set of repeat instances. Every "repeat error" the placement decoder makes is it
+landing on the wrong point of the RIGHT fiber. Knowing the fibers lets us score
+within-fiber picks as correct and collapse repeats instead of competing them.
 
-Computing fibers robustly is a music-structure-analysis problem, and the naive
-methods FAIL: thresholded union-find and k-NN-recurrence + connected-components
-both transitively chain a repetitive track into one blob (100% of the track =
-one fiber). The fix is a fixed-K spectral PARTITION (McFee-Ellis Laplacian
-segmentation): a partition can't blob. Robustness to "sung differently" comes
-from the feature — HuBERT phonetic frames match on the *words*, which repeat even
-when melody/delivery/key don't; separation noise is rejected by path-enhancement
-(a fiber needs a sustained diagonal, not frame-coincidence).
+**Lesson from human audit (2026-06-16):** the first version (spectral cluster
+labels + pooled-cosine display) over-merged badly — John heard false merges
+(diff sections, pooled sim 0.9+) and silence "fibers" (the vocal stem goes
+quiet; silence is perfectly self-similar). Pooled cosine and spectral labels are
+NOT trustworthy equivalence. Fixes, all validated on his examples:
 
-So: feed HuBERT frames for vocal stems (chroma is fine for harmonic beds but
-over-similar on EDM). `compute_fibers` returns a per-(downsampled)-frame label;
-`same_fiber` answers the question the decoder/scorer actually needs.
+  1. SILENCE GATE — drop sections whose RMS << the track median (the silence
+     fibers had RMS ~0.0).
+  2. DIAGONAL verification — equivalence = a sustained best-offset matched-filter
+     diagonal between two sections (real repeats scored 0.56-0.84, false merges
+     0.21-0.37; pooled cosine couldn't tell them apart).
+  3. AVERAGE-LINKAGE grouping, not connected-components — a section that matches
+     ONE member of a group but not the others (18s~174s=0.62 but 18s~96s=0.00)
+     must not transitively join; averaging the links blocks that.
+
+Spectral clustering is kept only to propose section BOUNDARIES; the equivalence
+itself is the diagonal test. Feed HuBERT frames for vocals (phonetic -> robust to
+a singer varying delivery), chroma for harmonic beds.
 """
 
 from __future__ import annotations
@@ -29,52 +33,154 @@ import warnings
 
 import numpy as np
 
+from workspaces.alignment_prototype.refine_ref_offsets import HOP, SR
+
+
+def _long_repeats(g, g_hz, nonsil, min_repeat_s, thresh):
+    """Candidate repeated SEGMENTS by scanning self-similarity diagonals.
+
+    A sustained high run on the lag-L diagonal means [i..j] recurs at [i+L..j+L]
+    — this captures the LONG, loud repeats (a 29 s chorus) that fixed short
+    sections fragment and miss. Both ends must be audible (silence is perfectly
+    self-similar and would otherwise form spurious repeats). Overlapping detected
+    intervals are merged into canonical segments. Returns (start, end) in
+    ds-frames."""
+    from scipy.ndimage import uniform_filter1d
+
+    t = g.shape[1]
+    s = (g.T @ g).astype(np.float32)
+    pw = max(1, int(2 * g_hz))
+    ml = int(min_repeat_s * g_hz)
+    ivs: list[tuple[int, int]] = []
+    for lag in range(max(1, int(4 * g_hz)), t):
+        d = uniform_filter1d(np.diagonal(s, lag).astype(np.float32), pw, mode="nearest")
+        good = (d > thresh) & nonsil[: t - lag] & nonsil[lag:t]
+        i = 0
+        while i < len(good):
+            if good[i]:
+                j = i
+                while j < len(good) and good[j]:
+                    j += 1
+                if j - i >= ml:
+                    ivs.append((i, j))
+                    ivs.append((i + lag, j + lag))
+                i = j
+            else:
+                i += 1
+    if not ivs:
+        return []
+    ivs.sort()
+    merged = [list(ivs[0])]
+    for a, b in ivs[1:]:
+        if a <= merged[-1][1] + pw:  # overlapping/adjacent -> one canonical segment
+            merged[-1][1] = max(merged[-1][1], b)
+        else:
+            merged.append([a, b])
+    return [(a, b) for a, b in merged]
+
+
+def _diag_sim(a: np.ndarray, b: np.ndarray) -> float:
+    """Best-offset normalized matched-filter peak between two feature slices —
+    a sustained diagonal means the two sections are the SAME content (robust to
+    where in the section they align). Slides the shorter over the longer."""
+    from scipy.signal import fftconvolve
+
+    a = a / (np.linalg.norm(a, axis=0, keepdims=True) + 1e-9)
+    b = b / (np.linalg.norm(b, axis=0, keepdims=True) + 1e-9)
+    if a.shape[1] > b.shape[1]:
+        a, b = b, a
+    n = a.shape[1]
+    if n < 2 or b.shape[1] < n:
+        return 0.0
+    w = a / (np.linalg.norm(a) + 1e-9)
+    num = fftconvolve(b, w[:, ::-1], mode="valid", axes=1).sum(axis=0)
+    e = np.concatenate([[0.0], np.cumsum((b**2).sum(axis=0))])
+    den = np.sqrt(np.maximum(e[n:] - e[:-n], 1e-9))
+    return float((num / den).max())
+
+
+def _avg_linkage(sim: np.ndarray, thresh: float) -> list[int]:
+    """Agglomerative grouping by AVERAGE linkage at `thresh`. Returns a group id
+    per item. Average linkage (not single/connected-components) stops a section
+    that matches one member but not the rest from transitively joining."""
+    n = sim.shape[0]
+    groups = [[i] for i in range(n)]
+    while len(groups) > 1:
+        best, bi, bj = thresh, -1, -1
+        for i in range(len(groups)):
+            for j in range(i + 1, len(groups)):
+                m = np.mean([sim[a, b] for a in groups[i] for b in groups[j]])
+                if m > best:
+                    best, bi, bj = m, i, j
+        if bi < 0:
+            break
+        groups[bi].extend(groups[bj])
+        groups.pop(bj)
+    label = [0] * n
+    for gid, g in enumerate(groups):
+        for i in g:
+            label[i] = gid
+    return label
+
 
 def compute_fibers(
     feat: np.ndarray,
     fps: float,
     *,
-    k: int = 6,
     ds_hz: float = 8.0,
-    min_section_s: float = 4.0,
+    min_repeat_s: float = 6.0,
+    repeat_thresh: float = 0.5,
+    verify_thresh: float = 0.5,
+    audio_path: str | None = None,
+    silence_ratio: float = 0.35,
+    k: int | None = None,  # back-compat (ignored)
+    min_section_s: float | None = None,  # back-compat (ignored)
 ) -> tuple[np.ndarray, float]:
     """(labels, label_hz). feat=(D, T) per-column features at `fps`.
 
-    Spectral-cluster the recurrence+sequence affinity into k section labels.
-    Same label at two times => same fiber (mutually self-similar section).
-    Downsamples to ~ds_hz first (structure is coarse; keeps the eigendecomp
-    cheap). k is clamped so short tracks don't get over-segmented."""
-    import librosa
-    from sklearn.cluster import KMeans
-
+    Pipeline: downsample -> RMS silence mask (if `audio_path`) -> scan
+    self-similarity diagonals for LONG sustained repeats (the long/loud
+    hook/chorus, not short fragments) -> verify+group candidate segments by
+    average-linkage on the best-offset diagonal similarity. labels are per
+    downsampled frame: shared id = same fiber, -1 = silence / non-repeated.
+    Use `same_fiber` for the question the decoder/scorer actually asks."""
     step = max(1, int(round(fps / ds_hz)))
     g = feat[:, ::step].astype(np.float32)
     g_hz = fps / step
     g = g / (np.linalg.norm(g, axis=0, keepdims=True) + 1e-9)
-    n = g.shape[1]
-    k = max(2, min(k, n // max(1, int(min_section_s * g_hz))))
-    if n < 4 or k < 2:
-        return np.zeros(n, dtype=int), g_hz
+    t = g.shape[1]
+    labels = -np.ones(t, dtype=int)
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        rec = librosa.segment.recurrence_matrix(
-            g, mode="affinity", sym=True, width=max(3, int(3 * g_hz))
-        )
-        rec = librosa.segment.path_enhance(rec, n=max(1, int(2 * g_hz)))
-    # add a sequence term so sections stay temporally contiguous (McFee-Ellis)
-    seq = np.zeros((n, n), dtype=np.float32)
-    i = np.arange(n - 1)
-    seq[i, i + 1] = seq[i + 1, i] = 1.0
-    affinity = rec + seq * (rec.mean() + 1e-9)
-    deg = affinity.sum(1) + 1e-9
-    lap = np.eye(n) - affinity / deg[:, None]  # random-walk Laplacian
-    w, v = np.linalg.eig(lap)
-    order = np.argsort(w.real)
-    x = v.real[:, order[:k]]
-    x = x / (np.linalg.norm(x, axis=1, keepdims=True) + 1e-9)
-    labels = KMeans(n_clusters=k, n_init=4, random_state=0).fit_predict(x)
-    return labels.astype(int), g_hz
+    nonsil = np.ones(t, dtype=bool)
+    if audio_path is not None:
+        import librosa
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            y, _ = librosa.load(audio_path, sr=SR, mono=True)
+        rms = librosa.feature.rms(y=y, hop_length=HOP)[0][::step]
+        floor = float(np.median(rms)) * silence_ratio
+        nonsil[: rms.size] = rms[:t] >= floor
+
+    secs = _long_repeats(g, g_hz, nonsil, min_repeat_s, repeat_thresh)
+    if not secs:
+        return labels, g_hz
+
+    feats = [np.ascontiguousarray(g[:, a:b]) for a, b in secs]
+    m = len(secs)
+    sim = np.eye(m, dtype=np.float32)
+    for i in range(m):
+        for j in range(i + 1, m):
+            sim[i, j] = sim[j, i] = _diag_sim(feats[i], feats[j])
+    grp = _avg_linkage(sim, verify_thresh) if m > 1 else [0]
+    remap: dict[int, int] = {}
+    next_id = 0
+    for (a, b), gid in zip(secs, grp):
+        if gid not in remap:
+            remap[gid] = next_id
+            next_id += 1
+        labels[a : min(b, t)] = remap[gid]
+    return labels, g_hz
 
 
 def fiber_at(labels: np.ndarray, label_hz: float, sec: float) -> int:
@@ -85,21 +191,25 @@ def fiber_at(labels: np.ndarray, label_hz: float, sec: float) -> int:
 
 
 def same_fiber(labels: np.ndarray, label_hz: float, a_s: float, b_s: float) -> bool:
-    """Do two ref times fall in the same self-repeat class?"""
-    return fiber_at(labels, label_hz, a_s) == fiber_at(labels, label_hz, b_s)
+    """Do two ref times fall in the same self-repeat class? (-1 = silence /
+    ungrouped never counts as equivalent.)"""
+    fa = fiber_at(labels, label_hz, a_s)
+    fb = fiber_at(labels, label_hz, b_s)
+    return fa >= 0 and fa == fb
 
 
 def fiber_intervals(
     labels: np.ndarray, label_hz: float, min_len_s: float = 4.0
 ) -> list[tuple[float, float, int]]:
-    """Contiguous (start_s, end_s, label) runs >= min_len_s — for inspection."""
+    """Contiguous (start_s, end_s, label) runs >= min_len_s, excluding silence
+    (label -1) — for inspection / UI."""
     out: list[tuple[float, float, int]] = []
     if labels.size == 0:
         return out
     s = 0
     for i in range(1, labels.size + 1):
         if i == labels.size or labels[i] != labels[i - 1]:
-            if (i - s) / label_hz >= min_len_s:
+            if labels[s] >= 0 and (i - s) / label_hz >= min_len_s:
                 out.append((s / label_hz, i / label_hz, int(labels[s])))
             s = i
     return out

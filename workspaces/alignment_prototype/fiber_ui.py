@@ -27,6 +27,7 @@ import html
 import json
 import subprocess
 import sys
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -37,6 +38,7 @@ if str(_REPO) not in sys.path:
 
 from workspaces.alignment_prototype.path_decode import _ensure_feat  # noqa: E402
 from workspaces.alignment_prototype.ref_fibers import (  # noqa: E402
+    _diag_sim,
     compute_fibers,
     fiber_intervals,
 )
@@ -61,6 +63,16 @@ def _pooled(feat: np.ndarray, s: float, e: float) -> np.ndarray:
     seg = feat[:, a : max(a + 1, b)]
     v = seg.mean(axis=1)
     return v / (np.linalg.norm(v) + 1e-9)
+
+
+def _rms(path: str) -> float:
+    """Whole-file RMS — a ~silent instrumental stem flags a real acappella."""
+    import librosa
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        y, _ = librosa.load(path, sr=SR, mono=True)
+    return float(np.sqrt(np.mean(y**2)))
 
 
 def _cut(src: Path, s: float, e: float, out: Path) -> bool:
@@ -98,10 +110,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--borderline",
         type=float,
-        default=0.85,
-        help="flag members whose similarity to the fiber centroid is below this "
-        "(within-fiber sims cluster ~0.93; the 0.74-0.84 tail is where a singer's "
-        "varied emphasis / a wrong merge shows — those are what to listen to)",
+        default=0.75,
+        help="flag members whose DIAGONAL sim to the fiber's reference member is "
+        "below this (real repeats ~0.8-1.0; the 0.5-0.75 band is where a singer's "
+        "varied emphasis / a borderline merge shows — those are what to listen to)",
     )
     args = p.parse_args(argv)
     want = {s.strip() for s in args.stems.split(",") if s.strip()}
@@ -126,10 +138,22 @@ def main(argv: list[str] | None = None) -> int:
             sp = (tr.get("stems") or {}).get(sk) if sk else tr.get("local_path")
             if not sp or not Path(sp).is_file():
                 continue
+            # prefer a REAL acappella over the separation stem: if this track's
+            # instrumental stem is ~silent, local_path IS a clean acappella
+            # (label-agnostic — the "(Acappella)" title is often a full track).
+            if stem == "acappella":
+                ins = (tr.get("stems") or {}).get("instrumental")
+                lp = tr.get("local_path")
+                if ins and lp and Path(lp).is_file() and _rms(ins) < 0.02:
+                    sp = lp
             feature = args.feature or _DEFAULT_FEATURE.get(stem, "chroma")
             feat = np.load(_ensure_feat(sp, sp, feature, args.hubert_layer))
             labels, hz = compute_fibers(
-                feat, FPS, k=args.k, min_section_s=args.min_section_s
+                feat,
+                FPS,
+                k=args.k,
+                min_section_s=args.min_section_s,
+                audio_path=sp,  # enables RMS silence-gating
             )
             ivs = fiber_intervals(labels, hz, min_len_s=args.min_section_s)
             by_lab: dict[int, list] = {}
@@ -143,13 +167,19 @@ def main(argv: list[str] | None = None) -> int:
             name = html.escape(tr.get("title") or tr.get("name") or rid)
             blocks = [f"<h2>{name} <small>({stem}, {feature})</small></h2>"]
             for lab, members in sorted(multi.items(), key=lambda kv: -len(kv[1])):
-                centroid = np.mean([_pooled(feat, s, e) for s, e in members], axis=0)
-                centroid /= np.linalg.norm(centroid) + 1e-9
+                # reference = the longest member; display each member's DIAGONAL
+                # sim to it (the metric the grouping uses — pooled cosine is
+                # fooled, scoring 0.9+ on different sections)
+                ref_s, ref_e = max(members, key=lambda m: m[1] - m[0])
+                ref_feat = np.ascontiguousarray(
+                    feat[:, int(ref_s * FPS) : int(ref_e * FPS)]
+                )
                 blocks.append(
                     f'<div class="fiber"><b>fiber {lab}</b> — {len(members)} members'
                 )
                 for j, (s, e) in enumerate(members):
-                    sim = float(_pooled(feat, s, e) @ centroid)
+                    seg = np.ascontiguousarray(feat[:, int(s * FPS) : int(e * FPS)])
+                    sim = _diag_sim(seg, ref_feat)
                     snip = out_dir / f"{rid}_L{lab}_{j}.mp3"
                     ok = _cut(Path(sp), s, e, snip)
                     cls = "bad" if sim < args.borderline else "ok"
