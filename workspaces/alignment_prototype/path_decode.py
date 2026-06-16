@@ -89,31 +89,63 @@ def _ensure_feat(audio_path, src_key, feature: str, layer: int) -> Path:
 
 
 # --- the decode -----------------------------------------------------------
-def _viterbi(reward: np.ndarray, lam: float) -> tuple[float, np.ndarray]:
-    """Best piecewise-constant-offset path. reward[t, k] is the emission for
-    mix frame t at offset-state k; staying is free, switching state costs lam
-    (a single section-jump, independent of jump size). Returns (score, path_k).
+def _cummax_arg(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Inclusive running max value and its argindex (vectorized)."""
+    m = np.maximum.accumulate(x)
+    arg = np.maximum.accumulate(np.where(x >= m, np.arange(x.size), -1))
+    return m, arg
 
-    Transition is 'stay at k, or jump to the best previous state for lam', so
-    each step is O(K): the jump source is the global argmax of the prior row."""
-    tm, k = reward.shape
+
+def _viterbi(
+    reward: np.ndarray, lam_fwd: float, lam_back: float | None = None
+) -> tuple[float, np.ndarray]:
+    """Best piecewise-constant-offset path with a DIRECTIONAL jump penalty.
+
+    reward[t, k] is the emission for window t at clip-start state k (larger k =
+    later in the ref). Staying is free; a FORWARD jump (k increases — the DJ
+    skips ahead, 51% of plays) costs lam_fwd; a BACKWARD jump (replay an earlier
+    section) costs lam_back >> lam_fwd. This is the monotonic prior: among
+    equivalent repeats (same fiber) the path prefers the forward-consistent
+    instance, converting within-fiber ambiguity into correct placement.
+
+    O(K) per step via exclusive prefix max (best forward source, j<k) and
+    suffix max (best backward source, j>k)."""
+    if lam_back is None:
+        lam_back = lam_fwd
+    tm, K = reward.shape
     dp = reward[0].astype(np.float64).copy()
-    jumped = np.zeros((tm, k), dtype=bool)
-    src = np.zeros(tm, dtype=np.int32)
+    src = np.empty((tm, K), dtype=np.int32)
+    ar = np.arange(K)
     for t in range(1, tm):
-        am = int(dp.argmax())
-        jump_val = dp[am] - lam
-        take = jump_val > dp  # cheaper to arrive by jumping than by staying
-        dp = reward[t] + np.where(take, jump_val, dp)
-        jumped[t] = take
-        src[t] = am
+        # forward source: max over j<k (exclusive prefix)
+        pm, pa = _cummax_arg(dp)
+        pmv = np.empty(K)
+        pmv[0] = -np.inf
+        pmv[1:] = pm[:-1]
+        pmi = np.empty(K, np.int32)
+        pmi[0] = 0
+        pmi[1:] = pa[:-1]
+        # backward source: max over j>k (exclusive suffix) via reversed prefix
+        rm, ra = _cummax_arg(dp[::-1])
+        sm_inc = rm[::-1]
+        sa_inc = (K - 1 - ra)[::-1]
+        smv = np.empty(K)
+        smv[-1] = -np.inf
+        smv[:-1] = sm_inc[1:]
+        smi = np.empty(K, np.int32)
+        smi[-1] = 0
+        smi[:-1] = sa_inc[1:]
+        cand = np.stack([dp, pmv - lam_fwd, smv - lam_back])  # stay / fwd / back
+        csrc = np.stack([ar, pmi, smi])
+        ci = cand.argmax(0)
+        dp = reward[t] + cand[ci, ar]
+        src[t] = csrc[ci, ar]
     end = int(dp.argmax())
     path = np.empty(tm, dtype=np.int32)
     cur = end
     for t in range(tm - 1, -1, -1):
         path[t] = cur
-        if jumped[t, cur]:  # this state was reached by a jump from src[t]
-            cur = src[t]
+        cur = int(src[t, cur])
     return float(dp[end]), path
 
 
@@ -143,6 +175,7 @@ def decode_path(
     lam: float,
     wlen_frames: int = 516,  # ~12 s matched-filter window
     hop_frames: int = 86,  # ~2 s window hop
+    lam_back: float | None = None,  # backward-jump penalty (monotonic prior)
 ) -> tuple[list[tuple[float, float, float]], float]:
     """(segments, score). M=(D,Tm) span, R=(D,Tr) ref, both L2-normed per col.
 
@@ -181,7 +214,7 @@ def decode_path(
             continue
         lr0 = min(c.size - sh for c, sh in valid)
         e = np.stack([c[sh : sh + lr0] for c, sh in valid]).astype(np.float32)
-        score, path_r0 = _viterbi(e, lam)  # path over windows
+        score, path_r0 = _viterbi(e, lam, lam_back)  # path over windows
         if best is None or score > best[0]:
             best = (score, s, np.asarray(rel), path_r0)
     if best is None:
@@ -312,12 +345,12 @@ def _stretch_band(t, mix_series, ref_series) -> tuple[float, ...]:
 
 
 def _job(args: tuple) -> dict:
-    idx, mix_npy, a, n, ref_npy, stretches, lam, wlen, hop = args
+    idx, mix_npy, a, n, ref_npy, stretches, lam, wlen, hop, lam_back = args
     M = np.load(mix_npy, mmap_mode="r")[:, a : a + n]
     R = np.load(ref_npy, mmap_mode="r")
     M = np.ascontiguousarray(M, dtype=np.float32)
     R = np.ascontiguousarray(R, dtype=np.float32)
-    segs, score = decode_path(M, R, tuple(stretches), lam, wlen, hop)
+    segs, score = decode_path(M, R, tuple(stretches), lam, wlen, hop, lam_back)
     return {"idx": idx, "segs": segs, "score": round(score, 3)}
 
 
@@ -330,7 +363,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--feature", choices=["chroma", "hubert"], default="chroma")
     p.add_argument("--hubert-layer", type=int, default=9)
     p.add_argument("--stems", default="regular,acappella,instrumental")
-    p.add_argument("--lam", type=float, default=0.15, help="section-jump penalty")
+    p.add_argument("--lam", type=float, default=0.15, help="forward-jump penalty")
+    p.add_argument(
+        "--lam-back",
+        type=float,
+        default=None,
+        help="backward-jump penalty. Default = --lam (symmetric/neutral). "
+        "Raising it favors forward-consistent instances, but the cleaner answer "
+        "to repeat-ambiguity is to score fibers as equivalent (--fibers), not "
+        "to chase a specific instance (the lam-back sweep showed it hurts).",
+    )
     p.add_argument("--window-s", type=float, default=12.0, help="matched-filter window")
     p.add_argument("--hop-s", type=float, default=2.0, help="window hop")
     p.add_argument(
@@ -425,7 +467,21 @@ def main(argv: list[str] | None = None) -> int:
         stretches = _stretch_band(t, mix_series, ref_series)
         wlen = int(args.window_s * FPS)
         hop = int(args.hop_s * FPS)
-        jobs.append((i, str(mnpy), a, n, str(ref_npy), stretches, args.lam, wlen, hop))
+        lam_back = args.lam if args.lam_back is None else args.lam_back
+        jobs.append(
+            (
+                i,
+                str(mnpy),
+                a,
+                n,
+                str(ref_npy),
+                stretches,
+                args.lam,
+                wlen,
+                hop,
+                lam_back,
+            )
+        )
         meta.append((t, row, str(ref_npy)))
 
     print(
