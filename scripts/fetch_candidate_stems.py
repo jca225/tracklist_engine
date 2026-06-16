@@ -267,7 +267,10 @@ def rank_hits(layer: Layer, hits: list[Hit]) -> list[Hit]:
 def search_layer(layer: Layer, per_query: int = 5, cookies_browser: str | None = None) -> list[Hit]:
     import yt_dlp
     by_id: dict[str, Hit] = {}
-    opts: dict = {"quiet": True, "no_warnings": True, "extract_flat": True}
+    # yt-dlp's library default js runtime is deno (not installed on this Mac);
+    # YouTube signature/n-challenge solving needs node>=22 + yt-dlp-ejs.
+    opts: dict = {"quiet": True, "no_warnings": True, "extract_flat": True,
+                  "js_runtimes": {"node": {}}}
     if cookies_browser:
         opts["cookiesfrombrowser"] = (cookies_browser,)
     with yt_dlp.YoutubeDL(opts) as ydl:
@@ -306,6 +309,7 @@ def download_hit(hit: Hit, dest: Path, rank: int, cookies_browser: str | None) -
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
+        "js_runtimes": {"node": {}},   # node>=22 + yt-dlp-ejs; library default is deno (absent)
         "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "m4a", "preferredquality": "0"}],
     }
     if cookies_browser:
