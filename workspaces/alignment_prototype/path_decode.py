@@ -149,10 +149,18 @@ def _viterbi(
     return float(dp[end]), path
 
 
-def _scores_at_stretch(win_f: np.ndarray, ref_f: np.ndarray, st: float) -> np.ndarray:
+def _scores_at_stretch(
+    win_f: np.ndarray, ref_f: np.ndarray, st: float, wgt: np.ndarray | None = None
+) -> np.ndarray:
     """Normalized matched-filter curve of one window over the whole ref (the
     proven localizer — normalizes by each ref window's energy, so it localizes
-    where a raw per-frame cosine wanders)."""
+    where a raw per-frame cosine wanders).
+
+    `wgt` (length = win frames) down-weights query frames where THIS bed is
+    faded down: during a crossfade the mix is gain·thisBed + gain·otherBed, so
+    low-gain frames carry mostly the other bed and only mislead the match.
+    Weighting by the bed's own fader (its GT gain_curve) concentrates the
+    correlation on the frames where the bed is actually audible."""
     from scipy.signal import fftconvolve
 
     n = win_f.shape[1]
@@ -161,6 +169,8 @@ def _scores_at_stretch(win_f: np.ndarray, ref_f: np.ndarray, st: float) -> np.nd
         return np.zeros(0, np.float32)
     idx = np.clip((np.arange(m) / st).astype(int), 0, n - 1)
     w = win_f[:, idx]
+    if wgt is not None:
+        w = w * np.asarray(wgt, np.float32)[idx][None, :]
     w = w / (np.linalg.norm(w) + 1e-9)
     num = fftconvolve(ref_f, w[:, ::-1], mode="valid", axes=1).sum(axis=0)
     e = np.concatenate([[0.0], np.cumsum((ref_f**2).sum(axis=0))])
@@ -176,6 +186,7 @@ def decode_path(
     wlen_frames: int = 516,  # ~12 s matched-filter window
     hop_frames: int = 86,  # ~2 s window hop
     lam_back: float | None = None,  # backward-jump penalty (monotonic prior)
+    weight: np.ndarray | None = None,  # per-span-frame fader gain (gain_curve)
 ) -> tuple[list[tuple[float, float, float]], float]:
     """(segments, score). M=(D,Tm) span, R=(D,Tr) ref, both L2-normed per col.
 
@@ -200,7 +211,8 @@ def decode_path(
             win = np.ascontiguousarray(M[:, ap : ap + wlen_frames])
             if win.shape[1] < wlen_frames // 2:
                 continue
-            c = _scores_at_stretch(win, R, s)
+            wgt = None if weight is None else weight[ap : ap + win.shape[1]]
+            c = _scores_at_stretch(win, R, s, wgt)
             if c.size:
                 curves.append(c)
                 rel.append(ap)

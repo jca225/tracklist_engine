@@ -168,7 +168,9 @@ def localize(beds):
             mix_npy[stem] = _ensure_feat(f, f"{gt.set_id}_{stem}", "chroma", 0)
 
     all_iv = _bed_intervals(beds)
-    in_err, out_err = [], []  # abs ref error (s) per sample
+    # abs ref error (s) per sample, baseline vs gain-weighted emission
+    in_err = {"base": [], "gw": []}
+    out_err = {"base": [], "gw": []}
     per_span = []
     for t in targets:
         stem = t.claimed_stem or "regular"
@@ -203,52 +205,75 @@ def localize(beds):
         R = np.ascontiguousarray(np.load(ref_npy, mmap_mode="r"), dtype=np.float32)
         stretches = _stretch_band(t, mix_series, ref_series)
         wlen, hop = int(12 * FPS), int(2 * FPS)
-        segs, _sc = decode_path(M, R, stretches, 0.15, wlen, hop)
-        if not segs:
-            continue
         s0, s1 = float(row["set_start_s"]), float(row["set_end_s"])
         slope = float(row.get("tempo_ratio") or 1.0)
         gtp = _gt_pieces(row)
-        prp = _pieces([(s0 + ms, rs, re) for (ms, rs, re) in segs], s0, s1, slope)
-        ts = np.arange(s0, s1, 1.0)
         self_curve = _curve(row)
         others = [(o, c) for o, _st, sl, c in all_iv if sl != t.slot_label]
-        sin, sout = [], []
-        for tt in ts:
-            # only score where THIS bed is actually audible (faded-down frames
-            # aren't a placement the aligner could or should make)
-            if self_curve and _gain_at(self_curve, tt) <= MUTE_THR:
-                continue
-            err = abs(_ref_at(prp, tt) - _ref_at(gtp, tt))
-            # overlap = ANOTHER bed is audible (gain-gated) at this set-time
-            covered = any(_audible_at(o, c, tt) for o, c in others)
-            (in_err if covered else out_err).append(err)
-            (sin if covered else sout).append(err)
-        per_span.append(
-            (
-                t.slot_label,
-                stem,
-                np.mean([e < 2 for e in sin]) if sin else float("nan"),
-                np.mean([e < 2 for e in sout]) if sout else float("nan"),
-                len(sin),
-                len(sout),
+        ts = np.arange(s0, s1, 1.0)
+        # frame-aligned fader weight: gain of THIS bed at each span frame
+        # per-frame fader gain of THIS bed (weights the matched-filter window).
+        # NB: tested gain-proportional AND binary-audible masks — both a wash
+        # (59%->56/58%). Frame reweighting can't unmix a crossfade frame
+        # (gainA*A + gainB*B): the other bed's energy is WITHIN each frame, not
+        # in separate frames. The real fix is a joint two-bed decode.
+        wgt = np.ones(n, np.float32)
+        if self_curve:
+            wgt = np.array(
+                [max(0.0, _gain_at(self_curve, (a + f) / FPS)) for f in range(n)],
+                np.float32,
             )
+
+        def score(segs):
+            if not segs:
+                return None
+            prp = _pieces([(s0 + ms, rs, re) for (ms, rs, re) in segs], s0, s1, slope)
+            ein, eout = [], []
+            for tt in ts:
+                if self_curve and _gain_at(self_curve, tt) <= MUTE_THR:
+                    continue  # don't score faded-down frames
+                err = abs(_ref_at(prp, tt) - _ref_at(gtp, tt))
+                covered = any(_audible_at(o, c, tt) for o, c in others)
+                (ein if covered else eout).append(err)
+            return ein, eout
+
+        base = score(decode_path(M, R, stretches, 0.15, wlen, hop)[0])
+        gw = score(decode_path(M, R, stretches, 0.15, wlen, hop, weight=wgt)[0])
+        if base is None or gw is None:
+            continue
+        in_err["base"].extend(base[0])
+        out_err["base"].extend(base[1])
+        in_err["gw"].extend(gw[0])
+        out_err["gw"].extend(gw[1])
+        if base[0]:  # only overlap-touching spans are interesting here
+            per_span.append(
+                (
+                    t.slot_label,
+                    stem,
+                    np.mean([e < 2 for e in base[0]]),
+                    np.mean([e < 2 for e in gw[0]]) if gw[0] else float("nan"),
+                    len(base[0]),
+                )
+            )
+
+    def rep(tag, ie, oe):
+        ie, oe = np.array(ie), np.array(oe)
+        print(
+            f"  [{tag:11}] IN-overlap n={ie.size:5} exact<2s {100 * (ie < 2).mean():3.0f}%"
+            f" med {np.median(ie):4.1f}s  |  OUT n={oe.size:5} exact<2s "
+            f"{100 * (oe < 2).mean():3.0f}% med {np.median(oe):4.1f}s"
         )
 
-    ie, oe = np.array(in_err), np.array(out_err)
-    print(
-        f"  IN-overlap  samples n={ie.size:5}  exact<2s {100 * (ie < 2).mean():3.0f}%  "
-        f"median err {np.median(ie):5.1f}s"
-    )
-    print(
-        f"  OUT-overlap samples n={oe.size:5}  exact<2s {100 * (oe < 2).mean():3.0f}%  "
-        f"median err {np.median(oe):5.1f}s"
-    )
-    print("\n  per-span exact<2s  (slot stem | in% out% | n_in n_out):")
-    for slot, st, ina, outa, ni, no in per_span:
+    rep("baseline", in_err["base"], out_err["base"])
+    rep("gain-weight", in_err["gw"], out_err["gw"])
+    print("\n  per-span IN-overlap exact<2s  (slot stem | base gw | n):")
+    for slot, st, b, g, ni in per_span:
+        flag = "  <-- " + (
+            "better" if g > b + 0.05 else "worse" if g < b - 0.05 else ""
+        )
         print(
-            f"    {str(slot):6} {st:12} | "
-            f"{100 * ina:3.0f}% {100 * outa:3.0f}% | {ni:3} {no:3}"
+            f"    {str(slot):6} {st:12} | {100 * b:3.0f}% {100 * g:3.0f}% | {ni:3}"
+            f"{flag if abs(g - b) > 0.05 else ''}"
         )
 
 
