@@ -51,3 +51,359 @@ mixes:
     set_id: "rufus_mayan"
     title: "RÜFÜS DU SOL (DJ Set) - Mayan Warrior, Burning Man 2024"
     soundcloud_url: "https://soundcloud.com/mayanwarriorofficial/rufus-du-sol-dj-set-mayan-warrior-burning-man-2024"
+
+  # --- roster scrape-up (86 sets, build_taste_roster.py) ---
+  # Avicii
+  94vpcwk:
+    set_id: "94vpcwk"
+    title: "Avicii - Promo Mix April"
+    soundcloud_url: "https://soundcloud.com/aviciiofficial/avicii-promotional-mix-2013"   # 231023 SC likes
+  57nd501:
+    set_id: "57nd501"
+    title: "Avicii & RL Grime - Diplo & Friends"
+    soundcloud_url: "https://soundcloud.com/rlgrime/diplo-and-friends-rl-grime-mix"   # 83148 SC likes
+  915yyk:
+    set_id: "915yyk"
+    title: "Avicii - Radio 1's Essential Mix"
+    soundcloud_url: "https://soundcloud.com/hasino/avicii-essential-mix-11-12-2010"   # 5806 SC likes
+  6r34939:
+    set_id: "6r34939"
+    title: "Avicii - BBC Radio 1 Essential Mix"
+    soundcloud_url: "https://soundcloud.com/jaxon-fields/avicii-live-creamfields-2012-bbc-radio1-essential-mix-25082012"   # 4702 SC likes
+  818stbk:
+    set_id: "818stbk"
+    title: "Avicii @ Mainstage, Tomorrowland, Belgium"
+    soundcloud_url: "https://soundcloud.com/aviciitomorrowland2013/avicii"   # 4484 SC likes
+  2ug0zhmk:
+    set_id: "2ug0zhmk"
+    title: "Avicii @ Rock In Rio Lisbon, Portugal"
+    soundcloud_url: "https://soundcloud.com/user-699308679/avicii-live-rock-in-rio-lisboa-2016"   # 4359 SC likes
+  hcglz9:
+    set_id: "hcglz9"
+    title: "Avicii @ kineticFIELD, EDC Las Vegas, United States"
+    soundcloud_url: "https://soundcloud.com/electric-daisy_carnival/dj-avicii-mix-edc-las-vegas-sirius-xm-radio"   # 3082 SC likes
+  jcxf59:
+    set_id: "jcxf59"
+    title: "Avicii @ Pier 94 New York, United States"
+    soundcloud_url: "https://soundcloud.com/juan-sebastian-ruiz-ruiz/avicii-at-pier-94-nye-2012-new"   # 2411 SC likes
+  7x3ubt:
+    set_id: "7x3ubt"
+    title: "Avicii @ Independence Day Weekend, Marquee Las Vegas, United"
+    soundcloud_url: "https://soundcloud.com/mobiusprime/live-set-avicii-marquee"   # 1922 SC likes
+  441pps1:
+    set_id: "441pps1"
+    title: "Avicii @ kineticFIELD, EDC Las Vegas, United States"
+    soundcloud_url: "https://soundcloud.com/cunau/avicii-live-electric-daisy"   # 1478 SC likes
+  # Chris Lake
+  7t2dqjt:
+    set_id: "7t2dqjt"
+    title: "Martin Garrix & Chris Lake - UMF Radio 270"
+    soundcloud_url: "https://soundcloud.com/martingarrix/martin-garrix-live-at-ultra"   # 144409 SC likes
+  15qxu19t:
+    set_id: "15qxu19t"
+    title: "Chris Lake @ Black Book Records, Factory Town, Miami Music W"
+    soundcloud_url: "https://soundcloud.com/fish-tales/fisher-x-flowdan-boost-up-catchrelease"   # 25812 SC likes
+  1r26t051:
+    set_id: "1r26t051"
+    title: "Chris Lake @ Pool Deck, Holy Ship!"
+    soundcloud_url: "https://soundcloud.com/holy_ship/hs17live_chrislake"   # 12463 SC likes
+  6mf58b9:
+    set_id: "6mf58b9"
+    title: "Moksi & Chris Lake - Diplo & Friends"
+    soundcloud_url: "https://soundcloud.com/moksiofficial/moksi-live-on-diplo-and-friends-13-12-2015"   # 12316 SC likes
+  25lznjt:
+    set_id: "25lznjt"
+    title: "TJR & Chris Lake & Nom De Strip - Diplo & Friends"
+    soundcloud_url: "https://soundcloud.com/tjr/tjr-diplo-friends-mix-sept"   # 10503 SC likes
+  8z8ttm1:
+    set_id: "8z8ttm1"
+    title: "Chris Lake - Deep House Mix"
+    soundcloud_url: "https://soundcloud.com/chrislake/chris-lake-deep-house-mix"   # 7845 SC likes
+  fjtj0pk:
+    set_id: "fjtj0pk"
+    title: "Chris Lake @ Sutro, Outside Lands San Francisco, United Stat"
+    soundcloud_url: "https://soundcloud.com/sasha-poletaev/chris-lake-full-set-live-outside-lands-festival-2024"   # 6763 SC likes
+  34x4gpk:
+    set_id: "34x4gpk"
+    title: "Chris Lake - North America 2015 Tour Mix"
+    soundcloud_url: "https://soundcloud.com/chrislake/chris-lake-north-america-2015-tour-mix"   # 5918 SC likes
+  2hqqg0yk:
+    set_id: "2hqqg0yk"
+    title: "Chris Lake @ Chemistry Release Weekend, Brooklyn Storehouse,"
+    soundcloud_url: "https://soundcloud.com/user-554382340/chris-lake-live-from-brooklyn"   # 5730 SC likes
+  2600qnxk:
+    set_id: "2600qnxk"
+    title: "Chris Lake & Will Clarke - Night Owl Radio 134"
+    soundcloud_url: "https://soundcloud.com/insomniacevents/night-owl-radio-134-ft-chris-lake-and-will-clarke"   # 5638 SC likes
+  # Disco Lines
+  2p9kdknk:
+    set_id: "2p9kdknk"
+    title: "Disco Lines @ Club Space Miami, United States"
+    soundcloud_url: "https://soundcloud.com/discolines/disco-lines-live-from-club-space"   # 8328 SC likes
+  2ws2y6h9:
+    set_id: "2ws2y6h9"
+    title: "Disco Lines @ Lakefront Green Chicago, United States"
+    soundcloud_url: "https://soundcloud.com/discolines/disco-lines-live-lakefront-green-chicago"   # 7349 SC likes
+  1rcqfczk:
+    set_id: "1rcqfczk"
+    title: "Disco Lines @ Carousel Club, Electric Forest Festival, Unite"
+    soundcloud_url: "https://soundcloud.com/discolines/e-forest-disco-lines"   # 5844 SC likes
+  1ytwgnrk:
+    set_id: "1ytwgnrk"
+    title: "Ship Wrek & Disco Lines @ DoLab Stage, Coachella Festival We"
+    soundcloud_url: "https://soundcloud.com/theshipwrek/discowrekdolab"   # 5697 SC likes
+  105bmxf9:
+    set_id: "105bmxf9"
+    title: "Disco Lines @ RC Cola, III Points Music Festival, United Sta"
+    soundcloud_url: "https://soundcloud.com/discolines/disco-lines-live-3-points-2024"   # 5536 SC likes
+  1rfb0yl9:
+    set_id: "1rfb0yl9"
+    title: "Disco Lines @ Mammoth Mountain, United States"
+    soundcloud_url: "https://soundcloud.com/discolines/disco-lines-live-at-mammoth-mountain-apres-2024"   # 4993 SC likes
+  um4dt7t:
+    set_id: "um4dt7t"
+    title: "Disco Lines @ BoxPac Project Salt Lake City, United States"
+    soundcloud_url: "https://soundcloud.com/chach-dickey/disco-lines-live-boxpac-slc"   # 4709 SC likes
+  1yuuh521:
+    set_id: "1yuuh521"
+    title: "Disco Lines @ stereoBLOOM, EDC Orlando, United States"
+    soundcloud_url: "https://soundcloud.com/discolines/live-at-circuit-grounds-edc-orlando-2023"   # 4583 SC likes
+  1h2p2r71:
+    set_id: "1h2p2r71"
+    title: "Disco Lines - John Summit's Experts Only Radio 022"
+    soundcloud_url: "https://soundcloud.com/expertsonly/experts-only-radio-022"   # 4162 SC likes
+  1hvghsg1:
+    set_id: "1hvghsg1"
+    title: "Disco Lines @ Ministry Of Sound Recordings Dance Nation Take"
+    soundcloud_url: "https://soundcloud.com/discolines/ministryofsoundset2"   # 3754 SC likes
+  # Fisher
+  1gudm94k:
+    set_id: "1gudm94k"
+    title: "FISHER - Circoloco Radio 167"
+    soundcloud_url: "https://soundcloud.com/circolocoibizaofficial/circoloco-radio-167-fisher"   # 19810 SC likes
+  fgtn5c9:
+    set_id: "fgtn5c9"
+    title: "FISHER @ Sutro, Outside Lands San Francisco, United States"
+    soundcloud_url: "https://soundcloud.com/zachcool/fisher-outside-lands-2023"   # 2721 SC likes
+  26bqt9wk:
+    set_id: "26bqt9wk"
+    title: "FISHER & Chris Lake @ HARD Stage, HARD Summer Festival, Unit"
+    soundcloud_url: "https://soundcloud.com/user-47429638/under-construction-fisher-x-chris-lake-at-hard-summer-2024"   # 828 SC likes
+  252247vt:
+    set_id: "252247vt"
+    title: "FISHER & Paul Woolford - Night Owl Radio 126"
+    soundcloud_url: "https://soundcloud.com/insomniacevents/night-owl-radio-126-ft-fisher-and-paul-woolford"   # 734 SC likes
+  # Galantis
+  8h5vupk:
+    set_id: "8h5vupk"
+    title: "Galantis & Nicky Romero @ UMF Radio 312 (UMF Miami, United S"
+    soundcloud_url: "https://soundcloud.com/nickyromero/nicky-romero-live-at-ultra-music-festival-2015"   # 24911 SC likes
+  19f1xx1t:
+    set_id: "19f1xx1t"
+    title: "Annie Nightingale & Galantis & Knife Party - Annie Nightinga"
+    soundcloud_url: "https://soundcloud.com/knifepartyinc/knifeparty-australiadaymix2017"   # 17003 SC likes
+  88cmdr1:
+    set_id: "88cmdr1"
+    title: "Galantis - Gold Dust Mixtape"
+    soundcloud_url: "https://soundcloud.com/wearegalantis/gold-dust-mixtape-1"   # 14012 SC likes
+  936t6h9:
+    set_id: "936t6h9"
+    title: "Galantis @ Nassau Coco Cay, Bahamas, Holy Ship!, United Stat"
+    soundcloud_url: "https://soundcloud.com/wearegalantis/gold-dust-mixtape-1"   # 14012 SC likes
+  7fl4htk:
+    set_id: "7fl4htk"
+    title: "Moguai & Galantis & Adam Port - 1LIVE Rocker"
+    soundcloud_url: "https://soundcloud.com/wearegalantis/gold-dust-mixtape-1"   # 14012 SC likes
+  31rf7pt:
+    set_id: "31rf7pt"
+    title: "Galantis @ kineticFIELD, EDC Las Vegas, United States"
+    soundcloud_url: "https://soundcloud.com/ma109-1/galantis-live-edc-las-vegas-2015-free-download"   # 9229 SC likes
+  2438ghxt:
+    set_id: "2438ghxt"
+    title: "Galantis - Love On Mixtape"
+    soundcloud_url: "https://soundcloud.com/wearegalantis/galantis-love-on-mixtape"   # 8712 SC likes
+  h0321c1:
+    set_id: "h0321c1"
+    title: "Galantis @ kineticFIELD, EDC Las Vegas, United States"
+    soundcloud_url: "https://soundcloud.com/user-379671297/galantis-live-edc-las-vegas-2016-full-set-free-download"   # 6189 SC likes
+  12nr04z9:
+    set_id: "12nr04z9"
+    title: "Galantis @ Live Arena, Ultra Music Festival Miami, Miami Mus"
+    soundcloud_url: "https://soundcloud.com/wearegalantis/ultra2019"   # 5542 SC likes
+  8jqf8n9:
+    set_id: "8jqf8n9"
+    title: "Galantis @ Gobi Tent, Coachella Festival, United States"
+    soundcloud_url: "https://soundcloud.com/wearegalantis/seafoxchella-2014-live-set"   # 5463 SC likes
+  # It's Murph
+  287zps2t:
+    set_id: "287zps2t"
+    title: "it's murph @ cosmicMEADOW, EDC Las Vegas, United States"
+    soundcloud_url: "https://soundcloud.com/its-murph-987074444/its-murph-live-edc-las-vegas-cosmic-meadow-2025"   # 6096 SC likes
+  1d64ykdk:
+    set_id: "1d64ykdk"
+    title: "it's murph - it's murph mix 01"
+    soundcloud_url: "https://soundcloud.com/its-murph-987074444/its-murph-mix-01-deep-melodic-house"   # 4847 SC likes
+  12vu7tck:
+    set_id: "12vu7tck"
+    title: "it's murph @ DoLab Stage, Coachella Festival Weekend 2, Unit"
+    soundcloud_url: "https://soundcloud.com/its-murph-987074444/its-murph-live-coachella-dolab-set-2023"   # 3540 SC likes
+  2lg2pmn9:
+    set_id: "2lg2pmn9"
+    title: "it's murph @ Carousel Club, Electric Forest Festival, United"
+    soundcloud_url: "https://soundcloud.com/its-murph-987074444/electricforest"   # 2951 SC likes
+  12xzckr9:
+    set_id: "12xzckr9"
+    title: "it's murph @ The Other Stage, Bonnaroo Music Festival, Unite"
+    soundcloud_url: "https://soundcloud.com/its-murph-987074444/its-murph-bonnaroo"   # 1841 SC likes
+  tpqp5dt:
+    set_id: "tpqp5dt"
+    title: "it's murph @ AM.RADIO 008, Boulevard Coffee Venice Los Angel"
+    soundcloud_url: "https://soundcloud.com/am-radio-243091188/amradio008_itsmurph"   # 1135 SC likes
+  12x5bkh9:
+    set_id: "12x5bkh9"
+    title: "it's murph @ Radius Chicago, United States, elrow"
+    soundcloud_url: "https://soundcloud.com/its-murph-987074444/its-murph-live-el-row-2023-radius-chicago"   # 948 SC likes
+  # John Summit
+  12vus5st:
+    set_id: "12vus5st"
+    title: "Subtronics & John Summit @ circuitGROUNDS, EDC Las Vegas, Un"
+    soundcloud_url: "https://soundcloud.com/subtronics/subjohnics-live-edc-las-vegas-2023"   # 44343 SC likes
+  pyl5q01:
+    set_id: "pyl5q01"
+    title: "John Summit @ Club Space Miami, United States"
+    soundcloud_url: "https://soundcloud.com/johnsummit/john-summit-live-club-space-miami-full-8-hour-set"   # 34045 SC likes
+  1yufnjg1:
+    set_id: "1yufnjg1"
+    title: "John Summit @ The Grid, ARC Music Festival, United States"
+    soundcloud_url: "https://soundcloud.com/johnsummit/john-summit-live-arc-music-festival-chicago"   # 26252 SC likes
+  m18f74t:
+    set_id: "m18f74t"
+    title: "John Summit @ Off The Grid, The Brooklyn Mirage New York, Un"
+    soundcloud_url: "https://soundcloud.com/johnsummit/john-summit-live-brooklyn-mirage-2023"   # 25549 SC likes
+  1ply51dt:
+    set_id: "1ply51dt"
+    title: "John Summit @ Experts Only, Art Basel Miami, Toejam Backlot,"
+    soundcloud_url: "https://soundcloud.com/johnsummit/johnsummitartbasel"   # 24448 SC likes
+  pyzh66t:
+    set_id: "pyzh66t"
+    title: "John Summit @ Freedom Stage, Tomorrowland Weekend 1, Belgium"
+    soundcloud_url: "https://soundcloud.com/johnsummit/tomorrowland-freedom-stage-2025"   # 24406 SC likes
+  10zcy4s1:
+    set_id: "10zcy4s1"
+    title: "John Summit @ neonGARDEN, EDC Orlando, United States"
+    soundcloud_url: "https://soundcloud.com/johnsummit/john-summit-live-edc-orlando-2022"   # 21817 SC likes
+  22mbbubt:
+    set_id: "22mbbubt"
+    title: "John Summit @ Madison Square Garden New York, United States"
+    soundcloud_url: "https://soundcloud.com/johnsummit/john-summit-live-madison-square-garden"   # 19468 SC likes
+  11w6bq1k:
+    set_id: "11w6bq1k"
+    title: "John Summit @ circuitGROUNDS, EDC Las Vegas, United States"
+    soundcloud_url: "https://soundcloud.com/johnsummit/john-summit-live-edc-las-vegas-2022"   # 19359 SC likes
+  111sd47k:
+    set_id: "111sd47k"
+    title: "John Summit @ Pop Up Set, Vail Mountain Colorado, United Sta"
+    soundcloud_url: "https://soundcloud.com/johnsummit/john-summit-pop-up-set-at-vail-mountain-colorado"   # 18479 SC likes
+  # Porter Robinson
+  492pxu9:
+    set_id: "492pxu9"
+    title: "Porter Robinson @ Theatre, Holy Ship!, United States"
+    soundcloud_url: "https://soundcloud.com/paths3lector7/porter-robinson-live-on-holy-ship-2016-february-theater"   # 8300 SC likes
+  2380f1b9:
+    set_id: "2380f1b9"
+    title: "Porter Robinson @ Second Sky Festival, United States"
+    soundcloud_url: "https://soundcloud.com/user-546515212/porter-robinson-worlds-live-second-sky-2019"   # 6372 SC likes
+  16b0w6qk:
+    set_id: "16b0w6qk"
+    title: "Porter Robinson @ cosmicMEADOW, EDC Las Vegas, United States"
+    soundcloud_url: "https://soundcloud.com/anthonyrepost/porter-robinson-live-edc-set-2017"   # 5270 SC likes
+  14hd9109:
+    set_id: "14hd9109"
+    title: "Porter Robinson @ Spring Awakening Music Festival, United St"
+    soundcloud_url: "https://soundcloud.com/djfoxxtrott/porter-robinson-dj-set-live-at-spring-awakening-chicago-2018"   # 3292 SC likes
+  2bwdg361:
+    set_id: "2bwdg361"
+    title: "Porter Robinson @ Nurture (Together) Live, Second Sky Festiv"
+    soundcloud_url: "https://soundcloud.com/derek_dd/porter-robinson-nurture-together-live-second-sky-2022-siriusxm-broadcast-official-audio"   # 1317 SC likes
+  1lfxhz6t:
+    set_id: "1lfxhz6t"
+    title: "Porter Robinson - TCY Radio"
+    soundcloud_url: "https://soundcloud.com/naosu/tcyradio-porterrobinson-dj-mix-2017"   # 1262 SC likes
+  1bzw691k:
+    set_id: "1bzw691k"
+    title: "Porter Robinson @ Anison Matrix, Mogra Tokyo, Japan"
+    soundcloud_url: "https://soundcloud.com/shrubpig/porter-robinson-mogra-surprise-set-5518"   # 1003 SC likes
+  8lnmj49:
+    set_id: "8lnmj49"
+    title: "Mat Zo & Porter Robinson @ Beatport Live (Beatport HQ Denver"
+    soundcloud_url: "https://soundcloud.com/edmtunesofficial/porter-robinson-live-beatport-denver-office-07-07-2012"   # 821 SC likes
+  # RÜFÜS DU SOL
+  2q52s2bt:
+    set_id: "2q52s2bt"
+    title: "RÜFÜS DU SOL @ Junkyard Stage, Lightning In A Bottle Festiva"
+    soundcloud_url: "https://soundcloud.com/rufusdusol/rufus-du-sol-dj-set-lightning-in-a-bottle-2024"   # 42634 SC likes
+  1d5bys6k:
+    set_id: "1d5bys6k"
+    title: "RÜFÜS DU SOL @ Sundream Tulum, Mexico"
+    soundcloud_url: "https://soundcloud.com/rufusdusol/rufus-du-sol-dj-set-from-sundream-tulum-closing-weekend-03052022"   # 28319 SC likes
+  1t0k9hy9:
+    set_id: "1t0k9hy9"
+    title: "RÜFÜS DU SOL @ Opulent Temple, Burning Man, United States"
+    soundcloud_url: "https://soundcloud.com/rufusdusol/dj-set-at-burning-man-2019-opulent-temple-party-at-sonic-soul-tribe"   # 28260 SC likes
+  2gcnqux9:
+    set_id: "2gcnqux9"
+    title: "RÜFÜS DU SOL @ Favela Bar, Lightning In A Bottle Festival, U"
+    soundcloud_url: "https://soundcloud.com/rufusdusol/rufus-du-sol-dj-setat-lib-2017"   # 20854 SC likes
+  1q656g2t:
+    set_id: "1q656g2t"
+    title: "RÜFÜS DU SOL - BBC Radio 1 Essential Mix"
+    soundcloud_url: "https://soundcloud.com/rufusdusol/bbc-radio-1-essential-mix"   # 19510 SC likes
+  11q6dywk:
+    set_id: "11q6dywk"
+    title: "RÜFÜS DU SOL - Mixmag Cover Mix"
+    soundcloud_url: "https://soundcloud.com/mixmag-1/the-cover-mix-rufus-du-sol-1"   # 13498 SC likes
+  1byygc49:
+    set_id: "1byygc49"
+    title: "RÜFÜS DU SOL @ Do LaB, Coachella Festival Weekend 2, United "
+    soundcloud_url: "https://soundcloud.com/rufusdusol/rufus-du-sol-dj-set-dolab-stage-weekend-ii"   # 13111 SC likes
+  2nv856jk:
+    set_id: "2nv856jk"
+    title: "RÜFÜS DU SOL @ Do LaB"
+    soundcloud_url: "https://soundcloud.com/rufusdusol/rufus-du-sol-dj-set-dolab-stage-weekend-ii"   # 13111 SC likes
+  bgtcjh1:
+    set_id: "bgtcjh1"
+    title: "RÜFÜS DU SOL @ Igloofest Montreal, Canada"
+    soundcloud_url: "https://soundcloud.com/rufusdusol/dj-set-recorded-at-igloofest-montreal-01312020"   # 9368 SC likes
+  # Two Friends
+  237tdqmk:
+    set_id: "237tdqmk"
+    title: "Two Friends - Big Bootie Mix Volume 15"
+    soundcloud_url: "https://soundcloud.com/twofriendsbigbootie/bb15"   # 344803 SC likes
+  zwf3n2t:
+    set_id: "zwf3n2t"
+    title: "Two Friends - Big Bootie Mix Volume 17"
+    soundcloud_url: "https://soundcloud.com/bigbootiemix/bb17"   # 253889 SC likes
+  qj4v0wt:
+    set_id: "qj4v0wt"
+    title: "Two Friends - Big Bootie Mix Volume 13"
+    soundcloud_url: "https://soundcloud.com/twofriendsbigbootie/bb13"   # 207663 SC likes
+  1yl70ql1:
+    set_id: "1yl70ql1"
+    title: "Two Friends - Big Bootie Mix Volume 14"
+    soundcloud_url: "https://soundcloud.com/twofriendsbigbootie/bb14"   # 197133 SC likes
+  w1mgcjt:
+    set_id: "w1mgcjt"
+    title: "Two Friends - Big Bootie Mix Volume 10"
+    soundcloud_url: "https://soundcloud.com/twofriendsmixes5/bb10"   # 164566 SC likes
+  261s43wt:
+    set_id: "261s43wt"
+    title: "Two Friends - Big Bootie Mix Volume 16"
+    soundcloud_url: "https://soundcloud.com/twofriendsbigbootie/bb16"   # 139045 SC likes
+  z0mhsf1:
+    set_id: "z0mhsf1"
+    title: "Two Friends - Big Bootie Mix 019"
+    soundcloud_url: "https://soundcloud.com/bigbootiemix/bb19"   # 119980 SC likes
+  21khc009:
+    set_id: "21khc009"
+    title: "Two Friends - Big Bootie Mix Vol. 21"
+    soundcloud_url: "https://soundcloud.com/bigbootiemix/bb21"   # 91915 SC likes
