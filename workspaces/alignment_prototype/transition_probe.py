@@ -114,6 +114,50 @@ def _bed_intervals(beds):
     return [(o, _stem(o), o.get("slot_label"), _curve(o)) for o in beds]
 
 
+def _dominance_window(self_curve, others, a, n):
+    """Longest contiguous span-frame run [f0,f1) where THIS bed is the loudest
+    bed (own gain >= every other bed's gain, and above mute). a = span start
+    frame, n = span frames. Beds with no curve play at unity."""
+    from workspaces.alignment_prototype.path_decode import FPS
+
+    dom = np.zeros(n, bool)
+    for f in range(n):
+        t = (a + f) / FPS
+        sg = _gain_at(self_curve, t) if self_curve else 1.0
+        if sg <= MUTE_THR:
+            continue
+        # a competitor counts only while its own clip is playing; no curve = unity
+        og = 0.0
+        for o, c in others:
+            os0, os1 = _iv(o)
+            if os0 <= t <= os1:
+                og = max(og, _gain_at(c, t) if c else 1.0)
+        dom[f] = sg >= og
+    best = (0, 0)
+    f = 0
+    while f < n:
+        if dom[f]:
+            g = f
+            while g < n and dom[g]:
+                g += 1
+            if g - f > best[1] - best[0]:
+                best = (f, g)
+            f = g
+        else:
+            f += 1
+    # buried fraction = audible frames where self is NOT the loudest bed. Only a
+    # heavily-buried bed needs the override; a mostly-dominant bed is better
+    # served by the robust full-span Viterbi (overriding it regresses).
+    aud = np.array(
+        [
+            (_gain_at(self_curve, (a + f) / FPS) if self_curve else 1.0) > MUTE_THR
+            for f in range(n)
+        ]
+    )
+    buried_frac = float((aud & ~dom).sum()) / max(1, int(aud.sum()))
+    return best[0], best[1], buried_frac
+
+
 def localize(beds):
     """Run path_decode per bed span; split per-sample error IN vs OUT overlap."""
     import json
@@ -133,6 +177,7 @@ def localize(beds):
     from workspaces.alignment_prototype.refine_ref_offsets import (
         _MIX_SOURCE,
         _STEM_FILE,
+        detect_offset,
     )
     from core.result import Err, Ok
 
@@ -168,9 +213,9 @@ def localize(beds):
             mix_npy[stem] = _ensure_feat(f, f"{gt.set_id}_{stem}", "chroma", 0)
 
     all_iv = _bed_intervals(beds)
-    # abs ref error (s) per sample, baseline vs gain-weighted emission
-    in_err = {"base": [], "gw": []}
-    out_err = {"base": [], "gw": []}
+    # abs ref error (s) per sample, single-bed baseline vs dominance-window
+    in_err = {"base": [], "dom": []}
+    out_err = {"base": [], "dom": []}
     per_span = []
     for t in targets:
         stem = t.claimed_stem or "regular"
@@ -211,18 +256,6 @@ def localize(beds):
         self_curve = _curve(row)
         others = [(o, c) for o, _st, sl, c in all_iv if sl != t.slot_label]
         ts = np.arange(s0, s1, 1.0)
-        # frame-aligned fader weight: gain of THIS bed at each span frame
-        # per-frame fader gain of THIS bed (weights the matched-filter window).
-        # NB: tested gain-proportional AND binary-audible masks — both a wash
-        # (59%->56/58%). Frame reweighting can't unmix a crossfade frame
-        # (gainA*A + gainB*B): the other bed's energy is WITHIN each frame, not
-        # in separate frames. The real fix is a joint two-bed decode.
-        wgt = np.ones(n, np.float32)
-        if self_curve:
-            wgt = np.array(
-                [max(0.0, _gain_at(self_curve, (a + f) / FPS)) for f in range(n)],
-                np.float32,
-            )
 
         def score(segs):
             if not segs:
@@ -237,22 +270,39 @@ def localize(beds):
                 (ein if covered else eout).append(err)
             return ein, eout
 
+        # DOMINANCE decode: find the longest window where THIS bed is the
+        # loudest bed, decode its offset there (clean signal), then propagate
+        # one linear diagonal across the whole span at the bed's tempo. In a
+        # crossfade beds alternate dominance, so each bed is visible somewhere.
+        f0, f1, buried_frac = _dominance_window(self_curve, others, a, n)
+        dom_segs = None
+        # only override the full-span decode when the bed is heavily buried
+        # (>40% of audible frames dominated by another bed) AND there's a clean
+        # window >=8s to decode from.
+        if buried_frac > 0.4 and f1 - f0 >= int(8 * FPS) and (f1 - f0) < n:
+            win = np.ascontiguousarray(M[:, f0:f1])
+            ref_ws, pk, _st = detect_offset(win, R, tuple(stretches))
+            ref_span0 = ref_ws - (f0 / FPS) * slope  # back to span start
+            dom_segs = [(0.0, ref_span0, ref_span0 + (n / FPS) * slope)]
+
         base = score(decode_path(M, R, stretches, 0.15, wlen, hop)[0])
-        gw = score(decode_path(M, R, stretches, 0.15, wlen, hop, weight=wgt)[0])
-        if base is None or gw is None:
+        # dominance falls back to baseline when there's no clean window
+        dom = score(dom_segs) if dom_segs else base
+        if base is None or dom is None:
             continue
         in_err["base"].extend(base[0])
         out_err["base"].extend(base[1])
-        in_err["gw"].extend(gw[0])
-        out_err["gw"].extend(gw[1])
+        in_err["dom"].extend(dom[0])
+        out_err["dom"].extend(dom[1])
         if base[0]:  # only overlap-touching spans are interesting here
             per_span.append(
                 (
                     t.slot_label,
                     stem,
                     np.mean([e < 2 for e in base[0]]),
-                    np.mean([e < 2 for e in gw[0]]) if gw[0] else float("nan"),
+                    np.mean([e < 2 for e in dom[0]]) if dom[0] else float("nan"),
                     len(base[0]),
+                    dom_segs is not None,
                 )
             )
 
@@ -265,15 +315,16 @@ def localize(beds):
         )
 
     rep("baseline", in_err["base"], out_err["base"])
-    rep("gain-weight", in_err["gw"], out_err["gw"])
-    print("\n  per-span IN-overlap exact<2s  (slot stem | base gw | n):")
-    for slot, st, b, g, ni in per_span:
-        flag = "  <-- " + (
-            "better" if g > b + 0.05 else "worse" if g < b - 0.05 else ""
+    rep("dominance", in_err["dom"], out_err["dom"])
+    print("\n  per-span IN-overlap exact<2s  (slot stem | base dom | n | had-window):")
+    for slot, st, b, d, ni, had in per_span:
+        delta = d - b
+        flag = (
+            "  <-- better" if delta > 0.05 else "  <-- worse" if delta < -0.05 else ""
         )
         print(
-            f"    {str(slot):6} {st:12} | {100 * b:3.0f}% {100 * g:3.0f}% | {ni:3}"
-            f"{flag if abs(g - b) > 0.05 else ''}"
+            f"    {str(slot):6} {st:12} | {100 * b:3.0f}% {100 * d:3.0f}% | {ni:3} "
+            f"| {'dom' if had else 'fallback'}{flag}"
         )
 
 
