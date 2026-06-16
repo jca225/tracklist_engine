@@ -40,6 +40,7 @@ from workspaces.alignment_prototype.path_decode import _ensure_feat  # noqa: E40
 from workspaces.alignment_prototype.ref_fibers import (  # noqa: E402
     _diag_sim,
     compute_fibers,
+    compute_fibers_fp,
     fiber_intervals,
 )
 from workspaces.alignment_prototype.refine_ref_offsets import (  # noqa: E402
@@ -102,6 +103,14 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--set-id", default="1fsnxchk")
     p.add_argument("--stems", default="acappella")
+    p.add_argument(
+        "--method",
+        choices=["hubert", "fp"],
+        default="hubert",
+        help="hubert = phonetic diagonal-scan (default); fp = constellation "
+        "match-density localizer (recovers melodic repeats HuBERT misses, but "
+        "threshold-sensitive across tracks — testing)",
+    )
     p.add_argument("--feature", default=None, help="chroma|hubert (default per stem)")
     p.add_argument("--hubert-layer", type=int, default=9)
     p.add_argument("--k", type=int, default=6)
@@ -147,15 +156,21 @@ def main(argv: list[str] | None = None) -> int:
                 lp = tr.get("local_path")
                 if ins and lp and Path(lp).is_file() and _rms(ins) < 0.02:
                     sp = lp
-            feature = args.feature or _DEFAULT_FEATURE.get(stem, "chroma")
-            feat = np.load(_ensure_feat(sp, sp, feature, args.hubert_layer))
-            labels, hz = compute_fibers(
-                feat,
-                FPS,
-                k=args.k,
-                min_section_s=args.min_section_s,
-                audio_path=sp,  # enables RMS silence-gating
-            )
+            if args.method == "fp":
+                # constellation match-density localizer; display sim on chroma
+                # (HuBERT is blind to the melodic repeats this finds)
+                labels, hz = compute_fibers_fp(sp)
+                feat = np.load(_ensure_feat(sp, sp, "chroma", args.hubert_layer))
+            else:
+                feature = args.feature or _DEFAULT_FEATURE.get(stem, "chroma")
+                feat = np.load(_ensure_feat(sp, sp, feature, args.hubert_layer))
+                labels, hz = compute_fibers(
+                    feat,
+                    FPS,
+                    k=args.k,
+                    min_section_s=args.min_section_s,
+                    audio_path=sp,  # enables RMS silence-gating
+                )
             ivs = fiber_intervals(labels, hz, min_len_s=args.min_section_s)
             by_lab: dict[int, list] = {}
             for s, e, lab in ivs:

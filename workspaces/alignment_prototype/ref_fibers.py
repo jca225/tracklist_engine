@@ -187,6 +187,126 @@ def compute_fibers(
     return labels, g_hz
 
 
+def compute_fibers_fp(
+    audio_path: str,
+    *,
+    label_hz: float = 8.0,
+    min_lag_s: float = 8.0,
+    lag_tol_s: float = 0.5,
+    peak_frac: float = 0.15,
+    dens_frac: float = 0.30,
+    min_repeat_s: float = 6.0,
+    close_s: float = 1.0,
+) -> tuple[np.ndarray, float]:
+    """Constellation match-density localizer (the "proper localizer").
+
+    HuBERT is blind to MELODIC repeats (John's audit: 0:00 ≈ 2:32 of Love On Me
+    scores 0.11) and chroma is harmonically uniform (its diagonal is high
+    EVERYWHERE at a real lag, so it can't localize). The discriminative signal is
+    the landmark-fingerprint match-density: peak-pair hashes give (1) robust
+    repeat LAGS by vote, and (2) per-time density of hashes at time t that recur
+    at t+L — high ONLY in the actual repeated region. Pipeline: hashes -> strong
+    lags (clustered, vote-thresholded) -> per-lag covered-density -> runs ->
+    union [s,e] with [s+L,e+L]. labels: shared id = same fiber, -1 = none.
+
+    STATUS (2026-06-16): recovers melodic repeats HuBERT misses (Love On Me,
+    Emily) but is THRESHOLD-SENSITIVE across tracks (Congratulations/Freeze Time
+    can come out empty at one param set). Full robustness needs per-track
+    ADAPTIVE thresholding (or msaf / learned contrastive embeddings — not
+    installed/built). Offered as a selectable method, not the default, so it
+    doesn't regress HuBERT-validated tracks."""
+    import librosa
+    from collections import Counter, defaultdict
+
+    from scipy.ndimage import binary_closing, uniform_filter1d
+
+    from workspaces.alignment_prototype.fp_probe import _FPS, constellation, hashes
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        y, _ = librosa.load(audio_path, sr=SR, mono=True)
+    nfr = max(1, int(len(y) / SR * label_hz))
+    labels = -np.ones(nfr, dtype=int)
+    h = hashes(*constellation(y))
+    lh: dict = defaultdict(int)
+    lag_ti: dict = defaultdict(list)
+    minlag = int(min_lag_s * _FPS)
+    for _key, ts in h.items():
+        s = sorted(set(ts))
+        for i in range(len(s)):
+            for j in range(i + 1, len(s)):
+                lg = s[j] - s[i]
+                if lg >= minlag:
+                    lh[lg] += 1
+                    lag_ti[lg].append(s[i])
+    if not lh:
+        return labels, label_hz
+    tol = int(lag_tol_s * _FPS)
+    clusters: list = []
+    for lg, v in sorted(lh.items()):
+        if clusters and lg - clusters[-1][0] <= tol:
+            clusters[-1] = [
+                clusters[-1][0],
+                clusters[-1][1] + v,
+                clusters[-1][2] + lag_ti[lg],
+            ]
+        else:
+            clusters.append([lg, v, list(lag_ti[lg])])
+    mx = max(c[1] for c in clusters)
+    parent = list(range(nfr))
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    minrep = int(min_repeat_s * label_hz)
+    for lag_c, v, tis in clusters:
+        if v < peak_frac * mx:
+            continue
+        lb = int(round(lag_c / _FPS * label_hz))
+        if lb < minrep or lb >= nfr:
+            continue
+        dens = np.zeros(nfr)
+        for ti in tis:
+            b = int(ti / _FPS * label_hz)
+            if 0 <= b < nfr:
+                dens[b] += 1
+        dens = uniform_filter1d(dens, int(2 * label_hz))
+        if dens.max() <= 0:
+            continue
+        cov = binary_closing(
+            dens > dens_frac * dens.max(), structure=np.ones(int(close_s * label_hz))
+        )
+        i = 0
+        while i < nfr:
+            if cov[i]:
+                k = i
+                while k < nfr and cov[k]:
+                    k += 1
+                if k - i >= minrep:
+                    for b in range(i, k):
+                        if b + lb < nfr:
+                            parent[find(b)] = find(b + lb)
+                i = k
+            else:
+                i += 1
+    lab = np.array([find(i) for i in range(nfr)])
+    cnt = Counter(lab.tolist())
+    out = -np.ones(nfr, dtype=int)
+    remap: dict = {}
+    nid = 0
+    for i in range(nfr):
+        c = lab[i]
+        if cnt[c] >= int(1.5 * minrep):
+            if c not in remap:
+                remap[c] = nid
+                nid += 1
+            out[i] = remap[c]
+    return out, label_hz
+
+
 def fiber_at(labels: np.ndarray, label_hz: float, sec: float) -> int:
     if labels.size == 0:
         return -1
