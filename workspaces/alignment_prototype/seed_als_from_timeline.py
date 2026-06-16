@@ -27,6 +27,7 @@ Usage:
     venvs/audio/bin/python -m workspaces.alignment_prototype.seed_als_from_timeline \\
         --set-id 2nvzlh2k [--out ~/Desktop/...] [--template <als>]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -53,9 +54,11 @@ from labeling.als_io import (
 
 OUT_DIR = Path(__file__).resolve().parent / "out"
 ALIGNING_ROOT = Path.home() / "aligning"
-DEFAULT_TEMPLATE = (
-    Path.home() / "Desktop/big bootie 12 labeling Project/big bootie 12 labeling_fast.als"
-)
+# A dedicated *clean* seed template (one warped audio track + master), NOT the
+# live labeling session — deep-copying the evolving labeling .als crashes Live
+# (accumulated device/automation state). Pin a stable copy here. Recreate from
+# any early Ableton backup if lost. See als-seed crash debugging, 2026-06-16.
+DEFAULT_TEMPLATE = Path.home() / "aligning/_seed_template.als"
 
 _TEMPO_BPM = 60.0  # 1 beat == 1 second: drag math stays trivial for the human
 # Live 11 clip palette indices (approximate hues)
@@ -66,13 +69,28 @@ _SUS_RED_S, _SUS_YELLOW_S = 45.0, 25.0
 def ffprobe_audio(path: Path) -> tuple[float, int]:
     """(duration_s, sample_rate)."""
     r = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-         "-show_entries", "stream=sample_rate", "-of", "json", str(path)],
-        capture_output=True, text=True, check=True,
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-show_entries",
+            "stream=sample_rate",
+            "-of",
+            "json",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
     )
     j = json.loads(r.stdout)
     dur = float(j["format"]["duration"])
-    sr = next((int(s["sample_rate"]) for s in j.get("streams", []) if s.get("sample_rate")), 44100)
+    sr = next(
+        (int(s["sample_rate"]) for s in j.get("streams", []) if s.get("sample_rate")),
+        44100,
+    )
     return dur, sr
 
 
@@ -155,7 +173,9 @@ def rewrite_clip(
     for w in list(wm):
         wm.remove(w)
     for i, (beat, sec) in enumerate(((0.0, ref_start_s), (arr_len, ref_end_s))):
-        etree.SubElement(wm, "WarpMarker", Id=str(i), SecTime=f"{sec:.6f}", BeatTime=f"{beat:.6f}")
+        etree.SubElement(
+            wm, "WarpMarker", Id=str(i), SecTime=f"{sec:.6f}", BeatTime=f"{beat:.6f}"
+        )
 
     # repoint the sample; drop every OriginalFileRef (one hides nested in
     # SampleRef/SourceContext) so clip_original_path falls through to
@@ -193,7 +213,7 @@ def build_track(
     **clip_kwargs,
 ) -> etree._Element:
     t = copy.deepcopy(template)
-    strip_automation(t)        # remove cross-references that crash Ableton on copy
+    strip_automation(t)  # remove cross-references that crash Ableton on copy
     t.set("Id", str(track_id))
     _set_value(t.find(".//Name"), "EffectiveName", track_name)
     _set_value(t.find(".//Name"), "UserName", track_name)
@@ -225,7 +245,9 @@ def renumber_pointee_ids(track: etree._Element, alloc) -> None:
     (The earlier version missed <Pointee>: 450 duplicated Pointee ids = the crash.)"""
     idmap: dict[str, str] = {}
     for el in track.iter():
-        if el.get("Id") is not None and (el.tag.endswith("Target") or el.tag == "Pointee"):
+        if el.get("Id") is not None and (
+            el.tag.endswith("Target") or el.tag == "Pointee"
+        ):
             new = str(next(alloc))
             idmap[el.get("Id")] = new
             el.set("Id", new)
@@ -252,6 +274,95 @@ def pick_audio(span: dict, track: dict) -> Path | None:
     return p if p.is_file() else None
 
 
+def add_tempo_and_markers(
+    root, spans: list[dict], set_id: str, set_dir: Path
+) -> tuple[int, int]:
+    """Overlay a reference tempo curve + BPM markers on the rebuilt session.
+
+    Same enhancement as the BB12 in-place file, but on a freshly rebuilt set:
+    piecewise-constant BPM from the bed spans (per-track [NNNbpm] tags x
+    tempo_ratio, octave-guarded), placed on the 60-BPM beat=second grid the clips
+    sit on, plus a BPM-labelled marker at each change. Best-effort: returns (0, 0)
+    and skips if the mix beat grid (data/analysis/<set>_measure_times.json) or the
+    bed spans are unavailable. Reuses the BB12 helpers, so behaviour matches.
+    """
+    import numpy as np
+
+    from labeling.als_io import write_locators, write_tempo_envelope
+    from workspaces.alignment_prototype.seed_tempo_test import (
+        grid_bpm,
+        slot_bpm_map,
+        stepped_points,
+    )
+
+    mpath = _REPO / f"data/analysis/{set_id}_measure_times.json"
+    if not mpath.is_file():
+        return 0, 0
+    raw = json.loads(mpath.read_text())
+    times = (
+        raw
+        if isinstance(raw, list)
+        else (raw.get("measure_times") or raw.get("beats") or next(iter(raw.values())))
+    )
+    times = [float(x) for x in times]
+    bed = sorted(
+        (
+            s
+            for s in spans
+            if (s.get("claimed_stem") or "regular") != "acappella"
+            and s.get("set_start_s") is not None
+        ),
+        key=lambda s: float(s["set_start_s"]),
+    )
+    if len(times) < 2 or not bed:
+        return 0, 0
+
+    slot_bpm = slot_bpm_map(set_dir / "tracks")
+    ts, bp = grid_bpm(times, 4)
+    ts_a, bp_a = np.array(ts), np.array(bp)
+    natives = [
+        slot_bpm[str(s.get("slot_label"))]
+        for s in bed
+        if str(s.get("slot_label")) in slot_bpm
+    ]
+    ref = float(np.median(natives)) if natives else 128.0
+
+    raw_seg: list[tuple[float, float]] = []
+    for s in bed:
+        native = slot_bpm.get(str(s.get("slot_label")))
+        if native is not None:
+            val = native * float(s.get("tempo_ratio") or 1.0)
+        else:  # untagged slot: robust grid median over the span
+            lo, hi = float(s["set_start_s"]), float(s["set_end_s"])
+            m = bp_a[(ts_a >= lo) & (ts_a < hi)]
+            val = float(np.median(m)) if m.size else ref
+        while (
+            val > ref * 1.35
+        ):  # one-directional octave guard (never raises a low value)
+            val /= 2.0
+        raw_seg.append((float(s["set_start_s"]), round(val)))
+
+    segs: list[list] = []
+    for i, (st, val) in enumerate(raw_seg):
+        end = raw_seg[i + 1][0] if i + 1 < len(raw_seg) else times[-1]
+        if end <= st:
+            continue
+        if segs and segs[-1][2] == val:
+            segs[-1][1] = end
+        else:
+            segs.append([st, end, val])
+    fseg = [(float(s), float(e), float(v)) for s, e, v in segs]
+    try:
+        n_t = write_tempo_envelope(root, stepped_points(fseg))
+        n_m = write_locators(root, [(s, f"{v:.0f} BPM") for (s, e, v) in fseg])
+    except (
+        Exception
+    ) as exc:  # template lacks a tempo/locator block — skip, keep the seed
+        print(f"  tempo/markers skipped: {exc}", file=sys.stderr)
+        return 0, 0
+    return n_t, n_m
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--set-id", required=True)
@@ -259,7 +370,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", type=Path, default=None)
     args = p.parse_args(argv)
 
-    timeline = json.loads((OUT_DIR / f"{args.set_id}_predicted_timeline.json").read_text())
+    timeline = json.loads(
+        (OUT_DIR / f"{args.set_id}_predicted_timeline.json").read_text()
+    )
     spans = timeline["spans"]
 
     set_dirs = sorted(ALIGNING_ROOT.glob(f"{args.set_id}__*"))
@@ -285,6 +398,7 @@ def main(argv: list[str] | None = None) -> int:
         tempo_manual.set("Value", f"{_TEMPO_BPM:.1f}")
 
     import itertools
+
     alloc = itertools.count(doc_max_id(root) + len(spans) * 2 + 1000)
 
     next_id = 1000  # clear of any surviving template ids
@@ -337,22 +451,41 @@ def main(argv: list[str] | None = None) -> int:
         renumber_pointee_ids(track, alloc)
         tracks_node.insert(insert_at, track)
         insert_at += 1
-        placed.append({**s, "ref_start_s": ref_start, "ref_end_s": ref_end, "path": str(fpath)})
+        placed.append(
+            {**s, "ref_start_s": ref_start, "ref_end_s": ref_end, "path": str(fpath)}
+        )
         if (i + 1) % 30 == 0:
             print(f"  placed {i + 1}/{len(spans)}")
+
+    # reference tempo curve + BPM markers (same enhancement as the BB12 file)
+    n_t, n_m = add_tempo_and_markers(root, spans, args.set_id, set_dir)
+    print(
+        f"tempo curve: {n_t} points + {n_m} BPM markers"
+        if n_t
+        else "tempo/markers skipped (no measure grid for this set)"
+    )
 
     # Live requires NextPointeeId above every pointee id in the document.
     for npi in root.findall(".//NextPointeeId"):
         npi.set("Value", str(next(alloc)))
 
     out_path = args.out or (
-        Path.home() / "Desktop" / f"{args.set_id} predicted review Project"
+        Path.home()
+        / "Desktop"
+        / f"{args.set_id} predicted review Project"
         / f"{args.set_id} predicted review.als"
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_bytes(gzip.compress(etree.tostring(
-        root, xml_declaration=True, encoding="UTF-8", standalone=True,
-    )))
+    out_path.write_bytes(
+        gzip.compress(
+            etree.tostring(
+                root,
+                xml_declaration=True,
+                encoding="UTF-8",
+                standalone=True,
+            )
+        )
+    )
     print(f"\nwrote {out_path} ({len(placed)} clips, {len(skipped)} skipped)")
     for m in skipped:
         print(f"  SKIP {m}")
@@ -360,9 +493,12 @@ def main(argv: list[str] | None = None) -> int:
     # ---- round-trip validation through the real GT export parser -----------
     reparsed = load_als_xml(out_path)
     mix_tracks = [
-        t for t in reparsed.findall(".//LiveSet/Tracks/AudioTrack")
-        if (t.find(".//Name/EffectiveName") is not None
-            and t.find(".//Name/EffectiveName").get("Value", "").startswith("1-mix"))
+        t
+        for t in reparsed.findall(".//LiveSet/Tracks/AudioTrack")
+        if (
+            t.find(".//Name/EffectiveName") is not None
+            and t.find(".//Name/EffectiveName").get("Value", "").startswith("1-mix")
+        )
     ]
     mapper = ArrangementMapper.from_mix_track(mix_tracks[0], mix_duration_s=mix_dur)
     clips = parse_layer_clips(reparsed)
@@ -370,14 +506,20 @@ def main(argv: list[str] | None = None) -> int:
     if len(clips) != len(placed):
         sys.exit(f"VALIDATION FAIL: {len(clips)} clips parsed, {len(placed)} placed")
     errs = 0
-    for clip, s in zip(sorted(clips, key=lambda c: c.arr_start),
-                       sorted(placed, key=lambda x: x["set_start_s"])):
+    for clip, s in zip(
+        sorted(clips, key=lambda c: c.arr_start),
+        sorted(placed, key=lambda x: x["set_start_s"]),
+    ):
         set_start = mapper.arr_to_set_sec(clip.arr_start)
         rid, _slot, _label, stem = resolve_identity(clip, mindex)
         p = s["path"]
-        expect_stem = ("acappella" if p.endswith("/vocals.flac")
-                       else "instrumental" if p.endswith("/instrumental.flac")
-                       else "regular")
+        expect_stem = (
+            "acappella"
+            if p.endswith("/vocals.flac")
+            else "instrumental"
+            if p.endswith("/instrumental.flac")
+            else "regular"
+        )
         bad = []
         if set_start is None or abs(set_start - s["set_start_s"]) > 0.05:
             bad.append(f"set_start {set_start} != {s['set_start_s']:.2f}")
@@ -392,8 +534,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  MISMATCH {s['slot_label']}: {'; '.join(bad)}")
     if errs:
         sys.exit(f"VALIDATION FAIL: {errs}/{len(placed)} clips mismatched")
-    print(f"round-trip validation OK: {len(placed)} clips parse back exactly "
-          f"(set_start, ref_start, identity)")
+    print(
+        f"round-trip validation OK: {len(placed)} clips parse back exactly "
+        f"(set_start, ref_start, identity)"
+    )
     return 0
 
 
