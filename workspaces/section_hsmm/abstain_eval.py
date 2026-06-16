@@ -32,12 +32,16 @@ from workspaces.section_hsmm.decode_v2 import (  # noqa: E402
     CHANNELS, _pooled, build_channel_vocab, viterbi_v2,
 )
 from workspaces.section_hsmm.decode_v3 import build_overlay_vocab_mert, _assemble_vocab  # noqa: E402
+from workspaces.section_hsmm.hubert_emit import (  # noqa: E402
+    assemble_vocab as assemble_vocab_hubert, ensure_hubert_cache, load_pooled_hubert,
+)
 from workspaces.section_hsmm.mert_emit import ensure_mert_cache, load_pooled_mert  # noqa: E402
 
 PENS = dict(fwd_pen=0.15, back_pen=0.30, switch_pen=0.50, hold_pen=0.10, skip_pen=0.10)
 
 
-def _decode_channel(channel, set_dir, by_tid, gt_tids, frame_s, layer):
+def _decode_channel(channel, set_dir, by_tid, gt_tids, frame_s, layer,
+                    overlay_feature="mert"):
     if channel == "bed":
         vocab = build_channel_vocab("bed", by_tid, gt_tids, frame_s)
         cfg = CHANNELS["bed"]
@@ -45,10 +49,15 @@ def _decode_channel(channel, set_dir, by_tid, gt_tids, frame_s, layer):
                       f"1fsnxchk_{cfg['mix_key']}_pool{frame_s}", frame_s)
     else:
         key_of, items = build_overlay_vocab_mert(by_tid, gt_tids, frame_s, layer)
-        ensure_mert_cache(items + [(set_dir / CHANNELS["overlay"]["mix_file"],
-                                    f"1fsnxchk_mix_vocals")], frame_s, layer)
-        vocab = _assemble_vocab(key_of, frame_s, layer)
-        mix = load_pooled_mert("1fsnxchk_mix_vocals", frame_s, layer)
+        mix_item = (set_dir / CHANNELS["overlay"]["mix_file"], "1fsnxchk_mix_vocals")
+        if overlay_feature == "hubert":
+            ensure_hubert_cache(items + [mix_item], frame_s, layer)
+            vocab = assemble_vocab_hubert(key_of, frame_s, layer)
+            mix = load_pooled_hubert("1fsnxchk_mix_vocals", frame_s, layer)
+        else:
+            ensure_mert_cache(items + [mix_item], frame_s, layer)
+            vocab = _assemble_vocab(key_of, frame_s, layer)
+            mix = load_pooled_mert("1fsnxchk_mix_vocals", frame_s, layer)
     emis = (mix @ vocab.emit_ref.T).astype(np.float64)
     path = viterbi_v2(emis, vocab, **PENS)
     T = len(path)
@@ -99,6 +108,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--set-id", default="1fsnxchk")
     p.add_argument("--frame-s", type=float, default=2.0)
     p.add_argument("--mert-layer", type=int, default=6)
+    p.add_argument("--overlay-feature", choices=["mert", "hubert"], default="mert",
+                   help="emission feature for the overlay (acappella) channel")
+    p.add_argument("--hubert-layer", type=int, default=9,
+                   help="HuBERT layer when --overlay-feature hubert")
     args = p.parse_args(argv)
 
     set_dir = find_aligning_dir(args.set_id)
@@ -118,10 +131,13 @@ def main(argv: list[str] | None = None) -> int:
         t["_stem"] = stem_by_tid.get(tid, "regular")
     gt_tids = _gt_track_ids(_REPO / "labeling/fixtures/bb12_ground_truth.yaml")
 
-    print(f"=== abstention precision@coverage ({args.set_id}) ===")
+    print(f"=== abstention precision@coverage ({args.set_id}, "
+          f"overlay={args.overlay_feature}) ===")
     for channel in ("bed", "overlay"):
+        layer = args.hubert_layer if (channel == "overlay"
+                and args.overlay_feature == "hubert") else args.mert_layer
         dec_tid, conf = _decode_channel(channel, set_dir, by_tid, gt_tids,
-                                        args.frame_s, args.mert_layer)
+                                        args.frame_s, layer, args.overlay_feature)
         _sweep(channel, dec_tid, conf, args.frame_s, gt_rows)
     return 0
 

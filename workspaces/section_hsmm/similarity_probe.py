@@ -17,7 +17,8 @@ acappella-tagged ones.
 
 Usage:
     venvs/audio/bin/python -m workspaces.section_hsmm.similarity_probe \
-        --set-id 1fsnxchk [--n-distractors 15] [--feature mfcc|chroma]
+        --set-id 1fsnxchk [--n-distractors 15] [--feature mfcc|chroma|hubert] \
+        [--hubert-layer 9]
 """
 from __future__ import annotations
 
@@ -48,15 +49,87 @@ def _mfcc(y: np.ndarray) -> np.ndarray:
     return (m / (np.linalg.norm(m, axis=0, keepdims=True) + 1e-8)).astype(np.float32)
 
 
-def _feat(audio_path: Path, cache_key: str, feature: str) -> np.ndarray:
-    cf = _CACHE / f"{cache_key}_{feature}.npy"
+# --- HuBERT phonetic-embedding channel ------------------------------------
+# Matches on *what is sung*, not its spectral shape, so key changes / pitch
+# shifts become irrelevant and reverb is tolerated (the external object-detection
+# diagnosis: "the lyrics don't transpose"). A/B'd against MFCC on the same
+# matched-filter retrieval harness.
+_HUBERT_SR = 16000
+_HUBERT_MODEL = "facebook/hubert-base-ls960"
+_HUBERT_LAYER = 9          # mid layers carry the most phonetic content
+_HUBERT_FPS = 50.0         # base model: 320-sample hop @ 16 kHz
+_HUBERT_CHUNK_S = 30.0     # cap GPU memory on hour-long mixes
+_hub_cache: dict = {}
+
+
+def _hubert_model():
+    if "m" not in _hub_cache:
+        import torch
+        from transformers import AutoFeatureExtractor, AutoModel
+        dev = "mps" if torch.backends.mps.is_available() else "cpu"
+        fe = AutoFeatureExtractor.from_pretrained(_HUBERT_MODEL)
+        m = AutoModel.from_pretrained(_HUBERT_MODEL).to(dev).eval()
+        _hub_cache.update(m=m, fe=fe, dev=dev)
+    return _hub_cache["m"], _hub_cache["fe"], _hub_cache["dev"]
+
+
+def _resample_cols(x: np.ndarray, n_out: int) -> np.ndarray:
+    """Linear-interpolate a (D, T_in) feature onto T_out columns."""
+    t_in = x.shape[1]
+    if t_in == n_out or t_in < 2:
+        return x
+    src = np.linspace(0.0, 1.0, t_in)
+    dst = np.linspace(0.0, 1.0, n_out)
+    return np.stack([np.interp(dst, src, row) for row in x]).astype(np.float32)
+
+
+def _hubert(y: np.ndarray, layer: int) -> np.ndarray:
+    """(768, frames) L2-normed per frame, resampled onto the SR/HOP grid so it
+    is a drop-in for _mfcc/chroma in the existing matched-filter harness."""
+    import librosa
+    import torch
+    model, fe, dev = _hubert_model()
+    y16 = librosa.resample(y, orig_sr=SR, target_sr=_HUBERT_SR)
+    step = int(_HUBERT_CHUNK_S * _HUBERT_SR)
+    hs: list[np.ndarray] = []
+    with torch.no_grad():
+        for i in range(0, len(y16), step):
+            chunk = y16[i:i + step]
+            if len(chunk) < 400:  # < conv receptive field
+                continue
+            iv = fe(chunk, sampling_rate=_HUBERT_SR, return_tensors="pt")
+            h = model(iv.input_values.to(dev), output_hidden_states=True
+                      ).hidden_states[layer][0]  # (T, 768)
+            hs.append(h.float().cpu().numpy())
+    if not hs:
+        return np.zeros((768, 0), dtype=np.float32)
+    h = np.concatenate(hs, axis=0).T  # (768, T@50fps)
+    n_out = max(1, int(round(len(y) / HOP)))  # match librosa frame count @ SR/HOP
+    h = _resample_cols(h, n_out)
+    return (h / (np.linalg.norm(h, axis=0, keepdims=True) + 1e-8)).astype(np.float32)
+
+
+def _feat(audio_path: Path, cache_key: str, feature: str,
+          hubert_layer: int = _HUBERT_LAYER) -> np.ndarray:
+    suffix = f"hubertL{hubert_layer}" if feature == "hubert" else feature
+    cf = _CACHE / f"{cache_key}_{suffix}.npy"
     if cf.is_file():
         return np.load(cf)
     import librosa
+    sr = _HUBERT_SR if feature == "hubert" else SR
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        y, _ = librosa.load(str(audio_path), sr=SR, mono=True)
-    f = _mfcc(y) if feature == "mfcc" else chroma(y)
+        y, _ = librosa.load(str(audio_path), sr=sr, mono=True)
+    if feature == "mfcc":
+        f = _mfcc(y)
+    elif feature == "chroma":
+        f = chroma(y)
+    else:
+        # _hubert resamples 22050->16000 internally; load at SR for a uniform path
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            y, _ = librosa.load(str(audio_path), sr=SR, mono=True)
+        f = _hubert(y, hubert_layer)
     _CACHE.mkdir(parents=True, exist_ok=True)
     np.save(cf, f)
     return f
@@ -68,7 +141,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--gt", type=Path,
                    default=_REPO / "labeling/fixtures/bb12_ground_truth.yaml")
     p.add_argument("--n-distractors", type=int, default=15)
-    p.add_argument("--feature", choices=["mfcc", "chroma"], default="mfcc")
+    p.add_argument("--feature", choices=["mfcc", "chroma", "hubert"], default="mfcc")
+    p.add_argument("--hubert-layer", type=int, default=_HUBERT_LAYER,
+                   help="HuBERT hidden-state layer (mid layers = most phonetic)")
     p.add_argument("--max-win-s", type=float, default=15.0)
     p.add_argument("--single-stretch", action="store_true",
                    help="disable stretch search (fix 1.0) — isolates the warp effect")
@@ -93,7 +168,8 @@ def main(argv: list[str] | None = None) -> int:
                                                by_tid[t]) is not None]
 
     print(f"chroma/mfcc({args.feature}) of mix_vocals …", file=sys.stderr)
-    mix = _feat(set_dir / "mix_vocals.flac", f"{args.set_id}_mix_vocals", args.feature)
+    mix = _feat(set_dir / "mix_vocals.flac", f"{args.set_id}_mix_vocals",
+                args.feature, args.hubert_layer)
 
     ranks, margins, true_peaks, dist_peaks = [], [], [], []
     for r in rows:
@@ -111,7 +187,7 @@ def main(argv: list[str] | None = None) -> int:
         peaks = {}
         for c in cands:
             rp = ref_audio_for({"claimed_stem": "acappella"}, by_tid[c])
-            rf = _feat(rp, f"ref_{c}_voc", args.feature)
+            rf = _feat(rp, f"ref_{c}_voc", args.feature, args.hubert_layer)
             if rf.shape[1] <= win.shape[1]:
                 continue
             _, peak, _ = detect_offset(win, rf, stretches)
