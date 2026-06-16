@@ -159,6 +159,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.method == "fp":
                 # constellation match-density localizer; display sim on chroma
                 # (HuBERT is blind to the melodic repeats this finds)
+                feature = "fp/chroma"
                 labels, hz = compute_fibers_fp(sp)
                 feat = np.load(_ensure_feat(sp, sp, "chroma", args.hubert_layer))
             else:
