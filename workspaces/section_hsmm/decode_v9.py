@@ -77,6 +77,33 @@ def diag_smooth_multislope(emis: np.ndarray, slices, w: int, slopes) -> np.ndarr
     return out
 
 
+def warp_dp_smooth(emis: np.ndarray, slices, gamma: float) -> np.ndarray:
+    """DTW-style warp-tolerant emission: forward DP with local steps (1,1),(1,2),
+    (2,1) so the alignment path can BEND (ref faster/slower moment-to-moment) —
+    true non-linear warp, not just the fixed slopes of multislope. gamma<1 gives
+    an effective window ~1/(1-gamma). out[t,j] = best decayed warp-aligned
+    accumulated similarity ending at (t,j)."""
+    out = np.empty_like(emis)
+    T = emis.shape[0]
+    for lo, hi in slices:
+        sim = emis[:, lo:hi]
+        L = hi - lo
+        blk = np.empty((T, L), dtype=emis.dtype)
+        blk[0] = sim[0]
+        prev1 = sim[0].copy()
+        prev2 = np.full(L, -1e9, dtype=emis.dtype)
+        for t in range(1, T):
+            s11 = np.full(L, -1e9, dtype=emis.dtype); s11[1:] = prev1[:-1]   # (1,1)
+            s12 = np.full(L, -1e9, dtype=emis.dtype); s12[2:] = prev1[:-2]   # (1,2)
+            s21 = np.full(L, -1e9, dtype=emis.dtype); s21[1:] = prev2[:-1]   # (2,1)
+            best = np.maximum(np.maximum(s11, s12), s21)
+            cur = sim[t] + gamma * np.where(best > -1e8, best, 0.0)
+            blk[t] = cur
+            prev2, prev1 = prev1, cur
+        out[:, lo:hi] = blk * (1.0 - gamma)     # rescale toward per-frame range
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--set-id", default="1fsnxchk")
@@ -86,6 +113,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--null-enter-pen", type=float, default=0.0)
     p.add_argument("--multislope", action="store_true",
                    help="also test tilted diagonals (non-linear warp tolerance)")
+    p.add_argument("--warpdp", action="store_true",
+                   help="also test DTW-style bending warp DP emission")
     args = p.parse_args(argv)
 
     set_dir = find_aligning_dir(args.set_id)
@@ -127,6 +156,9 @@ def main(argv: list[str] | None = None) -> int:
         slopes = (0.7, 0.85, 1.0, 1.18, 1.4)
         run(f"multislope w={w*args.frame_s:.0f}s",
             diag_smooth_multislope(emis, vocab.slices, w, slopes))
+    if args.warpdp:
+        for g in (0.75, 0.83):
+            run(f"warpDP gamma={g}", warp_dp_smooth(emis, vocab.slices, g))
     return 0
 
 
