@@ -67,6 +67,29 @@ Consequence: re-pulling a set deposits *fresh un-tagged copies* of files the
 annotator previously renamed. Expected — the annotator either re-runs the rename
 pass or ignores the duplicates. There's no automatic re-tag-on-refresh today.
 
+**Automated `[NNNbpm KK]` pass (tag → relink → fill).** Three offline tools
+reproduce BB12's tagged state on any pulled set. Run them in order — each later
+step depends on the rename the previous one did:
+
+1. `inline_tag_aligning_folder.py <folder> --stems` — renames `tracks/*` files
+   and `stems/*` subdirs to append `[NNNbpm KK]`, reading the BPM/key from each
+   M4A's already-written `tmpo`/`initialkey` atoms (offline counterpart to
+   `tag_aligning_folder.py`, which writes those atoms from pi-storage). Missing
+   features → `[no-features]`. Idempotent (skips already-tagged).
+2. `relink_als_after_tag.py <folder>` — the rename above orphans the session's
+   file references (clips go **offline**); this rewrites `Path`/`RelativePath`
+   in every `*.als` from the old name to the tagged name.
+3. `fill_als_clip_tags.py <folder>` — the seeder writes each clip's display
+   **Name** as `<title> [?]` (a tempo/key placeholder); this replaces `[?]`
+   with the real tag read from that clip's own referenced file (stem plays take
+   the tag from the parent stem-dir, since `vocals.flac` itself is untagged).
+
+All three edit the `.als` as gunzip→string-substitute→gzip (no lxml
+re-serialization, no device/automation changes) and write a one-time backup
+(`*.prerelink.bak` / `*.prefill.bak`). Per the `.als` crash history, **still
+open the session in Live to confirm** afterward. BPM/key shown are Essentia's,
+so acappella values are approximate (next caveat).
+
 Do not Essentia-tag acapellas: vocals-only audio has no intrinsic BPM/key — use
 the parent full song's features (see the `feedback_no_essentia_on_acapellas`
 memory). Analysis skips Essentia when `track_audio.stem != 'regular'`
