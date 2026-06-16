@@ -87,27 +87,31 @@ def main(argv: list[str] | None = None) -> int:
                 return None
             return all(peaks[tid] >= v for k, v in peaks.items() if k != tid)
 
-        w_un = _win_mfcc(mix_vocals, s0, dur, 0)
-        w_co = _win_mfcc(mix_vocals, s0, dur, -pshift) if pshift else w_un
-        vu, vc = rank(w_un), rank(w_co)
-        if vu is None or vc is None:
+        v_un = rank(_win_mfcc(mix_vocals, s0, dur, 0))
+        # test BOTH directions + a small oracle-free search (best over -2..+2)
+        v_minus = rank(_win_mfcc(mix_vocals, s0, dur, -pshift)) if pshift else v_un
+        v_plus = rank(_win_mfcc(mix_vocals, s0, dur, +pshift)) if pshift else v_un
+        if None in (v_un, v_minus, v_plus):
             continue
-        res.append((pshift != 0, vu, vc))
+        res.append({"shifted": pshift != 0, "p": pshift,
+                    "un": v_un, "minus": v_minus, "plus": v_plus})
 
     n = len(res)
-    shifted = [r for r in res if r[0]]
-    print(f"\n=== pitch-correction probe ({args.set_id}, {n} events) ===")
-    print(f"{'subset':>18} {'n':>4} {'uncorrected':>12} {'pitch-corrected':>16}")
-    print(f"{'ALL':>18} {n:>4} {100*np.mean([r[1] for r in res]):11.0f}% "
-          f"{100*np.mean([r[2] for r in res]):15.0f}%")
+    shifted = [r for r in res if r["shifted"]]
+    print(f"\n=== pitch-correction probe — both directions ({args.set_id}, {n} events) ===")
+    print(f"{'subset':>18} {'n':>4} {'uncorrected':>12} {'shift -p':>9} {'shift +p':>9}")
+    for label, sub in (("ALL", res), ("pitch-shifted only", shifted)):
+        if not sub:
+            continue
+        print(f"{label:>18} {len(sub):>4} {100*np.mean([r['un'] for r in sub]):11.0f}% "
+              f"{100*np.mean([r['minus'] for r in sub]):8.0f}% "
+              f"{100*np.mean([r['plus'] for r in sub]):8.0f}%")
     if shifted:
-        print(f"{'pitch-shifted only':>18} {len(shifted):>4} "
-              f"{100*np.mean([r[1] for r in shifted]):11.0f}% "
-              f"{100*np.mean([r[2] for r in shifted]):15.0f}%")
-        gained = sum(1 for r in shifted if r[2] and not r[1])
-        lost = sum(1 for r in shifted if r[1] and not r[2])
-        print(f"\non pitch-shifted events: {gained} newly verifiable, {lost} lost "
-              f"(net {gained-lost:+d} of {len(shifted)})")
+        for d in ("minus", "plus"):
+            g = sum(1 for r in shifted if r[d] and not r["un"])
+            l = sum(1 for r in shifted if r["un"] and not r[d])
+            print(f"  shift {'-p' if d=='minus' else '+p'}: {g} gained, {l} lost "
+                  f"(net {g-l:+d} of {len(shifted)})")
     return 0
 
 
