@@ -41,7 +41,7 @@ def load_settings(
 
 
 def load_mixes(config_path: Path = DEFAULT_CONFIG) -> tuple[MixTarget, ...]:
-    raw = yaml.safe_load(config_path.read_text()) or {}
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
     mixes = raw.get("mixes") or {}
     out: list[MixTarget] = []
     for key, m in mixes.items():
