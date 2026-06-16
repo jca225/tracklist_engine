@@ -591,3 +591,60 @@ def tempo_ratio(set_span: float, ref_span: float) -> float | None:
 
 def normalize_stem_value(raw: str) -> str:
     return normalize_stem(raw.strip() or None)
+
+
+# Ableton's "before-start" sentinel time for an automation's initial value.
+_ENV_INIT_TIME = "-63072000"
+
+
+def write_tempo_envelope(
+    root: etree._Element, breakpoints: list[tuple[float, float]]
+) -> int:
+    """Populate the MasterTrack tempo AutomationEnvelope with (beat, bpm) points.
+
+    Reuses the template's *existing* tempo AutomationTarget + AutomationEnvelope
+    (matched by PointeeId), so no new PointeeId is allocated — this is deliberately
+    clear of the deep-copy id-duplication path that crashes Live (the seeder's
+    strip_automation/renumber_pointee_ids machinery touches copied audio tracks,
+    never the MasterTrack). `breakpoints` are (beat_time, bpm), any order; beats
+    are arrangement musical time. Returns the number of points written; raises if
+    the tempo target/envelope is missing from the template.
+    """
+    tempo = root.find(".//MasterTrack//Tempo")
+    if tempo is None:
+        raise ValueError("no MasterTrack/Tempo in document")
+    at = tempo.find("AutomationTarget")
+    if at is None or at.get("Id") is None:
+        raise ValueError("Tempo has no AutomationTarget Id")
+    target_id = at.get("Id")
+    env = None
+    for ae in root.findall(
+        ".//MasterTrack//AutomationEnvelopes/Envelopes/AutomationEnvelope"
+    ):
+        pid = ae.find("EnvelopeTarget/PointeeId")
+        if pid is not None and pid.get("Value") == target_id:
+            env = ae
+            break
+    if env is None:
+        raise ValueError(f"no tempo AutomationEnvelope (PointeeId={target_id})")
+    events = env.find("Automation/Events")
+    if events is None:
+        raise ValueError("tempo envelope has no Automation/Events")
+    for child in list(events):
+        events.remove(child)
+    pts = sorted(breakpoints)
+    first_bpm = pts[0][1] if pts else 120.0
+    # leading initial-value event, then one FloatEvent per breakpoint
+    init = etree.SubElement(events, "FloatEvent")
+    init.set("Id", "0")
+    init.set("Time", _ENV_INIT_TIME)
+    init.set("Value", f"{first_bpm:.6f}")
+    for i, (beat, bpm) in enumerate(pts, start=1):
+        fe = etree.SubElement(events, "FloatEvent")
+        fe.set("Id", str(i))
+        fe.set("Time", f"{max(0.0, beat):.6f}")
+        fe.set("Value", f"{bpm:.6f}")
+    manual = tempo.find("Manual")
+    if manual is not None:
+        manual.set("Value", f"{first_bpm:.6f}")
+    return len(pts)
