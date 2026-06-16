@@ -167,6 +167,20 @@ def rewrite_clip(
     _set_value(sref, "DefaultSampleRate", str(sample_rate))
 
 
+def strip_automation(track: etree._Element) -> None:
+    """Empty every <Envelopes> in a deep-copied track.
+
+    A copied track duplicates its AutomationEnvelope/PointeeId cross-references
+    document-wide. als_io ignores them (so round-trip validation passes), but
+    Ableton can't reconcile the duplicates — it offers to "fix" the file and
+    then CRASHES during the migration. With no envelopes, nothing references the
+    automation targets, so the deep-copy is safe and the .als opens cleanly.
+    A track with empty automation is fully valid (just no automation drawn)."""
+    for env in track.iter("Envelopes"):
+        for child in list(env):
+            env.remove(child)
+
+
 def build_track(
     template: etree._Element,
     *,
@@ -175,6 +189,7 @@ def build_track(
     **clip_kwargs,
 ) -> etree._Element:
     t = copy.deepcopy(template)
+    strip_automation(t)        # remove cross-references that crash Ableton on copy
     t.set("Id", str(track_id))
     _set_value(t.find(".//Name"), "EffectiveName", track_name)
     _set_value(t.find(".//Name"), "UserName", track_name)
