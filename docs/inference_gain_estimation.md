@@ -76,12 +76,28 @@ only** (n=1). The unlock is cheap and already built: **the GT export computes
 `gain_curve` from any labeled `.als`** ([labeling/export_als_to_gt.py]). So the
 next step is not more DSP — it is:
 
-1. **Harvest gain curves** by re-exporting every already-labeled `.als` in
-   `~/aligning/` through the updated exporter — free training data from existing
-   labels. As of 2026-06-16 there are **4 labeled sessions beyond BB12** (BB11
-   `2nvzlh2k`, BB10 `w1mgcjt`, murph `pwgrrb1`, + BB12), so a one-off re-export
-   sweep takes gain-curve GT from n=1 to ~4 sets. Mind the enrich-then-merge
-   rule (never bare-overwrite an enriched GT — see [[project_gt_gain_curve]]).
+1. **Harvest gain curves** from already-labeled `.als` sessions. **Ran this
+   2026-06-16 — the data is NOT there.** Re-exporting BB11/BB10/murph through the
+   updated exporter:
+   - murph (`pwgrrb1`): exporter incompatible (club set, no `1-mix` warp track) → 0 spans.
+   - BB11 (`2nvzlh2k`): 127 spans, 36 beds, but **0 faded beds** — 2 rich-fader
+     overlap beds.
+   - BB10 (`w1mgcjt`): 93 spans, 24 beds, **0 faded beds** — 0 rich-fader spans.
+
+   **Finding:** fader/audibility labeling is a *new* practice — only **BB12**
+   carries it (58 rich-fader overlap beds). BB11/BB10 were labeled placement +
+   identity only, faders at unity. So harvesting old labels does NOT expand the
+   supervision; the gain estimator's training data is **BB12 alone (n=1)**.
+   (Bonus from the sweep: BB11/BB10 fresh exports resolved track_ids via manifest
+   path match, so they're usable for *placement* training — just not gain.)
+
+   **Revised data plan:** the supervision must be *produced*, not harvested —
+   either (a) train a first estimator on BB12's 58 rich-fader overlap beds
+   (single-set, but dominance is a simple binary/ranking target, may suffice for
+   a v0), or (b) a focused **fader-labeling pass** on the already-placed BB11/BB10
+   sessions (adding volume automation to existing clips is far cheaper than
+   labeling from scratch). Mind the enrich-then-merge rule when writing GT back
+   (never bare-overwrite an enriched GT — see [[project_gt_gain_curve]]).
 2. Once ≳ a handful of sets carry gain curves, train estimator **B** and validate
    it the same way we validated the decode: does dominance-from-`ĝ` recover the
    buried beds that dominance-from-GT-gain does, **without** GT?
