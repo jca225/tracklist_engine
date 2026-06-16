@@ -22,9 +22,12 @@ NOT trustworthy equivalence. Fixes, all validated on his examples:
      ONE member of a group but not the others (18s~174s=0.62 but 18s~96s=0.00)
      must not transitively join; averaging the links blocks that.
 
-Spectral clustering is kept only to propose section BOUNDARIES; the equivalence
-itself is the diagonal test. Feed HuBERT frames for vocals (phonetic -> robust to
-a singer varying delivery), chroma for harmonic beds.
+Feed HuBERT frames for vocals (phonetic -> robust to a singer varying delivery),
+chroma for harmonic beds.
+
+NOTE: the path_decode "53% -> 70% fiber-aware" figure was measured on the v1
+(over-merged) fibers and is INFLATED — re-measure with this version before
+trusting it.
 """
 
 from __future__ import annotations
