@@ -324,3 +324,39 @@ set-specific. The aligner should treat all stem channels as informative boundary
 signals, not bet on one. Still n = 2; the v5 ceiling (set as unit, ≥3–5 sets)
 stands. Caveat: tracklist cues carry their own small error, partially absorbed by
 the ±3 s window.
+
+---
+
+## v7 — Cross-set scale-up to n=19 + the popularity hypothesis (2026-06-14)
+
+Ran the full 3×2×2 grid (source × rep × tol) on **19 DJ sets** via Vast GPU
+(RoFormer 5-model ensemble + MERT-v1-330M all-layer, identical pipeline to the
+banked n=4 so results are comparable). 4 BB sets excluded (only 1 usable
+tracklist cue). Sets span **1.3k–816k 1001tracklists views** — Big Bootie–style
+mashup sets (~13k–52k views) + big festival mainstage sets (Hardwell/DVLM/Guetta/
+Marshmello, 165k–816k views) + Disco Lines.
+
+**John's hypothesis — "which stem/representation *wins* is a popularity
+artifact" — is NOT supported.** The winning *source* is balanced across the
+view-median split (full 5 low / 5 high; instrumental 3/3; acappella 1/2). The
+per-set flipping of which-stem-wins (the v6 finding) is **genuine set-to-set
+variation, not driven by popularity.**
+
+**A different, popularity-correlated signal does appear — in localization
+*strength*, not in which-cell-wins.** Spearman(log10 views, max lift) = **−0.27**,
+(·, mean lift) = **−0.30**, (·, #significant cells) = **−0.23**: *more popular
+sets localize boundaries from surprise WORSE.* Starkly: the **4 highest-view
+festival mainstage sets all score 0/6 FDR-significant cells** (max lift
+0.03–0.07), while most mashup sets clear 4–12/6 (max lift 0.20–0.33).
+
+**Caveats (do not over-read).** (1) n=19, ρ≈−0.3 is **not significant** (p≈0.2).
+(2) Popularity is **confounded with set type**: high-view = festival mainstage
+(continuous high-energy EDM, smooth transitions → little boundary surprise);
+mid-view = Big Bootie mashups (sharp genre/track cuts → strong surprise peaks).
+The honest read is **"surprise localizes boundaries on mashup-style sets, not on
+festival mainstage sets,"** with popularity a proxy for that style axis. (3) A few
+mashup sets also score 0/6 (2cxndfmk, zwf3n2t), so the split is a trend, not a law.
+
+**Implication for the aligner.** Boundary-from-surprise is a usable signal for
+mashup/Big-Bootie-style sets (the GT domain) but weak for smooth festival sets —
+the aligner should not rely on it as a universal boundary cue.
