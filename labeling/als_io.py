@@ -533,6 +533,63 @@ def audible_span(
     return AudibleSpan(frac, arr_a, arr_b)
 
 
+def clip_gain_breakpoints(
+    pts: tuple[tuple[float, float], ...] | list[tuple[float, float]],
+    arr_lo: float,
+    arr_hi: float,
+) -> list[tuple[float, float]]:
+    """Volume breakpoints (arr-beat, linear-gain) ACROSS one clip's span.
+
+    The exact piecewise-linear fader curve the DJ rode over [arr_lo, arr_hi]:
+    every automation breakpoint strictly inside the span, bracketed by
+    interpolated values at the two endpoints so the curve is closed and
+    self-contained. With no automation the track plays at unity, so we return
+    a flat [(lo, 1.0), (hi, 1.0)]. Gain is Ableton's linear Mixer/Volume value
+    (1.0 = unity / 0 dB; the mute floor is `MUTE_THR`)."""
+    if arr_hi <= arr_lo:
+        return [(arr_lo, envelope_value(pts, arr_lo))]
+    inner = [(b, v) for (b, v) in pts if arr_lo < b < arr_hi]
+    curve = [(arr_lo, envelope_value(pts, arr_lo))]
+    curve.extend(inner)
+    curve.append((arr_hi, envelope_value(pts, arr_hi)))
+    return curve
+
+
+def audible_from_curve(
+    curve: tuple[tuple[float, float], ...] | list[tuple[float, float]],
+    *,
+    thr: float = MUTE_THR,
+    n: int = 200,
+) -> tuple[float, float | None, float | None]:
+    """(fraction, first_audible_x, last_audible_x) of a gain curve above mute.
+
+    The single source of truth for `audible_frac` / `audible_start` /
+    `audible_end`: integrating ONE curve guarantees the three agree (the old
+    per-field `min`/`max` merge let a muted sibling clip zero the fraction while
+    the window stayed populated — slots 066/112). x is whatever domain the curve
+    is in (arr-beats or set-seconds); the caller chooses."""
+    if not curve:
+        return 1.0, None, None
+    if len(curve) == 1:
+        x, g = curve[0]
+        return (1.0, x, x) if g > thr else (0.0, None, None)
+    lo, hi = curve[0][0], curve[-1][0]
+    if hi <= lo:
+        return 1.0, lo, hi
+    step = (hi - lo) / (n - 1)
+    above = 0
+    start: float | None = None
+    end: float | None = None
+    x = lo
+    for _ in range(n):
+        if envelope_value(curve, x) > thr:
+            above += 1
+            start = x if start is None else start
+            end = x
+        x += step
+    return above / n, start, end
+
+
 def parse_layer_clips(root: etree._Element) -> list[ParsedClip]:
     vol_envs = build_vol_envelopes(root)
     tracks = root.xpath(".//LiveSet/Tracks/*")

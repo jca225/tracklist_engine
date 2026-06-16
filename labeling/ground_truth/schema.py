@@ -10,6 +10,7 @@ Style notes (per CLAUDE.md):
   - PyYAML is the one library boundary; its exceptions are caught
     exactly where yaml.safe_load is invoked and mapped to typed errors.
 """
+
 from __future__ import annotations
 
 import shutil
@@ -34,6 +35,7 @@ class GroundTruthError:
 @dataclass(frozen=True)
 class RefSegment:
     """One iteration of a loop or one slice of a cut-up."""
+
     ref_start_s: float
     ref_end_s: float
     mix_start_s: float
@@ -50,27 +52,32 @@ class MediaLinks:
         return bool(self.youtube or self.spotify or self.soundcloud or self.other)
 
     def as_dict(self) -> dict[str, str]:
-        return {k: v for k, v in (
-            ("youtube", self.youtube),
-            ("spotify", self.spotify),
-            ("soundcloud", self.soundcloud),
-            ("other", self.other),
-        ) if v}
+        return {
+            k: v
+            for k, v in (
+                ("youtube", self.youtube),
+                ("spotify", self.spotify),
+                ("soundcloud", self.soundcloud),
+                ("other", self.other),
+            )
+            if v
+        }
 
 
 @dataclass(frozen=True)
 class GroundTruthTrack:
     """One annotated play-span from a DJ set."""
-    label: str                              # human-readable track name
-    track_id: str | None                    # 1001tracklists data-trackid
-    claimed_stem: str                       # regular | acappella | instrumental
+
+    label: str  # human-readable track name
+    track_id: str | None  # 1001tracklists data-trackid
+    claimed_stem: str  # regular | acappella | instrumental
     set_start_s: float
     set_end_s: float
-    ref_start_s: float                      # MANDATORY — see schema doc
+    ref_start_s: float  # MANDATORY — see schema doc
     ref_end_s: float | None = None
-    slot_label: str = ""                    # PK slot e.g. 154, 154w1
-    ref_source: str = "reference"           # reference | demucs | online_candidate | ...
-    tempo_ratio: float | None = None        # ref_span_s / set_span_s
+    slot_label: str = ""  # PK slot e.g. 154, 154w1
+    ref_source: str = "reference"  # reference | demucs | online_candidate | ...
+    tempo_ratio: float | None = None  # ref_span_s / set_span_s
     pitch_shift_semi: int = 0
     is_loop: bool = False
     ref_segments: tuple[RefSegment, ...] = ()
@@ -78,14 +85,22 @@ class GroundTruthTrack:
     audible_frac: float | None = None
     audible_start_s: float | None = None
     audible_end_s: float | None = None
+    gain_curve: tuple[tuple[float, float], ...] = ()
+    # fader ride over the span: (set_time_s,
+    # linear_gain) breakpoints, piecewise-linear,
+    # 1.0 = unity / 0 dB. The GROUND TRUTH for
+    # audibility — two clips can co-exist in time
+    # yet not overlap acoustically when one is
+    # faded down. audible_frac/start/end derive
+    # from this. Empty = unity across the span.
     skip_training: bool = False
-    unalignable: bool = False                # human placeholder (mix/mix_instrumental
-                                             # used as the clip): too hard to align OR
-                                             # source absent. A POSITIVE abstain LABEL,
-                                             # not a training mask — the aligner learns to
-                                             # PREDICT difficulty on unseen mixes. Placement
-                                             # loss is masked; the row stays a training example.
-    source_note: str | None = None           # e.g. "Lux Omega — original unavailable"
+    unalignable: bool = False  # human placeholder (mix/mix_instrumental
+    # used as the clip): too hard to align OR
+    # source absent. A POSITIVE abstain LABEL,
+    # not a training mask — the aligner learns to
+    # PREDICT difficulty on unseen mixes. Placement
+    # loss is masked; the row stays a training example.
+    source_note: str | None = None  # e.g. "Lux Omega — original unavailable"
 
 
 @dataclass(frozen=True)
@@ -100,18 +115,23 @@ class GroundTruthSet:
 # Parsing
 # ---------------------------------------------------------------------------
 
-def _parse_track(idx: int, t: dict[str, Any], path: Path) -> Result[GroundTruthTrack, GroundTruthError]:
+
+def _parse_track(
+    idx: int, t: dict[str, Any], path: Path
+) -> Result[GroundTruthTrack, GroundTruthError]:
     label = str(t.get("track", "")).strip()
     if "ref_start_s" not in t or t["ref_start_s"] is None:
-        return Err(GroundTruthError(
-            kind="schema",
-            detail=(
-                f"track #{idx} ({label!r}) is missing mandatory `ref_start_s`. "
-                "Add the seconds offset into the reference where the DJ first "
-                "dropped in (top-level, not inside ref_segments)."
-            ),
-            path=path,
-        ))
+        return Err(
+            GroundTruthError(
+                kind="schema",
+                detail=(
+                    f"track #{idx} ({label!r}) is missing mandatory `ref_start_s`. "
+                    "Add the seconds offset into the reference where the DJ first "
+                    "dropped in (top-level, not inside ref_segments)."
+                ),
+                path=path,
+            )
+        )
     is_loop = bool(t.get("is_loop", False))
     raw_segs = t.get("ref_segments") or ()
     segments: list[RefSegment] = []
@@ -120,20 +140,24 @@ def _parse_track(idx: int, t: dict[str, Any], path: Path) -> Result[GroundTruthT
             continue
         if not all(k in s for k in ("ref_start_s", "ref_end_s", "mix_start_s")):
             continue
-        segments.append(RefSegment(
-            ref_start_s=float(s["ref_start_s"]),
-            ref_end_s=float(s["ref_end_s"]),
-            mix_start_s=float(s["mix_start_s"]),
-        ))
+        segments.append(
+            RefSegment(
+                ref_start_s=float(s["ref_start_s"]),
+                ref_end_s=float(s["ref_end_s"]),
+                mix_start_s=float(s["mix_start_s"]),
+            )
+        )
     if is_loop and not segments:
-        return Err(GroundTruthError(
-            kind="schema",
-            detail=(
-                f"track #{idx} ({label!r}) has `is_loop: true` but no "
-                "`ref_segments`. Add one segment per loop iteration."
-            ),
-            path=path,
-        ))
+        return Err(
+            GroundTruthError(
+                kind="schema",
+                detail=(
+                    f"track #{idx} ({label!r}) has `is_loop: true` but no "
+                    "`ref_segments`. Add one segment per loop iteration."
+                ),
+                path=path,
+            )
+        )
     tid_raw = t.get("track_id")
     track_id = str(tid_raw).strip() if tid_raw not in (None, "") else None
     ml = t.get("media_links") or {}
@@ -160,42 +184,59 @@ def _parse_track(idx: int, t: dict[str, Any], path: Path) -> Result[GroundTruthT
     audible_raw = t.get("audible_frac")
     audible_frac = float(audible_raw) if isinstance(audible_raw, (int, float)) else None
     aud_start_raw = t.get("audible_start_s")
-    audible_start_s = float(aud_start_raw) if isinstance(aud_start_raw, (int, float)) else None
+    audible_start_s = (
+        float(aud_start_raw) if isinstance(aud_start_raw, (int, float)) else None
+    )
     aud_end_raw = t.get("audible_end_s")
-    audible_end_s = float(aud_end_raw) if isinstance(aud_end_raw, (int, float)) else None
+    audible_end_s = (
+        float(aud_end_raw) if isinstance(aud_end_raw, (int, float)) else None
+    )
+    gain_raw = t.get("gain_curve") or ()
+    gain_curve: list[tuple[float, float]] = []
+    if isinstance(gain_raw, (list, tuple)):
+        for pt in gain_raw:
+            if (
+                isinstance(pt, (list, tuple))
+                and len(pt) == 2
+                and all(isinstance(v, (int, float)) for v in pt)
+            ):
+                gain_curve.append((float(pt[0]), float(pt[1])))
     skip_training = bool(t.get("skip_training", False))
     unalignable = bool(t.get("unalignable", False))
     sn_raw = t.get("source_note")
     source_note = str(sn_raw).strip() if sn_raw not in (None, "") else None
-    return Ok(GroundTruthTrack(
-        label=label,
-        track_id=track_id,
-        claimed_stem=normalize_stem(
-            str(t.get("claimed_stem") or t.get("version_tag") or "").strip() or None
-        ),
-        set_start_s=float(t["set_start_s"]),
-        set_end_s=float(t["set_end_s"]),
-        ref_start_s=float(t["ref_start_s"]),
-        ref_end_s=ref_end,
-        slot_label=slot_label,
-        ref_source=ref_source,
-        tempo_ratio=tempo_ratio,
-        pitch_shift_semi=pitch_shift_semi,
-        is_loop=is_loop,
-        ref_segments=tuple(segments),
-        media_links=MediaLinks(
-            youtube=str(ml.get("youtube") or "").strip(),
-            spotify=str(ml.get("spotify") or "").strip(),
-            soundcloud=str(ml.get("soundcloud") or "").strip(),
-            other=str(ml.get("other") or "").strip(),
-        ),
-        audible_frac=audible_frac,
-        audible_start_s=audible_start_s,
-        audible_end_s=audible_end_s,
-        skip_training=skip_training,
-        unalignable=unalignable,
-        source_note=source_note,
-    ))
+    return Ok(
+        GroundTruthTrack(
+            label=label,
+            track_id=track_id,
+            claimed_stem=normalize_stem(
+                str(t.get("claimed_stem") or t.get("version_tag") or "").strip() or None
+            ),
+            set_start_s=float(t["set_start_s"]),
+            set_end_s=float(t["set_end_s"]),
+            ref_start_s=float(t["ref_start_s"]),
+            ref_end_s=ref_end,
+            slot_label=slot_label,
+            ref_source=ref_source,
+            tempo_ratio=tempo_ratio,
+            pitch_shift_semi=pitch_shift_semi,
+            is_loop=is_loop,
+            ref_segments=tuple(segments),
+            media_links=MediaLinks(
+                youtube=str(ml.get("youtube") or "").strip(),
+                spotify=str(ml.get("spotify") or "").strip(),
+                soundcloud=str(ml.get("soundcloud") or "").strip(),
+                other=str(ml.get("other") or "").strip(),
+            ),
+            audible_frac=audible_frac,
+            audible_start_s=audible_start_s,
+            audible_end_s=audible_end_s,
+            gain_curve=tuple(gain_curve),
+            skip_training=skip_training,
+            unalignable=unalignable,
+            source_note=source_note,
+        )
+    )
 
 
 def load(yaml_path: Path | str) -> Result[GroundTruthSet, GroundTruthError]:
@@ -210,27 +251,33 @@ def load(yaml_path: Path | str) -> Result[GroundTruthSet, GroundTruthError]:
     except yaml.YAMLError as e:
         return Err(GroundTruthError(kind="yaml_parse", detail=str(e), path=path))
     if not isinstance(payload, dict):
-        return Err(GroundTruthError(
-            kind="schema",
-            detail="top-level yaml must be a mapping",
-            path=path,
-        ))
+        return Err(
+            GroundTruthError(
+                kind="schema",
+                detail="top-level yaml must be a mapping",
+                path=path,
+            )
+        )
     set_id = str(payload.get("set_id") or "").strip()
     if not set_id:
-        return Err(GroundTruthError(
-            kind="schema",
-            detail="missing required `set_id` field",
-            path=path,
-        ))
+        return Err(
+            GroundTruthError(
+                kind="schema",
+                detail="missing required `set_id` field",
+                path=path,
+            )
+        )
 
     tracks: list[GroundTruthTrack] = []
     raw_tracks = payload.get("tracks") or []
     if not isinstance(raw_tracks, list):
-        return Err(GroundTruthError(
-            kind="schema",
-            detail="`tracks:` must be a list",
-            path=path,
-        ))
+        return Err(
+            GroundTruthError(
+                kind="schema",
+                detail="`tracks:` must be a list",
+                path=path,
+            )
+        )
     for idx, t in enumerate(raw_tracks):
         if not isinstance(t, dict):
             continue
@@ -239,17 +286,20 @@ def load(yaml_path: Path | str) -> Result[GroundTruthSet, GroundTruthError]:
             return Err(r.error)
         tracks.append(r.value)
 
-    return Ok(GroundTruthSet(
-        set_id=set_id,
-        tracks=tuple(tracks),
-        source=str(payload.get("source") or "ableton_session"),
-        annotated_by=str(payload.get("annotated_by") or "user"),
-    ))
+    return Ok(
+        GroundTruthSet(
+            set_id=set_id,
+            tracks=tuple(tracks),
+            source=str(payload.get("source") or "ableton_session"),
+            annotated_by=str(payload.get("annotated_by") or "user"),
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
 # Serialization
 # ---------------------------------------------------------------------------
+
 
 def _fmt_num(v: float) -> str:
     """Match the existing fixture style: `%g`, no trailing zeros."""
@@ -274,9 +324,7 @@ def dump(gt: GroundTruthSet, *, title: str | None = None) -> str:
     out.append("tracks:")
     for t in gt.tracks:
         label = (
-            t.label.replace('"', r'\"')
-            .replace("\u2013", "-")
-            .replace("\u2014", "-")
+            t.label.replace('"', r"\"").replace("\u2013", "-").replace("\u2014", "-")
         )
         out.append(f'  - track:       "{label}"')
         if t.slot_label:
@@ -310,6 +358,14 @@ def dump(gt: GroundTruthSet, *, title: str | None = None) -> str:
             out.append(f"    audible_start_s: {_fmt_num(t.audible_start_s)}")
         if t.audible_end_s is not None:
             out.append(f"    audible_end_s: {_fmt_num(t.audible_end_s)}")
+        # Emit the fader curve only when it carries info beyond flat unity — a
+        # bare 2-point [unity, unity] curve says nothing the absence wouldn't.
+        if t.gain_curve and (
+            len(t.gain_curve) > 2 or any(g < 0.999 for _, g in t.gain_curve)
+        ):
+            out.append("    gain_curve:")
+            for x, g in t.gain_curve:
+                out.append(f"      - [{_fmt_num(x)}, {_fmt_num(g)}]")
         if t.skip_training:
             out.append("    skip_training: true")
         if t.unalignable:
@@ -353,8 +409,10 @@ def save(
 # Small conveniences used by the editor UI
 # ---------------------------------------------------------------------------
 
+
 def upsert_track(
-    gt: GroundTruthSet, new_track: GroundTruthTrack,
+    gt: GroundTruthSet,
+    new_track: GroundTruthTrack,
 ) -> GroundTruthSet:
     """Replace the track with the same track_id (if present) else append.
 

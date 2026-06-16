@@ -17,6 +17,7 @@ Review table only:
 
     venvs/audio/bin/python -m labeling.export_als_to_gt ... --review
 """
+
 from __future__ import annotations
 
 import argparse
@@ -32,7 +33,8 @@ from labeling.als_io import (
     ArrangementMapper,
     MUTE_THR,
     ParsedClip,
-    audible_span,
+    audible_from_curve,
+    clip_gain_breakpoints,
     build_manifest_index,
     classify_path,
     load_als_xml,
@@ -42,42 +44,69 @@ from labeling.als_io import (
     tempo_ratio,
     track_display_name,
 )
-from labeling.ground_truth.schema import GroundTruthSet, GroundTruthTrack, RefSegment, save
+from labeling.ground_truth.schema import (
+    GroundTruthSet,
+    GroundTruthTrack,
+    RefSegment,
+    save,
+)
 from core.result import Err, Ok
 
-DEFAULT_ALS = Path.home() / "Desktop/big bootie 12 labeling Project/big bootie 12 labeling_fast.als"
-DEFAULT_SET_DIR = Path.home() / "aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12"
+DEFAULT_ALS = (
+    Path.home()
+    / "Desktop/big bootie 12 labeling Project/big bootie 12 labeling_fast.als"
+)
+DEFAULT_SET_DIR = (
+    Path.home() / "aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12"
+)
 
 PARKING_TOL_S = 5.0
 SLIVER_MAX_S = 3.0
-MICRO_SLIVER_DROP_S = 0.01   # clip-boundary specks (e.g. slot 107)
+MICRO_SLIVER_DROP_S = 0.01  # clip-boundary specks (e.g. slot 107)
 LOOP_OVERLAP_MIN = 0.35
 BLINK_182_SLOTS = frozenset({"024", "024w1", "029"})
 AUDIBLE_EPS_S = 0.05
 
 
-def _min_frac(*values: float | None) -> float | None:
-    nums = [v for v in values if v is not None]
-    if not nums:
-        return None
-    m = min(nums)
-    return None if m >= 1.0 else m
+GainCurve = tuple[tuple[float, float], ...]
 
 
-def _min_optional(*values: float | None, default: float) -> float | None:
-    nums = [v for v in values if v is not None]
-    if not nums:
-        return None
-    m = min(nums)
-    return None if abs(m - default) < AUDIBLE_EPS_S else m
+def _merge_curves(*curves: GainCurve) -> GainCurve:
+    """Concatenate per-clip gain curves into one set-time-ordered envelope.
+
+    Slot-merge (slivers / loop iterations) unions clips that occupy distinct
+    mix regions; sorting by set-time stitches their fader curves into a single
+    curve over the slot's whole mix span. Near-coincident points are deduped so
+    a shared boundary doesn't create a zero-width segment."""
+    pts: list[tuple[float, float]] = []
+    for c in curves:
+        pts.extend(c)
+    pts.sort(key=lambda p: p[0])
+    out: list[tuple[float, float]] = []
+    for x, g in pts:
+        if out and abs(x - out[-1][0]) < 1e-4:
+            out[-1] = (x, max(out[-1][1], g))  # coincident -> keep louder
+        else:
+            out.append((x, g))
+    return tuple(out)
 
 
-def _max_optional(*values: float | None, default: float) -> float | None:
-    nums = [v for v in values if v is not None]
-    if not nums:
-        return None
-    m = max(nums)
-    return None if abs(m - default) < AUDIBLE_EPS_S else m
+def _audible_fields(
+    curve: GainCurve, set_start: float, set_end: float
+) -> tuple[float | None, float | None, float | None, bool]:
+    """Derive (audible_frac, audible_start_s, audible_end_s, skip) from ONE
+    gain curve — the single source that keeps the three fields consistent.
+
+    Sparse-output convention: frac omitted when fully audible (==1.0), and
+    start/end omitted when they coincide (within AUDIBLE_EPS_S) with the clip
+    extent — i.e. absence of a field means 'audible across the whole span'."""
+    frac, start, end = audible_from_curve(curve)
+    frac_out = None if frac >= 1.0 else round(frac, 3)
+    start_out = (
+        None if start is None or abs(start - set_start) < AUDIBLE_EPS_S else start
+    )
+    end_out = None if end is None or abs(end - set_end) < AUDIBLE_EPS_S else end
+    return frac_out, start_out, end_out, frac < MUTE_THR
 
 
 @dataclass(frozen=True)
@@ -111,6 +140,7 @@ class ClipRow:
     audible_frac: float | None = None
     audible_start_s: float | None = None
     audible_end_s: float | None = None
+    gain_curve: GainCurve = ()
     skip_training: bool = False
 
 
@@ -134,17 +164,20 @@ def _clip_row(clip: ParsedClip, mapper: ArrangementMapper, manifest) -> ClipRow 
     ref_end = clip.ref_end_s()
     set_span = set_end - set_start
     ref_span = ref_end - ref_start
-    aud = audible_span(clip.vol_points, clip.arr_start, clip.arr_end)
-    audible_start = mapper.arr_to_set_sec(aud.arr_start) if aud.fraction > 0 else None
-    audible_end = mapper.arr_to_set_sec(aud.arr_end) if aud.fraction > 0 else None
-    skip = aud.fraction < MUTE_THR
-    aud_start_out = audible_start
-    aud_end_out = audible_end
-    if aud_start_out is not None and abs(aud_start_out - set_start) < AUDIBLE_EPS_S:
-        aud_start_out = None
-    if aud_end_out is not None and abs(aud_end_out - set_end) < AUDIBLE_EPS_S:
-        aud_end_out = None
-    aud_frac_out = None if aud.fraction >= 1.0 else round(aud.fraction, 3)
+    # The real fader ride over this clip, in SET seconds: every volume
+    # breakpoint mapped through the warp. audible_frac/start/end are then
+    # derived from this one curve (no independent computation to drift).
+    curve: list[tuple[float, float]] = []
+    for arr_b, gain in clip_gain_breakpoints(
+        clip.vol_points, clip.arr_start, clip.arr_end
+    ):
+        sec = mapper.arr_to_set_sec(arr_b)
+        if sec is not None:
+            curve.append((round(sec, 3), round(gain, 4)))
+    gain_curve = _merge_curves(tuple(curve))  # sort + dedup coincident points
+    aud_frac_out, aud_start_out, aud_end_out, skip = _audible_fields(
+        gain_curve, set_start, set_end
+    )
     return ClipRow(
         clip=clip,
         set_start_s=set_start,
@@ -161,26 +194,31 @@ def _clip_row(clip: ParsedClip, mapper: ArrangementMapper, manifest) -> ClipRow 
         audible_frac=aud_frac_out,
         audible_start_s=aud_start_out,
         audible_end_s=aud_end_out,
+        gain_curve=gain_curve,
         skip_training=skip,
     )
 
 
-def _drop_parking(rows: list[ClipRow], mix_end_s: float) -> tuple[list[ClipRow], list[ReviewRow]]:
+def _drop_parking(
+    rows: list[ClipRow], mix_end_s: float
+) -> tuple[list[ClipRow], list[ReviewRow]]:
     kept: list[ClipRow] = []
     review: list[ReviewRow] = []
     cutoff = mix_end_s + PARKING_TOL_S
     for row in rows:
         if row.set_start_s > cutoff:
-            review.append(ReviewRow(
-                action="dropped",
-                reason=f"parking-lot (set_start_s>{cutoff:.1f})",
-                group=row.clip.group_name,
-                slot=row.slot_label,
-                track=row.display,
-                set_start_s=row.set_start_s,
-                set_end_s=row.set_end_s,
-                recording_id=row.recording_id,
-            ))
+            review.append(
+                ReviewRow(
+                    action="dropped",
+                    reason=f"parking-lot (set_start_s>{cutoff:.1f})",
+                    group=row.clip.group_name,
+                    slot=row.slot_label,
+                    track=row.display,
+                    set_start_s=row.set_start_s,
+                    set_end_s=row.set_end_s,
+                    recording_id=row.recording_id,
+                )
+            )
         else:
             kept.append(row)
     return kept, review
@@ -198,34 +236,36 @@ def _merge_slivers(rows: list[ClipRow]) -> tuple[list[ClipRow], list[ReviewRow]]
         span = row.set_end_s - row.set_start_s
         if 0 < span <= SLIVER_MAX_S and kept and kept[-1].clip.path == row.clip.path:
             prev = kept[-1]
+            m_end = max(prev.set_end_s, row.set_end_s)
+            m_curve = _merge_curves(prev.gain_curve, row.gain_curve)
+            frac, a0, a1, skip = _audible_fields(m_curve, prev.set_start_s, m_end)
             merged = replace(
                 prev,
-                set_end_s=max(prev.set_end_s, row.set_end_s),
+                set_end_s=m_end,
                 ref_end_s=max(prev.ref_end_s, row.ref_end_s),
                 tempo_ratio=tempo_ratio(
-                    max(prev.set_end_s, row.set_end_s) - prev.set_start_s,
+                    m_end - prev.set_start_s,
                     max(prev.ref_end_s, row.ref_end_s) - prev.ref_start_s,
                 ),
-                audible_frac=_min_frac(prev.audible_frac, row.audible_frac),
-                audible_start_s=_min_optional(
-                    prev.audible_start_s, row.audible_start_s, default=prev.set_start_s,
-                ),
-                audible_end_s=_max_optional(
-                    prev.audible_end_s, row.audible_end_s, default=row.set_end_s,
-                ),
-                skip_training=prev.skip_training or row.skip_training,
+                audible_frac=frac,
+                audible_start_s=a0,
+                audible_end_s=a1,
+                gain_curve=m_curve,
+                skip_training=skip,
             )
             kept[-1] = merged
-            review.append(ReviewRow(
-                action="merged",
-                reason=f"sliver ({span:.2f}s) into neighbor",
-                group=row.clip.group_name,
-                slot=row.slot_label,
-                track=row.display,
-                set_start_s=row.set_start_s,
-                set_end_s=row.set_end_s,
-                recording_id=row.recording_id,
-            ))
+            review.append(
+                ReviewRow(
+                    action="merged",
+                    reason=f"sliver ({span:.2f}s) into neighbor",
+                    group=row.clip.group_name,
+                    slot=row.slot_label,
+                    track=row.display,
+                    set_start_s=row.set_start_s,
+                    set_end_s=row.set_end_s,
+                    recording_id=row.recording_id,
+                )
+            )
             i += 1
             continue
         kept.append(row)
@@ -239,16 +279,18 @@ def _drop_micro_slivers(rows: list[ClipRow]) -> tuple[list[ClipRow], list[Review
     for row in rows:
         span = row.set_end_s - row.set_start_s
         if span < MICRO_SLIVER_DROP_S:
-            review.append(ReviewRow(
-                action="dropped",
-                reason=f"micro-sliver ({span:.4f}s < {MICRO_SLIVER_DROP_S}s)",
-                group=row.clip.group_name,
-                slot=row.slot_label,
-                track=row.display,
-                set_start_s=row.set_start_s,
-                set_end_s=row.set_end_s,
-                recording_id=row.recording_id,
-            ))
+            review.append(
+                ReviewRow(
+                    action="dropped",
+                    reason=f"micro-sliver ({span:.4f}s < {MICRO_SLIVER_DROP_S}s)",
+                    group=row.clip.group_name,
+                    slot=row.slot_label,
+                    track=row.display,
+                    set_start_s=row.set_start_s,
+                    set_end_s=row.set_end_s,
+                    recording_id=row.recording_id,
+                )
+            )
         else:
             kept.append(row)
     return kept, review
@@ -274,11 +316,13 @@ def _detect_loops(rows: list[ClipRow]) -> list[ClipRow]:
             continue
         segments: list[RefSegment] = []
         for row in key_rows:
-            segments.append(RefSegment(
-                ref_start_s=row.ref_start_s,
-                ref_end_s=row.ref_end_s,
-                mix_start_s=row.set_start_s,
-            ))
+            segments.append(
+                RefSegment(
+                    ref_start_s=row.ref_start_s,
+                    ref_end_s=row.ref_end_s,
+                    mix_start_s=row.set_start_s,
+                )
+            )
         # LOOP = a bit-identical ref segment re-triggered BACK-TO-BACK more than
         # once (>=2 identical, temporally-ADJACENT plays — the repeat starts
         # ~where it ended; Avicii ref 153-157 at mix 79/83/87, MJ "Just Beat It").
@@ -291,25 +335,23 @@ def _detect_loops(rows: list[ClipRow]) -> list[ClipRow]:
         for a, b in zip(_by_mix, _by_mix[1:]):
             # tolerance, not exact: warp jitter gives the same loop iteration
             # ref_end 157.1 vs 157.0 — rounding would split them.
-            same = (abs(a.ref_start_s - b.ref_start_s) < 1.5
-                    and abs(a.ref_end_s - b.ref_end_s) < 1.5)
+            same = (
+                abs(a.ref_start_s - b.ref_start_s) < 1.5
+                and abs(a.ref_end_s - b.ref_end_s) < 1.5
+            )
             dur = a.ref_end_s - a.ref_start_s
             adjacent = abs((b.mix_start_s - a.mix_start_s) - dur) < max(2.0, 0.4 * dur)
-            if same and adjacent:        # one back-to-back identical repeat = a loop
+            if same and adjacent:  # one back-to-back identical repeat = a loop
                 looped = True
                 break
         first = key_rows[0]
-        set_span = sum(
-            max(0.0, row.set_end_s - row.set_start_s) for row in key_rows
-        )
+        set_span = sum(max(0.0, row.set_end_s - row.set_start_s) for row in key_rows)
         # tempo_ratio is the PLAYBACK SPEED: sum of the segment ref-durations
         # actually played, NOT the outer ref envelope. The envelope counts the
         # ref region the DJ JUMPED OVER between non-contiguous segments — that
         # inflated Emily's instrumental (slot 003) to 2.69x when its 3 segments
         # each played at 1.0x (65.3s song played over 65.3s of mix).
-        ref_span = sum(
-            max(0.0, row.ref_end_s - row.ref_start_s) for row in key_rows
-        )
+        ref_span = sum(max(0.0, row.ref_end_s - row.ref_start_s) for row in key_rows)
         # ref envelope = MIN start / MAX end over all segments, not
         # first-start/last-end: a loop can jump BACKWARD in the song (Avicii
         # Fade slot 004 loops ref 153-157s x3 then drops back to ref 39-65s),
@@ -317,26 +359,27 @@ def _detect_loops(rows: list[ClipRow]) -> list[ClipRow]:
         # negative ref span. The segments carry the real (non-monotonic) path.
         ref_lo = min(row.ref_start_s for row in key_rows)
         ref_hi = max(row.ref_end_s for row in key_rows)
-        out.append(replace(
-            first,
-            set_start_s=min(row.set_start_s for row in key_rows),
-            set_end_s=max(row.set_end_s for row in key_rows),
-            ref_start_s=ref_lo,
-            ref_end_s=ref_hi,
-            tempo_ratio=tempo_ratio(set_span, ref_span),
-            is_loop=looped,
-            ref_segments=tuple(segments),
-            audible_frac=_min_frac(*(row.audible_frac for row in key_rows)),
-            audible_start_s=_min_optional(
-                *(row.audible_start_s for row in key_rows),
-                default=min(row.set_start_s for row in key_rows),
-            ),
-            audible_end_s=_max_optional(
-                *(row.audible_end_s for row in key_rows),
-                default=max(row.set_end_s for row in key_rows),
-            ),
-            skip_training=any(row.skip_training for row in key_rows),
-        ))
+        m_start = min(row.set_start_s for row in key_rows)
+        m_end = max(row.set_end_s for row in key_rows)
+        m_curve = _merge_curves(*(row.gain_curve for row in key_rows))
+        frac, a0, a1, skip = _audible_fields(m_curve, m_start, m_end)
+        out.append(
+            replace(
+                first,
+                set_start_s=m_start,
+                set_end_s=m_end,
+                ref_start_s=ref_lo,
+                ref_end_s=ref_hi,
+                tempo_ratio=tempo_ratio(set_span, ref_span),
+                is_loop=looped,
+                ref_segments=tuple(segments),
+                audible_frac=frac,
+                audible_start_s=a0,
+                audible_end_s=a1,
+                gain_curve=m_curve,
+                skip_training=skip,
+            )
+        )
     return sorted(out, key=lambda r: (r.set_start_s, r.slot_label, r.claimed_stem))
 
 
@@ -348,7 +391,9 @@ import re as _re
 # NOTE: an imported `instrumental-N.flac` is a REAL instrumental the human
 # dragged in (e.g. Mako - Smoke Filled Room at lane 202), NOT a placeholder —
 # its identity just isn't encoded in the generic filename (needs a manual map).
-_PLACEHOLDER_RE = _re.compile(r"^(mix\.(m4a|flac|wav)|mix_instrumental\.(m4a|flac|wav))$")
+_PLACEHOLDER_RE = _re.compile(
+    r"^(mix\.(m4a|flac|wav)|mix_instrumental\.(m4a|flac|wav))$"
+)
 
 
 def _placeholder_note(path: str, group: str) -> str | None:
@@ -379,6 +424,7 @@ def _to_gt_track(row: ClipRow) -> GroundTruthTrack:
         audible_frac=row.audible_frac,
         audible_start_s=row.audible_start_s,
         audible_end_s=row.audible_end_s,
+        gain_curve=row.gain_curve,
         skip_training=row.skip_training,
         unalignable=note is not None,
         source_note=note,
@@ -414,40 +460,46 @@ def collect_kept_clip_rows(
         for part in split_clip_at_mix_span_edges(clip, mapper):
             row = _clip_row(part, mapper, manifest)
             if row is None:
-                review.append(ReviewRow(
-                    action="dropped",
-                    reason="outside mix warp span",
-                    group=part.group_name,
-                    slot=slot_from_path(part.path) or "",
-                    track=part.track_name,
-                ))
+                review.append(
+                    ReviewRow(
+                        action="dropped",
+                        reason="outside mix warp span",
+                        group=part.group_name,
+                        slot=slot_from_path(part.path) or "",
+                        track=part.track_name,
+                    )
+                )
                 continue
             if row.set_end_s <= row.set_start_s:
-                review.append(ReviewRow(
-                    action="dropped",
-                    reason="non-positive set span after mix-span split",
-                    group=part.group_name,
-                    slot=row.slot_label or "",
-                    track=row.display,
-                    set_start_s=row.set_start_s,
-                    set_end_s=row.set_end_s,
-                    recording_id=row.recording_id,
-                ))
+                review.append(
+                    ReviewRow(
+                        action="dropped",
+                        reason="non-positive set span after mix-span split",
+                        group=part.group_name,
+                        slot=row.slot_label or "",
+                        track=row.display,
+                        set_start_s=row.set_start_s,
+                        set_end_s=row.set_end_s,
+                        recording_id=row.recording_id,
+                    )
+                )
                 continue
             raw_rows.append(row)
 
     if include_all:
         for row in raw_rows:
-            review.append(ReviewRow(
-                action="kept",
-                reason="include-all",
-                group=row.clip.group_name,
-                slot=row.slot_label,
-                track=row.display,
-                set_start_s=row.set_start_s,
-                set_end_s=row.set_end_s,
-                recording_id=row.recording_id,
-            ))
+            review.append(
+                ReviewRow(
+                    action="kept",
+                    reason="include-all",
+                    group=row.clip.group_name,
+                    slot=row.slot_label,
+                    track=row.display,
+                    set_start_s=row.set_start_s,
+                    set_end_s=row.set_end_s,
+                    recording_id=row.recording_id,
+                )
+            )
         return set_id, sorted(raw_rows, key=lambda r: r.set_start_s), review
 
     rows, rev = _drop_parking(raw_rows, mix_duration_s)
@@ -459,16 +511,18 @@ def collect_kept_clip_rows(
     rows = _detect_loops(rows)
 
     for row in rows:
-        review.append(ReviewRow(
-            action="kept",
-            reason="hygiene pass",
-            group=row.clip.group_name,
-            slot=row.slot_label,
-            track=row.display,
-            set_start_s=row.set_start_s,
-            set_end_s=row.set_end_s,
-            recording_id=row.recording_id,
-        ))
+        review.append(
+            ReviewRow(
+                action="kept",
+                reason="hygiene pass",
+                group=row.clip.group_name,
+                slot=row.slot_label,
+                track=row.display,
+                set_start_s=row.set_start_s,
+                set_end_s=row.set_end_s,
+                recording_id=row.recording_id,
+            )
+        )
 
     return set_id, rows, review
 
@@ -480,7 +534,9 @@ def export_gt(
     include_all: bool = False,
 ) -> tuple[GroundTruthSet, list[ReviewRow]]:
     set_id, rows, review = collect_kept_clip_rows(
-        als_path, set_dir, include_all=include_all,
+        als_path,
+        set_dir,
+        include_all=include_all,
     )
     return GroundTruthSet(
         set_id=set_id,
@@ -490,6 +546,7 @@ def export_gt(
 
 def slot_from_path(path: str) -> str | None:
     from labeling.als_io import slot_from_path as _slot
+
     return _slot(path)
 
 
@@ -497,10 +554,18 @@ def print_review(review: list[ReviewRow]) -> None:
     kept = sum(1 for r in review if r.action == "kept")
     dropped = sum(1 for r in review if r.action == "dropped")
     merged = sum(1 for r in review if r.action == "merged")
-    unresolved = sorted({r.slot for r in review if r.action == "kept" and not r.recording_id and r.slot})
-    print(f"review: kept={kept} dropped={dropped} merged={merged} unresolved_slots={len(unresolved)}")
+    unresolved = sorted(
+        {r.slot for r in review if r.action == "kept" and not r.recording_id and r.slot}
+    )
+    print(
+        f"review: kept={kept} dropped={dropped} merged={merged} unresolved_slots={len(unresolved)}"
+    )
     if unresolved:
-        print("  unresolved:", ", ".join(unresolved[:20]), ("..." if len(unresolved) > 20 else ""))
+        print(
+            "  unresolved:",
+            ", ".join(unresolved[:20]),
+            ("..." if len(unresolved) > 20 else ""),
+        )
     print(f"{'action':8} {'slot':8} {'set_span':22} {'recording':12} reason")
     for row in review[:40]:
         span = ""
@@ -515,10 +580,14 @@ def print_review(review: list[ReviewRow]) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--als", type=Path, default=DEFAULT_ALS)
     p.add_argument("--set-dir", type=Path, default=DEFAULT_SET_DIR)
-    p.add_argument("--out", type=Path, default=_REPO / "labeling/fixtures/bb12_ground_truth.yaml")
+    p.add_argument(
+        "--out", type=Path, default=_REPO / "labeling/fixtures/bb12_ground_truth.yaml"
+    )
     p.add_argument("--review", action="store_true", help="print review table only")
     p.add_argument("--include-all-clips", action="store_true")
     args = p.parse_args(argv)
@@ -531,7 +600,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     try:
-        gt, review = export_gt(args.als, args.set_dir, include_all=args.include_all_clips)
+        gt, review = export_gt(
+            args.als, args.set_dir, include_all=args.include_all_clips
+        )
     except (OSError, ValueError) as e:
         print(f"export failed: {e}", file=sys.stderr)
         return 1
