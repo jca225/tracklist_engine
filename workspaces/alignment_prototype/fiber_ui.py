@@ -110,10 +110,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--borderline",
         type=float,
-        default=0.75,
+        default=0.65,
         help="flag members whose DIAGONAL sim to the fiber's reference member is "
-        "below this (real repeats ~0.8-1.0; the 0.5-0.75 band is where a singer's "
-        "varied emphasis / a borderline merge shows — those are what to listen to)",
+        "below this. Calibrated by ear: true repeats (exact OR slightly-varied) "
+        "score ~0.75-0.85, false merges ~0.2-0.4; so pink = the questionable "
+        "0.5-0.65 band, not real repeats.",
     )
     args = p.parse_args(argv)
     want = {s.strip() for s in args.stems.split(",") if s.strip()}
