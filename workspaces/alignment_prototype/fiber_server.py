@@ -37,6 +37,7 @@ if str(_REPO) not in sys.path:
 
 from workspaces.alignment_prototype.path_decode import _ensure_feat  # noqa: E402
 from workspaces.alignment_prototype.ref_fibers import (  # noqa: E402
+    _diag_sim,
     compute_fibers,
     fiber_intervals,
 )
@@ -111,11 +112,14 @@ def build_fibers(set_id, stem, feature, k, min_section, max_refs) -> dict:
         for lab, members in sorted(by_lab.items(), key=lambda kv: -len(kv[1])):
             if len(members) < 2:
                 continue
-            cen = np.mean([_pooled(feat, s, e) for s, e in members], axis=0)
-            cen /= np.linalg.norm(cen) + 1e-9
+            # diagonal sim to the longest member (the calibrated metric; pooled
+            # cosine is fooled — scores 0.9+ on different sections)
+            rs, re = max(members, key=lambda m: m[1] - m[0])
+            ref_feat = np.ascontiguousarray(feat[:, int(rs * FPS) : int(re * FPS)])
             ms = []
             for s, e in members:
-                sim = float(_pooled(feat, s, e) @ cen)
+                seg = np.ascontiguousarray(feat[:, int(s * FPS) : int(e * FPS)])
+                sim = _diag_sim(seg, ref_feat)
                 sid = hashlib.md5(f"{sp}{s}{e}".encode()).hexdigest()[:16]
                 with _lock:
                     _snip_map[sid] = (sp, s, e)
@@ -204,8 +208,8 @@ Hit <b>flag</b> on anything that doesn't belong.</p>
     <input id=ms type=range min=2 max=12 value=4></div>
   <div><label>max refs <span id=mrv>10</span></label>
     <input id=mr type=range min=1 max=30 value=10></div>
-  <div><label>borderline <span id=bv>0.60</span></label>
-    <input id=b type=range min=0 max=100 value=60></div>
+  <div><label>borderline <span id=bv>0.65</span></label>
+    <input id=b type=range min=0 max=100 value=65></div>
   <button id=go>Compute</button><span id=status></span>
 </div>
 <div id=out></div>
