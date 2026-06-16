@@ -54,6 +54,13 @@ from labeling.als_io import (
 
 OUT_DIR = Path(__file__).resolve().parent / "out"
 ALIGNING_ROOT = Path.home() / "aligning"
+# Friendly display names for output filenames (fallback: the set_id itself).
+_SET_DISPLAY = {
+    "1fsnxchk": "BB12",
+    "2nvzlh2k": "BB11",
+    "w1mgcjt": "BB10",
+    "pwgrrb1": "Murph",
+}
 # A dedicated *clean* seed template (one warped audio track + master), NOT the
 # live labeling session — deep-copying the evolving labeling .als crashes Live
 # (accumulated device/automation state). Pin a stable copy here. Recreate from
@@ -457,12 +464,10 @@ def main(argv: list[str] | None = None) -> int:
     for npi in root.findall(".//NextPointeeId"):
         npi.set("Value", str(next(alloc)))
 
-    out_path = args.out or (
-        Path.home()
-        / "Desktop"
-        / f"{args.set_id} predicted review Project"
-        / f"{args.set_id} predicted review.als"
-    )
+    # Default: write the seed straight into the set's aligning folder (alongside
+    # mix/tracks/stems/manifest), the same dir export_als_to_gt --set-dir reads.
+    display = _SET_DISPLAY.get(args.set_id, args.set_id)
+    out_path = args.out or (set_dir / f"{display} align.als")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_bytes(
         gzip.compress(
