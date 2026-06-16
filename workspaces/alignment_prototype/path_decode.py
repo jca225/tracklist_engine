@@ -310,14 +310,13 @@ def trajectory_acc(
     strict = float(near.mean())
     if fiber is None:
         return strict, len(pred_segs), strict
-    from workspaces.alignment_prototype.ref_fibers import fiber_at
+    from workspaces.alignment_prototype.ref_fibers import same_fiber
 
     labels, hz = fiber
+    # same_fiber excludes label -1 (silence / ungrouped): two ungrouped frames
+    # are NOT equivalent, so within-fiber credit only applies to real repeats.
     eq = np.array(
-        [
-            fiber_at(labels, hz, float(p)) == fiber_at(labels, hz, float(gq))
-            for p, gq in zip(pr, gr)
-        ]
+        [same_fiber(labels, hz, float(p), float(gq)) for p, gq in zip(pr, gr)]
     )
     return strict, len(pred_segs), float((near | eq).mean())
 
@@ -494,7 +493,7 @@ def main(argv: list[str] | None = None) -> int:
                 lam_back,
             )
         )
-        meta.append((t, row, str(ref_npy)))
+        meta.append((t, row, str(ref_npy), str(ref_path)))
 
     print(
         f"decoding {len(jobs)} spans ({skipped} no-audio) "
@@ -509,17 +508,23 @@ def main(argv: list[str] | None = None) -> int:
 
     fiber_cache: dict[str, tuple] = {}
 
-    def fibers_for(ref_npy: str):
-        if ref_npy not in fiber_cache:
+    def fibers_for(ref_audio: str):
+        # Fibers ALWAYS on HuBERT + silence-gate — NOT the decode feature: chroma
+        # is too self-similar and blobs the whole track into one fiber (fake 100%
+        # fiber-aware). HuBERT (phonetic) + RMS gating gives real repeat classes.
+        if ref_audio not in fiber_cache:
             from workspaces.alignment_prototype.ref_fibers import compute_fibers
 
-            fiber_cache[ref_npy] = compute_fibers(np.load(ref_npy), FPS, k=args.fiber_k)
-        return fiber_cache[ref_npy]
+            hf = np.load(
+                _ensure_feat(ref_audio, ref_audio, "hubert", args.hubert_layer)
+            )
+            fiber_cache[ref_audio] = compute_fibers(hf, FPS, audio_path=ref_audio)
+        return fiber_cache[ref_audio]
 
     rows = []
-    for (i, *_), (t, row, ref_npy) in zip(jobs, meta):
+    for (i, *_), (t, row, ref_npy, ref_audio) in zip(jobs, meta):
         r = res[i]
-        fib = fibers_for(ref_npy) if args.fibers else None
+        fib = fibers_for(ref_audio) if args.fibers else None
         acc, n_pred, facc = trajectory_acc(r["segs"], row, fiber=fib)
         gt_n = len(row.get("ref_segments") or [1])
         rows.append(
