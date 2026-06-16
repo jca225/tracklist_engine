@@ -190,6 +190,48 @@ def extract_layers(set_dir: Path, als_xml: str) -> list[Layer]:
     return sorted(seen.values(), key=lambda l: (l.num, l.layer))
 
 
+def manifest_layers(set_dir: Path) -> list[Layer]:
+    """Build layers from manifest.json (no .als) for UPFRONT candidate fetch.
+    Rule: a track explicitly labeled acappella -> vocals only; explicitly
+    instrumental -> instrumental only; otherwise (regular) -> BOTH layers (we
+    don't yet know which stem the DJ used). The explicit label is read from the
+    scraped stem-folder/file name (e.g. '... (Acappella)'), since the manifest
+    `stem` axis is 'regular' for the full download."""
+    manifest = json.loads((set_dir / "manifest.json").read_text())
+    out: list[Layer] = []
+    seen: set[tuple[str, str]] = set()
+    for t in manifest.get("tracks", []):
+        folder = None
+        for lyr in ("vocals", "instrumental"):
+            p = (t.get("stems") or {}).get(lyr)
+            if p:
+                folder = Path(p).parent.name
+                break
+        if folder is None and t.get("local_path"):
+            folder = Path(t["local_path"]).stem
+        if not folder:
+            continue
+        f_artist, f_title, f_vtag, f_remixer = _parse_folder(folder)
+        artist = t.get("artist") or f_artist
+        title = t.get("title") or f_title
+        vtag = (t.get("version") or f_vtag or "").lower()
+        tid = t.get("track_id", "")
+        low = folder.lower()
+        if any(s in low for s in ("acapella", "acappella", "a cappella", "vocals only")):
+            want = ["vocals"]
+        elif "instrumental" in low:
+            want = ["instrumental"]
+        else:
+            want = ["vocals", "instrumental"]
+        for lyr in want:
+            key = (folder, lyr)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(Layer(folder, lyr, artist, title, vtag, f_remixer, tid))
+    return sorted(out, key=lambda l: (l.num, l.layer))
+
+
 def _kw_for(layer: str) -> tuple[str, ...]:
     return ("acapella", "acappella", "a cappella", "vocals only", "vocal", "voice track") if layer == "vocals" \
         else ("instrumental", "instr", "inst.")
@@ -404,6 +446,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--set-dir", type=Path, default=DEFAULT_SET)
     p.add_argument("--als", type=Path, default=None, help="Defaults to newest *_fast.als / *.als in the project.")
+    p.add_argument("--from-manifest", action="store_true",
+                   help="Build layers from manifest.json instead of the .als (upfront fetch: "
+                        "both layers for regular tracks, single for explicitly-labeled acap/instr).")
     p.add_argument("--candidates", type=int, default=3, help="Top-N hits to download per layer.")
     p.add_argument("--only", choices=("vocals", "instrumental"), default=None)
     p.add_argument("--filter", default=None, help="Substring on folder name (e.g. '080' or 'Coldplay').")
@@ -444,7 +489,10 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     logging.basicConfig(level=getattr(logging, args.log_level), format="%(asctime)s %(levelname)s: %(message)s")
 
-    all_als_layers = extract_layers(args.set_dir, _load_als_xml(args))
+    if args.from_manifest:
+        all_als_layers = manifest_layers(args.set_dir)
+    else:
+        all_als_layers = extract_layers(args.set_dir, _load_als_xml(args))
     layers = list(all_als_layers)
     if args.only:
         layers = [l for l in layers if l.layer == args.only]
