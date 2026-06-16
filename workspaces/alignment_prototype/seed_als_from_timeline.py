@@ -214,12 +214,14 @@ def doc_max_id(root: etree._Element) -> int:
 
 
 def renumber_pointee_ids(track: etree._Element, alloc) -> None:
-    """Deep-copied tracks share AutomationTarget/ModulationTarget ids; Live
-    requires pointee ids unique document-wide. Re-id every *Target element in
-    the copy and rewrite same-track PointeeId references to match."""
+    """Deep-copied tracks share ids in Live's global *pointee namespace*
+    (governed by NextPointeeId) — every `*Target` AND `<Pointee>` element must be
+    unique document-wide, or Live offers to "fix" and then CRASHES. Re-id every
+    such element in the copy and rewrite same-track PointeeId references to match.
+    (The earlier version missed <Pointee>: 450 duplicated Pointee ids = the crash.)"""
     idmap: dict[str, str] = {}
     for el in track.iter():
-        if el.tag.endswith("Target") and el.get("Id") is not None:
+        if el.get("Id") is not None and (el.tag.endswith("Target") or el.tag == "Pointee"):
             new = str(next(alloc))
             idmap[el.get("Id")] = new
             el.set("Id", new)
