@@ -25,9 +25,10 @@ NOT trustworthy equivalence. Fixes, all validated on his examples:
 Feed HuBERT frames for vocals (phonetic -> robust to a singer varying delivery),
 chroma for harmonic beds.
 
-NOTE: the path_decode "53% -> 70% fiber-aware" figure was measured on the v1
-(over-merged) fibers and is INFLATED — re-measure with this version before
-trusting it.
+NOTE: with these (HuBERT, silence-gated) fibers the path_decode figure is
+53% strict -> 59% fiber-aware (+6pp). The old "70%" was v1 over-merge inflation;
+computing fibers on the chroma decode feature instead blobs to one fiber (fake
+100%) — fibers MUST be HuBERT + silence-gated, never chroma.
 """
 
 from __future__ import annotations
