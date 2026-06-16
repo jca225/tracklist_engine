@@ -242,20 +242,39 @@ def _ref_at(pieces, t: float) -> float:
 
 
 def trajectory_acc(
-    pred_segs, row: dict, tol: float = 2.0, step: float = 1.0
-) -> tuple[float, int]:
-    """Fraction of sampled mix times whose predicted ref position is within
-    `tol` s of GT, plus the predicted segment count."""
+    pred_segs, row: dict, tol: float = 2.0, step: float = 1.0, fiber=None
+) -> tuple[float, int, float]:
+    """(strict_acc, n_pred_segments, fiber_acc).
+
+    strict_acc = fraction of sampled mix times whose predicted ref is within
+    `tol` s of GT. fiber_acc additionally credits a sample when predicted and
+    GT ref fall in the SAME self-repeat class (fiber=(labels, label_hz)) — i.e.
+    the decoder picked a different-but-equivalent repeat. With no fiber it
+    equals strict_acc."""
     s0, s1 = float(row["set_start_s"]), float(row["set_end_s"])
     if s1 <= s0 or not pred_segs:
-        return 0.0, len(pred_segs)
+        return 0.0, len(pred_segs), 0.0
     gt = _gt_pieces(row)
     slope = float(row.get("tempo_ratio") or 1.0)
     # decode_path returns mix-start RELATIVE to the span, ref times absolute
     pred = _pieces([(s0 + ms, rs, re) for (ms, rs, re) in pred_segs], s0, s1, slope)
     ts = np.arange(s0, s1, step)
-    errs = np.array([abs(_ref_at(pred, t) - _ref_at(gt, t)) for t in ts])
-    return float((errs < tol).mean()), len(pred_segs)
+    pr = np.array([_ref_at(pred, t) for t in ts])
+    gr = np.array([_ref_at(gt, t) for t in ts])
+    near = np.abs(pr - gr) < tol
+    strict = float(near.mean())
+    if fiber is None:
+        return strict, len(pred_segs), strict
+    from workspaces.alignment_prototype.ref_fibers import fiber_at
+
+    labels, hz = fiber
+    eq = np.array(
+        [
+            fiber_at(labels, hz, float(p)) == fiber_at(labels, hz, float(gq))
+            for p, gq in zip(pr, gr)
+        ]
+    )
+    return strict, len(pred_segs), float((near | eq).mean())
 
 
 def _span_class(row: dict) -> str:
@@ -314,6 +333,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--lam", type=float, default=0.15, help="section-jump penalty")
     p.add_argument("--window-s", type=float, default=12.0, help="matched-filter window")
     p.add_argument("--hop-s", type=float, default=2.0, help="window hop")
+    p.add_argument(
+        "--fibers",
+        action="store_true",
+        help="also report fiber-aware accuracy (credit same self-repeat class — "
+        "isolates true placement error from within-fiber repeat ambiguity)",
+    )
+    p.add_argument("--fiber-k", type=int, default=6, help="sections per ref")
     p.add_argument("--workers", type=int, default=8)
     args = p.parse_args(argv)
     if not args.eval:
@@ -400,7 +426,7 @@ def main(argv: list[str] | None = None) -> int:
         wlen = int(args.window_s * FPS)
         hop = int(args.hop_s * FPS)
         jobs.append((i, str(mnpy), a, n, str(ref_npy), stretches, args.lam, wlen, hop))
-        meta.append((t, row))
+        meta.append((t, row, str(ref_npy)))
 
     print(
         f"decoding {len(jobs)} spans ({skipped} no-audio) "
@@ -413,10 +439,20 @@ def main(argv: list[str] | None = None) -> int:
             if (k + 1) % 25 == 0:
                 print(f"  {k + 1}/{len(jobs)}")
 
+    fiber_cache: dict[str, tuple] = {}
+
+    def fibers_for(ref_npy: str):
+        if ref_npy not in fiber_cache:
+            from workspaces.alignment_prototype.ref_fibers import compute_fibers
+
+            fiber_cache[ref_npy] = compute_fibers(np.load(ref_npy), FPS, k=args.fiber_k)
+        return fiber_cache[ref_npy]
+
     rows = []
-    for (i, *_), (t, row) in zip(jobs, meta):
+    for (i, *_), (t, row, ref_npy) in zip(jobs, meta):
         r = res[i]
-        acc, n_pred = trajectory_acc(r["segs"], row)
+        fib = fibers_for(ref_npy) if args.fibers else None
+        acc, n_pred, facc = trajectory_acc(r["segs"], row, fiber=fib)
         gt_n = len(row.get("ref_segments") or [1])
         rows.append(
             (
@@ -427,6 +463,7 @@ def main(argv: list[str] | None = None) -> int:
                 gt_n,
                 t.slot_label,
                 t.label or "",
+                facc,
             )
         )
 
@@ -434,9 +471,13 @@ def main(argv: list[str] | None = None) -> int:
         if not sel:
             return
         acc = np.array([r[2] for r in sel])
+        extra = ""
+        if args.fibers:
+            facc = np.array([r[7] for r in sel])
+            extra = f"   ||  fiber-aware mean {100 * facc.mean():3.0f}%"
         print(
             f"  {name:20} n={len(sel):3}  traj-acc(<2s) mean {100 * acc.mean():3.0f}%  "
-            f">=80% covered: {100 * (acc >= 0.8).mean():3.0f}%"
+            f">=80% covered: {100 * (acc >= 0.8).mean():3.0f}%{extra}"
         )
 
     print(f"\n=== path decode — trajectory accuracy ({args.feature}) ===")
