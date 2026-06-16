@@ -128,6 +128,10 @@ def rewrite_clip(
     ref_end_s: float,
 ) -> None:
     arr_len = arr_end - arr_start
+    # Time attr = the clip's ARRANGEMENT position (beats); Ableton positions by
+    # this, not CurrentStart. The template clip's Time is inherited by every
+    # deep-copy, so without this every clip stacks at the template's beat.
+    clip.set("Time", f"{arr_start:.6f}")
     _set_value(clip, "CurrentStart", f"{arr_start:.6f}")
     _set_value(clip, "CurrentEnd", f"{arr_end:.6f}")
     _set_value(clip, "Name", name)
