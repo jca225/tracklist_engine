@@ -144,6 +144,7 @@ def rewrite_clip(
     sample_rate: int,
     ref_start_s: float,
     ref_end_s: float,
+    is_warped: bool = True,
 ) -> None:
     arr_len = arr_end - arr_start
     # Time attr = the clip's ARRANGEMENT position (beats); Ableton positions by
@@ -154,7 +155,10 @@ def rewrite_clip(
     _set_value(clip, "CurrentEnd", f"{arr_end:.6f}")
     _set_value(clip, "Name", name)
     _set_value(clip, "Color", str(color))
-    _set_value(clip, "IsWarped", "true")
+    # The mix is placed UNWARPED so it plays at natural real time — a fixed,
+    # tempo-agnostic "ruler" (1 beat = 1 s at the 60-BPM grid). Layer clips stay
+    # warped so they stretch onto their ref sections.
+    _set_value(clip, "IsWarped", "true" if is_warped else "false")
     _set_value(clip, "PitchCoarse", "0")
     _set_value(clip, "PitchFine", "0")
     _set_value(clip, "Disabled", "false")
@@ -274,37 +278,46 @@ def pick_audio(span: dict, track: dict) -> Path | None:
     return p if p.is_file() else None
 
 
+def _track_bpm(track: dict | None) -> float | None:
+    """Per-track BPM from the M4A iTunes 'tmpo' tag (written by
+    tag_aligning_folder, Essentia-accurate) — set-agnostic, unlike the BB12-only
+    [NNNbpm] filename convention. Falls through the 'essentia bpm=' comment."""
+    if not track:
+        return None
+    p = Path(track.get("local_path") or "")
+    if not p.is_file():
+        return None
+    try:
+        from mutagen.mp4 import MP4
+
+        tags = MP4(str(p)).tags or {}
+        if tags.get("tmpo"):
+            return float(tags["tmpo"][0])
+        cmt = str((tags.get("\xa9cmt") or [""])[0])
+        import re as _re
+
+        m = _re.search(r"bpm=(\d+(?:\.\d+)?)", cmt)
+        if m:
+            return float(m.group(1))
+    except Exception:
+        pass
+    return None
+
+
 def add_tempo_and_markers(
-    root, spans: list[dict], set_id: str, set_dir: Path
+    root, spans: list[dict], set_id: str, set_dir: Path, by_tid: dict
 ) -> tuple[int, int]:
-    """Overlay a reference tempo curve + BPM markers on the rebuilt session.
+    """Mark every song on the fixed real-time ruler (the unwarped mix).
 
-    Same enhancement as the BB12 in-place file, but on a freshly rebuilt set:
-    piecewise-constant BPM from the bed spans (per-track [NNNbpm] tags x
-    tempo_ratio, octave-guarded), placed on the 60-BPM beat=second grid the clips
-    sit on, plus a BPM-labelled marker at each change. Best-effort: returns (0, 0)
-    and skips if the mix beat grid (data/analysis/<set>_measure_times.json) or the
-    bed spans are unavailable. Reuses the BB12 helpers, so behaviour matches.
+    One arrangement locator per bed span at its mix-second (60-BPM grid =>
+    beat=second), labelled with that song's BPM read from the M4A iTunes tag
+    (accurate, every song — not the BB12-only filename convention, which left the
+    back half un-marked). No tempo automation: an unwarped-mix ruler and live
+    tempo automation are mutually exclusive, so BPM lives in the readout, not by
+    warping time. Best-effort: returns 0 if no bed spans. Returns marker count.
     """
-    import numpy as np
+    from labeling.als_io import write_locators
 
-    from labeling.als_io import write_locators, write_tempo_envelope
-    from workspaces.alignment_prototype.seed_tempo_test import (
-        grid_bpm,
-        slot_bpm_map,
-        stepped_points,
-    )
-
-    mpath = _REPO / f"data/analysis/{set_id}_measure_times.json"
-    if not mpath.is_file():
-        return 0, 0
-    raw = json.loads(mpath.read_text())
-    times = (
-        raw
-        if isinstance(raw, list)
-        else (raw.get("measure_times") or raw.get("beats") or next(iter(raw.values())))
-    )
-    times = [float(x) for x in times]
     bed = sorted(
         (
             s
@@ -314,53 +327,21 @@ def add_tempo_and_markers(
         ),
         key=lambda s: float(s["set_start_s"]),
     )
-    if len(times) < 2 or not bed:
+    if not bed:
         return 0, 0
 
-    slot_bpm = slot_bpm_map(set_dir / "tracks")
-    ts, bp = grid_bpm(times, 4)
-    ts_a, bp_a = np.array(ts), np.array(bp)
-    natives = [
-        slot_bpm[str(s.get("slot_label"))]
-        for s in bed
-        if str(s.get("slot_label")) in slot_bpm
-    ]
-    ref = float(np.median(natives)) if natives else 128.0
-
-    raw_seg: list[tuple[float, float]] = []
+    markers: list[tuple[float, str]] = []
     for s in bed:
-        native = slot_bpm.get(str(s.get("slot_label")))
-        if native is not None:
-            val = native * float(s.get("tempo_ratio") or 1.0)
-        else:  # untagged slot: robust grid median over the span
-            lo, hi = float(s["set_start_s"]), float(s["set_end_s"])
-            m = bp_a[(ts_a >= lo) & (ts_a < hi)]
-            val = float(np.median(m)) if m.size else ref
-        while (
-            val > ref * 1.35
-        ):  # one-directional octave guard (never raises a low value)
-            val /= 2.0
-        raw_seg.append((float(s["set_start_s"]), round(val)))
-
-    segs: list[list] = []
-    for i, (st, val) in enumerate(raw_seg):
-        end = raw_seg[i + 1][0] if i + 1 < len(raw_seg) else times[-1]
-        if end <= st:
-            continue
-        if segs and segs[-1][2] == val:
-            segs[-1][1] = end
-        else:
-            segs.append([st, end, val])
-    fseg = [(float(s), float(e), float(v)) for s, e, v in segs]
+        bpm = _track_bpm(by_tid.get(s.get("recording_id")))
+        name = str(s.get("name") or s.get("slot_label") or "")
+        label = f"{bpm:.0f} BPM — {name}" if bpm else name
+        markers.append((float(s["set_start_s"]), label))
     try:
-        n_t = write_tempo_envelope(root, stepped_points(fseg))
-        n_m = write_locators(root, [(s, f"{v:.0f} BPM") for (s, e, v) in fseg])
-    except (
-        Exception
-    ) as exc:  # template lacks a tempo/locator block — skip, keep the seed
-        print(f"  tempo/markers skipped: {exc}", file=sys.stderr)
+        n_m = write_locators(root, markers)
+    except Exception as exc:  # template lacks a locator block — skip, keep the seed
+        print(f"  markers skipped: {exc}", file=sys.stderr)
         return 0, 0
-    return n_t, n_m
+    return 0, n_m
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -393,9 +374,19 @@ def main(argv: list[str] | None = None) -> int:
         if t.tag in ("AudioTrack", "GroupTrack", "MidiTrack"):
             tracks_node.remove(t)
 
-    # global tempo: 60 BPM (1 beat = 1 s)
-    for tempo_manual in root.xpath(".//MasterTrack//Tempo/Manual"):
-        tempo_manual.set("Value", f"{_TEMPO_BPM:.1f}")
+    # Global tempo: a FLAT 60 BPM (1 beat = 1 s). The unwarped-mix ruler only
+    # works at exactly 60 — at any other tempo the native-rate mix and the
+    # beat=second clip grid diverge (a leftover template tempo automation made
+    # the mix span ~2x the beats, so clips covered only its first ~half).
+    # write_tempo_envelope sets Manual AND replaces any drawn tempo automation
+    # with a flat line, so nothing overrides 60.
+    try:
+        from labeling.als_io import write_tempo_envelope
+
+        write_tempo_envelope(root, [(0.0, _TEMPO_BPM)])
+    except Exception:
+        for tempo_manual in root.xpath(".//MasterTrack//Tempo/Manual"):
+            tempo_manual.set("Value", f"{_TEMPO_BPM:.1f}")
 
     import itertools
 
@@ -415,6 +406,7 @@ def main(argv: list[str] | None = None) -> int:
         sample_rate=mix_sr,
         ref_start_s=0.0,
         ref_end_s=mix_dur,
+        is_warped=False,  # the mix is the fixed real-time ruler
     )
     renumber_pointee_ids(mix_track, alloc)
     tracks_node.insert(0, mix_track)
@@ -457,13 +449,9 @@ def main(argv: list[str] | None = None) -> int:
         if (i + 1) % 30 == 0:
             print(f"  placed {i + 1}/{len(spans)}")
 
-    # reference tempo curve + BPM markers (same enhancement as the BB12 file)
-    n_t, n_m = add_tempo_and_markers(root, spans, args.set_id, set_dir)
-    print(
-        f"tempo curve: {n_t} points + {n_m} BPM markers"
-        if n_t
-        else "tempo/markers skipped (no measure grid for this set)"
-    )
+    # one BPM marker per song on the unwarped-mix real-time ruler
+    _, n_m = add_tempo_and_markers(root, spans, args.set_id, set_dir, by_tid)
+    print(f"placed {n_m} per-song BPM markers (unwarped mix ruler)")
 
     # Live requires NextPointeeId above every pointee id in the document.
     for npi in root.findall(".//NextPointeeId"):
