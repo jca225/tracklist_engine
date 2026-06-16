@@ -3,6 +3,7 @@
 Uses `lxml` (Py3.14 venv lacks working stdlib expat). Always re-read the
 `.als` from disk — never cache a parse across runs.
 """
+
 from __future__ import annotations
 
 import gzip
@@ -94,15 +95,19 @@ class ArrangementMapper:
     mix_duration_s: float
 
     @classmethod
-    def from_mix_track(cls, mix_track: etree._Element, *, mix_duration_s: float) -> ArrangementMapper:
+    def from_mix_track(
+        cls, mix_track: etree._Element, *, mix_duration_s: float
+    ) -> ArrangementMapper:
         spans: list[MixClipSpan] = []
         for clip in mix_track.xpath(".//AudioClip"):
-            spans.append(MixClipSpan(
-                arr_start=float(clip.find("CurrentStart").get("Value")),
-                arr_end=float(clip.find("CurrentEnd").get("Value")),
-                loop_start=float(clip.find(".//Loop/LoopStart").get("Value")),
-                warp=WarpMarkers.from_clip(clip),
-            ))
+            spans.append(
+                MixClipSpan(
+                    arr_start=float(clip.find("CurrentStart").get("Value")),
+                    arr_end=float(clip.find("CurrentEnd").get("Value")),
+                    loop_start=float(clip.find(".//Loop/LoopStart").get("Value")),
+                    warp=WarpMarkers.from_clip(clip),
+                )
+            )
         spans.sort(key=lambda s: s.arr_start)
         return cls(spans=tuple(spans), mix_duration_s=mix_duration_s)
 
@@ -207,20 +212,24 @@ def _split_monotonic_arr_interval(
     sec_lo = mapper.arr_to_set_sec(arr_lo)
     sec_hi = mapper.arr_to_set_sec(arr_hi)
     if sec_lo is not None and sec_hi is not None and sec_hi >= sec_lo:
-        return (replace(
-            clip,
-            arr_start=arr_lo,
-            arr_end=arr_hi,
-            loop_start=clip.loop_start + (arr_lo - clip.arr_start),
-        ),)
+        return (
+            replace(
+                clip,
+                arr_start=arr_lo,
+                arr_end=arr_hi,
+                loop_start=clip.loop_start + (arr_lo - clip.arr_start),
+            ),
+        )
     splice = _find_mix_splice_beat(mapper, arr_lo, arr_hi)
     if splice is None or splice <= arr_lo + 1e-6 or splice >= arr_hi - 1e-6:
-        return (replace(
-            clip,
-            arr_start=arr_lo,
-            arr_end=arr_hi,
-            loop_start=clip.loop_start + (arr_lo - clip.arr_start),
-        ),)
+        return (
+            replace(
+                clip,
+                arr_start=arr_lo,
+                arr_end=arr_hi,
+                loop_start=clip.loop_start + (arr_lo - clip.arr_start),
+            ),
+        )
     left_end = splice - 1e-4
     if left_end <= arr_lo + 1e-6:
         return _split_monotonic_arr_interval(clip, mapper, splice, arr_hi)
@@ -236,9 +245,7 @@ def split_clip_at_mix_span_edges(
 ) -> tuple[ParsedClip, ...]:
     """Split a layer clip when mix-second mapping jumps at a ``1-mix`` splice."""
     parts = _split_monotonic_arr_interval(clip, mapper, clip.arr_start, clip.arr_end)
-    return tuple(
-        p for p in parts if p.arr_end - p.arr_start > 1e-6
-    ) or (clip,)
+    return tuple(p for p in parts if p.arr_end - p.arr_start > 1e-6) or (clip,)
 
 
 @dataclass(frozen=True)
@@ -351,7 +358,11 @@ def match_manifest_for_path(path: str, manifest: ManifestIndex) -> ManifestSlot 
     for row in manifest.rows:
         if not row.local_path:
             continue
-        stem_root = _normalize_path(row.local_path).replace("/tracks/", "/stems/").rsplit(".", 1)[0]
+        stem_root = (
+            _normalize_path(row.local_path)
+            .replace("/tracks/", "/stems/")
+            .rsplit(".", 1)[0]
+        )
         if norm.startswith(stem_root + "/"):
             return row
 
@@ -442,6 +453,7 @@ def display_from_path(path: str) -> str:
 
 def labels_overlap(left: str, right: str, *, min_tokens: int = 2) -> bool:
     """True when two display labels share enough distinctive tokens."""
+
     def _tokens(label: str) -> set[str]:
         cleaned = re.sub(r"[^\w\s]", " ", label.lower())
         return {w for w in cleaned.split() if len(w) > 2}
@@ -475,7 +487,9 @@ def volume_automation_id(track_el: etree._Element) -> str | None:
     return at.get("Id") if at is not None else None
 
 
-def envelope_value(pts: tuple[tuple[float, float], ...] | list[tuple[float, float]], x: float) -> float:
+def envelope_value(
+    pts: tuple[tuple[float, float], ...] | list[tuple[float, float]], x: float
+) -> float:
     if not pts:
         return 1.0
     if x <= pts[0][0]:
@@ -547,19 +561,23 @@ def parse_layer_clips(root: etree._Element) -> list[ParsedClip]:
             pf_el = clip_el.find("PitchFine")
             vol_id = volume_automation_id(track_el)
             vol_pts = tuple(vol_envs.get(vol_id, ())) if vol_id else ()
-            out.append(ParsedClip(
-                group_name=current_group or "",
-                track_name=track_name,
-                path=path,
-                arr_start=float(cs_el.get("Value")),
-                arr_end=float(ce_el.get("Value")),
-                loop_start=float(ls_el.get("Value")),
-                loop_end=float(le_el.get("Value")),
-                pitch_coarse=int(pc_el.get("Value") or 0) if pc_el is not None else 0,
-                pitch_fine=int(pf_el.get("Value") or 0) if pf_el is not None else 0,
-                warp=WarpMarkers.from_clip(clip_el),
-                vol_points=vol_pts,
-            ))
+            out.append(
+                ParsedClip(
+                    group_name=current_group or "",
+                    track_name=track_name,
+                    path=path,
+                    arr_start=float(cs_el.get("Value")),
+                    arr_end=float(ce_el.get("Value")),
+                    loop_start=float(ls_el.get("Value")),
+                    loop_end=float(le_el.get("Value")),
+                    pitch_coarse=int(pc_el.get("Value") or 0)
+                    if pc_el is not None
+                    else 0,
+                    pitch_fine=int(pf_el.get("Value") or 0) if pf_el is not None else 0,
+                    warp=WarpMarkers.from_clip(clip_el),
+                    vol_points=vol_pts,
+                )
+            )
     return out
 
 
@@ -648,3 +666,49 @@ def write_tempo_envelope(
     if manual is not None:
         manual.set("Value", f"{first_bpm:.6f}")
     return len(pts)
+
+
+def write_locators(root: etree._Element, markers: list[tuple[float, float]]) -> int:
+    """Replace the arrangement Locators (markers) with `(beat_time, name)` pairs.
+
+    Clones the document's own <Locator> element when present so the schema matches
+    Live exactly (versions differ). Times are arrangement beats. Returns count.
+    `name` is a float here only by signature convenience — callers pass
+    (beat, label_str); we coerce label to str.
+    """
+    container = root.find(".//Locators/Locators")
+    if container is None:
+        outer = root.find(".//Locators")
+        if outer is None:
+            raise ValueError("no Locators block in document")
+        container = outer
+    existing = container.findall("Locator")
+    proto = existing[0] if existing else None
+    for loc in existing:
+        container.remove(loc)
+    from copy import deepcopy
+
+    for i, (beat, name) in enumerate(sorted(markers, key=lambda m: m[0])):
+        if proto is not None:
+            el = deepcopy(proto)
+        else:
+            el = etree.SubElement(container, "Locator")
+            for tag in ("LomId", "Time", "Name", "Annotation", "IsSongStart"):
+                etree.SubElement(el, tag)
+            container.remove(el)
+        el.set("Id", str(i))
+
+        def _set(tag: str, val: str, _el=el) -> None:
+            e = _el.find(tag)
+            if e is None:
+                e = etree.SubElement(_el, tag)
+            e.set("Value", val)
+
+        _set("Time", f"{max(0.0, beat):.6f}")
+        _set("Name", str(name))
+        _set("IsSongStart", "false")
+        lom = el.find("LomId")
+        if lom is not None:
+            lom.set("Value", "0")
+        container.append(el)
+    return len(markers)
