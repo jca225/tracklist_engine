@@ -34,3 +34,7 @@ workspaces/msst_webui/
 workspaces/separation_qa/smoke_out/
 workspaces/separation_qa/smoke_run.log
 workspaces/alignment_prototype/.cache/
+workspaces/alignment_prototype/.feat_cache/
+workspaces/alignment_prototype/out/
+workspaces/section_hsmm/.cache/
+workspaces/section_hsmm/out/

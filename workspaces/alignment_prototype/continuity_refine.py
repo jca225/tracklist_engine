@@ -29,6 +29,7 @@ Usage:
     venvs/audio/bin/python -m workspaces.alignment_prototype.continuity_refine \\
         --eval [--probes 5] [--window-s 12] [--workers 8]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -45,16 +46,58 @@ if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
 from workspaces.alignment_prototype.refine_ref_offsets import (  # noqa: E402
-    HOP, SR, STRETCHES, _MIX_SOURCE, _STEM_FILE,
-    chroma, detect_offset, find_aligning_dir,
+    HOP,
+    SR,
+    STRETCHES,
+    _MIX_SOURCE,
+    _STEM_FILE,
+    chroma,
+    detect_offset,
+    find_aligning_dir,
 )
 
 _EQ_DELTA = 0.04  # GT scores within this of the peak => content-identical repeat
+
+# --- HuBERT-frame feature option ------------------------------------------
+# Chroma can't separate verse 1 from verse 2 (same melody) — the dominant
+# "which section" failure on acappellas. HuBERT frame embeddings match on
+# *what is sung* (lyrics are the most position-specific signal a vocal has),
+# so they sharpen the diagonal where chroma is flat. Drop-in for chroma: same
+# (D, T) matched-filter contract on the SR/HOP grid. Expensive (torch/MPS, not
+# fork-safe), so features are precomputed serially in the parent and cached to
+# disk; workers only np.load the cached array.
+_FEAT_CACHE = _REPO / "workspaces/alignment_prototype/.feat_cache"
+
+
+def _hubert_cache_path(path, layer: int) -> Path:
+    import hashlib
+
+    key = hashlib.md5(str(path).encode()).hexdigest()[:16]
+    return _FEAT_CACHE / f"{key}_hubertL{layer}.npy"
+
+
+def _compute_hubert(path, layer: int) -> np.ndarray:
+    """(768, T) HuBERT frames on the SR/HOP grid, cached to disk by path."""
+    cf = _hubert_cache_path(path, layer)
+    if cf.is_file():
+        return np.load(cf)
+    import librosa
+
+    from workspaces.section_hsmm.similarity_probe import _hubert
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        y, _ = librosa.load(str(path), sr=SR, mono=True)
+    f = _hubert(y, layer)
+    _FEAT_CACHE.mkdir(parents=True, exist_ok=True)
+    np.save(cf, f)
+    return f
 
 
 def _scores_at_stretch(win_f: np.ndarray, ref_f: np.ndarray, st: float) -> np.ndarray:
     """Full normalized matched-filter curve of one window over the whole ref."""
     from scipy.signal import fftconvolve
+
     n = win_f.shape[1]
     m = int(round(n * st))
     idx = np.clip((np.arange(m) / st).astype(int), 0, n - 1)
@@ -63,7 +106,7 @@ def _scores_at_stretch(win_f: np.ndarray, ref_f: np.ndarray, st: float) -> np.nd
     if ref_f.shape[1] <= m:
         return np.zeros(0, np.float32)
     num = fftconvolve(ref_f, w[:, ::-1], mode="valid", axes=1).sum(axis=0)
-    e = np.concatenate([[0.0], np.cumsum((ref_f ** 2).sum(axis=0))])
+    e = np.concatenate([[0.0], np.cumsum((ref_f**2).sum(axis=0))])
     den = np.sqrt(np.maximum(e[m:] - e[:-m], 1e-9))
     return (num / den).astype(np.float32)
 
@@ -72,7 +115,9 @@ TRIM = 1  # drop this many lowest-scoring probes per r0 (robust to 1 bad probe)
 
 
 def stack_curves(
-    curves: list[np.ndarray], shifts: list[int], trim: int = TRIM,
+    curves: list[np.ndarray],
+    shifts: list[int],
+    trim: int = TRIM,
     band_frames: int = 0,
 ) -> tuple[np.ndarray, int]:
     """Shift-and-add probe curves onto the shared clip-start (r0) axis.
@@ -97,11 +142,12 @@ def stack_curves(
         return np.zeros(0, np.float32), max_shift
     if band_frames > 0:
         from scipy.ndimage import maximum_filter1d
+
         aligned = [(maximum_filter1d(c, 2 * band_frames + 1), s) for c, s in aligned]
     L = min(c.shape[0] - s for c, s in aligned)
     if L <= 0:
         return np.zeros(0, np.float32), max_shift
-    m = np.stack([c[s:s + L] for c, s in aligned]).astype(np.float64)  # (k, L)
+    m = np.stack([c[s : s + L] for c, s in aligned]).astype(np.float64)  # (k, L)
     k = m.shape[0]
     t = min(trim, max(0, k - 2)) if k >= 3 else 0
     if t > 0:
@@ -110,8 +156,10 @@ def stack_curves(
 
 
 def _stack_offset(
-    windows: list[tuple[int, np.ndarray]], ref_f: np.ndarray,
-    stretches: tuple[float, ...], band_frames: int = 0,
+    windows: list[tuple[int, np.ndarray]],
+    ref_f: np.ndarray,
+    stretches: tuple[float, ...],
+    band_frames: int = 0,
 ) -> tuple[float, float, float]:
     """(clip_ref_start_s, joint_peak, stretch) over the stretch band."""
     best = (0.0, -2.0, 1.0)
@@ -135,8 +183,11 @@ def _stack_offset(
 
 
 def _stack_score_at(
-    windows: list[tuple[int, np.ndarray]], ref_f: np.ndarray,
-    stretch: float, r0_s: float, band_frames: int = 0,
+    windows: list[tuple[int, np.ndarray]],
+    ref_f: np.ndarray,
+    stretch: float,
+    r0_s: float,
+    band_frames: int = 0,
 ) -> float:
     """Joint (mean) score of the line with intercept r0_s at a fixed stretch."""
     curves, shifts = [], []
@@ -155,12 +206,16 @@ def _stack_score_at(
 
 def _job(args: tuple) -> dict:
     """Worker: baseline (mid probe argmax) + stacked decode for one span."""
-    idx, ref_path, win_list, mid_k, stretches, gt_ref_start, band_frames = args
-    import librosa
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        ref_y, _ = librosa.load(ref_path, sr=SR, mono=True)
-    ref_f = chroma(ref_y)
+    idx, ref_path, win_list, mid_k, stretches, gt_ref_start, band_frames, feature = args
+    if feature == "hubert":
+        ref_f = np.load(ref_path)  # ref_path is the cached feature .npy
+    else:
+        import librosa
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            ref_y, _ = librosa.load(ref_path, sr=SR, mono=True)
+        ref_f = chroma(ref_y)
     windows = [(int(dt), np.asarray(w, dtype=np.float32)) for dt, w in win_list]
 
     # baseline: single mid-span window, exactly as the production refiner /
@@ -175,14 +230,21 @@ def _job(args: tuple) -> dict:
     base_gt = _scores_at_stretch(mid_win, ref_f, b_stretch)
     kg = int(round((gt_ref_start + (mid_dt * HOP / SR) * b_stretch) * SR / HOP))
     base_score_gt = float(base_gt[kg]) if 0 <= kg < base_gt.size else float("nan")
-    stack_score_gt = _stack_score_at(windows, ref_f, s_stretch, gt_ref_start, band_frames)
+    stack_score_gt = _stack_score_at(
+        windows, ref_f, s_stretch, gt_ref_start, band_frames
+    )
 
     return {
-        "idx": idx, "n_probes": len(windows),
-        "base_r0": round(base_r0, 3), "base_peak": round(peak, 3),
-        "base_score_gt": base_score_gt, "base_stretch": b_stretch,
-        "stack_r0": round(r0, 3), "stack_peak": round(jpeak, 3),
-        "stack_score_gt": stack_score_gt, "stack_stretch": s_stretch,
+        "idx": idx,
+        "n_probes": len(windows),
+        "base_r0": round(base_r0, 3),
+        "base_peak": round(peak, 3),
+        "base_score_gt": base_score_gt,
+        "base_stretch": b_stretch,
+        "stack_r0": round(r0, 3),
+        "stack_peak": round(jpeak, 3),
+        "stack_score_gt": stack_score_gt,
+        "stack_stretch": s_stretch,
     }
 
 
@@ -220,6 +282,7 @@ def _xchan_job(args: tuple) -> dict:
     """Stack every available channel for one span; return per-channel results."""
     idx, gt_ref_start, channels = args
     import librosa
+
     out = []
     for name, ref_path, win_list, stretches, band in channels:
         with warnings.catch_warnings():
@@ -229,13 +292,28 @@ def _xchan_job(args: tuple) -> dict:
         windows = [(int(dt), np.asarray(w, dtype=np.float32)) for dt, w in win_list]
         b = _stack_best(windows, ref_f, tuple(stretches), band)
         if b is None:
-            out.append({"ch": name, "err": float("nan"), "peak": float("nan"),
-                        "prom": float("nan"), "z": float("nan"), "r0": float("nan")})
+            out.append(
+                {
+                    "ch": name,
+                    "err": float("nan"),
+                    "peak": float("nan"),
+                    "prom": float("nan"),
+                    "z": float("nan"),
+                    "r0": float("nan"),
+                }
+            )
         else:
             r0, pk, prom, _st, z = b
-            out.append({"ch": name, "err": abs(r0 - gt_ref_start),
-                        "peak": round(pk, 3), "prom": round(prom, 3),
-                        "z": round(z, 3), "r0": round(r0, 3)})
+            out.append(
+                {
+                    "ch": name,
+                    "err": abs(r0 - gt_ref_start),
+                    "peak": round(pk, 3),
+                    "prom": round(prom, 3),
+                    "z": round(z, 3),
+                    "r0": round(r0, 3),
+                }
+            )
     return {"idx": idx, "channels": out}
 
 
@@ -286,7 +364,7 @@ def _windows_from(mc: np.ndarray, set_start_s: float, dts: list[float], n: int):
     for dt in dts:
         a = int((set_start_s + dt) * SR / HOP)
         a = min(a, max(0, mc.shape[1] - n))
-        w = mc[:, a:a + n]
+        w = mc[:, a : a + n]
         if w.shape[1] >= n // 2:
             wl.append((int(round(dt * SR / HOP)), w.tolist()))
     return wl
@@ -294,14 +372,23 @@ def _windows_from(mc: np.ndarray, set_start_s: float, dts: list[float], n: int):
 
 # mix-channel chroma key + ref-side audio resolver per channel
 _CHANNELS = (
-    ("regular", "regular", None),          # full mix vs full ref track
+    ("regular", "regular", None),  # full mix vs full ref track
     ("acappella", "acappella", "vocals"),  # mix vocals vs ref vocals stem
     ("instrumental", "instrumental", "instrumental"),
 )
 
 
-def _run_cross_channel(args, targets, src_by_key, linear_by_key, by_tid,
-                       mix_chroma, mix_series, ref_series, n) -> int:
+def _run_cross_channel(
+    args,
+    targets,
+    src_by_key,
+    linear_by_key,
+    by_tid,
+    mix_chroma,
+    mix_series,
+    ref_series,
+    n,
+) -> int:
     """Heuristic #2/#6: per span, stack every channel whose mix + ref audio both
     exist; flag where the best-localizing (or most-prominent) channel disagrees
     with claimed_stem. The audio, not the label, names the stem."""
@@ -341,8 +428,7 @@ def _run_cross_channel(args, targets, src_by_key, linear_by_key, by_tid,
         jobs.append((i, t.ref_start_s, chans))
         meta.append(t)
 
-    print(f"cross-channel on {len(jobs)} spans (>=2 channels each; "
-          f"{skipped} skipped)…")
+    print(f"cross-channel on {len(jobs)} spans (>=2 channels each; {skipped} skipped)…")
     res = {}
     with ProcessPoolExecutor(max_workers=args.workers) as ex:
         for k, r in enumerate(ex.map(_xchan_job, jobs, chunksize=2)):
@@ -368,42 +454,75 @@ def _run_cross_channel(args, targets, src_by_key, linear_by_key, by_tid,
     agree_err = sum(1 for r in rows if r[3] == r[1])
     agree_prom = sum(1 for r in rows if r[4] == r[1])
     prom_matches_err = sum(1 for r in rows if r[3] == r[4])
-    print(f"n={len(rows)}   claimed==best-by-error: {agree_err}/{len(rows)}"
-          f"   claimed==best-by-prominence: {agree_prom}/{len(rows)}"
-          f"   prominence agrees with oracle: {prom_matches_err}/{len(rows)}")
+    print(
+        f"n={len(rows)}   claimed==best-by-error: {agree_err}/{len(rows)}"
+        f"   claimed==best-by-prominence: {agree_prom}/{len(rows)}"
+        f"   prominence agrees with oracle: {prom_matches_err}/{len(rows)}"
+    )
 
     flagged = [r for r in rows if r[4] != r[1]]
     print(f"\nFLAGGED (best-by-prominence != claimed) — {len(flagged)}:")
-    print(f"{'slot':6} {'claimed':11} {'best_prom':11} {'best_err':11} "
-          f"{'claim_err':>9} {'alt_err':>8}  label")
+    print(
+        f"{'slot':6} {'claimed':11} {'best_prom':11} {'best_err':11} "
+        f"{'claim_err':>9} {'alt_err':>8}  label"
+    )
     for t, claimed, chans, best_err, best_prom in flagged:
         ce = chans[claimed]["err"]
         ae = chans[best_prom]["err"]
-        print(f"{t.slot_label:6} {claimed:11} {best_prom:11} {best_err:11} "
-              f"{ce:9.1f} {ae:8.1f}  {(t.label or '')[:34]}")
+        print(
+            f"{t.slot_label:6} {claimed:11} {best_prom:11} {best_err:11} "
+            f"{ce:9.1f} {ae:8.1f}  {(t.label or '')[:34]}"
+        )
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--eval", action="store_true", help="score vs BB12 GT")
-    p.add_argument("--gt", type=Path,
-                   default=_REPO / "labeling/fixtures/bb12_ground_truth.yaml")
+    p.add_argument(
+        "--gt", type=Path, default=_REPO / "labeling/fixtures/bb12_ground_truth.yaml"
+    )
     p.add_argument("--window-s", type=float, default=12.0)
     p.add_argument("--probes", type=int, default=5, help="max probe windows/span")
-    p.add_argument("--acap-band-s", type=float, default=0.0,
-                   help="warp tolerance (s) applied to ACAPPELLA spans only — each "
-                        "probe may slip +/- this off the line (heuristic #7: acaps "
-                        "are sub-track warped). 0 = rigid stack everywhere.")
-    p.add_argument("--cross-channel", action="store_true",
-                   help="heuristic #2/#6: stack every available channel (full / "
-                        "vocal / instrumental) per span; flag where the audio's best "
-                        "channel disagrees with claimed_stem (mislabel detector).")
+    p.add_argument(
+        "--acap-band-s",
+        type=float,
+        default=0.0,
+        help="warp tolerance (s) applied to ACAPPELLA spans only — each "
+        "probe may slip +/- this off the line (heuristic #7: acaps "
+        "are sub-track warped). 0 = rigid stack everywhere.",
+    )
+    p.add_argument(
+        "--cross-channel",
+        action="store_true",
+        help="heuristic #2/#6: stack every available channel (full / "
+        "vocal / instrumental) per span; flag where the audio's best "
+        "channel disagrees with claimed_stem (mislabel detector).",
+    )
+    p.add_argument(
+        "--feature",
+        choices=["chroma", "hubert"],
+        default="chroma",
+        help="matched-filter feature. hubert = phonetic frames (lyrics are "
+        "position-specific) — the fix for acappella 'which section'.",
+    )
+    p.add_argument(
+        "--hubert-layer", type=int, default=9, help="HuBERT layer (mid = phonetic)"
+    )
+    p.add_argument(
+        "--stems",
+        default="regular,acappella,instrumental",
+        help="comma list of claimed_stem values to evaluate (limits the "
+        "expensive HuBERT precompute to the channel under test)",
+    )
     p.add_argument("--workers", type=int, default=8)
     args = p.parse_args(argv)
 
     if not args.eval:
         p.error("only --eval is wired (the stack core is importable)")
+    if args.cross_channel and args.feature == "hubert":
+        p.error("--feature hubert is not wired into --cross-channel (chroma only)")
+    want_stems = {s.strip() for s in args.stems.split(",") if s.strip()}
 
     import librosa
     import yaml as _yaml
@@ -429,9 +548,11 @@ def main(argv: list[str] | None = None) -> int:
         key = (str(row.get("slot_label")), round(float(row.get("set_start_s", -1)), 2))
         src_by_key[key] = row.get("ref_source") or "reference"
         ratio = float(row.get("tempo_ratio") or 1.0)
-        linear_by_key[key] = (not row.get("is_loop")
-                              and not row.get("ref_segments")
-                              and 0.9 <= ratio <= 1.15)
+        linear_by_key[key] = (
+            not row.get("is_loop")
+            and not row.get("ref_segments")
+            and 0.9 <= ratio <= 1.15
+        )
 
     set_dir = find_aligning_dir(gt.set_id)
     manifest = json.loads((set_dir / "manifest.json").read_text())
@@ -442,8 +563,15 @@ def main(argv: list[str] | None = None) -> int:
 
     mix_chroma: dict[str, np.ndarray] = {}
     for stem, (fname, _) in _MIX_SOURCE.items():
+        if args.feature == "hubert" and stem not in want_stems:
+            continue  # don't compute hour-long HuBERT for an unused channel
         f = set_dir / fname
-        if f.is_file():
+        if not f.is_file():
+            continue
+        if args.feature == "hubert":
+            print(f"hubert L{args.hubert_layer}({fname}) …")
+            mix_chroma[stem] = _compute_hubert(f, args.hubert_layer)
+        else:
             print(f"chroma({fname}) …")
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
@@ -453,8 +581,17 @@ def main(argv: list[str] | None = None) -> int:
     n = int(args.window_s * SR / HOP)
 
     if args.cross_channel:
-        return _run_cross_channel(args, targets, src_by_key, linear_by_key,
-                                  by_tid, mix_chroma, mix_series, ref_series, n)
+        return _run_cross_channel(
+            args,
+            targets,
+            src_by_key,
+            linear_by_key,
+            by_tid,
+            mix_chroma,
+            mix_series,
+            ref_series,
+            n,
+        )
 
     jobs, meta, skipped, nonlinear = [], [], 0, 0
     for i, t in enumerate(targets):
@@ -468,6 +605,8 @@ def main(argv: list[str] | None = None) -> int:
             skipped += 1
             continue
         stem = t.claimed_stem or "regular"
+        if stem not in want_stems:
+            continue
         ref_path = None
         stem_key = _STEM_FILE.get(stem)
         if stem_key:
@@ -479,14 +618,19 @@ def main(argv: list[str] | None = None) -> int:
         if not Path(ref_path).is_file():
             skipped += 1
             continue
-        mc = mix_chroma.get(stem, mix_chroma["regular"])
+        mc = mix_chroma.get(stem)
+        if mc is None:
+            mc = mix_chroma.get("regular")
+        if mc is None:
+            skipped += 1
+            continue
         span_len = max(0.0, t.set_end_s - t.set_start_s)
         dts = _probe_offsets(span_len, args.window_s, args.probes)
         win_list = []
         for dt in dts:
             a = int((t.set_start_s + dt) * SR / HOP)
             a = min(a, max(0, mc.shape[1] - n))
-            w = mc[:, a:a + n]
+            w = mc[:, a : a + n]
             if w.shape[1] < n // 2:
                 continue
             win_list.append((int(round(dt * SR / HOP)), w.tolist()))
@@ -494,16 +638,34 @@ def main(argv: list[str] | None = None) -> int:
             skipped += 1
             continue
         # baseline probe = the one nearest mid-span (strongest single-probe)
-        mid_k = int(np.argmin([abs(dt - span_len / 2) for dt in dts][:len(win_list)]))
+        mid_k = int(np.argmin([abs(dt - span_len / 2) for dt in dts][: len(win_list)]))
         stretches = _grid_stretches(t, mix_series, ref_series)
-        band_frames = (int(round(args.acap_band_s * SR / HOP))
-                       if stem == "acappella" else 0)
-        jobs.append((i, str(ref_path), win_list, mid_k, stretches,
-                     t.ref_start_s, band_frames))
+        band_frames = (
+            int(round(args.acap_band_s * SR / HOP)) if stem == "acappella" else 0
+        )
+        if args.feature == "hubert":
+            _compute_hubert(ref_path, args.hubert_layer)  # cache serially (MPS)
+            ref_arg = str(_hubert_cache_path(ref_path, args.hubert_layer))
+        else:
+            ref_arg = str(ref_path)
+        jobs.append(
+            (
+                i,
+                ref_arg,
+                win_list,
+                mid_k,
+                stretches,
+                t.ref_start_s,
+                band_frames,
+                args.feature,
+            )
+        )
         meta.append(t)
 
-    print(f"evaluating {len(jobs)} linear spans "
-          f"(excluded: {nonlinear} loop/segment/odd-ratio, {skipped} no-audio)…")
+    print(
+        f"evaluating {len(jobs)} linear spans "
+        f"(excluded: {nonlinear} loop/segment/odd-ratio, {skipped} no-audio)…"
+    )
     res: dict[int, dict] = {}
     with ProcessPoolExecutor(max_workers=args.workers) as ex:
         for k, r in enumerate(ex.map(_job, jobs, chunksize=2)):
@@ -517,21 +679,40 @@ def main(argv: list[str] | None = None) -> int:
         src = src_by_key.get((t.slot_label, round(t.set_start_s, 2)), "reference")
         b_err = abs(r["base_r0"] - t.ref_start_s)
         s_err = abs(r["stack_r0"] - t.ref_start_s)
-        b_eq = (b_err < 2.0) or (not np.isnan(r["base_score_gt"])
-                                 and r["base_score_gt"] >= r["base_peak"] - _EQ_DELTA)
-        s_eq = (s_err < 2.0) or (not np.isnan(r["stack_score_gt"])
-                                 and r["stack_score_gt"] >= r["stack_peak"] - _EQ_DELTA)
-        rows.append((t.slot_label, t.claimed_stem, src, r["n_probes"],
-                     b_err, b_eq, s_err, s_eq, t.label or ""))
+        b_eq = (b_err < 2.0) or (
+            not np.isnan(r["base_score_gt"])
+            and r["base_score_gt"] >= r["base_peak"] - _EQ_DELTA
+        )
+        s_eq = (s_err < 2.0) or (
+            not np.isnan(r["stack_score_gt"])
+            and r["stack_score_gt"] >= r["stack_peak"] - _EQ_DELTA
+        )
+        rows.append(
+            (
+                t.slot_label,
+                t.claimed_stem,
+                src,
+                r["n_probes"],
+                b_err,
+                b_eq,
+                s_err,
+                s_eq,
+                t.label or "",
+            )
+        )
 
     def report(name: str, sel: list) -> None:
         if not sel:
             return
-        be = np.array([r[4] for r in sel]); beq = np.array([r[5] for r in sel])
-        se = np.array([r[6] for r in sel]); seq = np.array([r[7] for r in sel])
-        print(f"  {name:22} n={len(sel):3}  "
-              f"baseline exact<2s {100*(be<2).mean():3.0f}% / equiv {100*beq.mean():3.0f}%"
-              f"   ||  stack exact<2s {100*(se<2).mean():3.0f}% / equiv {100*seq.mean():3.0f}%")
+        be = np.array([r[4] for r in sel])
+        beq = np.array([r[5] for r in sel])
+        se = np.array([r[6] for r in sel])
+        seq = np.array([r[7] for r in sel])
+        print(
+            f"  {name:22} n={len(sel):3}  "
+            f"baseline exact<2s {100 * (be < 2).mean():3.0f}% / equiv {100 * beq.mean():3.0f}%"
+            f"   ||  stack exact<2s {100 * (se < 2).mean():3.0f}% / equiv {100 * seq.mean():3.0f}%"
+        )
 
     comparable = [r for r in rows if r[2] != "online_candidate"]
     print("\n=== baseline (mid probe) vs continuity stack — vs corrected GT ===")
@@ -542,11 +723,19 @@ def main(argv: list[str] | None = None) -> int:
     fixed = [r for r in comparable if r[4] >= 2.0 and r[6] < 2.0]
     broke = [r for r in comparable if r[4] < 2.0 and r[6] >= 2.0]
     print(f"\nstack FIXED (baseline>2s -> stack<2s): {len(fixed)}")
-    for slot, stem, src, npr, be, _bq, se, _sq, label in sorted(fixed, key=lambda r: -r[4])[:12]:
-        print(f"  {slot:6} {stem:11} probes={npr} base_err={be:6.1f} -> {se:4.1f}  {label[:36]}")
+    for slot, stem, src, npr, be, _bq, se, _sq, label in sorted(
+        fixed, key=lambda r: -r[4]
+    )[:12]:
+        print(
+            f"  {slot:6} {stem:11} probes={npr} base_err={be:6.1f} -> {se:4.1f}  {label[:36]}"
+        )
     print(f"stack BROKE (baseline<2s -> stack>2s): {len(broke)}")
-    for slot, stem, src, npr, be, _bq, se, _sq, label in sorted(broke, key=lambda r: -r[6])[:12]:
-        print(f"  {slot:6} {stem:11} probes={npr} base_err={be:4.1f} -> {se:6.1f}  {label[:36]}")
+    for slot, stem, src, npr, be, _bq, se, _sq, label in sorted(
+        broke, key=lambda r: -r[6]
+    )[:12]:
+        print(
+            f"  {slot:6} {stem:11} probes={npr} base_err={be:4.1f} -> {se:6.1f}  {label[:36]}"
+        )
     return 0
 
 
