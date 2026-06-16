@@ -59,9 +59,33 @@ Every box except the recognition call already exists in some form:
   modes — transform-tolerant) is the better fit for a Python/partly-cluster
   pipeline. **AudD** is the easy second opinion. Recognizer is **pluggable** so we
   A/B and never lock in; ShazamKit custom-catalog stays a free/offline backup.
-- Feed the **cleaned separated stem** (mix_instrumental / mix_vocals), not the full
-  mush, for the best hit rate. Recognition only runs on *flagged* segments, so
-  per-call volume (and cost) is low.
+- Feed the **FULL mix** segment, NOT the isolated stem — fingerprinting leans on
+  the vocals, so the instrumental stem matched *worse* in testing (BB12 @600s:
+  full-mix hits, instrumental stem = no match). Recognition only runs on *flagged*
+  segments, so per-call volume (and cost) is low.
+- **Recognition is reliable for the SONG, NOT the VERSION.** From a
+  tempo/pitch/EQ-transformed mix it snaps to the nearest catalogued master, so the
+  remix/edit label is a guess (BB12 @150s -> "AJR - Weak (Jaded Remix)", but the GT
+  is a filtered edit, not that remix). The recognizer proposes the song; the human
+  confirms the version axis.
+
+### The SoundCloud tier (the part commercial recognizers can't do)
+
+ACRCloud/Shazam/AudD index **licensed commercial catalogs** and structurally miss
+the **SoundCloud long tail** — DJ edits, bootlegs, white-labels, unreleased IDs —
+which is exactly what live/edit-heavy sets play (Murph scored 0/2 in testing).
+The fix is a **SoundCloud-sourced custom index**:
+- Route A: an **ACRCloud custom bucket** populated with SoundCloud-sourced tracks
+  (least infra).
+- Route B: **our own fingerprint index** (chromaprint/MERT) over a curated
+  SoundCloud corpus — = the corpus-scale index this doc already calls the missing
+  build. The repo already downloads from SoundCloud (`acquire_variant`,
+  `replace_track_audio`); the real work is curating + refreshing which accounts to
+  index.
+
+End state is a **two-tier recognizer**: commercial API for released tracks +
+SoundCloud index for the edit/bootleg/ID tail, with truly-unreleased remainder
+still falling to human + set-audio self-reference.
 
 `scripts/recognize_segment.py` — prototype. `.env`: `ACRCLOUD_IDENTIFY_HOST`,
 `ACRCLOUD_ACCESS_KEY`, `ACRCLOUD_ACCESS_SECRET`, `AUDD_API_TOKEN`.

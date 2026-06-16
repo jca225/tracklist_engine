@@ -38,6 +38,18 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[1]
 
 
+def _load_env(path: Path) -> None:
+    """Minimal .env loader (no python-dotenv dependency in venvs/audio)."""
+    if not path.is_file():
+        return
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, _, v = line.partition("=")
+        os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+
 def _aligning_dir(set_id: str) -> Path:
     hits = sorted((Path.home() / "aligning").glob(f"{set_id}__*"))
     if not hits:
@@ -111,11 +123,7 @@ def main(argv=None):
     p.add_argument("--provider", choices=("acrcloud", "audd", "both"), default="acrcloud")
     args = p.parse_args(argv)
 
-    try:
-        from dotenv import load_dotenv
-        load_dotenv(_REPO / ".env")
-    except Exception:
-        pass
+    _load_env(_REPO / ".env")
 
     if args.audio:
         audio = args.audio
@@ -140,11 +148,15 @@ def main(argv=None):
         ran = False
         for prov in providers:
             if prov == "acrcloud":
-                host = os.getenv("ACRCLOUD_IDENTIFY_HOST")
+                host = os.getenv("ACRCLOUD_IDENTIFY_HOST") or os.getenv("ACRCLOUD_HOST")
                 key = os.getenv("ACRCLOUD_ACCESS_KEY")
-                sec = os.getenv("ACRCLOUD_ACCESS_SECRET")
+                sec = (os.getenv("ACRCLOUD_ACCESS_SECRET") or os.getenv("ACRCLOUD_SECRET_KEY")
+                       or os.getenv("ACRCLOUD_SECRET"))
                 if not all((host, key, sec)):
-                    print("[acrcloud] missing ACRCLOUD_* in .env — skipping")
+                    miss = [n for n, v in (("host", host), ("access_key", key),
+                                           ("secret", sec)) if not v]
+                    print(f"[acrcloud] missing in .env: {', '.join(miss)} — skipping "
+                          "(host = ACRCLOUD_IDENTIFY_HOST, e.g. identify-eu-west-1.acrcloud.com)")
                     continue
                 ran = True
                 print("[acrcloud]")
