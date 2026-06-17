@@ -318,6 +318,8 @@ main{max-width:74rem;margin:0 auto;padding:1.1rem 1.2rem 4rem}
 .src.clean{background:rgba(62,207,142,.14);border-color:var(--good)}
 .src.keep{background:rgba(91,140,255,.1);border-color:var(--accent)}
 .src.diff{background:rgba(255,122,144,.08);border-color:var(--warn);opacity:.7}
+.src.unsure{background:rgba(154,163,178,.1);border-color:var(--dim)}
+.src.tied{box-shadow:inset 3px 0 0 #c792ea}
 .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.9rem}
 .badge{font-size:.7rem;padding:.1rem .45rem;border-radius:999px;font-weight:600}
 .badge.demucs{background:#33384a;color:var(--dim)}
@@ -332,6 +334,12 @@ button.mk:hover{color:var(--ink)}
 button.mclean.on{background:var(--good);color:#06231a;border-color:var(--good);font-weight:600}
 button.mkeep.on{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
 button.mdiff.on{background:var(--warn);color:#2a0710;border-color:var(--warn);font-weight:600}
+button.munsure.on{background:var(--dim);color:#10131a;border-color:var(--dim);font-weight:600}
+button.tie{background:var(--card);color:var(--dim);border:1px solid var(--line);
+  border-radius:7px;padding:.28rem .5rem;cursor:pointer;font-size:.85rem}
+button.tie.on{background:#c792ea;color:#1a0f24;border-color:#c792ea;font-weight:700}
+input.pitch{width:3.4rem;background:var(--card);color:var(--ink);border:1px solid var(--line);
+  border-radius:7px;padding:.26rem .35rem;font-size:.8rem}
 .card .hd{display:flex;align-items:center;gap:.6rem;justify-content:space-between}
 .card .hd .meta{min-width:0}
 .tally{font-size:.78rem;color:var(--dim);font-variant:tabular-nums}
@@ -382,15 +390,19 @@ button.flag:hover{border-color:var(--warn);color:var(--warn)}
       <button class=go id=loadStem>Load</button>
       <span id=status></span>
     </div>
-    <p class=note>Per layer, play each source and mark it:
+    <p class=note>Per source:
       <b style="color:var(--good)">★ clean</b> = virtually no artifacts ·
-      <b style="color:var(--accent)">✓ keep</b> = usable but some artifacts ·
-      <b style="color:var(--warn)">✗ diff</b> = completely different / wrong track.
-      Mark as many as apply (two equally-clean sources → ★ both). Layer-level:
-      <b>not sure</b> = can't tell which is best · <b>wrong version</b> = none is the
-      actual track (only remixes/noise found). A <b style="color:var(--warn)">pink
-      duration</b> doesn't match the baseline length — likely a preview clip. Every
-      change logs the layer's full verdict to out/discern/picks.jsonl.</p>
+      <b style="color:var(--accent)">✓ keep</b> = usable but artifacts ·
+      <b style="color:var(--warn)">✗ diff</b> = wrong track ·
+      <b>?</b> = can't tell for this one alone ·
+      <b style="color:#c792ea">⇄</b> = interchangeable (quality equivalent to others tied
+      here — pick any) ·
+      <b>st</b> = semitones this source is pitched vs the real track (e.g. +1 for
+      Content-ID evasion; we re-pitch it back before alignment).
+      Layer-level: <b>not sure</b> = can't tell which is best across all · <b>wrong
+      version</b> = none is the actual track. A <b style="color:var(--warn)">pink
+      duration</b> = doesn't match baseline length (likely a preview clip). Every change
+      logs the layer's full verdict to out/discern/picks.jsonl.</p>
     <div id=stemOut></div>
   </section>
   <!-- ===== FIBERS ===== -->
@@ -433,19 +445,26 @@ async function loadSets(){const s=await(await fetch('/api/sets')).json();
 
 // ---- stem winner ---- per-source mark (clean|keep|diff) + layer verdict
 let stemState={};  // card index -> {set,folder,layer,mark:{name->m},not_sure,not_found}
-const MARKCLS={clean:'clean',keep:'keep',diff:'diff'};
+const MARKCLS={clean:'clean',keep:'keep',diff:'diff',unsure:'unsure'};
 function submitLayer(i){const v=stemState[i],names=Object.keys(v.mark);
+  const pitch={};for(const[n,p]of Object.entries(v.pitch))if(p)pitch[n]=p;
   fetch('/api/pick',{method:'POST',headers:{'content-type':'application/json'},
     body:JSON.stringify({set:v.set,folder:v.folder,layer:v.layer,
       clean:names.filter(n=>v.mark[n]==='clean'),
       keep:names.filter(n=>v.mark[n]==='keep'),
       different:names.filter(n=>v.mark[n]==='diff'),
+      unsure_src:names.filter(n=>v.mark[n]==='unsure'),
+      interchangeable:[...v.tie],
+      pitch_semitones:pitch,
       not_sure:v.not_sure,not_found:v.not_found})});}
 function syncCard(i){const v=stemState[i],card=$('card'+i);
   card.querySelectorAll('.src').forEach(s=>{
-    const m=v.mark[s.dataset.name]||'';
+    const nm=s.dataset.name,m=v.mark[nm]||'';
     s.classList.remove('clean','keep','diff');if(m)s.classList.add(MARKCLS[m]);
-    s.querySelectorAll('.mk').forEach(b=>b.classList.toggle('on',b.dataset.m===m));});
+    s.querySelectorAll('.mk').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
+    s.classList.toggle('tied',v.tie.has(nm));
+    const tb=s.querySelector('.tie');if(tb)tb.classList.toggle('on',v.tie.has(nm));
+    const pi=s.querySelector('.pitch');if(pi&&document.activeElement!==pi)pi.value=v.pitch[nm]||'';});
   card.classList.toggle('notsure',v.not_sure);
   card.classList.toggle('missing',v.not_found);
   card.querySelector('.unsure').textContent=v.not_sure?'🤷 not sure':'not sure';
@@ -453,12 +472,19 @@ function syncCard(i){const v=stemState[i],card=$('card'+i);
   const cnt=m=>Object.values(v.mark).filter(x=>x===m).length;
   const t=card.querySelector('.tally');
   t.textContent=v.not_found?'no right version':v.not_sure?'not sure'
-    :[[cnt('clean'),'clean'],[cnt('keep'),'keep'],[cnt('diff'),'different']]
+    :[[cnt('clean'),'clean'],[cnt('keep'),'keep'],[cnt('diff'),'different'],
+      [cnt('unsure'),'?'],[v.tie.size,'⇄ tied']]
        .filter(([n])=>n).map(([n,l])=>n+' '+l).join(' · ')||'—';
   t.classList.toggle('has',(cnt('clean')+cnt('keep'))>0&&!v.not_sure&&!v.not_found);}
 function setMark(i,name,m){const v=stemState[i];
   if(v.mark[name]===m)delete v.mark[name];else v.mark[name]=m;
   v.not_sure=false;v.not_found=false;syncCard(i);submitLayer(i);}
+function toggleTie(i,name){const v=stemState[i];
+  if(v.tie.has(name))v.tie.delete(name);else v.tie.add(name);
+  syncCard(i);submitLayer(i);}
+function setPitch(i,name,val){const v=stemState[i];const p=parseFloat(val);
+  if(val===''||isNaN(p))delete v.pitch[name];else v.pitch[name]=p;
+  syncCard(i);submitLayer(i);}
 function toggleUnsure(i){const v=stemState[i];
   v.not_sure=!v.not_sure;if(v.not_sure){v.mark={};v.not_found=false;}
   syncCard(i);submitLayer(i);}
@@ -477,7 +503,7 @@ async function loadStem(){
   if(!d.layers.length){$('stemOut').innerHTML='<p class=empty>No candidates downloaded yet — run fetch_candidate_stems.py.</p>';$('status').textContent='';return;}
   $('status').textContent=d.layers.length+' layers with candidates';
   $('stemOut').innerHTML=d.layers.map((L,i)=>{
-    stemState[i]={set:d.set,folder:L.folder,layer:L.layer,mark:{},not_sure:false,not_found:false};
+    stemState[i]={set:d.set,folder:L.folder,layer:L.layer,mark:{},pitch:{},tie:new Set(),not_sure:false,not_found:false};
     return `<div class=card id=card${i}>
     <div class=hd><div class=meta><h3>${esc(L.folder)}</h3>
       <div class=sub>${L.layer} · ${L.n_cand} candidates</div></div>
@@ -494,6 +520,9 @@ async function loadStem(){
         <button class="mk mclean" data-m=clean title="clean — virtually no artifacts" onclick='setMark(${i},${attr(s.name)},"clean")'>★ clean</button>
         <button class="mk mkeep" data-m=keep title="usable but some artifacts" onclick='setMark(${i},${attr(s.name)},"keep")'>✓ keep</button>
         <button class="mk mdiff" data-m=diff title="completely different / wrong track" onclick='setMark(${i},${attr(s.name)},"diff")'>✗ diff</button>
+        <button class="mk munsure" data-m=unsure title="can't tell — this source alone" onclick='setMark(${i},${attr(s.name)},"unsure")'>? </button>
+        <button class="tie" title="interchangeable — quality equivalent to the others tied here (pick any)" onclick='toggleTie(${i},${attr(s.name)})'>⇄</button>
+        <input class=pitch type=number step=0.5 placeholder=st title="semitones this source is pitched vs the real track (e.g. +1 = Content-ID evasion; we re-pitch it back before alignment)" oninput='setPitch(${i},${attr(s.name)},this.value)'>
       </span>
     </div>`).join('')+`</div>`;}).join('');
 }
