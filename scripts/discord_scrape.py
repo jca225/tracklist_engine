@@ -480,11 +480,24 @@ def dl_mediafire(
         return "error", "", f"{type(e).__name__}: {e}"
 
 
+def _is_sc_profile(url: str) -> bool:
+    """A bare SoundCloud profile URL (soundcloud.com/user) — yt-dlp would pull the
+    whole discography. Real tracks have >=2 path segments; /sets/ playlists and
+    on.soundcloud short links are intentional and kept."""
+    if "soundcloud.com" not in url or "on.soundcloud" in url:
+        return False
+    path = re.sub(r"^https?://[^/]+/", "", url.split("?")[0]).strip("/")
+    segs = [p for p in path.split("/") if p]
+    return len(segs) < 2 and "sets" not in segs
+
+
 def dl_ytdlp(session: requests.Session, a: Asset, outdir: Path) -> tuple[str, str, str]:
     """SoundCloud / YouTube: hand off to yt-dlp (handles private `s-…` share links)."""
     import shutil
     import subprocess
 
+    if _is_sc_profile(a.source_url):
+        return "skipped", "", "bare SoundCloud profile (avatar link) — not a track"
     ytdlp = shutil.which("yt-dlp") or str(Path(sys.executable).parent / "yt-dlp")
     if not Path(ytdlp).exists() and not shutil.which("yt-dlp"):
         return "manual", "", "yt-dlp not found on PATH / in venv"
