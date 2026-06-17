@@ -491,6 +491,15 @@ def _is_sc_profile(url: str) -> bool:
     return len(segs) < 2 and "sets" not in segs
 
 
+def _is_yt_channel(url: str) -> bool:
+    """A YouTube channel/uploader URL — yt-dlp would pull the whole channel.
+    Keep only single videos (watch?v= / youtu.be/<id>)."""
+    u = url.lower()
+    if "youtube.com" not in u and "youtu.be" not in u:
+        return False
+    return any(seg in u for seg in ("/channel/", "/@", "/c/", "/user/"))
+
+
 def dl_ytdlp(session: requests.Session, a: Asset, outdir: Path) -> tuple[str, str, str]:
     """SoundCloud / YouTube: hand off to yt-dlp (handles private `s-…` share links)."""
     import shutil
@@ -498,6 +507,8 @@ def dl_ytdlp(session: requests.Session, a: Asset, outdir: Path) -> tuple[str, st
 
     if _is_sc_profile(a.source_url):
         return "skipped", "", "bare SoundCloud profile (avatar link) — not a track"
+    if _is_yt_channel(a.source_url):
+        return "skipped", "", "YouTube channel/uploader link — not a single track"
     ytdlp = shutil.which("yt-dlp") or str(Path(sys.executable).parent / "yt-dlp")
     if not Path(ytdlp).exists() and not shutil.which("yt-dlp"):
         return "manual", "", "yt-dlp not found on PATH / in venv"
