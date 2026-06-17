@@ -306,6 +306,12 @@ def parse_paste(text: str, label: str) -> list[Asset]:
             author = m.group(1).strip()
         for raw in ALL_URL_RE.findall(line):
             url = _clean_url(raw)
+            host = _host_of(url)
+            # Discord CDN anchors include posted screenshots — keep only audio/archive
+            if host == "discord":
+                ext = Path(url.split("?")[0]).suffix.lower()
+                if ext and ext not in KEEP_EXTS:
+                    continue
             # filename hint: the first nearby line that looks like an audio file
             hint = ""
             for look in lines[i : i + 4]:
@@ -321,7 +327,7 @@ def parse_paste(text: str, label: str) -> list[Asset]:
                     author=author,
                     timestamp="",
                     kind="link",
-                    host=_host_of(url),
+                    host=host,
                     source_url=url,
                     filename=hint,
                 )
@@ -647,7 +653,9 @@ def main() -> None:
         print(f"\ncatalog-only: manifest at {manifest_path}", file=sys.stderr)
         return
 
-    for url, a in list(assets.items()):
+    # Discord CDN links carry expiring signatures — fetch those first.
+    ordered = sorted(assets.items(), key=lambda kv: 0 if kv[1].host == "discord" else 1)
+    for url, a in ordered:
         if a.status in ("downloaded", "skipped"):
             continue
         outdir = args.out / a.channel_label / a.host
