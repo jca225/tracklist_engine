@@ -121,10 +121,14 @@ def _cut(src: str, s: float, e: float) -> bytes | None:
             f"{max(0.3, e - s):.3f}",
             "-i",
             src,
+            # full-bandwidth stereo: quality judgement (and fiber timbre) needs the
+            # top octave — a 22.05 kHz/mono/56k cut sounds lowpassed/"filtered".
             "-ac",
-            "1",
+            "2",
             "-ar",
-            "22050",
+            "44100",
+            "-b:a",
+            "192k",
             str(out),
         ]
         if subprocess.run(cmd, capture_output=True).returncode != 0:
@@ -311,7 +315,7 @@ main{max-width:74rem;margin:0 auto;padding:1.1rem 1.2rem 4rem}
 .src+.src{margin-top:.3rem}
 .src:hover{background:var(--card)}
 .src.demucs .nm{color:var(--dim)}
-.src.picked{background:rgba(62,207,142,.12);border-color:var(--good)}
+.src.included{background:rgba(62,207,142,.12);border-color:var(--good)}
 .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.9rem}
 .badge{font-size:.7rem;padding:.1rem .45rem;border-radius:999px;font-weight:600}
 .badge.demucs{background:#33384a;color:var(--dim)}
@@ -319,10 +323,24 @@ main{max-width:74rem;margin:0 auto;padding:1.1rem 1.2rem 4rem}
 .dur{font-variant:tabular-nums;color:var(--dim);font-size:.82rem;width:4.5rem;text-align:right}
 .dur.bad{color:var(--warn)}
 audio{height:2rem}
-button.pick{background:var(--card);color:var(--ink);border:1px solid var(--line);
-  border-radius:8px;padding:.3rem .8rem;cursor:pointer;font-size:.85rem}
-button.pick:hover{border-color:var(--accent)}
-.src.picked button.pick{background:var(--good);color:#06231a;border-color:var(--good);font-weight:600}
+button.inc{background:var(--card);color:var(--ink);border:1px solid var(--line);
+  border-radius:8px;padding:.3rem .8rem;cursor:pointer;font-size:.85rem;white-space:nowrap}
+button.inc:hover{border-color:var(--accent)}
+.src.included button.inc{background:var(--good);color:#06231a;border-color:var(--good);font-weight:600}
+.card .hd{display:flex;align-items:center;gap:.6rem;justify-content:space-between}
+.card .hd .meta{min-width:0}
+.tally{font-size:.78rem;color:var(--dim);font-variant:tabular-nums}
+.tally.has{color:var(--good)}
+button.unsure{background:transparent;color:var(--dim);border:1px solid var(--line);
+  border-radius:8px;padding:.3rem .7rem;cursor:pointer;font-size:.82rem;white-space:nowrap}
+button.unsure:hover{border-color:var(--warn);color:var(--warn)}
+.card.notsure{border-color:var(--warn)}
+.card.notsure button.unsure{background:var(--warn);color:#2a0710;border-color:var(--warn);font-weight:600}
+button.notfound{background:transparent;color:var(--dim);border:1px solid var(--line);
+  border-radius:8px;padding:.3rem .7rem;cursor:pointer;font-size:.82rem;white-space:nowrap}
+button.notfound:hover{border-color:#d9a066;color:#d9a066}
+.card.missing{border-color:#d9a066}
+.card.missing button.notfound{background:#d9a066;color:#241405;border-color:#d9a066;font-weight:600}
 .fiber{border:1px solid var(--line);border-radius:10px;padding:.6rem .7rem;margin:.5rem 0;background:var(--card)}
 .fiber .ttl{font-weight:600;font-size:.9rem;margin-bottom:.35rem}
 .m{display:flex;align-items:center;gap:.7rem;padding:.28rem .3rem;border-radius:8px}
@@ -350,16 +368,22 @@ button.flag:hover{border-color:var(--warn);color:var(--warn)}
   <!-- ===== STEM WINNER ===== -->
   <section class="panel on" id=panel-stem>
     <div class=toolbar>
-      <div class=fld><label>layer</label>
-        <select id=only><option value="">both</option><option>vocals</option>
-          <option>instrumental</option></select></div>
-      <button class=go id=loadStem>Load layers</button>
+      <div class=fld><label>view</label>
+        <div class=tabs id=layerToggle>
+          <button class="tab on" data-only="vocals">Acappella</button>
+          <button class=tab data-only="instrumental">Instrumental</button>
+          <button class=tab data-only="">Both</button>
+        </div></div>
+      <button class=go id=loadStem>Load</button>
       <span id=status></span>
     </div>
-    <p class=note>Per layer, play a 30s chunk of each source and <b>pick the cleanest
-      isolation</b> (fewest artifacts, full length). A <b style="color:var(--warn)">pink
-      duration</b> means it doesn't match the baseline length — likely a preview clip.
-      Picks log to out/discern/picks.jsonl.</p>
+    <p class=note>Per layer, play a 30s chunk of each source and <b>include the cleanest
+      isolation(s)</b>. <b>Include can be multiple</b> — if two sources are virtually the
+      same quality, keep both. <b>not sure</b> = can't tell which is best. <b>wrong
+      version</b> = none of these is the actual track (only remixes / noisy results came
+      up — the right version isn't on YouTube). A <b style="color:var(--warn)">pink
+      duration</b> doesn't match the baseline length — likely a preview clip. Every
+      change logs the layer's full verdict to out/discern/picks.jsonl.</p>
     <div id=stemOut></div>
   </section>
   <!-- ===== FIBERS ===== -->
@@ -400,29 +424,66 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
 async function loadSets(){const s=await(await fetch('/api/sets')).json();
   $('set').innerHTML=s.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');}
 
-// ---- stem winner ----
-async function pick(btn,d){await fetch('/api/pick',{method:'POST',
-  headers:{'content-type':'application/json'},body:JSON.stringify(d)});
-  const box=btn.closest('.card');
-  box.querySelectorAll('.src').forEach(s=>s.classList.remove('picked'));
-  btn.closest('.src').classList.add('picked');btn.textContent='✓ picked';}
-$('loadStem').onclick=async()=>{
-  $('status').textContent='loading…';$('stemOut').innerHTML='';
-  const q=new URLSearchParams({set:$('set').value,only:$('only').value});
+// ---- stem winner ---- (multi-include + not-sure verdict per layer)
+let stemState={};  // card index -> {set,folder,layer,include:Set,not_sure,not_found}
+function submitLayer(i){const v=stemState[i];
+  fetch('/api/pick',{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({set:v.set,folder:v.folder,layer:v.layer,
+      include:[...v.include],not_sure:v.not_sure,not_found:v.not_found})});}
+function syncCard(i){const v=stemState[i],card=$('card'+i);
+  card.querySelectorAll('.src').forEach(s=>{
+    const on=v.include.has(s.dataset.name);
+    s.classList.toggle('included',on);
+    s.querySelector('.inc').textContent=on?'✓ included':'include';});
+  card.classList.toggle('notsure',v.not_sure);
+  card.classList.toggle('missing',v.not_found);
+  card.querySelector('.unsure').textContent=v.not_sure?'🤷 not sure':'not sure';
+  card.querySelector('.notfound').textContent=v.not_found?'⚠ wrong version':'wrong version';
+  const t=card.querySelector('.tally');
+  t.textContent=v.not_found?'no right version'
+    :v.not_sure?'not sure'
+    :(v.include.size?v.include.size+' included':'—');
+  t.classList.toggle('has',v.include.size>0&&!v.not_sure&&!v.not_found);}
+function toggleInc(i,name){const v=stemState[i];
+  if(v.include.has(name))v.include.delete(name);
+  else{v.include.add(name);v.not_sure=false;v.not_found=false;}
+  syncCard(i);submitLayer(i);}
+function toggleUnsure(i){const v=stemState[i];
+  v.not_sure=!v.not_sure;if(v.not_sure){v.include.clear();v.not_found=false;}
+  syncCard(i);submitLayer(i);}
+function toggleNotFound(i){const v=stemState[i];
+  v.not_found=!v.not_found;if(v.not_found){v.include.clear();v.not_sure=false;}
+  syncCard(i);submitLayer(i);}
+let stemOnly='vocals';  // acappella view by default
+$('layerToggle').querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  $('layerToggle').querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));
+  stemOnly=t.dataset.only;loadStem();});
+async function loadStem(){
+  $('status').textContent='loading…';$('stemOut').innerHTML='';stemState={};
+  const q=new URLSearchParams({set:$('set').value,only:stemOnly});
   const d=await(await fetch('/api/layers?'+q)).json();
   if(d.error){$('status').textContent=d.error;return;}
   if(!d.layers.length){$('stemOut').innerHTML='<p class=empty>No candidates downloaded yet — run fetch_candidate_stems.py.</p>';$('status').textContent='';return;}
   $('status').textContent=d.layers.length+' layers with candidates';
-  $('stemOut').innerHTML=d.layers.map(L=>`<div class=card>
-    <h3>${esc(L.folder)}</h3><div class=sub>${L.layer} · ${L.n_cand} candidates</div>`+
-    L.sources.map(s=>`<div class="src ${s.kind}">
+  $('stemOut').innerHTML=d.layers.map((L,i)=>{
+    stemState[i]={set:d.set,folder:L.folder,layer:L.layer,include:new Set(),not_sure:false,not_found:false};
+    return `<div class=card id=card${i}>
+    <div class=hd><div class=meta><h3>${esc(L.folder)}</h3>
+      <div class=sub>${L.layer} · ${L.n_cand} candidates</div></div>
+      <div style="display:flex;gap:.6rem;align-items:center">
+        <span class=tally>—</span>
+        <button class=unsure onclick='toggleUnsure(${i})'>not sure</button>
+        <button class=notfound onclick='toggleNotFound(${i})'>wrong version</button></div></div>`+
+    L.sources.map(s=>`<div class="src ${s.kind}" data-name="${esc(s.name)}">
       <span class="badge ${s.kind==='demucs'?'demucs':'cand'}">${s.kind==='demucs'?'baseline':'cand'}</span>
       <span class=nm>${esc(s.name)}</span>
       <span class="dur ${s.match?'':'bad'}">${s.dur}s</span>
       <audio controls preload=none src="/audio?id=${s.audio}"></audio>
-      <button class=pick onclick='pick(this,${attr({set:d.set,folder:L.folder,layer:L.layer,pick:s.name})})'>pick</button>
-    </div>`).join('')+`</div>`).join('');
-};
+      <button class=inc onclick='toggleInc(${i},${attr(s.name)})'>include</button>
+    </div>`).join('')+`</div>`;}).join('');
+}
+$('loadStem').onclick=loadStem;
+$('set').onchange=()=>{if($('panel-stem').classList.contains('on'))loadStem();};
 
 // ---- fibers ----
 for(const [s,l] of [['k','kv'],['ms','msv'],['mr','mrv']])
@@ -453,7 +514,7 @@ $('compFiber').onclick=async()=>{
       </div>`).join('')+`</div>`).join('')+`</div>`).join('');
   recolor();
 };
-function esc(s){return (s+'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function esc(s){return (s+'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function attr(o){return esc(JSON.stringify(o));}
 loadSets();
 </script>
