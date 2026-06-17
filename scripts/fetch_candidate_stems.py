@@ -43,6 +43,7 @@ Usage (from repo root):
   # Legacy batching (avoid unless debugging):
   venvs/audio/bin/python scripts/fetch_candidate_stems.py --limit 15 --offset 0
 """
+
 from __future__ import annotations
 
 import argparse
@@ -55,7 +56,9 @@ from pathlib import Path
 
 _log = logging.getLogger("fetch_candidate_stems")
 
-DEFAULT_SET = Path.home() / "aligning" / "1fsnxchk__Two Friends - Big Bootie Mix Volume 12"
+DEFAULT_SET = (
+    Path.home() / "aligning" / "1fsnxchk__Two Friends - Big Bootie Mix Volume 12"
+)
 
 # The 7 real acappellas dragged in from ~/Downloads -> their song stem folders.
 # (Mapped by substring so the messy download filenames resolve to a song.)
@@ -69,22 +72,35 @@ MANUAL_DOWNLOAD_VOCALS = {
     "Mo Money Mo Problems": "087__The Notorious B.I.G - Mo Money Mo Problems (Acappella) [104bpm 12B]",
 }
 
-_REMIX_WORDS = ("remix", "rework", "edit", "bootleg", "mashup", "altversion", "vip", "flip")
+_REMIX_WORDS = (
+    "remix",
+    "rework",
+    "edit",
+    "bootleg",
+    "mashup",
+    "altversion",
+    "vip",
+    "flip",
+)
 _VOCAL_SUFFIXES = ("acapella", "acappella", "vocals only", "a cappella")
 _INSTR_SUFFIXES = ("instrumental", "instrumental only")
-_BRACKET_RE = re.compile(r"\s*\[[^\]]*\]\s*$")           # trailing " [128bpm 1A]" / "[no-features]"
-_LEAD_NUM_RE = re.compile(r"^\d+(?:w\d+)?__")            # "048__" / "024w1__"
-_PAREN_RE = re.compile(r"\s*\(([^)]*)\)\s*$")            # trailing "(Madison Mars Remix)"
+_BRACKET_RE = re.compile(
+    r"\s*\[[^\]]*\]\s*$"
+)  # trailing " [128bpm 1A]" / "[no-features]"
+_LEAD_NUM_RE = re.compile(r"^\d+(?:w\d+)?__")  # "048__" / "024w1__"
+_PAREN_RE = re.compile(r"\s*\(([^)]*)\)\s*$")  # trailing "(Madison Mars Remix)"
 
 
 @dataclass(frozen=True)
 class Layer:
-    folder: str          # stem folder name, e.g. "048__Martin Garrix... (Madison Mars Remix) [..]"
-    layer: str           # "vocals" | "instrumental"
+    folder: (
+        str  # stem folder name, e.g. "048__Martin Garrix... (Madison Mars Remix) [..]"
+    )
+    layer: str  # "vocals" | "instrumental"
     artist: str
-    title: str           # base title, version qualifier stripped
-    version_tag: str     # lowercased: "" | "remix" | "rework" | ...
-    remixer: str         # named remixer for instrumental queries, or ""
+    title: str  # base title, version qualifier stripped
+    version_tag: str  # lowercased: "" | "remix" | "rework" | ...
+    remixer: str  # named remixer for instrumental queries, or ""
     track_id: str = ""
 
     @property
@@ -142,14 +158,24 @@ def _parse_folder(folder: str) -> tuple[str, str, str, str]:
             version_tag = last
             name = " ".join(words[:-1]).strip()
             # "Madison Mars Remix" -> remixer "Madison Mars"; bare "Remix" -> none
-            if name and name.lower() not in ("instrumental", "extended", "club", "radio"):
+            if name and name.lower() not in (
+                "instrumental",
+                "extended",
+                "club",
+                "radio",
+            ):
                 remixer = name
-        elif qual.lower() in ("acappella", "acapella", "instrumental", "instrumental mix"):
+        elif qual.lower() in (
+            "acappella",
+            "acapella",
+            "instrumental",
+            "instrumental mix",
+        ):
             pass  # stem-ish label, not a version
         else:
             version_tag = qual.lower()
     artist, _, title = s.partition(" - ")
-    if not title:                       # no " - " split; treat whole as title
+    if not title:  # no " - " split; treat whole as title
         artist, title = artist, ""
     return artist.strip(), title.strip(), version_tag, remixer
 
@@ -182,12 +208,29 @@ def extract_layers(set_dir: Path, als_xml: str) -> list[Layer]:
         seen[key] = Layer(folder, layer, artist, title, vtag, f_remixer, tid)
 
     import html
-    for m in re.finditer(r'<Path Value="([^"]*/stems/([^/]+)/(vocals|instrumental)\.flac)"', als_xml):
+
+    for m in re.finditer(
+        r'<Path Value="([^"]*/stems/([^/]+)/(vocals|instrumental)\.flac)"', als_xml
+    ):
         add(html.unescape(m.group(2)), m.group(3))
     for f in MANUAL_DOWNLOAD_VOCALS.values():
         add(f, "vocals")
 
     return sorted(seen.values(), key=lambda l: (l.num, l.layer))
+
+
+def _resolve_on_disk_folder(set_dir: Path, folder: str) -> str:
+    """Map a manifest (canonical, untagged) stem-folder name to the actual
+    on-disk dir, preferring an annotator-tagged sibling ``folder [126bpm 8B]``
+    so candidates land WITH the renamed stems, not in an untagged duplicate."""
+    stems = set_dir / "stems"
+    if (stems / folder).is_dir():
+        return folder
+    if stems.is_dir():
+        for d in sorted(stems.iterdir()):
+            if d.is_dir() and (d.name == folder or d.name.startswith(folder + " [")):
+                return d.name
+    return folder
 
 
 def manifest_layers(set_dir: Path) -> list[Layer]:
@@ -211,13 +254,16 @@ def manifest_layers(set_dir: Path) -> list[Layer]:
             folder = Path(t["local_path"]).stem
         if not folder:
             continue
+        folder = _resolve_on_disk_folder(set_dir, folder)
         f_artist, f_title, f_vtag, f_remixer = _parse_folder(folder)
         artist = t.get("artist") or f_artist
         title = t.get("title") or f_title
         vtag = (t.get("version") or f_vtag or "").lower()
         tid = t.get("track_id", "")
         low = folder.lower()
-        if any(s in low for s in ("acapella", "acappella", "a cappella", "vocals only")):
+        if any(
+            s in low for s in ("acapella", "acappella", "a cappella", "vocals only")
+        ):
             want = ["vocals"]
         elif "instrumental" in low:
             want = ["instrumental"]
@@ -233,8 +279,11 @@ def manifest_layers(set_dir: Path) -> list[Layer]:
 
 
 def _kw_for(layer: str) -> tuple[str, ...]:
-    return ("acapella", "acappella", "a cappella", "vocals only", "vocal", "voice track") if layer == "vocals" \
+    return (
+        ("acapella", "acappella", "a cappella", "vocals only", "vocal", "voice track")
+        if layer == "vocals"
         else ("instrumental", "instr", "inst.")
+    )
 
 
 def _fmt_duration(secs: float | int | None) -> str:
@@ -254,7 +303,9 @@ def rank_hits(layer: Layer, hits: list[Hit]) -> list[Hit]:
         s = 0
         if any(k in tl for k in kws):
             s += 5
-        s += 2 * len(a_tok & set(re.split(r"\W+", (h.title + " " + h.uploader).lower())))
+        s += 2 * len(
+            a_tok & set(re.split(r"\W+", (h.title + " " + h.uploader).lower()))
+        )
         s += 2 * len(t_tok & set(re.split(r"\W+", tl)))
         if rmx and rmx in tl:
             s += 4
@@ -264,20 +315,27 @@ def rank_hits(layer: Layer, hits: list[Hit]) -> list[Hit]:
     return sorted(hits, key=lambda h: h.score, reverse=True)
 
 
-def search_layer(layer: Layer, per_query: int = 5, cookies_browser: str | None = None) -> list[Hit]:
+def search_layer(
+    layer: Layer, per_query: int = 5, cookies_browser: str | None = None
+) -> list[Hit]:
     import yt_dlp
+
     by_id: dict[str, Hit] = {}
     # yt-dlp's library default js runtime is deno (not installed on this Mac);
     # YouTube signature/n-challenge solving needs node>=22 + yt-dlp-ejs.
-    opts: dict = {"quiet": True, "no_warnings": True, "extract_flat": True,
-                  "js_runtimes": {"node": {}}}
+    opts: dict = {
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": True,
+        "js_runtimes": {"node": {}},
+    }
     if cookies_browser:
         opts["cookiesfrombrowser"] = (cookies_browser,)
     with yt_dlp.YoutubeDL(opts) as ydl:
         for q in layer.queries():
             try:
                 info = ydl.extract_info(f"ytsearch{per_query}:{q}", download=False)
-            except Exception as e:                       # noqa: BLE001
+            except Exception as e:  # noqa: BLE001
                 _log.debug("search err %r: %s", q, e)
                 continue
             for r in info.get("entries") or []:
@@ -285,10 +343,12 @@ def search_layer(layer: Layer, per_query: int = 5, cookies_browser: str | None =
                 if not vid or vid in by_id:
                     continue
                 by_id[vid] = Hit(
-                    video_id=vid, title=str(r.get("title") or ""),
+                    video_id=vid,
+                    title=str(r.get("title") or ""),
                     uploader=str(r.get("uploader") or r.get("channel") or ""),
                     duration=_fmt_duration(r.get("duration")),
-                    src_filter="youtube", src_query=q,
+                    src_filter="youtube",
+                    src_query=q,
                 )
     return rank_hits(layer, list(by_id.values()))
 
@@ -299,8 +359,11 @@ def _safe(name: str, limit: int = 80) -> str:
     return name[:limit].strip() or "untitled"
 
 
-def download_hit(hit: Hit, dest: Path, rank: int, cookies_browser: str | None) -> Path | None:
+def download_hit(
+    hit: Hit, dest: Path, rank: int, cookies_browser: str | None
+) -> Path | None:
     import yt_dlp
+
     stem = f"cand{rank}__{_safe(hit.title)}__{_safe(hit.uploader, 40)}"
     outtmpl = str(dest / (stem + ".%(ext)s"))
     opts = {
@@ -309,8 +372,16 @@ def download_hit(hit: Hit, dest: Path, rank: int, cookies_browser: str | None) -
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
-        "js_runtimes": {"node": {}},   # node>=22 + yt-dlp-ejs; library default is deno (absent)
-        "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "m4a", "preferredquality": "0"}],
+        "js_runtimes": {
+            "node": {}
+        },  # node>=22 + yt-dlp-ejs; library default is deno (absent)
+        "postprocessors": [
+            {
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "m4a",
+                "preferredquality": "0",
+            }
+        ],
     }
     if cookies_browser:
         opts["cookiesfrombrowser"] = (cookies_browser,)
@@ -318,8 +389,10 @@ def download_hit(hit: Hit, dest: Path, rank: int, cookies_browser: str | None) -
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             ydl.download([url])
-    except Exception as e:                               # noqa: BLE001
-        _log.warning("    dl FAIL %s (%s): %s", hit.video_id, hit.title[:40], str(e)[:120])
+    except Exception as e:  # noqa: BLE001
+        _log.warning(
+            "    dl FAIL %s (%s): %s", hit.video_id, hit.title[:40], str(e)[:120]
+        )
         return None
     out = dest / (stem + ".m4a")
     return out if out.exists() else None
@@ -359,18 +432,32 @@ def _attach_files_from_disk(entry: dict, set_dir: Path) -> None:
             c["file"] = by_rank[rank]
     for rank, fname in sorted(by_rank.items()):
         if not any(c.get("rank") == rank for c in entry.get("candidates", [])):
-            entry.setdefault("candidates", []).append({
-                "rank": rank, "video_id": "", "title": fname, "uploader": "",
-                "duration": "", "score": 0, "src_filter": "disk", "file": fname,
-            })
+            entry.setdefault("candidates", []).append(
+                {
+                    "rank": rank,
+                    "video_id": "",
+                    "title": fname,
+                    "uploader": "",
+                    "duration": "",
+                    "score": 0,
+                    "src_filter": "disk",
+                    "file": fname,
+                }
+            )
 
 
 def _stub_entry(layer: Layer) -> dict:
     return {
-        "folder": layer.folder, "layer": layer.layer, "artist": layer.artist,
-        "title": layer.title, "version_tag": layer.version_tag, "remixer": layer.remixer,
-        "track_id": layer.track_id, "low_confidence": layer.low_confidence,
-        "queries": layer.queries(), "candidates": [],
+        "folder": layer.folder,
+        "layer": layer.layer,
+        "artist": layer.artist,
+        "title": layer.title,
+        "version_tag": layer.version_tag,
+        "remixer": layer.remixer,
+        "track_id": layer.track_id,
+        "low_confidence": layer.low_confidence,
+        "queries": layer.queries(),
+        "candidates": [],
     }
 
 
@@ -429,7 +516,8 @@ def _audit(
     stale = [
         f"{e['folder']} ({e['layer']})"
         for e in merged
-        if (e["folder"], e["layer"]) not in {(l.folder, l.layer) for l in all_als_layers}
+        if (e["folder"], e["layer"])
+        not in {(l.folder, l.layer) for l in all_als_layers}
     ]
     if missing:
         _log.warning("%d layer(s) in .als with NO candidates:", len(missing))
@@ -442,33 +530,74 @@ def _audit(
     if stale:
         _log.info("%d manifest row(s) not in this .als (kept on disk only)", len(stale))
     complete = len(all_als_layers) - len(missing) - len(partial)
-    _log.info("audit: %d/%d .als layers have >=%d candidates", complete, len(all_als_layers), need)
+    _log.info(
+        "audit: %d/%d .als layers have >=%d candidates",
+        complete,
+        len(all_als_layers),
+        need,
+    )
     return len(missing) + len(partial)
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--set-dir", type=Path, default=DEFAULT_SET)
-    p.add_argument("--als", type=Path, default=None, help="Defaults to newest *_fast.als / *.als in the project.")
-    p.add_argument("--from-manifest", action="store_true",
-                   help="Build layers from manifest.json instead of the .als (upfront fetch: "
-                        "both layers for regular tracks, single for explicitly-labeled acap/instr).")
-    p.add_argument("--candidates", type=int, default=3, help="Top-N hits to download per layer.")
-    p.add_argument("--only", choices=("vocals", "instrumental"), default=None)
-    p.add_argument("--filter", default=None, help="Substring on folder name (e.g. '080' or 'Coldplay').")
-    p.add_argument("--limit", type=int, default=None)
-    p.add_argument("--offset", type=int, default=0, help="Skip first N layers after filters (legacy batching).")
     p.add_argument(
-        "--all", action="store_true",
+        "--als",
+        type=Path,
+        default=None,
+        help="Defaults to newest *_fast.als / *.als in the project.",
+    )
+    p.add_argument(
+        "--from-manifest",
+        action="store_true",
+        help="Build layers from manifest.json instead of the .als (upfront fetch: "
+        "both layers for regular tracks, single for explicitly-labeled acap/instr).",
+    )
+    p.add_argument(
+        "--candidates", type=int, default=3, help="Top-N hits to download per layer."
+    )
+    p.add_argument("--only", choices=("vocals", "instrumental"), default=None)
+    p.add_argument(
+        "--filter",
+        default=None,
+        help="Substring on folder name (e.g. '080' or 'Coldplay').",
+    )
+    p.add_argument("--limit", type=int, default=None)
+    p.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help="Skip first N layers after filters (legacy batching).",
+    )
+    p.add_argument(
+        "--all",
+        action="store_true",
         help="Process every .als layer, not only those missing candidates on disk (default: gaps only).",
     )
     p.add_argument(
-        "--keep-stale", action="store_true",
+        "--keep-stale",
+        action="store_true",
         help="Keep manifest rows for layers no longer in this .als (default: prune).",
     )
-    p.add_argument("--dry-run", action="store_true", help="Search + print resolved hits; download nothing.")
-    p.add_argument("--cookies-from-browser", default=None, help="e.g. 'safari' / 'chrome' if bot-checked.")
-    p.add_argument("--als-xml", type=Path, default=None, help="Pre-decompressed .als XML (internal/testing).")
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Search + print resolved hits; download nothing.",
+    )
+    p.add_argument(
+        "--cookies-from-browser",
+        default=None,
+        help="e.g. 'safari' / 'chrome' if bot-checked.",
+    )
+    p.add_argument(
+        "--als-xml",
+        type=Path,
+        default=None,
+        help="Pre-decompressed .als XML (internal/testing).",
+    )
     p.add_argument("--log-level", default="INFO")
     return p.parse_args(argv)
 
@@ -477,6 +606,7 @@ def _load_als_xml(args: argparse.Namespace) -> str:
     if args.als_xml and args.als_xml.exists():
         return args.als_xml.read_text(errors="ignore")
     import gzip
+
     proj = args.set_dir  # the .als lives in the Ableton project, not the aligning dir
     als = args.als
     if als is None:
@@ -484,14 +614,19 @@ def _load_als_xml(args: argparse.Namespace) -> str:
         cands = sorted(args.set_dir.glob("*.als")) or sorted(Path.cwd().glob("*.als"))
         als = cands[0] if cands else None
     if als is None or not Path(als).exists():
-        _log.error("No .als found; pass --als <project.als> or --als-xml <decompressed.xml>")
+        _log.error(
+            "No .als found; pass --als <project.als> or --als-xml <decompressed.xml>"
+        )
         sys.exit(2)
     return gzip.decompress(Path(als).read_bytes()).decode("utf-8", "ignore")
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    logging.basicConfig(level=getattr(logging, args.log_level), format="%(asctime)s %(levelname)s: %(message)s")
+    logging.basicConfig(
+        level=getattr(logging, args.log_level),
+        format="%(asctime)s %(levelname)s: %(message)s",
+    )
 
     if args.from_manifest:
         all_als_layers = manifest_layers(args.set_dir)
@@ -507,8 +642,10 @@ def main(argv: list[str] | None = None) -> int:
     if gaps_only and not args.limit and not args.offset:
         before = len(layers)
         layers = [
-            l for l in layers
-            if _count_candidates_on_disk(args.set_dir, l.folder, l.layer) < args.candidates
+            l
+            for l in layers
+            if _count_candidates_on_disk(args.set_dir, l.folder, l.layer)
+            < args.candidates
         ]
         _log.info("gap sync: %d/%d .als layers need candidates", len(layers), before)
 
@@ -521,29 +658,64 @@ def main(argv: list[str] | None = None) -> int:
     n_ins = len(layers) - n_voc
     _log.info(
         "%d to process (%d vocal / %d instrumental); need=%d; dry_run=%s; .als layers=%d",
-        len(layers), n_voc, n_ins, args.candidates, args.dry_run, len(all_als_layers),
+        len(layers),
+        n_voc,
+        n_ins,
+        args.candidates,
+        args.dry_run,
+        len(all_als_layers),
     )
 
     ledger: list[dict] = []
     for i, layer in enumerate(layers, 1):
         tag = f"[{layer.version_tag}]" if layer.version_tag else ""
         flag = " (LOW-CONF remixer unknown)" if layer.low_confidence else ""
-        _log.info("(%d/%d) %s  %s — %s %s%s", i, len(layers), layer.layer.upper(),
-                  layer.artist, layer.title, tag, flag)
-        hits = search_layer(layer, cookies_browser=args.cookies_from_browser)[: max(args.candidates, 3)]
+        _log.info(
+            "(%d/%d) %s  %s — %s %s%s",
+            i,
+            len(layers),
+            layer.layer.upper(),
+            layer.artist,
+            layer.title,
+            tag,
+            flag,
+        )
+        hits = search_layer(layer, cookies_browser=args.cookies_from_browser)[
+            : max(args.candidates, 3)
+        ]
         chosen = hits[: args.candidates]
         for h in chosen:
-            _log.info("      %-7s %s  %-52s | %-26s | %s",
-                      f"s={h.score}", h.video_id, h.title[:52], h.uploader[:26], h.duration)
+            _log.info(
+                "      %-7s %s  %-52s | %-26s | %s",
+                f"s={h.score}",
+                h.video_id,
+                h.title[:52],
+                h.uploader[:26],
+                h.duration,
+            )
         entry = {
-            "folder": layer.folder, "layer": layer.layer, "artist": layer.artist,
-            "title": layer.title, "version_tag": layer.version_tag, "remixer": layer.remixer,
-            "track_id": layer.track_id, "low_confidence": layer.low_confidence,
+            "folder": layer.folder,
+            "layer": layer.layer,
+            "artist": layer.artist,
+            "title": layer.title,
+            "version_tag": layer.version_tag,
+            "remixer": layer.remixer,
+            "track_id": layer.track_id,
+            "low_confidence": layer.low_confidence,
             "queries": layer.queries(),
-            "candidates": [{"rank": r + 1, "video_id": h.video_id, "title": h.title,
-                            "uploader": h.uploader, "duration": h.duration, "score": h.score,
-                            "src_filter": h.src_filter, "file": None}
-                           for r, h in enumerate(chosen)],
+            "candidates": [
+                {
+                    "rank": r + 1,
+                    "video_id": h.video_id,
+                    "title": h.title,
+                    "uploader": h.uploader,
+                    "duration": h.duration,
+                    "score": h.score,
+                    "src_filter": h.src_filter,
+                    "file": None,
+                }
+                for r, h in enumerate(chosen)
+            ],
         }
         if not args.dry_run and chosen:
             # vocals + instrumental for the same stem folder share one parent
@@ -563,13 +735,18 @@ def main(argv: list[str] | None = None) -> int:
 
     out_manifest = args.set_dir / "candidate_stems_manifest.json"
     merged = _finalize_manifest(
-        out_manifest, args.set_dir, all_als_layers, ledger,
+        out_manifest,
+        args.set_dir,
+        all_als_layers,
+        ledger,
         prune_stale=not args.keep_stale,
     )
     out_manifest.write_text(json.dumps(merged, indent=1, ensure_ascii=False))
     _log.info(
         "wrote ledger -> %s (%d processed this run, %d rows for this .als)",
-        out_manifest, len(ledger), len(merged),
+        out_manifest,
+        len(ledger),
+        len(merged),
     )
     gaps = _audit(args.set_dir, all_als_layers, merged, need=args.candidates)
     if gaps and not args.dry_run and gaps_only and not args.filter:
