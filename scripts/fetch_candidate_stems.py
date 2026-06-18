@@ -125,9 +125,14 @@ class Layer:
         # instrumental
         if self.remixer:
             base = f"{a} {t} {self.remixer} Remix".strip()
-        elif self.is_remix:
-            base = f"{a} {t} {self.version_tag}".strip()
         else:
+            # No NAMED remixer: do not inject the bare internal version tag
+            # ("altversion", "rework", "edit", ...). These are taxonomy labels,
+            # not strings that appear in YouTube titles, so YouTube drops
+            # relevance and returns the artist's most-popular videos instead
+            # (e.g. "Feel So Close altversion instrumental" -> One Kiss / Blame
+            # / Summer). Search the plain song instrumental; remix-without-named
+            # -remixer layers are already flagged `low_confidence` for audit.
             base = f"{a} {t}".strip()
         return [f"{base} {s}" for s in _INSTR_SUFFIXES]
 
