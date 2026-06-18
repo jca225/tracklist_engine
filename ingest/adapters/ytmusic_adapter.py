@@ -16,10 +16,12 @@ Schema:
   Resulting `track_audio` rows use platform='youtube_music' so they're
   distinguishable from raw 1001tracklists YT scrapes (platform='youtube').
 """
+
 from __future__ import annotations
 
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -54,18 +56,20 @@ def _sha256(path: Path) -> str:
 @dataclass(frozen=True)
 class YTMSearchHit:
     """One YT Music search hit (filtered to `songs` resultType)."""
+
     video_id: str
     title: str
     artists: tuple[str, ...]
-    duration_s: int | None         # None if ytmusicapi returned malformed duration
+    duration_s: int | None  # None if ytmusicapi returned malformed duration
 
 
 @dataclass(frozen=True)
 class BatchItem:
     """One unit of work for `download_batch` — a canonical track_id paired
     with the search query string we pass to YT Music."""
+
     track_id: str
-    query: str                     # "Artist - Title" or similar
+    query: str  # "Artist - Title" or similar
 
 
 @dataclass(frozen=True)
@@ -99,11 +103,14 @@ def _get_ytmusic():
     global _ytmusic_singleton
     if _ytmusic_singleton is None:
         from ytmusicapi import YTMusic
+
         _ytmusic_singleton = YTMusic()
     return _ytmusic_singleton
 
 
-def search(query: str, limit: int = 5) -> Result[tuple[YTMSearchHit, ...], DownloadError]:
+def search(
+    query: str, limit: int = 5
+) -> Result[tuple[YTMSearchHit, ...], DownloadError]:
     """Search YT Music's 'songs' filter for `query` and return up to `limit`
     hits. Filter='songs' restricts to clean studio uploads (Topic channels
     + label-uploaded album tracks); excludes music videos, live recordings,
@@ -113,27 +120,35 @@ def search(query: str, limit: int = 5) -> Result[tuple[YTMSearchHit, ...], Downl
         yt = _get_ytmusic()
         raw = yt.search(query, filter="songs", limit=limit)
     except Exception as e:
-        return Err(DownloadError(
-            kind="network", url=query,
-            detail=f"ytmusicapi search failed: {type(e).__name__}: {e}"[:300],
-        ))
+        return Err(
+            DownloadError(
+                kind="network",
+                url=query,
+                detail=f"ytmusicapi search failed: {type(e).__name__}: {e}"[:300],
+            )
+        )
     hits = []
     for r in raw[:limit]:
         vid = r.get("videoId")
         if not vid:
             continue
         artists = tuple(a.get("name", "") for a in (r.get("artists") or []))
-        hits.append(YTMSearchHit(
-            video_id=vid,
-            title=r.get("title", ""),
-            artists=artists,
-            duration_s=_parse_duration(r.get("duration")),
-        ))
+        hits.append(
+            YTMSearchHit(
+                video_id=vid,
+                title=r.get("title", ""),
+                artists=artists,
+                duration_s=_parse_duration(r.get("duration")),
+            )
+        )
     if not hits:
-        return Err(DownloadError(
-            kind="unavailable", url=query,
-            detail=f"ytmusicapi returned no song hits for {query!r}",
-        ))
+        return Err(
+            DownloadError(
+                kind="unavailable",
+                url=query,
+                detail=f"ytmusicapi returned no song hits for {query!r}",
+            )
+        )
     return Ok(tuple(hits))
 
 
@@ -148,10 +163,13 @@ def _ytdlp_download(
     audio to cfg.out_dir. Returns the path of the produced file."""
     bin_path = _ytdlp_bin()
     if bin_path is None:
-        return Err(DownloadError(
-            kind="parse", url=f"yt:{video_id}",
-            detail="yt-dlp not on PATH",
-        ))
+        return Err(
+            DownloadError(
+                kind="parse",
+                url=f"yt:{video_id}",
+                detail="yt-dlp not on PATH",
+            )
+        )
     cfg.out_dir.mkdir(parents=True, exist_ok=True)
     # Write to canonical track-audio name directly to avoid post-download rename.
     dst = cfg.out_dir / f"{track_id}__youtube_music__{video_id}.{cfg.audio_format}"
@@ -160,11 +178,17 @@ def _ytdlp_download(
 
     url = f"https://www.youtube.com/watch?v={video_id}"
     cmd = [
-        bin_path, url,
-        "-x", "--audio-format", cfg.audio_format,
-        "-o", str(dst),
-        "--no-playlist", "--quiet",
-        "--retries", str(cfg.retries),
+        bin_path,
+        url,
+        "-x",
+        "--audio-format",
+        cfg.audio_format,
+        "-o",
+        str(dst),
+        "--no-playlist",
+        "--quiet",
+        "--retries",
+        str(cfg.retries),
     ]
     if cookies_path is not None and cookies_path.is_file():
         cmd += ["--cookies", str(cookies_path)]
@@ -172,26 +196,91 @@ def _ytdlp_download(
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)
     except subprocess.TimeoutExpired:
-        return Err(DownloadError(
-            kind="network", url=url,
-            detail=f"yt-dlp timeout after {timeout_s}s",
-        ))
+        return Err(
+            DownloadError(
+                kind="network",
+                url=url,
+                detail=f"yt-dlp timeout after {timeout_s}s",
+            )
+        )
     except OSError as e:
         return Err(DownloadError(kind="parse", url=url, detail=str(e)))
 
     if proc.returncode != 0:
         msg = (proc.stderr or proc.stdout or "")[:300]
-        kind = "unavailable" if (
-            "unavailable" in msg.lower() or "not available" in msg.lower()
-        ) else "parse"
+        kind = (
+            "unavailable"
+            if ("unavailable" in msg.lower() or "not available" in msg.lower())
+            else "parse"
+        )
         return Err(DownloadError(kind=kind, url=url, detail=msg))
 
     if not dst.is_file():
-        return Err(DownloadError(
-            kind="parse", url=url,
-            detail=f"yt-dlp finished cleanly but {dst} missing",
-        ))
+        return Err(
+            DownloadError(
+                kind="parse",
+                url=url,
+                detail=f"yt-dlp finished cleanly but {dst} missing",
+            )
+        )
     return Ok(dst)
+
+
+_VERSION_WORDS = (
+    "remix",
+    "bootleg",
+    "rework",
+    "edit",
+    "vip",
+    "flip",
+    "mashup",
+    "refix",
+    "retwerk",
+)
+_VOCAL_QUALS = ("instrumental", "acappella", "acapella", "vocals only", "a cappella")
+_QUAL_STOP = {*_VERSION_WORDS, "mix", "the", "and", "feat", "ft", "vs", "with"}
+
+
+def _expected_version_tokens(query: str) -> list[str]:
+    """Tokens the chosen hit's title MUST contain, from a version qualifier in
+    the query. Empty list => no version qualifier (original cut) => accept the
+    top hit unconditionally. This is what stops "correct title, wrong audio":
+    a query for a named remix/bootleg must not silently resolve to the original.
+
+      'Adele - Someone Like You (Vicetone Remix)'   -> ['vicetone']
+      'X - Y (Oski & Apashe & Lennon Bootleg)'      -> ['oski','apashe','lennon']
+      'X - Y (Remix)'                               -> ['remix']  (bare version)
+      'X - Y'                                       -> []         (original)
+    """
+    m = re.search(r"\(([^)]*)\)\s*$", query)
+    qual = m.group(1).lower().strip() if m else ""
+    if not qual:  # also catch un-parenthesized 'Title <Name> Remix'
+        mm = re.search(
+            r"\b(\w[\w .&'-]*?\s+(?:%s))\s*$" % "|".join(_VERSION_WORDS), query.lower()
+        )
+        qual = mm.group(1) if mm else ""
+    if not qual or any(v in qual for v in _VOCAL_QUALS):
+        return []
+    if not any(v in qual for v in _VERSION_WORDS):
+        return []  # parenthetical is not a version qualifier
+    names = [t for t in re.split(r"[\W_]+", qual) if len(t) > 2 and t not in _QUAL_STOP]
+    if names:  # named remixer -> require the name tokens
+        return names
+    return [w for w in _VERSION_WORDS if w in qual][:1]  # bare version word
+
+
+def _select_hit(query: str, hits: tuple[YTMSearchHit, ...]) -> YTMSearchHit | None:
+    """Pick the hit matching the query's version qualifier. Returns None when
+    the query names a version/remixer that NO hit's title carries — the caller
+    then refuses the download instead of installing the wrong version."""
+    want = _expected_version_tokens(query)
+    if not want:
+        return hits[0]
+    for h in hits:
+        tl = h.title.lower()
+        if all(t in tl for t in want):
+            return h
+    return None
 
 
 def download_one(
@@ -201,11 +290,13 @@ def download_one(
     timeout_s: float = 120.0,
     cookies_path: Path | None = None,
 ) -> Result[AudioAsset, DownloadError]:
-    """Search YT Music for `query`, pick the top 'songs' hit, download it
-    via yt-dlp, return an AudioAsset.
+    """Search YT Music for `query`, pick the 'songs' hit that matches the
+    query's version qualifier, download it via yt-dlp, return an AudioAsset.
 
-    `query` is typically 'Artist - Title' from track_metadata. The top
-    'songs' filter result is studio audio (no music video noise).
+    `query` is typically 'Artist - Title' (or '… (Remixer Remix)') from
+    track_metadata. The 'songs' filter result is studio audio (no music-video
+    noise). If the query names a remix/bootleg that no hit carries, this
+    refuses (Err kind='version-mismatch') rather than installing the original.
     """
     sr = search(query, limit=5)
     match sr:
@@ -214,7 +305,19 @@ def download_one(
         case Ok(hits):
             pass
 
-    top = hits[0]
+    top = _select_hit(query, hits)
+    if top is None:
+        return Err(
+            DownloadError(
+                kind="version-mismatch",
+                url=f"ytmsearch:{query}",
+                detail=(
+                    f"no 'songs' hit matched the version qualifier in {query!r}; "
+                    f"top hit was {hits[0].title!r} — refusing to install the "
+                    f"wrong version (correct title / wrong audio)"
+                ),
+            )
+        )
     dl = _ytdlp_download(top.video_id, track_id, cfg, timeout_s, cookies_path)
     match dl:
         case Err(err):
@@ -222,19 +325,21 @@ def download_one(
         case Ok(path):
             pass
 
-    return Ok(AudioAsset(
-        track_audio_id=None,
-        track_id=track_id,
-        platform="youtube_music",
-        source_url=f"https://www.youtube.com/watch?v={top.video_id}",
-        player_id=top.video_id,
-        path=str(path),
-        sha256=_sha256(path),
-        duration_s=float(top.duration_s) if top.duration_s else None,
-        sample_rate=None,
-        codec=cfg.audio_format,
-        bitrate_kbps=None,
-    ))
+    return Ok(
+        AudioAsset(
+            track_audio_id=None,
+            track_id=track_id,
+            platform="youtube_music",
+            source_url=f"https://www.youtube.com/watch?v={top.video_id}",
+            player_id=top.video_id,
+            path=str(path),
+            sha256=_sha256(path),
+            duration_s=float(top.duration_s) if top.duration_s else None,
+            sample_rate=None,
+            codec=cfg.audio_format,
+            bitrate_kbps=None,
+        )
+    )
 
 
 def download_batch(
@@ -261,12 +366,17 @@ def download_batch(
     def _one(it: BatchItem) -> BatchResult:
         out_dir = objects_root / it.track_id
         cfg = DownloadConfig(
-            out_dir=out_dir, audio_format=audio_format, retries=2,
+            out_dir=out_dir,
+            audio_format=audio_format,
+            retries=2,
             cookies_path=cookies_path,
         )
         r = download_one(
-            it.track_id, it.query, cfg,
-            timeout_s=timeout_s_per_track, cookies_path=cookies_path,
+            it.track_id,
+            it.query,
+            cfg,
+            timeout_s=timeout_s_per_track,
+            cookies_path=cookies_path,
         )
         return BatchResult(item=it, result=r)
 
