@@ -56,6 +56,7 @@ Prune safety:
     not from `succeeded`, so a transient rsync failure does not cause
     its file to be misclassified as an orphan.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -69,6 +70,13 @@ import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from core.audio_resolve import (  # noqa: E402
+    TIER_VARIANT_FALLBACK,
+    resolve_slot_audio,
+    tier_name,
+)
+
 PI_HOST = "pi-storage"
 PI_DB = "/mnt/storage/data/db/music_database.db"
 
@@ -79,7 +87,7 @@ def sanitize(s: str, max_len: int = 120) -> str:
     s = unicodedata.normalize("NFC", s or "")
     s = _BAD.sub("-", s)
     s = re.sub(r"\s+", " ", s).strip(" .")
-    return (s[:max_len].rstrip(" .") or "_")
+    return s[:max_len].rstrip(" .") or "_"
 
 
 @dataclass(frozen=True)
@@ -96,13 +104,14 @@ class TrackRow:
     Each appearance gets its own label and local filename; in the pull
     loop, the first appearance triggers an rsync and subsequent
     appearances are hard-linked to the cached file."""
+
     track_id: str
     track_audio_id: int
     artist: str
     title: str
-    version: str | None          # original | remix | rework | … (track_metadata)
-    stem: str                    # regular | acappella | instrumental (track_audio)
-    variant: str                 # regular | extended (track_audio)
+    version: str | None  # original | remix | rework | … (track_metadata)
+    stem: str  # regular | acappella | instrumental (track_audio)
+    variant: str  # regular | extended (track_audio)
     # Raw "Artist - Title (Qualifier)" from track_metadata. Carries the full
     # remixer qualifier ("(Syn Cole Remix)") that the version column
     # collapses to "remix". Used to build the filename suffix.
@@ -135,7 +144,11 @@ def ssh_sqlite(query: str) -> list[dict]:
     script = f".mode json\n{query.strip()}\n"
     cmd = ["ssh", PI_HOST, f"sqlite3 {PI_DB}"]
     out = subprocess.run(
-        cmd, input=script, capture_output=True, text=True, check=True,
+        cmd,
+        input=script,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     body = out.stdout.strip()
     if not body:
@@ -262,14 +275,21 @@ def fetch_tracks(set_id: str) -> list[TrackRow]:
     # to deriving labels from raw dj_set_rows for unmaterialized sets.
     slot_rows = ssh_sqlite(f"""
         SELECT row_index, slot_label,
-               COALESCE(recording_id, track_id) AS track_id
+               COALESCE(recording_id, track_id) AS track_id,
+               claimed_stem, claimed_variant
         FROM set_track_slots
         WHERE set_id = '{set_id}'
         ORDER BY row_index;
     """)
     if slot_rows:
         labeled = [
-            (r["slot_label"], r["row_index"], r["track_id"])
+            (
+                r["slot_label"],
+                r["row_index"],
+                r["track_id"],
+                r.get("claimed_stem") or "regular",
+                r.get("claimed_variant") or "regular",
+            )
             for r in slot_rows
             if r.get("track_id") and r.get("slot_label")
         ]
@@ -289,12 +309,19 @@ def fetch_tracks(set_id: str) -> list[TrackRow]:
             ORDER BY row_index;
         """)
         row_rows = [r for r in row_rows if r.get("track_id")]
-        labeled = _label_rows(row_rows)
+        # dj_set_rows has no claimed axes -> regular/regular (current behavior).
+        labeled = [
+            (lbl, ri, tid, "regular", "regular")
+            for (lbl, ri, tid) in _label_rows(row_rows)
+        ]
     if not labeled:
         return []
 
-    # Second pass: resolve each unique track_id to its best track_audio
-    # row + metadata. Platform ordering prefers cleanest sources.
+    # Second pass (resolve-at-read): fetch ALL track_audio candidates for the
+    # wanted recordings/tracks, then pick per slot by its claimed stem+variant
+    # (core.audio_resolve). A recording can have regular/extended/acappella/
+    # instrumental siblings, and two sets may need different ones — so we do
+    # NOT collapse to one is_reference row here; the slot's claim decides.
     #
     # Ids come from the canonical set_track_slots spine, unioned with
     # dj_set_track_media_links for sets not yet materialized. Sourcing only
@@ -308,57 +335,48 @@ def fetch_tracks(set_id: str) -> list[TrackRow]:
             UNION
             SELECT track_id FROM dj_set_track_media_links
             WHERE set_id = '{set_id}'
-        ),
-        ranked AS (
-            SELECT
-                ta.track_id,
-                ta.recording_id,
-                ta.track_audio_id,
-                ta.path,
-                ta.codec,
-                ta.duration_s,
-                tm.artists_json,
-                tm.title           AS meta_title,
-                tm.version,
-                tm.full_name,
-                ta.stem,
-                ta.variant,
-                ROW_NUMBER() OVER (
-                    PARTITION BY ta.track_id
-                    ORDER BY ta.is_reference DESC,
-                             CASE ta.platform
-                                 WHEN 'manual' THEN 0
-                                 WHEN 'youtube_music' THEN 1
-                                 WHEN 'spotify' THEN 2
-                                 WHEN 'soundcloud' THEN 3
-                                 WHEN 'youtube' THEN 4
-                                 ELSE 5
-                             END,
-                             ta.downloaded_at DESC
-                ) AS pick
-            FROM track_audio ta
-            LEFT JOIN track_metadata tm ON tm.track_id = ta.track_id
-            WHERE ta.track_id IN (SELECT tid FROM wanted)
-               OR ta.recording_id IN (SELECT tid FROM wanted)
         )
-        SELECT track_id, recording_id, track_audio_id, artists_json,
-               meta_title AS title, version, full_name, stem, variant,
-               path, codec, duration_s
-        FROM ranked
-        WHERE pick = 1;
+        SELECT
+            ta.track_id, ta.recording_id, ta.track_audio_id,
+            ta.path, ta.codec, ta.duration_s,
+            ta.stem, ta.variant, ta.platform, ta.is_reference, ta.downloaded_at,
+            tm.artists_json, tm.title AS title, tm.version, tm.full_name
+        FROM track_audio ta
+        LEFT JOIN track_metadata tm ON tm.track_id = ta.track_id
+        WHERE ta.track_id IN (SELECT tid FROM wanted)
+           OR ta.recording_id IN (SELECT tid FROM wanted);
     """)
     if not rows:
         return []
-    audio_by_tid: dict[str, dict] = {r["track_id"]: r for r in rows}
+    # Index candidates under both keys a slot may use: tid = COALESCE(
+    # recording_id, track_id). A post-reconcile remap can leave only
+    # recording_id matching, so register both.
+    candidates_by_tid: dict[str, list[dict]] = {}
     for r in rows:
-        # dj_set_rows ids usually equal track_id, but post-reconcile remaps
-        # can leave only recording_id matching — index both, exact key wins.
-        if r.get("recording_id"):
-            audio_by_tid.setdefault(r["recording_id"], r)
+        for key in (r.get("track_id"), r.get("recording_id")):
+            if key:
+                candidates_by_tid.setdefault(key, []).append(r)
 
-    # Bulk-fetch stems for all picked track_audio_ids in one query.
-    audio_ids = [r["track_audio_id"] for r in rows]
-    id_list = ",".join(str(i) for i in audio_ids)
+    # Resolve each slot to its best-matching track_audio row (claim-aware),
+    # then bulk-fetch stems for just the chosen rows.
+    resolved: list[tuple[str, int, str, dict]] = []
+    for label, row_index, tid, c_stem, c_variant in labeled:
+        chosen, tier = resolve_slot_audio(
+            c_stem, c_variant, candidates_by_tid.get(tid, [])
+        )
+        if chosen is None:
+            continue  # in the spine but no track_audio yet; skip
+        if tier is not None and tier >= TIER_VARIANT_FALLBACK:
+            print(
+                f"  [resolve] {label}: claimed {c_stem}/{c_variant} -> "
+                f"{tier_name(tier)} ({chosen.get('stem')}/"
+                f"{chosen.get('variant')}, taid={chosen['track_audio_id']})",
+                file=sys.stderr,
+            )
+        resolved.append((label, row_index, tid, chosen))
+
+    audio_ids = sorted({r["track_audio_id"] for _, _, _, r in resolved})
+    id_list = ",".join(str(i) for i in audio_ids) or "NULL"
     stem_rows = ssh_sqlite(f"""
         SELECT track_audio_id, stem_name, path
         FROM track_stems
@@ -371,31 +389,30 @@ def fetch_tracks(set_id: str) -> list[TrackRow]:
         )
 
     out: list[TrackRow] = []
-    for label, row_index, tid in labeled:
-        r = audio_by_tid.get(tid)
-        if r is None:
-            continue  # in dj_set_rows but no track_audio yet; skip
+    for label, row_index, tid, r in resolved:
         try:
             artists = json.loads(r["artists_json"]) if r.get("artists_json") else []
         except (json.JSONDecodeError, TypeError):
             artists = []
         artist = " & ".join(a for a in artists if a) or "Unknown"
-        out.append(TrackRow(
-            track_id=tid,
-            track_audio_id=r["track_audio_id"],
-            artist=artist,
-            title=r.get("title") or "Unknown",
-            version=r.get("version"),
-            stem=r.get("stem") or "regular",
-            variant=r.get("variant") or "regular",
-            full_name=r.get("full_name"),
-            pi_path=r["path"],
-            codec=r.get("codec"),
-            duration_s=r.get("duration_s"),
-            stems=tuple(stems_by_audio.get(r["track_audio_id"], [])),
-            row_index=row_index,
-            label=label,
-        ))
+        out.append(
+            TrackRow(
+                track_id=tid,
+                track_audio_id=r["track_audio_id"],
+                artist=artist,
+                title=r.get("title") or "Unknown",
+                version=r.get("version"),
+                stem=r.get("stem") or "regular",
+                variant=r.get("variant") or "regular",
+                full_name=r.get("full_name"),
+                pi_path=r["path"],
+                codec=r.get("codec"),
+                duration_s=r.get("duration_s"),
+                stems=tuple(stems_by_audio.get(r["track_audio_id"], [])),
+                row_index=row_index,
+                label=label,
+            )
+        )
     # Preserve dj_set_rows order (the published 1001tl ordering).
     out.sort(key=lambda t: t.row_index)
     return out
@@ -491,8 +508,10 @@ def prune_orphans(
         for f in tracks_dir.iterdir():
             if not _consider(f):
                 continue
-            print(f"  - prune: {f.relative_to(tracks_dir.parent)}"
-                  + (" (dry-run)" if dry_run else ""))
+            print(
+                f"  - prune: {f.relative_to(tracks_dir.parent)}"
+                + (" (dry-run)" if dry_run else "")
+            )
             if not dry_run:
                 f.unlink()
             pruned_files += 1
@@ -509,8 +528,10 @@ def prune_orphans(
             for f in sub.iterdir():
                 if not _consider(f):
                     continue
-                print(f"  - prune: {f.relative_to(tracks_dir.parent)}"
-                      + (" (dry-run)" if dry_run else ""))
+                print(
+                    f"  - prune: {f.relative_to(tracks_dir.parent)}"
+                    + (" (dry-run)" if dry_run else "")
+                )
                 if not dry_run:
                     f.unlink()
                 pruned_files += 1
@@ -525,8 +546,10 @@ def prune_orphans(
                 continue
             if any(sub.iterdir()):
                 continue
-            print(f"  - prune empty dir: {sub.relative_to(tracks_dir.parent)}"
-                  + (" (dry-run)" if dry_run else ""))
+            print(
+                f"  - prune empty dir: {sub.relative_to(tracks_dir.parent)}"
+                + (" (dry-run)" if dry_run else "")
+            )
             if not dry_run:
                 sub.rmdir()
             pruned_dirs += 1
@@ -592,19 +615,30 @@ def pull_or_link(
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("set_id", nargs="?", help="dj_sets.set_id (e.g. 2vpur281)")
-    ap.add_argument("--dest", default="~/aligning",
-                    help="local working dir root (default: ~/aligning)")
-    ap.add_argument("--dry-run", action="store_true",
-                    help="print what would happen, no rsync")
-    ap.add_argument("--list-recent", action="store_true",
-                    help="show sets with downloaded mix + ≥10 tracks")
-    ap.add_argument("--no-stems", action="store_true",
-                    help="skip pulling vocals/instrumental stems")
-    ap.add_argument("--prune", action="store_true",
-                    help="after pulling, delete local audio files under "
-                         "tracks/ and stems/ that pi-storage no longer "
-                         "considers part of the set. Combine with --dry-run "
-                         "to preview deletions without touching anything.")
+    ap.add_argument(
+        "--dest",
+        default="~/aligning",
+        help="local working dir root (default: ~/aligning)",
+    )
+    ap.add_argument(
+        "--dry-run", action="store_true", help="print what would happen, no rsync"
+    )
+    ap.add_argument(
+        "--list-recent",
+        action="store_true",
+        help="show sets with downloaded mix + ≥10 tracks",
+    )
+    ap.add_argument(
+        "--no-stems", action="store_true", help="skip pulling vocals/instrumental stems"
+    )
+    ap.add_argument(
+        "--prune",
+        action="store_true",
+        help="after pulling, delete local audio files under "
+        "tracks/ and stems/ that pi-storage no longer "
+        "considers part of the set. Combine with --dry-run "
+        "to preview deletions without touching anything.",
+    )
     args = ap.parse_args()
 
     if args.list_recent:
@@ -625,7 +659,9 @@ def main() -> int:
         return 1
     tracks = fetch_tracks(args.set_id)
     if not tracks:
-        print(f"ERROR: no reference tracks linked to set {args.set_id}", file=sys.stderr)
+        print(
+            f"ERROR: no reference tracks linked to set {args.set_id}", file=sys.stderr
+        )
         return 1
 
     folder_name = f"{args.set_id}__{sanitize(mix.title)}"
@@ -635,7 +671,9 @@ def main() -> int:
 
     n_with_stems = sum(1 for t in tracks if t.stems)
     print(f"\nSet: {mix.title}")
-    print(f"  Mix:    {Path(mix.pi_path).name}  ({mix.duration_s and f'{mix.duration_s/60:.1f} min'})")
+    print(
+        f"  Mix:    {Path(mix.pi_path).name}  ({mix.duration_s and f'{mix.duration_s / 60:.1f} min'})"
+    )
     print(f"  Tracks: {len(tracks)}")
     if not args.no_stems:
         print(f"  Stems:  {n_with_stems}/{len(tracks)} tracks have stems available")
@@ -663,7 +701,10 @@ def main() -> int:
     for i, t in enumerate(tracks, start=1):
         ext = Path(t.pi_path).suffix or ".m4a"
         suffix = _qualifier_suffix(
-            t.full_name, t.version, stem=t.stem, variant=t.variant,
+            t.full_name,
+            t.version,
+            stem=t.stem,
+            variant=t.variant,
         )
         name = f"{t.label}__{sanitize(t.artist)} - {sanitize(t.title)}{suffix}{ext}"
         dst = tracks_dir / name
@@ -671,7 +712,9 @@ def main() -> int:
         n_stems = len(t.stems) if not args.no_stems else 0
         stems_note = f"  +{n_stems} stems" if n_stems else ""
         replay_note = "  (replay → hardlink)" if t.pi_path in pulled_tracks else ""
-        print(f"[{i:03d}/{len(tracks)}] {t.label}  {t.artist} - {t.title}{stems_note}{replay_note}")
+        print(
+            f"[{i:03d}/{len(tracks)}] {t.label}  {t.artist} - {t.title}{stems_note}{replay_note}"
+        )
 
         track_entry: dict = {
             "track_id": t.track_id,
@@ -696,8 +739,12 @@ def main() -> int:
         if args.dry_run:
             print(f"    -> {dst}")
             pulled_tracks.setdefault(t.pi_path, dst)
-            for s in (t.stems if not args.no_stems else ()):
-                stem_dst = stems_dir / stem_subdir_name / f"{s.stem_name}{Path(s.pi_path).suffix or '.m4a'}"
+            for s in t.stems if not args.no_stems else ():
+                stem_dst = (
+                    stems_dir
+                    / stem_subdir_name
+                    / f"{s.stem_name}{Path(s.pi_path).suffix or '.m4a'}"
+                )
                 keep_paths.add(stem_dst)
                 pulled_stems.setdefault(s.pi_path, stem_dst)
                 print(f"    -> {stem_dst}")
