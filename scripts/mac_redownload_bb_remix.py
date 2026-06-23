@@ -10,6 +10,7 @@ Usage:
   venvs/audio/bin/python scripts/mac_redownload_bb_remix.py
   venvs/audio/bin/python scripts/mac_redownload_bb_remix.py --max-tracks 50
 """
+
 from __future__ import annotations
 
 import argparse
@@ -28,14 +29,19 @@ sys.path.insert(0, str(REPO))
 
 from core.result import Err
 from ingest.adapters import ytmusic_adapter
-from ingest.search_query import to_search_query
+from ingest.search_query import to_search_query_for_claim
 
 PI_HOST = "pi-storage"
 PI_DB = "/mnt/storage/data/db/music_database.db"
 PI_REPO = "~/tracklist_engine"
 PI_PY = "venvs/audio/bin/python"
 BB_SETS = (
-    "w1mgcjt", "2nvzlh2k", "1fsnxchk", "qj4v0wt", "1yl70ql1", "237tdqmk",
+    "w1mgcjt",
+    "2nvzlh2k",
+    "1fsnxchk",
+    "qj4v0wt",
+    "1yl70ql1",
+    "237tdqmk",
 )
 BB_CSV = ",".join(f"'{s}'" for s in BB_SETS)
 
@@ -43,10 +49,14 @@ NODE = shutil.which("node") or "/opt/homebrew/bin/node"
 YTDLP = REPO / "venvs/audio/bin/yt-dlp"
 YTDLP_BASE = [
     str(YTDLP),
-    "--js-runtimes", f"node:{NODE}",
-    "--remote-components", "ejs:github",
-    "--cookies-from-browser", "safari",
-    "-f", "ba[ext=m4a]/bestaudio[ext=m4a]/bestaudio/best",
+    "--js-runtimes",
+    f"node:{NODE}",
+    "--remote-components",
+    "ejs:github",
+    "--cookies-from-browser",
+    "safari",
+    "-f",
+    "ba[ext=m4a]/bestaudio[ext=m4a]/bestaudio/best",
 ]
 
 _log = logging.getLogger("mac_redownload_bb_remix")
@@ -64,7 +74,13 @@ class Candidate:
 
     @property
     def query(self) -> str:
-        return to_search_query(self.full_name, self.artists_csv, self.title)
+        return to_search_query_for_claim(
+            full_name=self.full_name,
+            artists_csv=self.artists_csv,
+            title=self.title,
+            claimed_stem="regular",
+            version=self.version,
+        )
 
 
 def _ssh_sql(sql: str) -> str:
@@ -108,30 +124,35 @@ ORDER BY ta.track_audio_id
         except json.JSONDecodeError:
             artists = []
         artists_csv = ", ".join(a for a in artists if a)
-        out.append(Candidate(
-            track_audio_id=int(taid_s),
-            track_id=tid,
-            full_name=full_name or None,
-            artists_csv=artists_csv,
-            title=title or "",
-            version=version or None,
-            set_id=set_id or "",
-        ))
+        out.append(
+            Candidate(
+                track_audio_id=int(taid_s),
+                track_id=tid,
+                full_name=full_name or None,
+                artists_csv=artists_csv,
+                title=title or "",
+                version=version or None,
+                set_id=set_id or "",
+            )
+        )
     return tuple(out)
 
 
 def _pick_video(c: Candidate) -> str | None:
-    sr = ytmusic_adapter.search(c.query, limit=8)
+    sr = ytmusic_adapter.search_and_pick(c.query, limit=8)
     if isinstance(sr, Err):
-        _log.warning("%s search failed: %s", c.track_id, sr.error.detail)
+        _log.warning(
+            "%s pick refused/failed: %s — %s",
+            c.track_id,
+            sr.error.kind,
+            sr.error.detail,
+        )
         return None
-    for hit in sr.value:
-        dur = hit.duration_s or 0
-        if dur > 1200:
-            continue
-        _log.info("%s pick %s (%ss): %s", c.track_id, hit.video_id, dur, hit.title)
-        return hit.video_id
-    return None
+    hit = sr.value
+    _log.info(
+        "%s pick %s (%ss): %s", c.track_id, hit.video_id, hit.duration_s, hit.title
+    )
+    return hit.video_id
 
 
 def _download(vid: str, out: Path) -> bool:
@@ -154,13 +175,19 @@ def _replace_on_pi(c: Candidate, local: Path, video_id: str, *, dry_run: bool) -
     )
     parts = [
         "scripts/replace_track_audio.py",
-        "--db", PI_DB,
-        "--audio-root", "/mnt/storage",
-        "--track-audio-id", str(c.track_audio_id),
-        "--track-id", c.track_id,
-        "--file", remote_tmp,
+        "--db",
+        PI_DB,
+        "--audio-root",
+        "/mnt/storage",
+        "--track-audio-id",
+        str(c.track_audio_id),
+        "--track-id",
+        c.track_id,
+        "--file",
+        remote_tmp,
         f"--player-id={video_id}",
-        "--reason", reason,
+        "--reason",
+        reason,
     ]
     if c.set_id:
         parts.extend(["--set-id", c.set_id])
@@ -173,7 +200,8 @@ def _replace_on_pi(c: Candidate, local: Path, video_id: str, *, dry_run: bool) -
 
     scp = subprocess.run(
         ["scp", "-q", str(local), f"{PI_HOST}:{remote_tmp}"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if scp.returncode != 0:
         _log.error("scp failed: %s", scp.stderr)
@@ -211,8 +239,15 @@ def main(argv: list[str] | None = None) -> int:
     ok = fail = 0
     t0 = time.monotonic()
     for i, c in enumerate(candidates, 1):
-        _log.info("[%d/%d] %s taid=%d v=%s q=%r", i, len(candidates),
-                  c.track_id, c.track_audio_id, c.version, c.query)
+        _log.info(
+            "[%d/%d] %s taid=%d v=%s q=%r",
+            i,
+            len(candidates),
+            c.track_id,
+            c.track_audio_id,
+            c.version,
+            c.query,
+        )
         vid = _pick_video(c)
         if not vid:
             fail += 1

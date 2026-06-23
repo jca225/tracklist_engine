@@ -12,6 +12,7 @@ from ingest.adapters.ytmusic_adapter import (
     YTMSearchHit,
     _expected_version_tokens,
     _select_hit,
+    pick_search_hit,
 )
 
 
@@ -51,3 +52,23 @@ def test_original_query_accepts_top_hit():
     hits = (_h("Around The World"), _h("Around The World (Radio Edit)"))
     sel = _select_hit("Daft Punk - Around The World", hits)
     assert sel is hits[0]
+
+
+def test_pick_search_hit_filters_duration():
+    hits = (
+        YTMSearchHit(
+            video_id="long",
+            title="Wrong Song",
+            artists=(),
+            duration_s=2000.0,
+        ),
+        _h("Got The Love (Vanze Bootleg)"),
+    )
+    sel = pick_search_hit("X - Got The Love (Vanze Bootleg)", hits)
+    assert sel is not None and "vanze" in sel.title.lower()
+
+
+def test_search_and_pick_refuses_named_remix_without_match():
+    """Integration-style: mock search unavailable; unit test pick path via pick_search_hit."""
+    hits = (_h("Someone Like You"),)
+    assert pick_search_hit("Adele - Someone Like You (Vicetone Remix)", hits) is None

@@ -33,6 +33,7 @@ For a smoke run on Big Bootie 10-15 only:
         --audio-root /mnt/storage \\
         --max-sets 6 --bb-only
 """
+
 from __future__ import annotations
 
 import argparse
@@ -54,9 +55,16 @@ from core.result import Err, Ok, Result
 _log = logging.getLogger("ingest.main")
 
 # Big Bootie 10-15 set IDs — used by --bb-only convenience flag.
-_BIG_BOOTIE_10_15: frozenset[str] = frozenset((
-    "w1mgcjt", "2nvzlh2k", "1fsnxchk", "qj4v0wt", "1yl70ql1", "237tdqmk",
-))
+_BIG_BOOTIE_10_15: frozenset[str] = frozenset(
+    (
+        "w1mgcjt",
+        "2nvzlh2k",
+        "1fsnxchk",
+        "qj4v0wt",
+        "1yl70ql1",
+        "237tdqmk",
+    )
+)
 
 # Platform fallback order for per-track downloads. We walk these in order
 # and stop at the first one that successfully produces audio for a given
@@ -87,49 +95,101 @@ class RunStats:
     downloaded: int = 0
     failed_no_source: int = 0
     failed_download: int = 0
+    needs_resource: int = 0
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--job-file", required=True, type=Path,
-                   help="JSON job file (array of {tracklist_id, ...} objects)")
-    p.add_argument("--db", type=Path,
-                   default=Path(os.environ.get("TRACKLIST_DB",
-                                               "/mnt/storage/data/db/music_database.db")),
-                   help="SQLite DB path (default: pi-storage canonical)")
-    p.add_argument("--audio-root", type=Path,
-                   default=Path(os.environ.get("TRACKLIST_AUDIO_ROOT", "/mnt/storage")),
-                   help="Audio storage root (default: /mnt/storage). "
-                        "Files land at <root>/objects/<track_id>/...")
-    p.add_argument("--max-sets", type=int, default=None,
-                   help="Stop after processing N sets (smoke testing)")
-    p.add_argument("--max-tracks", type=int, default=None,
-                   help="Stop after downloading N tracks (smoke testing)")
-    p.add_argument("--bb-only", action="store_true",
-                   help="Restrict to Big Bootie 10-15 set_ids only")
-    p.add_argument("--with-mixes", action="store_true",
-                   help="Also download the full DJ mix audio per set into "
-                        "<audio_root>/sets/<set_id>/. Off by default to keep "
-                        "the per-track ref pipeline lean.")
-    p.add_argument("--mixes-only", action="store_true",
-                   help="Skip per-track downloads entirely; only fetch the "
-                        "mix audio for each set. Implies --with-mixes.")
-    p.add_argument("--dry-run", action="store_true",
-                   help="Print what would be downloaded; do not invoke yt-dlp")
-    p.add_argument("--audio-format", default="m4a",
-                   help="yt-dlp postprocessor output format (default m4a)")
-    p.add_argument("--retries", type=int, default=3,
-                   help="Per-track yt-dlp retry count (default 3)")
-    p.add_argument("--cookies", type=Path,
-                   default=Path(os.environ["TRACKLIST_YT_COOKIES"])
-                       if os.environ.get("TRACKLIST_YT_COOKIES") else None,
-                   help="Netscape cookies.txt for age-gated YouTube. Without this, "
-                        "~5-15%% of tracks fail with 'Sign in to confirm your age'. "
-                        "Export from your browser on Mac and scp to pi-storage:  "
-                        "yt-dlp --cookies-from-browser chrome --cookies /tmp/yt.txt "
-                        "--skip-download 'https://youtube.com'")
-    p.add_argument("--log-level", default="INFO",
-                   choices=("DEBUG", "INFO", "WARNING", "ERROR"))
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument(
+        "--job-file",
+        required=True,
+        type=Path,
+        help="JSON job file (array of {tracklist_id, ...} objects)",
+    )
+    p.add_argument(
+        "--db",
+        type=Path,
+        default=Path(
+            os.environ.get("TRACKLIST_DB", "/mnt/storage/data/db/music_database.db")
+        ),
+        help="SQLite DB path (default: pi-storage canonical)",
+    )
+    p.add_argument(
+        "--audio-root",
+        type=Path,
+        default=Path(os.environ.get("TRACKLIST_AUDIO_ROOT", "/mnt/storage")),
+        help="Audio storage root (default: /mnt/storage). "
+        "Files land at <root>/objects/<track_id>/...",
+    )
+    p.add_argument(
+        "--max-sets",
+        type=int,
+        default=None,
+        help="Stop after processing N sets (smoke testing)",
+    )
+    p.add_argument(
+        "--max-tracks",
+        type=int,
+        default=None,
+        help="Stop after downloading N tracks (smoke testing)",
+    )
+    p.add_argument(
+        "--bb-only",
+        action="store_true",
+        help="Restrict to Big Bootie 10-15 set_ids only",
+    )
+    p.add_argument(
+        "--with-mixes",
+        action="store_true",
+        help="Also download the full DJ mix audio per set into "
+        "<audio_root>/sets/<set_id>/. Off by default to keep "
+        "the per-track ref pipeline lean.",
+    )
+    p.add_argument(
+        "--mixes-only",
+        action="store_true",
+        help="Skip per-track downloads entirely; only fetch the "
+        "mix audio for each set. Implies --with-mixes.",
+    )
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print what would be downloaded; do not invoke yt-dlp",
+    )
+    p.add_argument(
+        "--audio-format",
+        default="m4a",
+        help="yt-dlp postprocessor output format (default m4a)",
+    )
+    p.add_argument(
+        "--retries",
+        type=int,
+        default=3,
+        help="Per-track yt-dlp retry count (default 3)",
+    )
+    p.add_argument(
+        "--cookies",
+        type=Path,
+        default=Path(os.environ["TRACKLIST_YT_COOKIES"])
+        if os.environ.get("TRACKLIST_YT_COOKIES")
+        else None,
+        help="Netscape cookies.txt for age-gated YouTube. Without this, "
+        "~5-15%% of tracks fail with 'Sign in to confirm your age'. "
+        "Export from your browser on Mac and scp to pi-storage:  "
+        "yt-dlp --cookies-from-browser chrome --cookies /tmp/yt.txt "
+        "--skip-download 'https://youtube.com'",
+    )
+    p.add_argument(
+        "--log-level", default="INFO", choices=("DEBUG", "INFO", "WARNING", "ERROR")
+    )
+    p.add_argument(
+        "--sticky-skip",
+        action="store_true",
+        help="Legacy skip: any track_audio row blocks re-download even when "
+        "the reference file is missing on disk.",
+    )
     return p.parse_args(argv)
 
 
@@ -174,7 +234,9 @@ def _pick_sources(track: Track) -> tuple[MediaSource, ...]:
 
 
 def _download_via_platform(
-    source: MediaSource, track_id: str, cfg: DownloadConfig,
+    source: MediaSource,
+    track_id: str,
+    cfg: DownloadConfig,
 ) -> Result[AudioAsset, DownloadError]:
     """Dispatch to the correct adapter based on source.platform."""
     if source.platform == "spotify":
@@ -213,7 +275,9 @@ def _process_set_mix(
     if chosen is None:
         return ("no_source", None)
 
-    seen_r = db_adapter.already_downloaded_set(db_path, set_id, chosen.platform, chosen.url)
+    seen_r = db_adapter.already_downloaded_set(
+        db_path, set_id, chosen.platform, chosen.url
+    )
     match seen_r:
         case Err(err):
             return ("db_failed", f"already_downloaded_set: {err.detail}")
@@ -225,8 +289,12 @@ def _process_set_mix(
     if dry_run:
         return ("dry_run", f"{chosen.platform} {chosen.url[:80]}")
 
-    cfg = DownloadConfig(out_dir=out_dir, audio_format=audio_format,
-                         retries=retries, cookies_path=cookies_path)
+    cfg = DownloadConfig(
+        out_dir=out_dir,
+        audio_format=audio_format,
+        retries=retries,
+        cookies_path=cookies_path,
+    )
     dl_r = download_set_mix(set_id, chosen.platform, chosen.url, cfg)
     match dl_r:
         case Err(err):
@@ -248,6 +316,8 @@ def _process_track(
     retries: int,
     dry_run: bool,
     cookies_path: Path | None = None,
+    *,
+    reverify: bool = False,
 ) -> tuple[str, str | None]:
     """Returns (status, detail). Status: 'downloaded' | 'skip_existing' |
     'no_source' | 'download_failed' | 'db_failed' | 'dry_run'.
@@ -262,21 +332,22 @@ def _process_track(
     if not sources:
         return ("no_source", None)
 
-    has_r = db_adapter.has_any_audio(db_path, track.track_id)
-    match has_r:
-        case Err(err):
-            return ("db_failed", f"has_any_audio: {err.detail}")
-        case Ok(True):
-            return ("skip_existing", None)
-        case Ok(False):
-            pass
+    from ingest.identity_gate import should_skip_existing
+
+    skip, verify = should_skip_existing(db_path, track.track_id, reverify=reverify)
+    if skip:
+        return ("skip_existing", verify.detail)
 
     if dry_run:
         chain = " → ".join(f"{s.platform}:{s.player_id}" for s in sources)
         return ("dry_run", chain)
 
-    cfg = DownloadConfig(out_dir=out_dir, audio_format=audio_format,
-                         retries=retries, cookies_path=cookies_path)
+    cfg = DownloadConfig(
+        out_dir=out_dir,
+        audio_format=audio_format,
+        retries=retries,
+        cookies_path=cookies_path,
+    )
     last_err: DownloadError | None = None
     tried: list[str] = []
     for source in sources:
@@ -285,8 +356,11 @@ def _process_track(
         match dl_r:
             case Err(err):
                 last_err = err
-                _log.debug("        try %s failed: %s — falling back",
-                           source.platform, err.kind)
+                _log.debug(
+                    "        try %s failed: %s — falling back",
+                    source.platform,
+                    err.kind,
+                )
                 continue
             case Ok(asset):
                 ins_r = db_adapter.insert_audio_or_reap(db_path, asset)
@@ -294,12 +368,12 @@ def _process_track(
                     case Err(e):
                         return ("db_failed", f"insert_audio: {e.detail}")
                     case Ok(_):
-                        return ("downloaded",
-                                f"[{'+'.join(tried)}] {asset.path}")
+                        return ("downloaded", f"[{'+'.join(tried)}] {asset.path}")
     detail = (
         f"all {len(sources)} platforms failed (tried {','.join(tried)}); "
         f"last={last_err.kind}: {last_err.detail[:160]}"
-        if last_err else "no platforms tried"
+        if last_err
+        else "no platforms tried"
     )
     return ("download_failed", detail)
 
@@ -324,8 +398,13 @@ def _run(args: argparse.Namespace) -> int:
     if not set_ids:
         _log.error("no set_ids in job file after filters")
         return 1
-    _log.info("starting: %d sets, db=%s, audio_root=%s, dry_run=%s",
-              len(set_ids), args.db, args.audio_root, args.dry_run)
+    _log.info(
+        "starting: %d sets, db=%s, audio_root=%s, dry_run=%s",
+        len(set_ids),
+        args.db,
+        args.audio_root,
+        args.dry_run,
+    )
 
     objects_root = args.audio_root / "objects"
     sets_root = args.audio_root / "sets"
@@ -339,21 +418,57 @@ def _run(args: argparse.Namespace) -> int:
         if with_mixes:
             mix_dir = sets_root / set_id
             mix_status, mix_detail = _process_set_mix(
-                args.db, set_id, mix_dir, args.audio_format, args.retries, args.dry_run,
+                args.db,
+                set_id,
+                mix_dir,
+                args.audio_format,
+                args.retries,
+                args.dry_run,
                 cookies_path=args.cookies,
             )
             if mix_status == "downloaded":
-                _log.info("[%d/%d] set=%s MIX OK -> %s", set_idx, len(set_ids), set_id, mix_detail)
+                _log.info(
+                    "[%d/%d] set=%s MIX OK -> %s",
+                    set_idx,
+                    len(set_ids),
+                    set_id,
+                    mix_detail,
+                )
             elif mix_status == "dry_run":
-                _log.info("[%d/%d] set=%s MIX DRY %s", set_idx, len(set_ids), set_id, mix_detail)
+                _log.info(
+                    "[%d/%d] set=%s MIX DRY %s",
+                    set_idx,
+                    len(set_ids),
+                    set_id,
+                    mix_detail,
+                )
             elif mix_status == "skip_existing":
-                _log.debug("[%d/%d] set=%s MIX skip (already downloaded)", set_idx, len(set_ids), set_id)
+                _log.debug(
+                    "[%d/%d] set=%s MIX skip (already downloaded)",
+                    set_idx,
+                    len(set_ids),
+                    set_id,
+                )
             elif mix_status == "no_source":
-                _log.warning("[%d/%d] set=%s MIX no media link", set_idx, len(set_ids), set_id)
+                _log.warning(
+                    "[%d/%d] set=%s MIX no media link", set_idx, len(set_ids), set_id
+                )
             elif mix_status == "download_failed":
-                _log.warning("[%d/%d] set=%s MIX FAIL %s", set_idx, len(set_ids), set_id, mix_detail)
+                _log.warning(
+                    "[%d/%d] set=%s MIX FAIL %s",
+                    set_idx,
+                    len(set_ids),
+                    set_id,
+                    mix_detail,
+                )
             elif mix_status == "db_failed":
-                _log.error("[%d/%d] set=%s MIX DB %s", set_idx, len(set_ids), set_id, mix_detail)
+                _log.error(
+                    "[%d/%d] set=%s MIX DB %s",
+                    set_idx,
+                    len(set_ids),
+                    set_id,
+                    mix_detail,
+                )
 
         if skip_tracks:
             continue
@@ -362,13 +477,20 @@ def _run(args: argparse.Namespace) -> int:
         tracks_r = db_adapter.load_set_tracks(args.db, set_id)
         match tracks_r:
             case Err(err):
-                _log.warning("[%d/%d] set=%s load_tracks failed: %s",
-                             set_idx, len(set_ids), set_id, err.detail)
+                _log.warning(
+                    "[%d/%d] set=%s load_tracks failed: %s",
+                    set_idx,
+                    len(set_ids),
+                    set_id,
+                    err.detail,
+                )
                 continue
             case Ok(tracks):
                 pass
 
-        _log.info("[%d/%d] set=%s tracks=%d", set_idx, len(set_ids), set_id, len(tracks))
+        _log.info(
+            "[%d/%d] set=%s tracks=%d", set_idx, len(set_ids), set_id, len(tracks)
+        )
         stats = RunStats(
             sets_seen=stats.sets_seen + 1,
             tracks_seen=stats.tracks_seen,
@@ -389,24 +511,39 @@ def _run(args: argparse.Namespace) -> int:
             )
             out_dir = objects_root / track.track_id
             status, detail = _process_track(
-                args.db, track, out_dir, args.audio_format, args.retries, args.dry_run,
+                args.db,
+                track,
+                out_dir,
+                args.audio_format,
+                args.retries,
+                args.dry_run,
                 cookies_path=args.cookies,
+                reverify=not args.sticky_skip,
             )
             if status == "downloaded":
-                stats = RunStats(**{**stats.__dict__, "downloaded": stats.downloaded + 1})
+                stats = RunStats(
+                    **{**stats.__dict__, "downloaded": stats.downloaded + 1}
+                )
                 _log.info("    OK    %s -> %s", track.track_id, detail)
             elif status == "dry_run":
                 _log.info("    DRY   %s would fetch %s", track.track_id, detail)
             elif status == "skip_existing":
-                stats = RunStats(**{**stats.__dict__,
-                                    "skipped_already_downloaded": stats.skipped_already_downloaded + 1})
+                stats = RunStats(
+                    **{
+                        **stats.__dict__,
+                        "skipped_already_downloaded": stats.skipped_already_downloaded
+                        + 1,
+                    }
+                )
             elif status == "no_source":
-                stats = RunStats(**{**stats.__dict__,
-                                    "failed_no_source": stats.failed_no_source + 1})
+                stats = RunStats(
+                    **{**stats.__dict__, "failed_no_source": stats.failed_no_source + 1}
+                )
                 _log.debug("    SKIP  %s no YT/SC source", track.track_id)
             elif status == "download_failed":
-                stats = RunStats(**{**stats.__dict__,
-                                    "failed_download": stats.failed_download + 1})
+                stats = RunStats(
+                    **{**stats.__dict__, "failed_download": stats.failed_download + 1}
+                )
                 _log.warning("    FAIL  %s %s", track.track_id, detail)
             elif status == "db_failed":
                 _log.error("    DB    %s %s", track.track_id, detail)
@@ -423,9 +560,13 @@ def _run(args: argparse.Namespace) -> int:
 def _summarize(stats: RunStats, elapsed_s: float) -> None:
     _log.info(
         "DONE | sets=%d tracks_seen=%d downloaded=%d skipped=%d no_source=%d failed=%d in %.0fs",
-        stats.sets_seen, stats.tracks_seen, stats.downloaded,
-        stats.skipped_already_downloaded, stats.failed_no_source,
-        stats.failed_download, elapsed_s,
+        stats.sets_seen,
+        stats.tracks_seen,
+        stats.downloaded,
+        stats.skipped_already_downloaded,
+        stats.failed_no_source,
+        stats.failed_download,
+        elapsed_s,
     )
 
 

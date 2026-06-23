@@ -275,12 +275,60 @@ def _select_hit(query: str, hits: tuple[YTMSearchHit, ...]) -> YTMSearchHit | No
     then refuses the download instead of installing the wrong version."""
     want = _expected_version_tokens(query)
     if not want:
-        return hits[0]
+        return hits[0] if hits else None
     for h in hits:
         tl = h.title.lower()
         if all(t in tl for t in want):
             return h
     return None
+
+
+_MAX_MAC_RESCUE_DURATION_S = 1200.0
+
+
+def pick_search_hit(
+    query: str,
+    hits: tuple[YTMSearchHit, ...],
+    *,
+    max_duration_s: float = _MAX_MAC_RESCUE_DURATION_S,
+) -> YTMSearchHit | None:
+    """Version-gated hit pick shared by pi rescue and Mac re-source scripts."""
+    filtered = tuple(h for h in hits if (h.duration_s or 0) <= max_duration_s)
+    if not filtered:
+        return None
+    return _select_hit(query, filtered)
+
+
+def search_and_pick(
+    query: str,
+    *,
+    limit: int = 8,
+    max_duration_s: float = _MAX_MAC_RESCUE_DURATION_S,
+) -> Result[YTMSearchHit, DownloadError]:
+    """Search YT Music and return a version-gated hit (Mac rescue entrypoint)."""
+    sr = search(query, limit=limit)
+    match sr:
+        case Err(err):
+            return Err(err)
+        case Ok(hits):
+            pass
+    pick = pick_search_hit(query, hits, max_duration_s=max_duration_s)
+    if pick is None:
+        want = _expected_version_tokens(query)
+        detail = (
+            f"no hit matched version qualifier in {query!r}; "
+            f"hits={[h.title for h in hits[:3]]}"
+            if want
+            else f"no hits under {max_duration_s:.0f}s duration cap"
+        )
+        return Err(
+            DownloadError(
+                kind="version-mismatch",
+                url=f"ytmsearch:{query}",
+                detail=detail,
+            )
+        )
+    return Ok(pick)
 
 
 def download_one(
@@ -305,7 +353,7 @@ def download_one(
         case Ok(hits):
             pass
 
-    top = _select_hit(query, hits)
+    top = pick_search_hit(query, hits, max_duration_s=1e9)
     if top is None:
         return Err(
             DownloadError(

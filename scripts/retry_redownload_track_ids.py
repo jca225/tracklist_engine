@@ -8,6 +8,7 @@ Usage:
   venvs/audio/bin/python scripts/retry_redownload_track_ids.py --from-failures-tsv
   venvs/audio/bin/python scripts/retry_redownload_track_ids.py --track-ids 12m8zb3x 8744jmp
 """
+
 from __future__ import annotations
 
 import argparse
@@ -39,10 +40,14 @@ NODE = shutil.which("node") or "/opt/homebrew/bin/node"
 YTDLP = REPO / "venvs/audio/bin/yt-dlp"
 YTDLP_BASE = [
     str(YTDLP),
-    "--js-runtimes", f"node:{NODE}",
-    "--remote-components", "ejs:github",
-    "--cookies-from-browser", "safari",
-    "-f", "ba[ext=m4a]/bestaudio[ext=m4a]/bestaudio/best",
+    "--js-runtimes",
+    f"node:{NODE}",
+    "--remote-components",
+    "ejs:github",
+    "--cookies-from-browser",
+    "safari",
+    "-f",
+    "ba[ext=m4a]/bestaudio[ext=m4a]/bestaudio/best",
 ]
 
 _log = logging.getLogger("retry_redownload")
@@ -57,7 +62,9 @@ class Row:
 
 def _ssh_sql(sql: str) -> str:
     cmd = f'sqlite3 -separator "|" {PI_DB} "{sql}"'
-    r = subprocess.run(["ssh", PI_HOST, cmd], capture_output=True, text=True, check=True)
+    r = subprocess.run(
+        ["ssh", PI_HOST, cmd], capture_output=True, text=True, check=True
+    )
     return r.stdout.strip()
 
 
@@ -82,26 +89,31 @@ ORDER BY tm.track_id
             artists = []
         artists_csv = ", ".join(a for a in artists if a)
         q = to_search_query(full_name or None, artists_csv, title or None)
-        rows.append(Row(
-            track_id=tid,
-            track_audio_id=int(taid_s) if taid_s else None,
-            query=q or tid,
-        ))
+        rows.append(
+            Row(
+                track_id=tid,
+                track_audio_id=int(taid_s) if taid_s else None,
+                query=q or tid,
+            )
+        )
     return rows
 
 
 def _pick_video(row: Row) -> str | None:
-    sr = ytmusic_adapter.search(row.query, limit=8)
+    sr = ytmusic_adapter.search_and_pick(row.query, limit=8)
     if isinstance(sr, Err):
-        _log.warning("%s search failed: %s", row.track_id, sr.error.detail)
+        _log.warning(
+            "%s pick refused/failed: %s — %s",
+            row.track_id,
+            sr.error.kind,
+            sr.error.detail,
+        )
         return None
-    for hit in sr.value:
-        dur = hit.duration_s or 0
-        if dur > 1200:
-            continue
-        _log.info("%s pick %s (%ss): %s", row.track_id, hit.video_id, dur, hit.title)
-        return hit.video_id
-    return None
+    hit = sr.value
+    _log.info(
+        "%s pick %s (%ss): %s", row.track_id, hit.video_id, hit.duration_s, hit.title
+    )
+    return hit.video_id
 
 
 def _download(video_id: str, local: Path) -> bool:
@@ -120,12 +132,17 @@ def _replace_on_pi(row: Row, local: Path, video_id: str) -> bool:
     subprocess.check_call(["scp", str(local), f"{PI_HOST}:{remote_tmp}"])
     parts = [
         "scripts/replace_track_audio.py",
-        "--db", PI_DB,
-        "--audio-root", "/mnt/storage",
-        "--track-id", row.track_id,
-        "--file", remote_tmp,
+        "--db",
+        PI_DB,
+        "--audio-root",
+        "/mnt/storage",
+        "--track-id",
+        row.track_id,
+        "--file",
+        remote_tmp,
         f"--player-id={video_id}",
-        "--reason", "retry_redownload_track_ids",
+        "--reason",
+        "retry_redownload_track_ids",
     ]
     if row.track_audio_id is not None:
         parts.extend(["--track-audio-id", str(row.track_audio_id)])
@@ -154,7 +171,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--work-dir", type=Path, default=Path("/tmp/retry_redownload"))
     args = p.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+    )
 
     if args.from_failures_tsv:
         track_ids = _track_ids_from_tsv(FAILURES_TSV)
