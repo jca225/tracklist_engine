@@ -18,6 +18,7 @@ Phases 1–3 are mandatory. 4–5 are optional but commonly wanted.
 | 3. Promote + purge | `is_reference=1` on new, delete other rows + their files/stems | pi-storage |
 | 4. Refresh aligning | Overwrite local m4a, kill `.asd`, delete stale stem subdir | Mac |
 | 5. Re-stem + re-tag | Demucs + Essentia + iTunes tag + filename `[NNbpm KK]` | Mac |
+| 6. Log the case | Append the acquisition-case attempt to the Mac corpus | Mac |
 
 ## Phase 1: Identify the target track
 
@@ -213,6 +214,38 @@ f.rename(f.with_name(f"{f.stem} [{round(bpm)}bpm {camelot}]{f.suffix}"))
 stem = Path("<DST>")
 stem.rename(stem.with_name(f"{stem.name} [{round(bpm)}bpm {camelot}]"))
 ```
+
+## Phase 6: Log the acquisition case (Mac)
+
+The acquisition-case corpus (`data/acquisition_cases/{set_id}.jsonl`) records
+*why* each slot's audio was fixed — the decision trace the future ingest harness
+trains on. It lives on the **Mac**; `replace_track_audio.py` runs on pi-storage,
+so on success it **emits** a `ACQUISITION_CASE\t<json>` line on stdout that the
+Mac-side logger persists. Pipe the ssh output straight through it:
+
+```bash
+ssh pi-storage 'cd /home/johncabrahams/tracklist_engine && \
+  venvs/audio/bin/python -m scripts.replace_track_audio \
+    --track-audio-id <OLD_TAID> --url <URL> \
+    --set-id <SET_ID> --position <SLOT> --axis version \
+    --reason "original, not the <Remixer> remix"' \
+  | venvs/audio/bin/python scripts/log_acquisition.py --from-stdin
+```
+
+The emit only fires when `--set-id` + `--position` are passed (the case is keyed
+per set/slot). `--axis version` → problem class `wrong_version`; a stem swap →
+`suboptimal_stem`. To log without re-running the replace (e.g. a SQL-only fix),
+call the logger directly:
+
+```bash
+venvs/audio/bin/python scripts/log_acquisition.py \
+  --set-id <SET_ID> --position <SLOT> --recording-id <TRACK_ID> \
+  --problem wrong_version --url <URL> --reason "..."
+```
+
+This is the full-track sibling of the stem driver's built-in `--no-case-log`
+hook ([ingest_stem_url.py](../../../scripts/ingest_stem_url.py)); both feed one
+Mac-side corpus.
 
 ## Examples
 
