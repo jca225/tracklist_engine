@@ -6,6 +6,7 @@ Wraps acquire_variant (add) or replace_stem_audio (replace) over SSH.
 
 See docs/stem_discovery_playbook.md.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -34,33 +35,77 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     src = p.add_mutually_exclusive_group(required=True)
     src.add_argument("--url", help="YouTube / YT Music URL (downloaded on pi)")
-    src.add_argument("--file", type=Path, help="Local audio file (scp to pi, then ingest)")
+    src.add_argument(
+        "--file", type=Path, help="Local audio file (scp to pi, then ingest)"
+    )
 
-    p.add_argument("--track-audio-id", type=int, default=None,
-                   help="Replace this track_audio row (replace mode)")
-    p.add_argument("--track-id", default=None,
-                   help="track_id for add mode (required with --role if no --track-audio-id)")
-    p.add_argument("--role", choices=("acappella", "instrumental", "acapella", "vocals", "instr"),
-                   default=None, help="Stem role for add mode")
-    p.add_argument("--promote", action="store_true",
-                   help="Add mode only: set is_reference=1 (default add: no promote)")
+    p.add_argument(
+        "--track-audio-id",
+        type=int,
+        default=None,
+        help="Replace this track_audio row (replace mode)",
+    )
+    p.add_argument(
+        "--track-id",
+        default=None,
+        help="track_id for add mode (required with --role if no --track-audio-id)",
+    )
+    p.add_argument(
+        "--role",
+        choices=("acappella", "instrumental", "acapella", "vocals", "instr"),
+        default=None,
+        help="Stem role for add mode",
+    )
+    p.add_argument(
+        "--promote",
+        action="store_true",
+        help="Add mode only: set is_reference=1 (default add: no promote)",
+    )
     p.add_argument("--set-id", default=None)
     p.add_argument("--position", default=None)
-    p.add_argument("--reason", required=True,
-                   help="Correction ledger note, e.g. quality:good|identity:OK|...")
-    p.add_argument("--player-id", default=None,
-                   help="player_id for --file ingest (defaults to filename stem)")
-    p.add_argument("--pull", action="store_true",
-                   help="After ingest, run pull_set_for_alignment locally for --set-id")
-    p.add_argument("--aligning-dest", default="~/aligning",
-                    help="Destination root for --pull (default: ~/aligning)")
-    p.add_argument("--fail-on", default="",
-                   help="Comma-separated verdicts that exit 1: fallback, wrong_song, "
-                        "duration_mismatch (never blocks acappella WEAK_SIGNAL)")
+    p.add_argument(
+        "--reason",
+        required=True,
+        help="Correction ledger note, e.g. quality:good|identity:OK|...",
+    )
+    p.add_argument(
+        "--player-id",
+        default=None,
+        help="player_id for --file ingest (defaults to filename stem)",
+    )
+    p.add_argument(
+        "--pull",
+        action="store_true",
+        help="After ingest, run pull_set_for_alignment locally for --set-id",
+    )
+    p.add_argument(
+        "--aligning-dest",
+        default="~/aligning",
+        help="Destination root for --pull (default: ~/aligning)",
+    )
+    p.add_argument(
+        "--fail-on",
+        default="",
+        help="Comma-separated verdicts that exit 1: fallback, wrong_song, "
+        "duration_mismatch (never blocks acappella WEAK_SIGNAL)",
+    )
     p.add_argument("--dry-run", action="store_true", help="Print remote command only")
     p.add_argument("--no-log", action="store_true", help="Skip correction ledger on pi")
-    p.add_argument("--skip-preflight", action="store_true",
-                   help="Skip pi git SHA and materialize warnings")
+    p.add_argument(
+        "--no-case-log",
+        action="store_true",
+        help="Skip the local acquisition-case attempt log (needs --set-id)",
+    )
+    p.add_argument(
+        "--case-root",
+        default="data/acquisition_cases",
+        help="Root dir for acquisition-case JSONL (default: data/acquisition_cases)",
+    )
+    p.add_argument(
+        "--skip-preflight",
+        action="store_true",
+        help="Skip pi git SHA and materialize warnings",
+    )
     return p.parse_args(argv)
 
 
@@ -79,10 +124,16 @@ def _remote_shell(parts: list[str]) -> str:
     return f"cd {PI_REPO} && {PI_PYTHON} {inner}"
 
 
-def build_remote_command(args: argparse.Namespace, *, remote_file: str | None = None) -> list[str]:
+def build_remote_command(
+    args: argparse.Namespace, *, remote_file: str | None = None
+) -> list[str]:
     """Argv fragment after python executable (script path + flags)."""
     if args.track_audio_id is not None:
-        cmd = ["scripts/replace_stem_audio.py", "--track-audio-id", str(args.track_audio_id)]
+        cmd = [
+            "scripts/replace_stem_audio.py",
+            "--track-audio-id",
+            str(args.track_audio_id),
+        ]
         if remote_file:
             cmd.extend(["--file", remote_file])
             if args.player_id:
@@ -94,7 +145,9 @@ def build_remote_command(args: argparse.Namespace, *, remote_file: str | None = 
         # replace_stem_audio promotes by default
     else:
         if not args.track_id or not args.role:
-            sys.exit("add mode needs --track-id and --role (or use --track-audio-id to replace)")
+            sys.exit(
+                "add mode needs --track-id and --role (or use --track-audio-id to replace)"
+            )
         role = _norm_role(args.role)
         cmd = ["scripts/acquire_variant.py"]
         if args.url:
@@ -112,7 +165,11 @@ def build_remote_command(args: argparse.Namespace, *, remote_file: str | None = 
     if args.set_id:
         cmd.extend(["--set-id", args.set_id])
     if args.position:
-        cmd.extend(["--position", str(args.position)])
+        if args.track_audio_id is not None:
+            cmd.extend(["--position", str(args.position)])
+        elif str(args.position).isdigit():
+            cmd.extend(["--slot", str(args.position)])
+        # w-slots (013w1): acquire_variant ledger uses set_id + reason only
     if args.no_log:
         cmd.append("--no-log")
     return cmd
@@ -122,7 +179,9 @@ def _pi_git_sha() -> str | None:
     try:
         r = subprocess.run(
             ["ssh", PI_HOST, f"cd {PI_REPO} && git rev-parse --short HEAD"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
     except (subprocess.TimeoutExpired, OSError):
         return None
@@ -134,8 +193,14 @@ def _pi_git_sha() -> str | None:
 def _materialize_warning() -> str | None:
     try:
         r = subprocess.run(
-            ["ssh", PI_HOST, f"sqlite3 {CANONICAL_DB} 'SELECT COUNT(*) FROM track_metadata'"],
-            capture_output=True, text=True, timeout=30,
+            [
+                "ssh",
+                PI_HOST,
+                f"sqlite3 {CANONICAL_DB} 'SELECT COUNT(*) FROM track_metadata'",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
     except (subprocess.TimeoutExpired, OSError):
         return None
@@ -199,12 +264,16 @@ def _fail_on_set(spec: str) -> frozenset[str]:
         if not key:
             continue
         if key not in mapping:
-            sys.exit(f"unknown --fail-on value {part!r}; use: fallback, wrong_song, duration_mismatch")
+            sys.exit(
+                f"unknown --fail-on value {part!r}; use: fallback, wrong_song, duration_mismatch"
+            )
         out.add(mapping[key])
     return frozenset(out)
 
 
-def _resolve_track_id_on_pi(track_id: str | None, track_audio_id: int | None) -> str | None:
+def _resolve_track_id_on_pi(
+    track_id: str | None, track_audio_id: int | None
+) -> str | None:
     if track_id:
         return track_id
     if track_audio_id is None:
@@ -213,7 +282,9 @@ def _resolve_track_id_on_pi(track_id: str | None, track_audio_id: int | None) ->
     try:
         r = subprocess.run(
             ["ssh", PI_HOST, f"sqlite3 {CANONICAL_DB} {shlex.quote(sql)}"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
     except (subprocess.TimeoutExpired, OSError):
         return None
@@ -222,7 +293,9 @@ def _resolve_track_id_on_pi(track_id: str | None, track_audio_id: int | None) ->
     return r.stdout.strip() or None
 
 
-def _post_flight(args: argparse.Namespace, *, track_id: str | None, stem: str | None) -> None:
+def _post_flight(
+    args: argparse.Namespace, *, track_id: str | None, stem: str | None
+) -> None:
     track_id = _resolve_track_id_on_pi(track_id, args.track_audio_id)
     if not track_id:
         return
@@ -234,8 +307,14 @@ def _post_flight(args: argparse.Namespace, *, track_id: str | None, stem: str | 
     )
     try:
         r = subprocess.run(
-            ["ssh", PI_HOST, f"sqlite3 -header -column {CANONICAL_DB} {shlex.quote(sql)}"],
-            capture_output=True, text=True, timeout=30,
+            [
+                "ssh",
+                PI_HOST,
+                f"sqlite3 -header -column {CANONICAL_DB} {shlex.quote(sql)}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
     except (subprocess.TimeoutExpired, OSError) as e:
         print(f"post-flight query failed: {e}", file=sys.stderr)
@@ -250,12 +329,83 @@ def _post_flight(args: argparse.Namespace, *, track_id: str | None, stem: str | 
             "ORDER BY correction_id DESC LIMIT 1"
         )
         cr = subprocess.run(
-            ["ssh", PI_HOST, f"sqlite3 -header -column {CANONICAL_DB} {shlex.quote(csql)}"],
-            capture_output=True, text=True, timeout=30,
+            [
+                "ssh",
+                PI_HOST,
+                f"sqlite3 -header -column {CANONICAL_DB} {shlex.quote(csql)}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         if cr.stdout.strip():
             print("\nlatest correction:")
             print(cr.stdout.strip())
+
+
+def _log_case_attempt(
+    args: argparse.Namespace, *, recording_id: str | None, verdict: str | None
+) -> None:
+    """Append an Attempt to the local acquisition case for this fix.
+
+    No-op unless ``--set-id`` is given (the case is keyed per set). A replace
+    promotes by default; an add promotes only with ``--promote``.
+    """
+    if args.no_case_log or not args.set_id or not args.position:
+        return
+    if not recording_id:
+        print("case-log: could not resolve recording_id; skipping", file=sys.stderr)
+        return
+
+    from core.acquisition_case import (
+        Actor,
+        Attempt,
+        AttemptAction,
+        AttemptVerdict,
+        CaseClaim,
+        ProblemClass,
+        Resolution,
+        record_attempt,
+    )
+    from core.identity import normalize_stem
+
+    stem = _norm_role(args.role) if args.role else "regular"
+    promoted = args.track_audio_id is not None or args.promote
+    source = args.url or (f"file://{args.file}" if args.file else None)
+    checks = {"identity": verdict} if verdict else {}
+
+    attempt = Attempt(
+        action=AttemptAction.INGEST_URL,
+        actor=Actor.HUMAN,
+        url=source,
+        platform="online_candidate",
+        verdict=AttemptVerdict.PROMOTE if promoted else AttemptVerdict.ACCEPT,
+        checks=checks,
+        notes=args.reason,
+    )
+    resolution = (
+        Resolution(
+            track_audio_id=args.track_audio_id,
+            ref_source="online_candidate",
+            source_path=source,
+        )
+        if promoted
+        else None
+    )
+    add_problems = (
+        (ProblemClass.SUBOPTIMAL_STEM,) if stem in ("acappella", "instrumental") else ()
+    )
+    case = record_attempt(
+        set_id=args.set_id,
+        slot_label=str(args.position),
+        recording_id=recording_id,
+        attempt=attempt,
+        claim=CaseClaim(recording_id=recording_id, stem=normalize_stem(stem)),
+        resolution=resolution,
+        add_problems=add_problems,
+        root=args.case_root,
+    )
+    print(f"\ncase-log: appended attempt to {case.case_id} ({case.status.value})")
 
 
 def _print_ytdlp_help() -> None:
@@ -275,8 +425,11 @@ def _run_pull(args: argparse.Namespace) -> int:
         return 2
     pull = REPO / "labeling" / "pull_set_for_alignment.py"
     cmd = [
-        sys.executable, str(pull), args.set_id,
-        "--dest", args.aligning_dest,
+        sys.executable,
+        str(pull),
+        args.set_id,
+        "--dest",
+        args.aligning_dest,
     ]
     print(f"\npull: {' '.join(shlex.quote(c) for c in cmd)}")
     return subprocess.call(cmd)
@@ -325,6 +478,9 @@ def main(argv: list[str] | None = None) -> int:
 
     stem = _norm_role(args.role) if args.role else None
     _post_flight(args, track_id=args.track_id, stem=stem)
+
+    recording_id = _resolve_track_id_on_pi(args.track_id, args.track_audio_id)
+    _log_case_attempt(args, recording_id=recording_id, verdict=verdict)
 
     if args.pull:
         return _run_pull(args)
