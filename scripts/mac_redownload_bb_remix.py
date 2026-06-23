@@ -44,6 +44,8 @@ BB_SETS = (
     "237tdqmk",
 )
 BB_CSV = ",".join(f"'{s}'" for s in BB_SETS)
+# BB10–15 refs are mostly manual Mac rescues (replace_track_audio), not yt-dlp rows.
+BB_PLATFORMS = ("youtube", "youtube_music", "manual", "soundcloud", "spotify")
 
 NODE = shutil.which("node") or "/opt/homebrew/bin/node"
 YTDLP = REPO / "venvs/audio/bin/yt-dlp"
@@ -55,6 +57,10 @@ YTDLP_BASE = [
     "ejs:github",
     "--cookies-from-browser",
     "safari",
+    # YouTube 403s the default `tv` player_client's media URLs (PO-token gate);
+    # web_safari serves the m4a stream with Safari cookies. See ytdlp-mac-403 memory.
+    "--extractor-args",
+    "youtube:player_client=web_safari",
     "-f",
     "ba[ext=m4a]/bestaudio[ext=m4a]/bestaudio/best",
 ]
@@ -105,7 +111,8 @@ SELECT ta.track_audio_id, ta.track_id, tm.full_name, tm.artists_json, tm.title, 
   ) AS set_id
 FROM track_audio ta
 JOIN track_metadata tm ON tm.track_id = ta.track_id
-WHERE ta.platform IN ('youtube', 'youtube_music')
+WHERE ta.platform IN ({",".join(repr(p) for p in BB_PLATFORMS)})
+  AND ta.is_reference = 1
   AND tm.version IN ('remix', 'rework', 'altversion', 'edit', 'bootleg')
   AND EXISTS (
     SELECT 1 FROM dj_set_track_media_links m
