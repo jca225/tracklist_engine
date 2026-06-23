@@ -14,7 +14,7 @@ REPO         := ~/tracklist_engine
 PIP          := $(REPO)/venvs/web_crawler/bin/pip
 DB           := /mnt/storage/data/db/music_database.db
 
-.PHONY: help check deploy deploy-storage deploy-worker \
+.PHONY: help check check-inventory deploy deploy-storage deploy-worker \
         restart-jobqueue start-scraper stop-scraper restart-retry \
         install-taste-scrape restart-taste-scrape logs-taste-scrape \
         status logs-jobqueue logs-scraper logs-retry queue ssh-storage ssh-worker
@@ -22,6 +22,7 @@ DB           := /mnt/storage/data/db/music_database.db
 help:
 	@echo "Common targets:"
 	@echo "  make check            — guardrails script + full pytest suite"
+	@echo "  make check-inventory SET=<set_id> — slot satisfaction gate (pi-storage)"
 	@echo "  make deploy           — git pull + pip install on both Pis"
 	@echo "  make status           — service states + scrape_failures queue depth"
 	@echo "  make queue            — just the scrape_failures count"
@@ -45,6 +46,10 @@ help:
 check:
 	venvs/audio/bin/python scripts/guardrails.py
 	venvs/audio/bin/python -m pytest tests/ -q
+
+check-inventory:
+	@test -n "$(SET)" || (echo "Usage: make check-inventory SET=<set_id>" && exit 1)
+	venvs/audio/bin/python labeling/pull_set_for_alignment.py $(SET) --check
 
 # ---------- deploy ----------------------------------------------------------
 

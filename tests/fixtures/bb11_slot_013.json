@@ -1,0 +1,63 @@
+{
+  "set_id": "2nvzlh2k",
+  "slots": [
+    {
+      "slot_label": "013",
+      "recording_id": "x4jt0y5",
+      "full_name": "Quintino & Hardwell vs. DJ Kool - Let Me Clear My Scorpion (Henry Fong Mashup)",
+      "claimed_stem": "regular",
+      "claimed_variant": "regular",
+      "is_concurrent": true,
+      "candidates": [
+        {
+          "track_audio_id": 766,
+          "track_id": "x4jt0y5",
+          "recording_id": "x4jt0y5",
+          "stem": "regular",
+          "variant": "regular",
+          "platform": "soundcloud",
+          "is_reference": 1
+        }
+      ]
+    },
+    {
+      "slot_label": "013w1",
+      "recording_id": "1qrzf9p",
+      "full_name": "DJ Kool - Let Me Clear My Throat",
+      "claimed_stem": "regular",
+      "claimed_variant": "regular",
+      "is_concurrent": true,
+      "candidates": [
+        {
+          "track_audio_id": 21822,
+          "track_id": "1qrzf9p",
+          "recording_id": "1qrzf9p",
+          "stem": "regular",
+          "variant": "regular",
+          "platform": "manual",
+          "is_reference": 1
+        }
+      ]
+    },
+    {
+      "slot_label": "013w1",
+      "recording_id": "1qrzf9p",
+      "full_name": "DJ Kool - Let Me Clear My Throat",
+      "claimed_stem": "acappella",
+      "claimed_variant": "regular",
+      "is_concurrent": true,
+      "candidates": [
+        {
+          "track_audio_id": 21822,
+          "track_id": "1qrzf9p",
+          "recording_id": "1qrzf9p",
+          "stem": "regular",
+          "variant": "regular",
+          "platform": "manual",
+          "is_reference": 1
+        }
+      ],
+      "expect_status": "wrong_stem"
+    }
+  ]
+}

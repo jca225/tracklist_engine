@@ -76,6 +76,11 @@ from core.audio_resolve import (  # noqa: E402
     resolve_slot_audio,
     tier_name,
 )
+from labeling.inventory_check import (  # noqa: E402
+    evaluate_set_inventory,
+    run_inventory_check,
+    satisfaction_to_manifest_fields,
+)
 
 PI_HOST = "pi-storage"
 PI_DB = "/mnt/storage/data/db/music_database.db"
@@ -612,6 +617,45 @@ def pull_or_link(
         return rsync(pi_path, dst, dry_run=False)
 
 
+def _run_fetch_candidates(dest_root: Path, satisfaction_by_label: dict) -> None:
+    """Fetch stem candidates for unsatisfied payload slots."""
+    from core.slot_inventory import is_blocking, is_warning
+
+    needs = [
+        label
+        for label, sat in satisfaction_by_label.items()
+        if sat.claim.layer_role == "payload" and (is_blocking(sat) or is_warning(sat))
+    ]
+    if not needs:
+        return
+    print(f"\nFetching candidates for {len(needs)} payload slot(s)...")
+    repo_root = Path(__file__).resolve().parent.parent
+    script = repo_root / "scripts" / "fetch_candidate_stems.py"
+    if not script.is_file():
+        print("  skip: fetch_candidate_stems.py not found", file=sys.stderr)
+        return
+    import subprocess
+
+    proc = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--set-dir",
+            str(dest_root),
+            "--dry-run",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        print(f"  candidate dry-run failed: {proc.stderr[:200]}", file=sys.stderr)
+        return
+    subprocess.run(
+        [sys.executable, str(script), "--set-dir", str(dest_root)],
+        check=False,
+    )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("set_id", nargs="?", help="dj_sets.set_id (e.g. 2vpur281)")
@@ -639,6 +683,22 @@ def main() -> int:
         "considers part of the set. Combine with --dry-run "
         "to preview deletions without touching anything.",
     )
+    ap.add_argument(
+        "--check",
+        action="store_true",
+        help="inventory gate only: report slot satisfaction, exit 1 on blocking gaps",
+    )
+    ap.add_argument(
+        "--check-warn",
+        action="store_true",
+        help="like --check but exit 0 even when blocking (warnings only to stderr)",
+    )
+    ap.add_argument(
+        "--fetch-candidates",
+        action="store_true",
+        help="after pull, fetch YouTube acapella/instrumental candidates for "
+        "unsatisfied payload slots (requires manifest)",
+    )
     args = ap.parse_args()
 
     if args.list_recent:
@@ -647,6 +707,10 @@ def main() -> int:
 
     if not args.set_id:
         ap.error("set_id required (or use --list-recent to browse)")
+
+    if args.check or args.check_warn:
+        code = run_inventory_check(args.set_id, ssh_sqlite, warn_only=args.check_warn)
+        return code
 
     if not shutil.which("rsync"):
         print("ERROR: rsync not on PATH", file=sys.stderr)
@@ -663,6 +727,10 @@ def main() -> int:
             f"ERROR: no reference tracks linked to set {args.set_id}", file=sys.stderr
         )
         return 1
+
+    satisfaction_by_label = {
+        s.claim.slot_label: s for s in evaluate_set_inventory(args.set_id, ssh_sqlite)
+    }
 
     folder_name = f"{args.set_id}__{sanitize(mix.title)}"
     dest_root = Path(args.dest).expanduser() / folder_name
@@ -731,6 +799,9 @@ def main() -> int:
             "duration_s": t.duration_s,
             "stems": {},
         }
+        sat = satisfaction_by_label.get(t.label)
+        if sat is not None:
+            track_entry.update(satisfaction_to_manifest_fields(sat))
 
         # Stem subdir mirrors the track filename minus extension, so the
         # human-readable name pairs visibly with its track.
@@ -775,6 +846,9 @@ def main() -> int:
     }
     if not args.dry_run:
         (dest_root / "manifest.json").write_text(json.dumps(manifest, indent=2))
+
+    if args.fetch_candidates and not args.dry_run and succeeded:
+        _run_fetch_candidates(dest_root, satisfaction_by_label)
 
     if args.prune:
         print("\nPruning orphaned local audio files...")

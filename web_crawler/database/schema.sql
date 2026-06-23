@@ -634,6 +634,8 @@ CREATE TABLE IF NOT EXISTS set_track_slots (
     title             TEXT,
     artists_json      TEXT,
     duration_seconds  INTEGER,
+    layer_role        TEXT,                  -- bed | payload | constituent | solo
+    constituents_json TEXT,                  -- w/ recording_ids for primary rows
     parsed_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (set_id, row_index),
     FOREIGN KEY (set_id) REFERENCES dj_sets(set_id) ON DELETE CASCADE,

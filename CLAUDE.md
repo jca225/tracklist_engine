@@ -55,6 +55,8 @@ or with scrape-only field names from older docs.
 | Axis | DB / code values | Meaning |
 |------|------------------|---------|
 | **version** | `original`, `remix`, `rework`, `altversion`, `edit`, `bootleg`, `mashup` | Creative version (remix vs original) — `track_metadata.version` |
+
+**Slot inventory (2026-06):** playable rows carry a derived `layer_role` (bed/payload/constituent/solo). Pre-pull gate: `make check-inventory SET=<set_id>`. Spec: [docs/inventory_coherence_contract.md](docs/inventory_coherence_contract.md).
 | **stem** | `regular`, `acappella`, `instrumental` | Vocal/instrumental form — `track_audio.stem` (canonical default: **`regular`**, not `full` / `original`) |
 | **variant** | `regular`, `extended` | Edit length — `track_audio.variant` |
 
