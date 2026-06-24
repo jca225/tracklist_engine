@@ -28,6 +28,10 @@ docs/*.pdf
 # macOS
 .DS_Store
 
+# Cursor debug logs (.cursor/rules/ stays tracked)
+.cursor/*.log
+.cursor/debug-*.log
+
 # workspaces: vendored MSST webUI (own git repo + 2.4G of checkpoints),
 # separation smoke outputs, and local MERT caches stay untracked
 workspaces/msst_webui/
@@ -38,3 +42,5 @@ workspaces/alignment_prototype/.feat_cache/
 workspaces/alignment_prototype/out/
 workspaces/section_hsmm/.cache/
 workspaces/section_hsmm/out/
+workspaces/source_detection/.cache/
+workspaces/source_detection/out/
