@@ -35,9 +35,16 @@ class TrackRef:
 
 
 def _yt_dlp() -> str:
+    import shutil
     root = Path(__file__).resolve().parents[1]
-    candidate = root / "venvs" / "audio" / "bin" / "yt-dlp"
-    return str(candidate) if candidate.is_file() else "yt-dlp"
+    for candidate in (
+        root / "venvs" / "audio" / "bin" / "yt-dlp",
+        Path("/venv/main/bin/yt-dlp"),          # Vast PyTorch image
+    ):
+        if candidate.is_file():
+            return str(candidate)
+    found = shutil.which("yt-dlp")
+    return found if found else "yt-dlp"
 
 
 def sc_track_url(raw_json: str) -> str | None:

@@ -12,6 +12,7 @@ layer; float32 accumulation avoids the float16 overflow).
 from __future__ import annotations
 
 import argparse
+import json
 import pickle
 import sqlite3
 import tempfile
@@ -21,13 +22,14 @@ from pathlib import Path
 import numpy as np
 
 from analysis.adapters import audio_io, mert_adapter
+from personalization.gpu_policy import enforce_vast_for_gpu
 from personalization.prior_mert import download_track, sc_track_url
 
 DB = Path("data/taste/taste_warehouse.db")
 OUT = Path("data/taste/tail_track_embeds.pkl")
 
 
-def tail_targets(conn: sqlite3.Connection, min_likers: int, head: int = 500) -> list[tuple[int, str]]:
+def tail_targets(conn: sqlite3.Connection, min_likers: int, head: int = 500) -> list[tuple[int, str, float | None]]:
     rows = conn.execute(
         """
         WITH pop AS (SELECT track_id, COUNT(DISTINCT user_id) k FROM sc_likes GROUP BY track_id),
@@ -40,9 +42,15 @@ def tail_targets(conn: sqlite3.Connection, min_likers: int, head: int = 500) -> 
     ).fetchall()
     out = []
     for tid, rj in rows:
-        url = sc_track_url(str(rj)) if rj else None
-        if url:
-            out.append((int(tid), url))
+        if not rj:
+            continue
+        rec = json.loads(str(rj))
+        url = sc_track_url(str(rj))
+        if not url:
+            continue
+        ms = rec.get("track_duration_ms")
+        dur_s = float(ms) / 1000.0 if ms else None
+        out.append((int(tid), url, dur_s))
     return out
 
 
@@ -73,23 +81,41 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--min-likers", type=int, default=50)
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--device", default="auto", help="MERT device: auto | cuda | mps | cpu")
+    ap.add_argument(
+        "--max-duration-s",
+        type=float,
+        default=0.0,
+        help="skip tracks longer than this (0 = no limit; use ~600 to skip full DJ mixes)",
+    )
+    ap.add_argument(
+        "--allow-local-gpu",
+        action="store_true",
+        help="Mac-only smoke test with --limit <= 5; otherwise use Vast",
+    )
     args = ap.parse_args(argv)
+    enforce_vast_for_gpu(args.device, allow_local_gpu=args.allow_local_gpu, limit=args.limit)
 
     conn = sqlite3.connect(DB)
     targets = tail_targets(conn, args.min_likers)
     if args.limit:
         targets = targets[:args.limit]
     cache = pickle.loads(OUT.read_bytes()) if OUT.is_file() else {}
-    todo = [(tid, url) for tid, url in targets if tid not in cache]
+    todo = [(tid, url, dur) for tid, url, dur in targets if tid not in cache]
     print(f"tail targets: {len(targets)} | already embedded: {len(cache)} | to do: {len(todo)}")
     if not todo:
         return 0
 
-    h = mert_adapter.load().value
-    ok = fail = 0
+    h = mert_adapter.load(device=args.device).value
+    ok = fail = skip = 0
     with tempfile.TemporaryDirectory() as tmp:
         tmpd = Path(tmp)
-        for i, (tid, url) in enumerate(todo, 1):
+        for i, (tid, url, meta_dur) in enumerate(todo, 1):
+            if args.max_duration_s > 0 and meta_dur and meta_dur > args.max_duration_s:
+                skip += 1
+                if skip % 50 == 1:
+                    print(f"  [{i}/{len(todo)}] skip (metadata {meta_dur:.0f}s > {args.max_duration_s:.0f}s)")
+                continue
             p = None
             for attempt in range(3):                       # survive transient WiFi/throttle blips
                 p = download_track(url, tmpd / str(tid))
@@ -103,16 +129,19 @@ def main(argv=None) -> int:
             p.unlink(missing_ok=True)
             if not wf.is_ok():
                 fail += 1; continue
+            dur = wf.value.samples.size / mert_adapter.MERT_SR
+            if args.max_duration_s > 0 and dur > args.max_duration_s:
+                skip += 1; continue
             vec = embed_all_layers(h, wf.value.samples)
             if vec is None:
                 fail += 1; continue
             cache[tid] = vec
             ok += 1
-            if ok % 25 == 0:
+            if ok % 10 == 0 or ok == 1:
                 OUT.write_bytes(pickle.dumps(cache))
-                print(f"  {ok} embedded ({fail} failed) / {len(todo)}")
+                print(f"  [{i}/{len(todo)}] {ok} embedded, {fail} failed, {skip} skipped")
     OUT.write_bytes(pickle.dumps(cache))
-    print(f"done: embedded {ok}, failed {fail}, total cached {len(cache)} -> {OUT}")
+    print(f"done: embedded {ok}, failed {fail}, skipped {skip}, total cached {len(cache)} -> {OUT}")
     return 0
 
 

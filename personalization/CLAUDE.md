@@ -11,6 +11,18 @@ as the producer side of the step-2 generation-pretrain boundary; the consumer
 **Runs on pi-worker** (`tracklist-taste-scrape.service`). Mac dev: `venvs/audio/bin/python`.
 Data: `data/taste/` (gitignored).
 
+## GPU policy
+
+**Batch deep-learning / GPU inference runs on Vast only** — not Mac MPS.
+
+| Work | Where |
+|------|--------|
+| Tail MERT embed (`embed_tail`) | `scripts/vast_taste_embed.sh` → Vast 4090 |
+| SoundCloud scrape, SQLite, ID-CF taste model | Mac / pi-worker (CPU) |
+| MERT smoke test (≤5 tracks) | Mac with `--limit 3 --allow-local-gpu` |
+
+See [docs/vast_coordination.md](../docs/vast_coordination.md) for multi-agent box registry + auto-teardown.
+
 ## Commands
 
 ```bash
@@ -32,7 +44,7 @@ venvs/audio/bin/python -m personalization.main loop --all-mixes --once
 venvs/audio/bin/python -m personalization.main score-bots --mix 2nvzlh2k
 venvs/audio/bin/python -m personalization.main cluster --mix 2nvzlh2k
 venvs/audio/bin/python -m personalization.main prior-mert \
-  --mix 2nvzlh2k --max-tracks 150 --max-users 100 --device mps
+  --mix 2nvzlh2k --max-tracks 150 --max-users 100 --device cuda   # Vast only for GPU batch
 venvs/audio/bin/python -m personalization.main comment-heatmap \
   --mix 1fsnxchk --gt labeling/fixtures/bb12_ground_truth.yaml --set-id 1fsnxchk \
   --out data/analysis/bb12_comment_heatmap.json
