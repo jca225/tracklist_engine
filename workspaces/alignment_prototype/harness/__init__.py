@@ -14,11 +14,13 @@ from .contract import (
     RefContext,
     RefSegment,
 )
+from .driver import DeterministicDriver
 from .merge import merge
 
 __all__ = [
     "AlignmentResult",
     "CandidatePool",
+    "DeterministicDriver",
     "MixContext",
     "Probe",
     "RefContext",
