@@ -40,6 +40,7 @@ sys.path.insert(0, str(REPO))
 from core.result import Err
 from ingest.adapters import ytmusic_adapter
 from ingest.search_query import to_search_query_for_claim
+from ingest.ytdlp_profile import mac_ytdlp_base
 
 PI_HOST = "pi-storage"
 PI_DB = "/mnt/storage/data/db/music_database.db"
@@ -48,21 +49,7 @@ PI_PY = "venvs/audio/bin/python"
 
 NODE = shutil.which("node") or "/opt/homebrew/bin/node"
 YTDLP = REPO / "venvs/audio/bin/yt-dlp"
-YTDLP_BASE = [
-    str(YTDLP),
-    "--js-runtimes",
-    f"node:{NODE}",
-    "--remote-components",
-    "ejs:github",
-    "--cookies-from-browser",
-    "safari",
-    # YouTube 403s the default `tv` player_client's media URLs (PO-token gate);
-    # web_safari serves the m4a stream with Safari cookies. See ytdlp-mac-403 memory.
-    "--extractor-args",
-    "youtube:player_client=web_safari",
-    "-f",
-    "ba[ext=m4a]/bestaudio[ext=m4a]/bestaudio/best",
-]
+YTDLP_BASE = mac_ytdlp_base(YTDLP, NODE)
 
 _log = logging.getLogger("mac_redownload_tracklist")
 
