@@ -14,6 +14,7 @@ from .contract import (
     RefContext,
     RefSegment,
 )
+from .merge import merge
 
 __all__ = [
     "AlignmentResult",
@@ -22,4 +23,5 @@ __all__ = [
     "Probe",
     "RefContext",
     "RefSegment",
+    "merge",
 ]
