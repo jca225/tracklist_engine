@@ -33,6 +33,7 @@ from ..errors import DownloadError
 from ..preflight import annotate as _annotate
 from core.models import AudioAsset, MediaSource
 from core.result import Err, Ok, Result
+from core.retry import retry
 from .downloader import DownloadConfig
 
 
@@ -110,6 +111,23 @@ def _get_ytmusic():
 
 
 def search(
+    query: str, limit: int = 5
+) -> Result[tuple[YTMSearchHit, ...], DownloadError]:
+    """Search YT Music with a short retry on transient network errors.
+
+    Retries _search_once only on a transient network Err — never on 'no hits',
+    which is deterministic. Short exponential backoff so a flaky ytmusicapi call
+    self-heals without stalling a batch run.
+    """
+    return retry(
+        lambda: _search_once(query, limit),
+        attempts=3,
+        base_delay_s=0.5,
+        retry_on=lambda e: e.kind == "network",
+    )
+
+
+def _search_once(
     query: str, limit: int = 5
 ) -> Result[tuple[YTMSearchHit, ...], DownloadError]:
     """Search YT Music's 'songs' filter for `query` and return up to `limit`
