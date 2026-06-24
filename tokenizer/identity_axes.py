@@ -3,6 +3,7 @@
 Re-exports canonical types from core.identity. Scrape-time Title Case tags are
 converted to DB lowercase via core.identity helpers in materialize.
 """
+
 from __future__ import annotations
 
 import re
@@ -16,7 +17,9 @@ from core.identity import (
     scrape_version_to_db,
 )
 
-VersionTag = Optional[Literal["Remix", "Rework", "AltVersion"]]
+VersionTag = Optional[
+    Literal["Remix", "Rework", "AltVersion", "Mashup", "Bootleg", "Edit"]
+]
 ClaimedStem = Literal["regular", "acappella", "instrumental"]
 
 _ACAPELLA_RE = re.compile(
@@ -56,14 +59,27 @@ def derive_version_flags(
     text_blob = row_text.lower()
     has_rework = " rework" in text_blob or has_recycle_rework
     has_remix = " remix" in text_blob
+    has_mashup = " mashup" in text_blob or " vs " in text_blob or " vs. " in text_blob
+    has_bootleg = " bootleg" in text_blob
+    has_edit = " edit" in text_blob and " remix" not in text_blob
+    has_flip = " flip" in text_blob
+    has_vip = " vip" in text_blob
 
-    is_remixish = remix_flag or has_rework or has_remix
+    is_remixish = remix_flag or has_rework or has_remix or has_mashup or has_bootleg
 
     version_tag: VersionTag = None
-    if has_rework or has_recycle_rework:
+    if has_mashup:
+        version_tag = "Mashup"
+    elif has_bootleg:
+        version_tag = "Bootleg"
+    elif has_rework or has_recycle_rework:
         version_tag = "Rework"
     elif has_remix:
         version_tag = "Remix"
+    elif has_edit:
+        version_tag = "Edit"
+    elif has_flip or has_vip:
+        version_tag = "AltVersion"
     elif remix_flag:
         version_tag = "AltVersion"
 
@@ -79,7 +95,9 @@ def scrape_claimed_stem(full_name: str | None, row_text: str | None = None) -> s
     return normalize_stem(derive_claimed_stem(full_name, row_text))
 
 
-def derive_claimed_variant(full_name: str | None, row_text: str | None = None) -> Variant:
+def derive_claimed_variant(
+    full_name: str | None, row_text: str | None = None
+) -> Variant:
     blob = " ".join(filter(None, (full_name or "", row_text or "")))
     if re.search(r"\bextended\s+(?:mix|version|edit)\b", blob, re.IGNORECASE):
         return "extended"

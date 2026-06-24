@@ -14,6 +14,7 @@ Run on pi-storage (the DB is local — no RPC needed):
     venvs/web_crawler/bin/python -m tokenizer.materialize \\
         --db /mnt/storage/data/db/music_database.db
 """
+
 from __future__ import annotations
 
 import argparse
@@ -33,6 +34,7 @@ from bs4 import BeautifulSoup
 
 from tokenizer._parser import BS_PARSER
 from tokenizer.tokenizer import classify_row
+from core.slot_inventory import derive_layer_role
 from tokenizer.identity_axes import (
     derive_claimed_variant,
     scrape_claimed_stem,
@@ -50,6 +52,7 @@ _BATCH_INSERT = 1000
 # -----------------------------------------------------------------------------
 # track_metadata aggregator (in-memory, ~50k unique track_ids fits easily)
 # -----------------------------------------------------------------------------
+
 
 class _MetadataAccumulator:
     """Holds per-track_id merged 'best so far' view across all sets seen."""
@@ -120,12 +123,15 @@ class _MetadataAccumulator:
         self._d[tr.track_key] = cur
 
     def finalize_rows(self) -> list[dict[str, Any]]:
-        return [{k: v for k, v in d.items() if k != "_seen_sets"} for d in self._d.values()]
+        return [
+            {k: v for k, v in d.items() if k != "_seen_sets"} for d in self._d.values()
+        ]
 
 
 # -----------------------------------------------------------------------------
 # Flushers
 # -----------------------------------------------------------------------------
+
 
 def _flush_suggestions(conn: sqlite3.Connection, buf: list[tuple]) -> None:
     if not buf:
@@ -164,14 +170,27 @@ def _slot_label(tr: TrackRow) -> str | None:
 def _flush_slots(conn: sqlite3.Connection, buf: list[tuple]) -> None:
     if not buf:
         return
-    conn.executemany(
-        "INSERT OR REPLACE INTO set_track_slots ("
-        "set_id, row_index, tlp_id, recording_id, track_id, source, slot_label, "
-        "is_concurrent, cue_seconds, cue_time_seconds, claimed_version, "
-        "claimed_stem, claimed_variant, full_name, title, artists_json, duration_seconds"
-        ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        buf,
-    )
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(set_track_slots)")}
+    if "layer_role" in cols:
+        conn.executemany(
+            "INSERT OR REPLACE INTO set_track_slots ("
+            "set_id, row_index, tlp_id, recording_id, track_id, source, slot_label, "
+            "is_concurrent, cue_seconds, cue_time_seconds, claimed_version, "
+            "claimed_stem, claimed_variant, full_name, title, artists_json, "
+            "duration_seconds, layer_role, constituents_json"
+            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            buf,
+        )
+    else:
+        legacy = [row[:17] for row in buf]
+        conn.executemany(
+            "INSERT OR REPLACE INTO set_track_slots ("
+            "set_id, row_index, tlp_id, recording_id, track_id, source, slot_label, "
+            "is_concurrent, cue_seconds, cue_time_seconds, claimed_version, "
+            "claimed_stem, claimed_variant, full_name, title, artists_json, duration_seconds"
+            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            legacy,
+        )
     conn.commit()
 
 
@@ -271,7 +290,9 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
                 outer_classes = set(outer.get("class") or [])
 
                 if "tlpItem" in outer_classes:
-                    tr = parse_track_main(raw)  # internally parses once with BS_PARSER too
+                    tr = parse_track_main(
+                        raw
+                    )  # internally parses once with BS_PARSER too
                     if tr.track_key:
                         if tr.is_ided:
                             metadata.update(tr, row["set_id"])
@@ -290,29 +311,41 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
                             label = None
                         slot_state[sid] = (primary, w_ctr)
 
-                        source = "synthetic" if tr.track_key.startswith("tlp") else "scraped"
+                        source = (
+                            "synthetic" if tr.track_key.startswith("tlp") else "scraped"
+                        )
 
                         claimed_stem = scrape_claimed_stem(tr.full_name)
-                        slot_buf.append((
-                            sid,
-                            int(row["row_index"]),
-                            tr.data_id,
-                            tr.track_key,
-                            tr.track_key,
-                            source,
-                            label,
-                            int(tr.is_concurrent),
-                            tr.cue_seconds,
-                            tr.cue_time_seconds,
-                            scrape_claimed_version(tr.version_tag),
-                            claimed_stem,
-                            derive_claimed_variant(tr.full_name),
-                            tr.full_name,
-                            tr.title,
-                            json.dumps(list(tr.artists), ensure_ascii=False)
-                            if tr.artists else None,
-                            tr.duration_seconds,
-                        ))
+                        layer_role = derive_layer_role(
+                            label or "",
+                            is_concurrent=tr.is_concurrent,
+                            claimed_stem=claimed_stem,
+                        )
+                        slot_buf.append(
+                            (
+                                sid,
+                                int(row["row_index"]),
+                                tr.data_id,
+                                tr.track_key,
+                                tr.track_key,
+                                source,
+                                label,
+                                int(tr.is_concurrent),
+                                tr.cue_seconds,
+                                tr.cue_time_seconds,
+                                scrape_claimed_version(tr.version_tag),
+                                claimed_stem,
+                                derive_claimed_variant(tr.full_name),
+                                tr.full_name,
+                                tr.title,
+                                json.dumps(list(tr.artists), ensure_ascii=False)
+                                if tr.artists
+                                else None,
+                                tr.duration_seconds,
+                                layer_role,
+                                None,
+                            )
+                        )
                         counts["slot"] += 1
 
                         if len(slot_buf) >= _BATCH_INSERT:
@@ -321,16 +354,26 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
 
                 elif "sugTog" in outer_classes:
                     sug = parse_suggestion_row(outer)
-                    sug_buf.append((
-                        sug.sug_id, row["set_id"], sug.tlp_id, sug.pos,
-                        sug.track_slug, sug.track_display, sug.artist_title,
-                        sug.suggester_user_id, sug.suggester_name,
-                        sug.suggestion_timestamp,
-                        int(bool(sug.is_remix)) if sug.is_remix is not None else None,
-                        int(bool(sug.has_youtube)),
-                        int(bool(sug.has_soundcloud)),
-                        int(bool(sug.has_spotify)),
-                    ))
+                    sug_buf.append(
+                        (
+                            sug.sug_id,
+                            row["set_id"],
+                            sug.tlp_id,
+                            sug.pos,
+                            sug.track_slug,
+                            sug.track_display,
+                            sug.artist_title,
+                            sug.suggester_user_id,
+                            sug.suggester_name,
+                            sug.suggestion_timestamp,
+                            int(bool(sug.is_remix))
+                            if sug.is_remix is not None
+                            else None,
+                            int(bool(sug.has_youtube)),
+                            int(bool(sug.has_soundcloud)),
+                            int(bool(sug.has_spotify)),
+                        )
+                    )
                     counts["suggestion"] += 1
 
                 elif "bItmH" in outer_classes:
@@ -349,8 +392,13 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
         if pct - last_log_pct >= 5:
             log.info(
                 "%d/%s (%d%%) — track=%d slot=%d sug=%d errors=%d",
-                offset, f"{total:,}", pct,
-                counts["track"], counts["slot"], counts["suggestion"], counts["errors"],
+                offset,
+                f"{total:,}",
+                pct,
+                counts["track"],
+                counts["slot"],
+                counts["suggestion"],
+                counts["errors"],
             )
             last_log_pct = pct
 
@@ -380,10 +428,13 @@ def main() -> int:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--db", required=True, type=Path,
-                   help="Path to music_database.db")
-    p.add_argument("--batch-size", type=int, default=10_000,
-                   help="Rows fetched per cycle (default: 10000)")
+    p.add_argument("--db", required=True, type=Path, help="Path to music_database.db")
+    p.add_argument(
+        "--batch-size",
+        type=int,
+        default=10_000,
+        help="Rows fetched per cycle (default: 10000)",
+    )
     args = p.parse_args()
 
     logging.basicConfig(

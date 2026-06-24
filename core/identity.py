@@ -23,13 +23,20 @@ Legacy mapping (Phase 1 migration / ingest compat):
 - ``full`` (tokenizer interim) → ``regular``
 - scrape ``version_tag='Remix'`` → version ``remix``
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Final, Literal, Optional
 
 Version = Literal[
-    "original", "remix", "rework", "altversion", "edit", "bootleg", "mashup",
+    "original",
+    "remix",
+    "rework",
+    "altversion",
+    "edit",
+    "bootleg",
+    "mashup",
 ]
 Stem = Literal["regular", "acappella", "instrumental"]
 Variant = Literal["regular", "extended"]
@@ -46,6 +53,9 @@ _VERSION_FROM_SCRAPE: Final[dict[str | None, Version]] = {
     "Remix": "remix",
     "Rework": "rework",
     "AltVersion": "altversion",
+    "Edit": "edit",
+    "Mashup": "mashup",
+    "Bootleg": "bootleg",
     "Acappella": "original",  # mis-tagged scrape rows: stem handled separately
 }
 
@@ -99,7 +109,13 @@ def normalize_version(raw: str | None) -> Version:
         return _VERSION_FROM_SCRAPE[s]
     low = s.lower()
     if low in (
-        "original", "remix", "rework", "altversion", "edit", "bootleg", "mashup",
+        "original",
+        "remix",
+        "rework",
+        "altversion",
+        "edit",
+        "bootleg",
+        "mashup",
     ):
         return low  # type: ignore[return-value]
     return DEFAULT_VERSION
