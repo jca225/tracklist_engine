@@ -293,6 +293,34 @@ def _resolve_track_id_on_pi(
     return r.stdout.strip() or None
 
 
+def _resolve_slot_on_pi(set_id: str, recording_id: str) -> str | None:
+    """The unique ``set_track_slots.slot_label`` this recording fills in the set.
+
+    Best-effort: returns None if the recording fills no slot, fills *more than
+    one* (ambiguous — don't guess a key), or the query fails. Lets batch callers
+    (ingest_candidate_winners, apply_stem_matches) that pass --set-id + --track-id
+    but no --position still get a correctly-keyed acquisition case, without each
+    reimplementing the lookup.
+    """
+    sql = (
+        "SELECT slot_label FROM set_track_slots "
+        f"WHERE set_id = '{set_id}' AND recording_id = '{recording_id}'"
+    )
+    try:
+        r = subprocess.run(
+            ["ssh", PI_HOST, f"sqlite3 {CANONICAL_DB} {shlex.quote(sql)}"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    if r.returncode != 0:
+        return None
+    labels = [ln.strip() for ln in r.stdout.splitlines() if ln.strip()]
+    return labels[0] if len(labels) == 1 else None
+
+
 def _post_flight(
     args: argparse.Namespace, *, track_id: str | None, stem: str | None
 ) -> None:
@@ -351,10 +379,20 @@ def _log_case_attempt(
     No-op unless ``--set-id`` is given (the case is keyed per set). A replace
     promotes by default; an add promotes only with ``--promote``.
     """
-    if args.no_case_log or not args.set_id or not args.position:
+    if args.no_case_log or not args.set_id:
         return
     if not recording_id:
         print("case-log: could not resolve recording_id; skipping", file=sys.stderr)
+        return
+    # Slot keys the case. Prefer the explicit --position; otherwise resolve the
+    # unique slot this recording fills in the set (covers batch ingests that pass
+    # --set-id + --track-id but no --position).
+    position = args.position or _resolve_slot_on_pi(args.set_id, recording_id)
+    if not position:
+        print(
+            "case-log: no unique slot_label for (set, recording); skipping",
+            file=sys.stderr,
+        )
         return
 
     from core.acquisition_case import (
@@ -397,7 +435,7 @@ def _log_case_attempt(
     )
     case = record_attempt(
         set_id=args.set_id,
-        slot_label=str(args.position),
+        slot_label=str(position),
         recording_id=recording_id,
         attempt=attempt,
         claim=CaseClaim(recording_id=recording_id, stem=normalize_stem(stem)),
