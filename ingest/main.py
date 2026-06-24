@@ -48,6 +48,7 @@ from pathlib import Path
 from core import db as db_adapter
 from .adapters import spotdl_adapter
 from .adapters.downloader import DownloadConfig, download_one, download_set_mix
+from .preflight import check_environment
 from .errors import DbError, DownloadError
 from core.models import AudioAsset, MediaSource, SetMediaLink, Track
 from core.result import Err, Ok, Result
@@ -383,6 +384,10 @@ def _run(args: argparse.Namespace) -> int:
         level=getattr(logging, args.log_level),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    env = check_environment()
+    if not env.ok:
+        _log.warning("preflight: %s", env.detail)
+
     job_r = _load_job(args.job_file)
     match job_r:
         case Err(reason):
