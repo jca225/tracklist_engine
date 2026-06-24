@@ -1,0 +1,6 @@
+# Optional: on-the-fly stem separation when a --mix file (not a stem folder) is
+# given. Heavy; install only if you need it. The BB12 pilot reuses existing
+# ~/aligning stems and does not require this.
+-r requirements.txt
+demucs==4.0.1
+torch>=2.1

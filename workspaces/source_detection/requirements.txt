@@ -1,0 +1,11 @@
+# source_detection — pinned to the versions in venvs/audio (verified 2026-06-11).
+# Core matcher + IO + report. Demucs/MERT are NOT needed at runtime when stems
+# and MERT npz already exist (the BB12 pilot case); see requirements-stems.txt
+# for the optional on-the-fly stem-separation path.
+numpy==2.4.4
+scipy==1.16.0
+librosa==0.11.0
+soundfile==0.13.1
+PyYAML==6.0.2
+tqdm==4.67.1
+Jinja2==3.1.6
