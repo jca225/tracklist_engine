@@ -3,6 +3,7 @@
 # Heavy GPU/audio deps (torch, demucs, MERT, essentia, librosa) are deliberately
 # excluded; tests that need them must lazy-import or pytest.importorskip.
 pytest
+hypothesis  # property-based (Tier-2) tests: test_result_laws, test_acquisition_ledger_props
 numpy
 pandas
 scipy
