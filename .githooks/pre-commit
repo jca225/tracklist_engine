@@ -12,4 +12,5 @@ if [[ ! -x "$PYTHON" ]]; then
 fi
 
 "$PYTHON" scripts/guardrails.py
+bash scripts/typecheck.sh
 "$PYTHON" -m pytest tests/ -q

@@ -24,5 +24,8 @@ jobs:
       - name: Mechanical guardrails
         run: python scripts/guardrails.py
 
+      - name: Type check (strict, clean core subset)
+        run: bash scripts/typecheck.sh
+
       - name: Pytest
         run: python -m pytest tests/ -q

@@ -45,7 +45,11 @@ help:
 
 check:
 	venvs/audio/bin/python scripts/guardrails.py
+	bash scripts/typecheck.sh
 	venvs/audio/bin/python -m pytest tests/ -q
+
+typecheck:
+	bash scripts/typecheck.sh
 
 check-inventory:
 	@test -n "$(SET)" || (echo "Usage: make check-inventory SET=<set_id>" && exit 1)

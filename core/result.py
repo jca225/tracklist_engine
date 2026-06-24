@@ -33,10 +33,10 @@ class Ok(Generic[T]):
 class Err(Generic[E]):
     error: E
 
-    def map(self, f: Callable) -> "Err[E]":
+    def map(self, f: Callable[..., object]) -> "Err[E]":
         return self
 
-    def flat_map(self, f: Callable) -> "Err[E]":
+    def flat_map(self, f: Callable[..., object]) -> "Err[E]":
         return self
 
     def map_err(self, f: Callable[[E], F]) -> "Err[F]":
