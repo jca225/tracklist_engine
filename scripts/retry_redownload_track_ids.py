@@ -46,6 +46,10 @@ YTDLP_BASE = [
     "ejs:github",
     "--cookies-from-browser",
     "safari",
+    # YouTube 403s the default `tv` player_client's media URLs (PO-token gate);
+    # web_safari serves the m4a stream with Safari cookies. See ytdlp-mac-403 memory.
+    "--extractor-args",
+    "youtube:player_client=web_safari",
     "-f",
     "ba[ext=m4a]/bestaudio[ext=m4a]/bestaudio/best",
 ]

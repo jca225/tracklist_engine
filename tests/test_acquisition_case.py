@@ -6,6 +6,8 @@ outcomes can't round-trip cleanly through the case record, the schema is wrong.
 
 from __future__ import annotations
 
+import argparse
+import json
 from pathlib import Path
 
 from core.acquisition_case import (
@@ -138,6 +140,66 @@ def test_record_attempt_distinct_recordings_are_separate_cases(tmp_path: Path):
         root=tmp_path,
     )
     assert len(load_cases(tmp_path / "bb11.jsonl")) == 2
+
+
+# ── Mac-side logger: flag mode, stdin mode, emit round-trip ────────────────────
+
+
+def test_log_acquisition_flag_payload(tmp_path: Path):
+    from scripts.log_acquisition import _record_from_payload
+
+    payload = {
+        "set_id": "bb11",
+        "slot_label": "081",
+        "recording_id": "rec1",
+        "url": "https://x",
+        "reason": "original, not the Syn Cole remix",
+        "ref_source": "reference",
+        "verdict": "promote",
+        "problems": ["wrong_version"],
+    }
+    cid = _record_from_payload(payload, root=tmp_path, dry_run=False)
+    assert cid is not None
+    c = load_cases(tmp_path / "bb11.jsonl")[0]
+    assert ProblemClass.WRONG_VERSION in c.problem_classes
+    assert c.resolution is not None and c.resolution.ref_source == "reference"
+
+
+def test_log_acquisition_skips_incomplete_payload(tmp_path: Path):
+    from scripts.log_acquisition import _record_from_payload
+
+    # No recording_id → must skip, not crash, and write nothing.
+    assert (
+        _record_from_payload(
+            {"set_id": "bb11", "slot_label": "081"}, root=tmp_path, dry_run=False
+        )
+        is None
+    )
+    assert load_cases(tmp_path / "bb11.jsonl") == []
+
+
+def test_emit_to_logger_round_trip(tmp_path: Path, capsys):
+    # The pi-side executor emits a line; the Mac-side logger persists it.
+    from scripts.log_acquisition import EMIT_PREFIX, _record_from_payload
+    from scripts.replace_track_audio import _emit_case_record
+
+    args = argparse.Namespace(
+        set_id="bb11",
+        position="081",
+        url="https://x",
+        file=None,
+        reason="wrong remix",
+        no_promote_reference=False,
+    )
+    _emit_case_record(args, "rec1", ledger_axis="version", stem="regular")
+    line = capsys.readouterr().out.strip()
+    assert line.startswith(EMIT_PREFIX)
+
+    payload = json.loads(line[len(EMIT_PREFIX) :])
+    _record_from_payload(payload, root=tmp_path, dry_run=False)
+    c = load_cases(tmp_path / "bb11.jsonl")[0]
+    assert ProblemClass.WRONG_VERSION in c.problem_classes
+    assert c.attempts[0].notes == "wrong remix"
 
 
 # ── BB12 backfill: the real coverage check ────────────────────────────────────

@@ -35,6 +35,7 @@ Usage:
   # Full run on pi-storage
   venvs/audio/bin/python -m scripts.redownload_via_ytmusic
 """
+
 from __future__ import annotations
 
 import argparse
@@ -55,7 +56,7 @@ from core.db import connect
 from scripts.rescue_common import bb_set_ids_sql, run_two_phase
 from ingest.adapters import ytmusic_adapter
 from ingest.errors import DownloadError
-from ingest.search_query import to_search_query
+from ingest.search_query import TrackSearchMeta, to_search_query_for_meta
 from core.result import Err, Ok
 
 _log = logging.getLogger("redownload_via_ytmusic")
@@ -73,23 +74,26 @@ class Candidate:
       None. Phase 1 inserts the YT Music row; Phase 2 is a no-op for
       this candidate.
     """
+
     yt_track_audio_id: int | None  # None = acquire mode (no row to replace)
-    yt_audio_path: str | None      # None = acquire mode
+    yt_audio_path: str | None  # None = acquire mode
     track_id: str
     title: str
-    artists_csv: str               # 'Daft Punk' or 'Artist1, Artist2'
+    artists_csv: str  # 'Daft Punk' or 'Artist1, Artist2'
     set_id: str
     is_bb: int
-    version: str | None            # original | remix | rework | … (track_metadata)
-    full_name: str | None          # canonical scraped 'Artist - Title (Remixer Remix)'
+    version: str | None  # original | remix | rework | … (track_metadata)
+    full_name: str | None  # canonical scraped 'Artist - Title (Remixer Remix)'
 
     @property
     def query(self) -> str:
-        # Download projection over the tokenizer's lossless full_name: keep the
-        # remixer qualifier ("(Madison Mars Remix)") so search hits the right
-        # release, but strip vocal/instrumental qualifiers and fall back to a
-        # bare "Artist - Title" on "ID" placeholders. See ingest/search_query.py.
-        return to_search_query(self.full_name, self.artists_csv, self.title)
+        meta = TrackSearchMeta(
+            full_name=self.full_name,
+            artists_csv=self.artists_csv,
+            title=self.title,
+            version=self.version,
+        )
+        return to_search_query_for_meta(meta, layer_role="solo")
 
     @property
     def needs_replace(self) -> bool:
@@ -111,42 +115,70 @@ class RunStats:
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--db", type=Path,
-                   default=Path(os.environ.get("TRACKLIST_DB",
-                                               "/mnt/storage/data/db/music_database.db")))
-    p.add_argument("--audio-root", type=Path,
-                   default=Path(os.environ.get("TRACKLIST_AUDIO_ROOT", "/mnt/storage")))
-    p.add_argument("--threads", type=int, default=4,
-                   help="Parallel yt-dlp processes (4 is conservative; bump if "
-                        "no rate-limit signs after a few hundred tracks).")
+    p.add_argument(
+        "--db",
+        type=Path,
+        default=Path(
+            os.environ.get("TRACKLIST_DB", "/mnt/storage/data/db/music_database.db")
+        ),
+    )
+    p.add_argument(
+        "--audio-root",
+        type=Path,
+        default=Path(os.environ.get("TRACKLIST_AUDIO_ROOT", "/mnt/storage")),
+    )
+    p.add_argument(
+        "--threads",
+        type=int,
+        default=4,
+        help="Parallel yt-dlp processes (4 is conservative; bump if "
+        "no rate-limit signs after a few hundred tracks).",
+    )
     p.add_argument("--timeout-per-track", type=float, default=120.0)
     p.add_argument("--max-tracks", type=int, default=None)
     p.add_argument("--dry-run", action="store_true")
-    p.add_argument("--no-replace", action="store_true",
-                   help="Skip Phase 2 destructive cleanup; both rows coexist.")
-    p.add_argument("--mode", choices=("replace", "acquire", "all", "resource"),
-                   default="all",
-                   help="replace=only existing yt-dlp rows (the original "
-                        "redownload behavior); acquire=only tracks with no "
-                        "track_audio row yet; resource=re-source existing "
-                        "youtube/youtube_music rows (variant-aware query); "
-                        "all=both replace+acquire (default).")
-    p.add_argument("--track-ids", nargs="+", default=None,
-                   help="Restrict to these track_ids only.")
-    p.add_argument("--job-file", type=Path, default=None,
-                   help="Optional JSON job file (e.g. data/djs/tier1_plus_bb.json) "
-                        "to restrict candidates to tracks that appear in any of "
-                        "those sets. Without this flag, the script considers "
-                        "the entire corpus.")
+    p.add_argument(
+        "--no-replace",
+        action="store_true",
+        help="Skip Phase 2 destructive cleanup; both rows coexist.",
+    )
+    p.add_argument(
+        "--mode",
+        choices=("replace", "acquire", "all", "resource"),
+        default="all",
+        help="replace=only existing yt-dlp rows (the original "
+        "redownload behavior); acquire=only tracks with no "
+        "track_audio row yet; resource=re-source existing "
+        "youtube/youtube_music rows (variant-aware query); "
+        "all=both replace+acquire (default).",
+    )
+    p.add_argument(
+        "--track-ids", nargs="+", default=None, help="Restrict to these track_ids only."
+    )
+    p.add_argument(
+        "--job-file",
+        type=Path,
+        default=None,
+        help="Optional JSON job file (e.g. data/djs/tier1_plus_bb.json) "
+        "to restrict candidates to tracks that appear in any of "
+        "those sets. Without this flag, the script considers "
+        "the entire corpus.",
+    )
     p.add_argument("--audio-format", default="m4a")
-    p.add_argument("--cookies", type=Path,
-                   default=Path(os.environ["TRACKLIST_YT_COOKIES"])
-                       if os.environ.get("TRACKLIST_YT_COOKIES") else None,
-                   help="yt-dlp cookies for age-gated tracks.")
-    p.add_argument("--log-level", default="INFO",
-                   choices=("DEBUG", "INFO", "WARNING", "ERROR"))
+    p.add_argument(
+        "--cookies",
+        type=Path,
+        default=Path(os.environ["TRACKLIST_YT_COOKIES"])
+        if os.environ.get("TRACKLIST_YT_COOKIES")
+        else None,
+        help="yt-dlp cookies for age-gated tracks.",
+    )
+    p.add_argument(
+        "--log-level", default="INFO", choices=("DEBUG", "INFO", "WARNING", "ERROR")
+    )
     return p.parse_args(argv)
 
 
@@ -174,8 +206,8 @@ def _row_to_candidate(r: sqlite3.Row) -> Candidate:
 
 def _load_candidates(
     db_path: Path,
-    mode: str,                            # 'replace' | 'acquire' | 'all' | 'resource'
-    job_set_ids: frozenset[str] | None,   # None = whole corpus
+    mode: str,  # 'replace' | 'acquire' | 'all' | 'resource'
+    job_set_ids: frozenset[str] | None,  # None = whole corpus
     track_ids: frozenset[str] | None = None,
 ) -> tuple[Candidate, ...]:
     """Loads candidates per `mode`:
@@ -303,9 +335,13 @@ def _phase1_download(
         for c in candidates
     )
 
-    _log.info("Phase 1: ytmusic-search + yt-dlp, %d items, threads=%d, "
-              "per-track-timeout=%.0fs", len(items), args.threads,
-              args.timeout_per_track)
+    _log.info(
+        "Phase 1: ytmusic-search + yt-dlp, %d items, threads=%d, "
+        "per-track-timeout=%.0fs",
+        len(items),
+        args.threads,
+        args.timeout_per_track,
+    )
 
     # Slice into shards so we can log + dedupe per-shard, but workers
     # actually parallelize across each shard.
@@ -316,7 +352,9 @@ def _phase1_download(
         chunk_cands = candidates[i : i + shard]
         t0 = time.monotonic()
         results = ytmusic_adapter.download_batch(
-            chunk, objects_root, args.audio_format,
+            chunk,
+            objects_root,
+            args.audio_format,
             threads=args.threads,
             timeout_s_per_track=args.timeout_per_track,
             cookies_path=args.cookies,
@@ -333,25 +371,52 @@ def _phase1_download(
                             stats = dc_replace(stats, phase1_ok=stats.phase1_ok + 1)
                             ok_map[c.track_id] = new_taid
                             ok_in_shard += 1
-                            supersedes = (str(c.yt_track_audio_id)
-                                          if c.yt_track_audio_id is not None
-                                          else "—")
-                            _log.info("OK    %s -> %s (taid=%d, supersedes %s)",
-                                      c.track_id, asset.path, new_taid, supersedes)
+                            supersedes = (
+                                str(c.yt_track_audio_id)
+                                if c.yt_track_audio_id is not None
+                                else "—"
+                            )
+                            _log.info(
+                                "OK    %s -> %s (taid=%d, supersedes %s)",
+                                c.track_id,
+                                asset.path,
+                                new_taid,
+                                supersedes,
+                            )
                         case Err(e):
-                            stats = dc_replace(stats, phase1_failed_insert=stats.phase1_failed_insert + 1)
+                            stats = dc_replace(
+                                stats,
+                                phase1_failed_insert=stats.phase1_failed_insert + 1,
+                            )
                             _log.error("DB    %s insert: %s", c.track_id, e.detail)
                 case Err(err):
-                    if "search failed" in (err.detail or "").lower() or err.kind == "unavailable":
-                        stats = dc_replace(stats, phase1_failed_search=stats.phase1_failed_search + 1)
+                    if (
+                        "search failed" in (err.detail or "").lower()
+                        or err.kind == "unavailable"
+                    ):
+                        stats = dc_replace(
+                            stats, phase1_failed_search=stats.phase1_failed_search + 1
+                        )
                     else:
-                        stats = dc_replace(stats, phase1_failed_dl=stats.phase1_failed_dl + 1)
-                    _log.warning("FAIL  %s [%s]: %s",
-                                 c.track_id, err.kind, (err.detail or "")[:140])
-        _log.info("shard %d-%d/%d: %d/%d ok in %.0fs (%.1fs/track wall)",
-                  i + 1, i + len(chunk), len(items),
-                  ok_in_shard, len(chunk), elapsed,
-                  elapsed / max(len(chunk), 1))
+                        stats = dc_replace(
+                            stats, phase1_failed_dl=stats.phase1_failed_dl + 1
+                        )
+                    _log.warning(
+                        "FAIL  %s [%s]: %s",
+                        c.track_id,
+                        err.kind,
+                        (err.detail or "")[:140],
+                    )
+        _log.info(
+            "shard %d-%d/%d: %d/%d ok in %.0fs (%.1fs/track wall)",
+            i + 1,
+            i + len(chunk),
+            len(items),
+            ok_in_shard,
+            len(chunk),
+            elapsed,
+            elapsed / max(len(chunk), 1),
+        )
     _log.info("Phase 1 total wall: %.0fs", time.monotonic() - t_start)
     return stats, ok_map
 
@@ -366,8 +431,11 @@ def _run(args: argparse.Namespace) -> int:
     if args.job_file is not None:
         try:
             rows = json.loads(args.job_file.read_text())
-            ids = [r["tracklist_id"] for r in rows
-                   if isinstance(r, dict) and r.get("tracklist_id")]
+            ids = [
+                r["tracklist_id"]
+                for r in rows
+                if isinstance(r, dict) and r.get("tracklist_id")
+            ]
             job_set_ids = frozenset(ids)
             _log.info("job-file %s: %d set_ids", args.job_file, len(job_set_ids))
         except (OSError, json.JSONDecodeError, KeyError) as e:
@@ -385,18 +453,31 @@ def _run(args: argparse.Namespace) -> int:
     bb_count = sum(1 for c in candidates if c.is_bb)
     replace_count = sum(1 for c in candidates if c.needs_replace)
     acquire_count = len(candidates) - replace_count
-    _log.info("loaded %d candidates (mode=%s, replace=%d, acquire=%d, BB-first=%d, "
-              "dry_run=%s, no_replace=%s)",
-              len(candidates), args.mode, replace_count, acquire_count,
-              bb_count, args.dry_run, args.no_replace)
+    _log.info(
+        "loaded %d candidates (mode=%s, replace=%d, acquire=%d, BB-first=%d, "
+        "dry_run=%s, no_replace=%s)",
+        len(candidates),
+        args.mode,
+        replace_count,
+        acquire_count,
+        bb_count,
+        args.dry_run,
+        args.no_replace,
+    )
 
     if args.dry_run:
         for c in candidates[:10]:
             kind = "REPL" if c.needs_replace else "ACQU"
             taid = str(c.yt_track_audio_id) if c.needs_replace else "—"
-            _log.info("DRY  %s  yt_taid=%s  set=%s  bb=%d  vtag=%s  query=%r",
-                      kind, taid, c.set_id, c.is_bb,
-                      c.version or "—", c.query)
+            _log.info(
+                "DRY  %s  yt_taid=%s  set=%s  bb=%d  vtag=%s  query=%r",
+                kind,
+                taid,
+                c.set_id,
+                c.is_bb,
+                c.version or "—",
+                c.query,
+            )
         if len(candidates) > 10:
             _log.info("... and %d more", len(candidates) - 10)
         return 0
@@ -409,7 +490,9 @@ def _run(args: argparse.Namespace) -> int:
         log=_log,
         phase2_replacement_label="ytmusic",
         phase1_failure_fields=(
-            "phase1_failed_search", "phase1_failed_dl", "phase1_failed_insert",
+            "phase1_failed_search",
+            "phase1_failed_dl",
+            "phase1_failed_insert",
         ),
     )
 
