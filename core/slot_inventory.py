@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Iterable, Literal
+from typing import Any, Iterable, Literal, TypedDict
 
 from core.audio_resolve import (
     TIER_EXACT,
@@ -275,10 +275,20 @@ def evaluate_slot(
     )
 
 
+class _ActionBase(TypedDict):
+    set_id: str
+    slot_label: str
+    recording_id: str
+
+
 def suggest_actions(satisfaction: SlotSatisfaction) -> tuple[InventoryAction, ...]:
     """Suggest inventory actions for an unsatisfied or fallback slot."""
     c = satisfaction.claim
-    base = dict(set_id=c.set_id, slot_label=c.slot_label, recording_id=c.recording_id)
+    base: _ActionBase = {
+        "set_id": c.set_id,
+        "slot_label": c.slot_label,
+        "recording_id": c.recording_id,
+    }
     out: list[InventoryAction] = []
 
     if satisfaction.status == SatisfactionStatus.MISSING:

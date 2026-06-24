@@ -183,7 +183,7 @@ def with_problem_classes(
 # ── serialization (lenient: unknown enum strings fall back, not raise) ────────
 
 
-def _coerce_enum(enum_cls: type[Enum], raw: Any, default: Enum) -> Enum:
+def _coerce_enum[E: Enum](enum_cls: type[E], raw: Any, default: E) -> E:
     try:
         return enum_cls(raw)
     except (ValueError, KeyError):
@@ -292,7 +292,7 @@ def case_from_dict(d: Mapping[str, Any]) -> AcquisitionCase:
         ),
     )
     problems = tuple(
-        _coerce_enum(ProblemClass, p, ProblemClass.MISSING_ASSET)  # type: ignore[misc]
+        _coerce_enum(ProblemClass, p, ProblemClass.MISSING_ASSET)
         for p in (d.get("problem_classes") or [])
     )
     role = d.get("layer_role")
@@ -304,8 +304,8 @@ def case_from_dict(d: Mapping[str, Any]) -> AcquisitionCase:
         slot_label=str(d.get("slot_label") or ""),
         layer_role=layer_role,
         claim=claim,
-        status=_coerce_enum(CaseStatus, d.get("status"), CaseStatus.OPEN),  # type: ignore[arg-type]
-        problem_classes=problems,  # type: ignore[arg-type]
+        status=_coerce_enum(CaseStatus, d.get("status"), CaseStatus.OPEN),
+        problem_classes=problems,
         attempts=tuple(attempt_from_dict(a) for a in (d.get("attempts") or [])),
         resolution=resolution,
         training=training,

@@ -2,18 +2,26 @@
 
 Domain code never imports sqlite3 directly; it calls these functions.
 """
+
 from __future__ import annotations
 
 import os
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
+from typing import Iterator, TypedDict
 
 from core.errors import DbError
 from core.models import (
-    AudioAsset, MediaSource, SetAudioAsset, SetMediaLink, Track,
-    normalize_set_media_url, soundcloud_api_url, spotify_track_url, youtube_url,
+    AudioAsset,
+    MediaSource,
+    SetAudioAsset,
+    SetMediaLink,
+    Track,
+    normalize_set_media_url,
+    soundcloud_api_url,
+    spotify_track_url,
+    youtube_url,
 )
 from core.result import Err, Ok, Result
 
@@ -53,6 +61,11 @@ def _source_for(platform: str, player_id: str) -> MediaSource | None:
             return None
 
 
+class _TrackBucket(TypedDict):
+    tlp_ids: set[str]
+    sources: dict[tuple[str, str], MediaSource]
+
+
 def load_set_tracks(db_path: Path, set_id: str) -> Result[tuple[Track, ...], DbError]:
     """Load canonical tracks for one set_id, with all known media sources."""
     try:
@@ -70,21 +83,23 @@ def load_set_tracks(db_path: Path, set_id: str) -> Result[tuple[Track, ...], DbE
     except sqlite3.DatabaseError as e:
         return Err(DbError(kind="query_failed", detail=str(e)))
 
-    by_track: dict[str, dict[str, object]] = {}
+    by_track: dict[str, _TrackBucket] = {}
     for r in rows:
         tid = r["track_id"]
-        bucket = by_track.setdefault(tid, {"tlp_ids": set(), "sources": {}})
+        if tid not in by_track:
+            by_track[tid] = {"tlp_ids": set(), "sources": {}}
+        bucket = by_track[tid]
         if r["tlp_id"]:
-            bucket["tlp_ids"].add(r["tlp_id"])  # type: ignore[union-attr]
+            bucket["tlp_ids"].add(r["tlp_id"])
         src = _source_for(r["platform"], r["player_id"])
         if src is not None:
-            bucket["sources"][(src.platform, src.player_id)] = src  # type: ignore[index]
+            bucket["sources"][(src.platform, src.player_id)] = src
 
     tracks = tuple(
         Track(
             track_id=tid,
-            tlp_ids=tuple(sorted(b["tlp_ids"])),  # type: ignore[arg-type]
-            sources=tuple(b["sources"].values()),  # type: ignore[union-attr]
+            tlp_ids=tuple(sorted(b["tlp_ids"])),
+            sources=tuple(b["sources"].values()),
         )
         for tid, b in by_track.items()
     )
@@ -123,7 +138,9 @@ def has_any_audio(db_path: Path, track_id: str) -> Result[bool, DbError]:
     return Ok(row is not None)
 
 
-def load_set_media_links(db_path: Path, set_id: str) -> Result[tuple[SetMediaLink, ...], DbError]:
+def load_set_media_links(
+    db_path: Path, set_id: str
+) -> Result[tuple[SetMediaLink, ...], DbError]:
     """Load all full-mix URLs posted for this set, normalized for yt-dlp.
 
     SoundCloud widget URLs are unwrapped into `api.soundcloud.com/tracks/<id>`.
@@ -178,8 +195,14 @@ def insert_set_audio(db_path: Path, asset: SetAudioAsset) -> Result[int, DbError
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
                 """,
                 (
-                    asset.set_id, asset.platform, asset.source_url, asset.path,
-                    asset.sha256, asset.duration_s, asset.sample_rate, asset.codec,
+                    asset.set_id,
+                    asset.platform,
+                    asset.source_url,
+                    asset.path,
+                    asset.sha256,
+                    asset.duration_s,
+                    asset.sample_rate,
+                    asset.codec,
                     asset.bitrate_kbps,
                 ),
             )
@@ -190,7 +213,11 @@ def insert_set_audio(db_path: Path, asset: SetAudioAsset) -> Result[int, DbError
                     (asset.set_id, asset.platform, asset.source_url),
                 ).fetchone()
                 if existing is None:
-                    return Err(DbError(kind="integrity", detail="set_audio insert returned no row"))
+                    return Err(
+                        DbError(
+                            kind="integrity", detail="set_audio insert returned no row"
+                        )
+                    )
                 return Ok(int(existing[0]))
             return Ok(int(cur.lastrowid))
     except sqlite3.DatabaseError as e:
@@ -198,8 +225,14 @@ def insert_set_audio(db_path: Path, asset: SetAudioAsset) -> Result[int, DbError
 
 
 def insert_track_media_link(
-    db_path: Path, *, set_id: str, track_id: str, platform: str,
-    player_id: str, url: str | None = None, tlp_id: str | None = None,
+    db_path: Path,
+    *,
+    set_id: str,
+    track_id: str,
+    platform: str,
+    player_id: str,
+    url: str | None = None,
+    tlp_id: str | None = None,
 ) -> Result[None, DbError]:
     """Insert a manually-provided URL into dj_set_track_media_links.
 
@@ -346,7 +379,9 @@ def load_set_stem_paths(
     return Ok(out)
 
 
-def load_ref_audio_paths(db_path: Path, track_ids: tuple[str, ...]) -> Result[dict[str, Path], DbError]:
+def load_ref_audio_paths(
+    db_path: Path, track_ids: tuple[str, ...]
+) -> Result[dict[str, Path], DbError]:
     """Map each canonical track_id to its preferred downloaded audio path."""
     if not track_ids:
         return Ok({})
@@ -366,12 +401,13 @@ def load_ref_audio_paths(db_path: Path, track_ids: tuple[str, ...]) -> Result[di
         return Err(DbError(kind="query_failed", detail=str(e)))
     out: dict[str, Path] = {}
     for r in rows:
-        out.setdefault(r["track_id"], Path(r["path"]))    # first row per track wins
+        out.setdefault(r["track_id"], Path(r["path"]))  # first row per track wins
     return Ok(out)
 
 
 def load_track_section_starts(
-    db_path: Path, track_id: str,
+    db_path: Path,
+    track_id: str,
 ) -> Result[frozenset[int], DbError]:
     """Return the set of ref-measure indices at which known sections
     begin for `track_id`. Used as structural priors in measure-DTW."""
@@ -413,6 +449,7 @@ def load_track_section_starts(
 
     # For each section start time, find the nearest measure start.
     import bisect
+
     m_starts = [float(m["start_s"]) for m in measures]
     m_idxs = [int(m["measure_idx"]) for m in measures]
     starts: set[int] = set()
@@ -457,10 +494,19 @@ def insert_audio(db_path: Path, asset: AudioAsset) -> Result[int, DbError]:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
                 """,
                 (
-                    asset.recording_id, asset.track_id, asset.platform, asset.source_url,
-                    asset.player_id, asset.path, asset.sha256, asset.duration_s,
-                    asset.sample_rate, asset.codec, asset.bitrate_kbps,
-                    asset.stem, asset.variant,
+                    asset.recording_id,
+                    asset.track_id,
+                    asset.platform,
+                    asset.source_url,
+                    asset.player_id,
+                    asset.path,
+                    asset.sha256,
+                    asset.duration_s,
+                    asset.sample_rate,
+                    asset.codec,
+                    asset.bitrate_kbps,
+                    asset.stem,
+                    asset.variant,
                 ),
             )
             conn.commit()
@@ -471,7 +517,12 @@ def insert_audio(db_path: Path, asset: AudioAsset) -> Result[int, DbError]:
                     (asset.recording_id, asset.platform, asset.player_id),
                 ).fetchone()
                 if existing is None:
-                    return Err(DbError(kind="integrity", detail="insert returned no row and lookup failed"))
+                    return Err(
+                        DbError(
+                            kind="integrity",
+                            detail="insert returned no row and lookup failed",
+                        )
+                    )
                 return Ok(int(existing[0]))
             return Ok(int(cur.lastrowid))
     except sqlite3.DatabaseError as e:
@@ -488,19 +539,22 @@ def insert_audio_or_reap(db_path: Path, asset: AudioAsset) -> Result[int, DbErro
     so only the canonical row's path remains on disk.
     """
     r = insert_audio(db_path, asset)
-    if not r.is_ok():
-        try:
-            Path(asset.path).unlink(missing_ok=True)
-        except OSError:
-            pass  # best-effort reap; the reconcile sweep is the backstop
-        return r
+    match r:
+        case Err(_):
+            try:
+                Path(asset.path).unlink(missing_ok=True)
+            except OSError:
+                pass  # best-effort reap; the reconcile sweep is the backstop
+            return r
+        case Ok(track_audio_id):
+            pass
 
     # Dedup retry: new download, existing row — reap when paths diverge.
     try:
         with _connect(db_path) as conn:
             row = conn.execute(
                 "SELECT path FROM track_audio WHERE track_audio_id = ?",
-                (r.value,),
+                (track_audio_id,),
             ).fetchone()
         if row is not None and row[0] != asset.path:
             Path(asset.path).unlink(missing_ok=True)
