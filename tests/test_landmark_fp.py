@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
+
+pytest.importorskip("librosa")  # landmark_fp computes the STFT via librosa at runtime
 
 from workspaces.alignment_prototype.landmark_fp import (
     LandmarkFingerprint,
