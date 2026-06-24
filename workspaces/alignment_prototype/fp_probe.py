@@ -83,35 +83,11 @@ def hashes(tf: np.ndarray, fb: np.ndarray, fan: int = 8, dt_max: int = 80) -> di
 def fp_offset(
     mix_y: np.ndarray, ref_y: np.ndarray, stretches: tuple[float, ...]
 ) -> tuple[float, int, float]:
-    """(ref_start_s, votes, stretch) by landmark offset histogram over stretches."""
-    import librosa
+    """Backward-compatible wrapper (sharpness dropped)."""
+    from workspaces.alignment_prototype.landmark_fp import fp_offset as _fp
 
-    tfm, fbm = constellation(mix_y)
-    hm = hashes(tfm, fbm)
-    best = (0.0, 0, 1.0)
-    for st in stretches:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            ry = (
-                ref_y
-                if abs(st - 1) < 1e-3
-                else librosa.effects.time_stretch(ref_y, rate=1.0 / st)
-            )
-        hr = hashes(*constellation(ry))
-        votes: dict = {}
-        for key, mts in hm.items():
-            rts = hr.get(key)
-            if not rts:
-                continue
-            for mt in mts:
-                for rt in rts:
-                    off = rt - mt
-                    votes[off] = votes.get(off, 0) + 1
-        if votes:
-            off, v = max(votes.items(), key=lambda kv: kv[1])
-            if v > best[1]:
-                best = (off * _FHOP / SR * st, v, st)
-    return best
+    off, votes, st, _sharp = _fp(mix_y, ref_y, stretches=stretchs)
+    return off, votes, st
 
 
 def _job(args: tuple) -> dict:
