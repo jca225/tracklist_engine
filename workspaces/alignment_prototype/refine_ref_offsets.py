@@ -106,11 +106,9 @@ def detect_offset(
 def _span_job(args: tuple) -> dict:
     """Worker: load ref audio, chroma, detect. Returns updates for the span.
 
-    When fp_cfg is set, ALSO run a landmark-fingerprint offset on the mix-audio
-    window vs the same ref audio — a high-vote fingerprint hit is a sharper,
-    higher-precision localizer than the chroma matched filter and recovers the
-    wrong-content errors it makes (validated by fp_fuse: +6pp fiber-aware)."""
-    span, ref_path, win, stretches, fp_cfg = args
+    When fp_cfg is set, run landmark fingerprint using a cached ref index when
+    available (skips re-hashing the full ref)."""
+    span, ref_path, win, stretches, fp_cfg, ref_fp_blob = args
     import librosa
 
     with warnings.catch_warnings():
@@ -125,9 +123,13 @@ def _span_job(args: tuple) -> dict:
         "ref_peak": round(peak, 3),
         "ref_stretch": stretch,
         "fp_votes": 0,
+        "fp_sharpness": 0.0,
     }
     if fp_cfg is not None:
-        from workspaces.alignment_prototype.fp_probe import fp_offset
+        from workspaces.alignment_prototype.landmark_fp import (
+            LandmarkFingerprint,
+            fp_offset,
+        )
 
         mix_audio, s0, fp_win, fp_stretches = fp_cfg
         with warnings.catch_warnings():
@@ -135,9 +137,16 @@ def _span_job(args: tuple) -> dict:
             mw, _ = librosa.load(
                 mix_audio, sr=SR, mono=True, offset=s0, duration=fp_win
             )
-        fp_off, votes, _ = fp_offset(mw, ref_y, tuple(fp_stretches))
+        ref_fp = LandmarkFingerprint.from_blob(ref_fp_blob) if ref_fp_blob else None
+        fp_off, votes, _st, sharp = fp_offset(
+            mw,
+            ref_y,
+            ref_fp=ref_fp,
+            stretches=tuple(fp_stretches),
+        )
         out["fp_ref_start"] = round(fp_off, 3)
         out["fp_votes"] = int(votes)
+        out["fp_sharpness"] = round(sharp, 3)
     return out
 
 
@@ -182,15 +191,30 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--fingerprint",
         action="store_true",
-        help="also run a landmark-fingerprint offset per span and OVERRIDE the "
-        "chroma match when its vote count is high (recovers wrong-content "
-        "errors the matched filter makes; fp_fuse validated +6pp fiber-aware)",
+        help="run landmark fingerprint per span (on by default when fp index hits)",
+    )
+    p.add_argument(
+        "--no-fingerprint",
+        action="store_true",
+        help="disable landmark fingerprint even if index entries exist",
+    )
+    p.add_argument(
+        "--fp-cache-dir",
+        type=Path,
+        default=Path(__file__).resolve().parent / ".cache" / "fp_index",
+        help="local landmark index written by scripts/backfill_track_fingerprints.py",
     )
     p.add_argument(
         "--fp-votes",
         type=int,
         default=40,
         help="min fingerprint votes to override the chroma offset",
+    )
+    p.add_argument(
+        "--fp-min-sharpness",
+        type=float,
+        default=1.25,
+        help="min vote peak/second ratio to trust fingerprint (below → abstain)",
     )
     p.add_argument(
         "--fp-win-s",
@@ -201,6 +225,12 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
 
     import librosa
+
+    from workspaces.alignment_prototype.fp_index import FpKey, load as load_fp
+
+    use_fp = not args.no_fingerprint and (
+        args.fingerprint or args.fp_cache_dir.is_dir()
+    )
 
     timeline_path = OUT_DIR / f"{args.set_id}_predicted_timeline.json"
     timeline = json.loads(timeline_path.read_text())
@@ -238,6 +268,7 @@ def main(argv: list[str] | None = None) -> int:
                 grids = (mix_series, ref_series)
 
     jobs, meta = [], []
+    fp_hits = 0
     for s in spans:
         t = by_tid.get(s["recording_id"])
         ref = ref_audio_for(s, t) if t else None
@@ -263,31 +294,35 @@ def main(argv: list[str] | None = None) -> int:
             ref_bar = float(np.median(rser.end_s - rser.start_s))
             if mix_bar > 0 and ref_bar > 0:
                 e = ref_bar / mix_bar
-                # Fold metrical-level (octave) mismatch between the two
-                # beat_this grids: the SECONDS-stretch is near 1 regardless
-                # of how each side tagged its bar level. No octave
-                # candidates in the search — comparing matched-filter peaks
-                # across 2x-different query lengths is length-biased (the
-                # shorter query always wins; measured BB11 2026-06-11).
                 while e > 1.45:
                     e *= 0.5
                 while e < 0.7:
                     e *= 2.0
                 stretches = tuple(e * f for f in (0.96, 0.98, 1.0, 1.02, 1.04))
         fp_cfg = None
-        if args.fingerprint:
+        ref_fp_blob = None
+        if use_fp:
             mix_file = set_dir / _MIX_SOURCE.get(stem, _MIX_SOURCE["regular"])[0]
             if not mix_file.is_file():
                 mix_file = set_dir / "mix.m4a"
             fp_win = min(args.fp_win_s, s["set_end_s"] - s["set_start_s"])
             fp_cfg = (str(mix_file), s["set_start_s"], fp_win, (0.98, 1.0, 1.02))
-        jobs.append((s, str(ref), win.tolist(), stretches, fp_cfg))
+            fp = load_fp(FpKey(s["recording_id"], stem), cache_dir=args.fp_cache_dir)
+            if fp is not None:
+                ref_fp_blob = fp.to_blob()
+                fp_hits += 1
+        jobs.append((s, str(ref), win.tolist(), stretches, fp_cfg, ref_fp_blob))
         meta.append(s)
 
+    fp_note = (
+        f"fingerprint on ({fp_hits}/{len(jobs)} spans have cached ref index)"
+        if use_fp
+        else "fingerprint off"
+    )
     print(
         f"detecting ref offsets for {len(jobs)} spans "
         f"(window={args.window_s:.0f}s, {len(STRETCHES)} stretches, "
-        f"{args.workers} workers)…"
+        f"{args.workers} workers, {fp_note})…"
     )
     results: dict[str, dict] = {}
     with ProcessPoolExecutor(max_workers=args.workers) as ex:
@@ -296,7 +331,7 @@ def main(argv: list[str] | None = None) -> int:
             if (i + 1) % 25 == 0:
                 print(f"  {i + 1}/{len(jobs)}")
 
-    updated, weak, fp_overrides = 0, [], 0
+    updated, weak, fp_overrides, abstained = 0, [], 0, 0
     for s in spans:
         r = results.get(s["slot_label"])
         if r is None:
@@ -306,32 +341,47 @@ def main(argv: list[str] | None = None) -> int:
         )  # keep original provenance on re-runs
         s["ref_peak"] = r["ref_peak"]
         span_len = s["set_end_s"] - s["set_start_s"]
-        # high-vote fingerprint OVERRIDES the chroma match (sharper, recovers
-        # wrong-content); else fall back to the matched-filter offset.
-        if args.fingerprint and r.get("fp_votes", 0) >= args.fp_votes:
+        fp_ok = (
+            use_fp
+            and r.get("fp_votes", 0) >= args.fp_votes
+            and r.get("fp_sharpness", 0.0) >= args.fp_min_sharpness
+        )
+        chroma_ok = r["ref_peak"] >= args.min_peak
+        s.pop("abstain_ref_offset", None)
+        s.pop("abstain_reason", None)
+
+        if fp_ok:
             s["ref_start_fp"] = r["fp_ref_start"]
             s["ref_fp_votes"] = r["fp_votes"]
+            s["ref_fp_sharpness"] = r.get("fp_sharpness", 0.0)
             s["ref_start_s"] = r["fp_ref_start"]
             s["ref_end_s"] = round(r["fp_ref_start"] + span_len * r["ref_stretch"], 3)
             s["ref_stretch"] = r["ref_stretch"]
             s["ref_source_method"] = "fingerprint"
             updated += 1
             fp_overrides += 1
-        elif r["ref_peak"] >= args.min_peak:
+        elif chroma_ok:
             s["ref_start_s"] = r["ref_start_s"]
             s["ref_end_s"] = round(r["ref_start_s"] + span_len * r["ref_stretch"], 3)
             s["ref_stretch"] = r["ref_stretch"]
             s["ref_source_method"] = "chroma"
             updated += 1
         else:
+            s["abstain_ref_offset"] = True
+            s["abstain_reason"] = "weak_chroma_and_fingerprint"
+            if use_fp:
+                s["ref_fp_votes"] = r.get("fp_votes", 0)
+                s["ref_fp_sharpness"] = r.get("fp_sharpness", 0.0)
             weak.append((s["slot_label"], r["ref_peak"], s["name"][:45]))
+            abstained += 1
 
     method = (
-        "matched-filter chroma + fingerprint override"
-        if args.fingerprint
+        "matched-filter chroma + cached landmark fingerprint"
+        if use_fp
         else "matched-filter chroma detection"
     )
     timeline["ref_offsets"] = f"{method} (refine_ref_offsets)"
+    timeline["abstain_ref_offset_count"] = abstained
     timeline_path.write_text(json.dumps(timeline, indent=2))
 
     peaks = np.array([r["ref_peak"] for r in results.values()])
@@ -339,10 +389,16 @@ def main(argv: list[str] | None = None) -> int:
         f"\nupdated {updated}/{len(results)} spans "
         f"(peak median={np.median(peaks):.2f} p10={np.percentile(peaks, 10):.2f})"
     )
-    if args.fingerprint:
-        print(f"  fingerprint overrode {fp_overrides} spans (votes >= {args.fp_votes})")
+    if use_fp:
+        print(
+            f"  fingerprint overrode {fp_overrides} spans (votes >= {args.fp_votes}, sharp >= {args.fp_min_sharpness})"
+        )
+    if abstained:
+        print(
+            f"  abstained ref_offset on {abstained} spans (weak chroma + fingerprint)"
+        )
     if weak:
-        print(f"{len(weak)} weak spans kept decode offsets (peak < {args.min_peak}):")
+        print(f"{len(weak)} weak spans kept decode offsets (abstain flagged):")
         for slot, pk, name in weak:
             print(f"  {slot:6} peak={pk:.2f}  {name}")
     print(f"rewrote {timeline_path}")

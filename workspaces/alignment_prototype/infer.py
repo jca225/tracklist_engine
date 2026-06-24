@@ -20,6 +20,7 @@ Usage:
 
 Output: out/<set_id>_predicted_timeline.json + a printed table.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -36,7 +37,10 @@ if str(_REPO) not in sys.path:
 import numpy as np
 
 from core.result import Err, Ok, Result
-from workspaces.alignment_prototype.dataset import load_set, slot_candidates_from_targets
+from workspaces.alignment_prototype.dataset import (
+    load_set,
+    slot_candidates_from_targets,
+)
 from workspaces.alignment_prototype.records import SlotCandidate, SpanTarget
 from workspaces.alignment_prototype.slot_priors import normalize_slot
 
@@ -53,7 +57,9 @@ _DUR_FALLBACK_S = 45.0
 def _ssh_sql(sql: str) -> str:
     r = subprocess.run(
         ["ssh", PI_HOST, f'sqlite3 -separator "|" {PI_DB} "{sql}"'],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     return r.stdout.strip()
 
@@ -71,19 +77,28 @@ def fetch_slot_rows(set_id: str) -> tuple[dict, ...]:
         parts = ln.split("|")
         if len(parts) < 5:
             continue
-        label, rid, stem, cue, name = parts[0], parts[1], parts[2], parts[3], "|".join(parts[4:])
-        rows.append({
-            "slot_label": normalize_slot(label),
-            "recording_id": rid or None,
-            "claimed_stem": stem,
-            "cue_s": float(cue) if cue else None,
-            "name": name,
-        })
+        label, rid, stem, cue, name = (
+            parts[0],
+            parts[1],
+            parts[2],
+            parts[3],
+            "|".join(parts[4:]),
+        )
+        rows.append(
+            {
+                "slot_label": normalize_slot(label),
+                "recording_id": rid or None,
+                "claimed_stem": stem,
+                "cue_s": float(cue) if cue else None,
+                "name": name,
+            }
+        )
     return tuple(rows)
 
 
 def build_stub_targets(
-    rows: tuple[dict, ...], mix_end_s: float,
+    rows: tuple[dict, ...],
+    mix_end_s: float,
 ) -> tuple[tuple[SpanTarget, ...], dict[str, float], dict[str, float]]:
     """SpanTarget stubs + cue anchors + cue-diff duration priors.
 
@@ -98,8 +113,10 @@ def build_stub_targets(
         if c is None:
             durs.append(_DUR_FALLBACK_S)
             continue
-        nxt = next((cues[j] for j in range(i + 1, n)
-                    if cues[j] is not None and cues[j] > c), None)
+        nxt = next(
+            (cues[j] for j in range(i + 1, n) if cues[j] is not None and cues[j] > c),
+            None,
+        )
         end = nxt if nxt is not None else mix_end_s
         durs.append(float(np.clip(end - c, _DUR_MIN_S, _DUR_MAX_S)))
 
@@ -108,18 +125,20 @@ def build_stub_targets(
     slot_durs: dict[str, list[float]] = {}
     for r, dur in zip(rows, durs):
         start = r["cue_s"] if r["cue_s"] is not None else 0.0
-        targets.append(SpanTarget(
-            slot_label=r["slot_label"],
-            recording_id=r["recording_id"],
-            claimed_stem=r["claimed_stem"],
-            set_start_s=start,
-            set_end_s=start + dur,
-            ref_start_s=0.0,
-            ref_end_s=None,
-            tempo_ratio=None,
-            pitch_shift_semi=0,
-            label=r["name"],
-        ))
+        targets.append(
+            SpanTarget(
+                slot_label=r["slot_label"],
+                recording_id=r["recording_id"],
+                claimed_stem=r["claimed_stem"],
+                set_start_s=start,
+                set_end_s=start + dur,
+                ref_start_s=0.0,
+                ref_end_s=None,
+                tempo_ratio=None,
+                pitch_shift_semi=0,
+                label=r["name"],
+            )
+        )
         if r["cue_s"] is not None:
             anchors[r["slot_label"]] = float(r["cue_s"])
         slot_durs.setdefault(r["slot_label"].split("w", 1)[0], []).append(dur)
@@ -128,12 +147,16 @@ def build_stub_targets(
     return tuple(targets), anchors, medians
 
 
-def slot_pools_from_rows(rows: tuple[dict, ...]) -> dict[str, tuple[SlotCandidate, ...]]:
+def slot_pools_from_rows(
+    rows: tuple[dict, ...],
+) -> dict[str, tuple[SlotCandidate, ...]]:
     pools: dict[str, list[SlotCandidate]] = {}
     for r in rows:
         if not r["recording_id"]:
             continue
-        c = SlotCandidate(recording_id=r["recording_id"], claimed_stem=r["claimed_stem"])
+        c = SlotCandidate(
+            recording_id=r["recording_id"], claimed_stem=r["claimed_stem"]
+        )
         pools.setdefault(r["slot_label"], [])
         if c not in pools[r["slot_label"]]:
             pools[r["slot_label"]].append(c)
@@ -142,6 +165,7 @@ def slot_pools_from_rows(rows: tuple[dict, ...]) -> dict[str, tuple[SlotCandidat
 
 def _torch_device() -> str:
     import torch
+
     if torch.backends.mps.is_available():
         return "mps"
     if torch.cuda.is_available():
@@ -154,12 +178,30 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--set-id", required=True, help="target (unlabeled) set_id")
     p.add_argument("--train-yaml", type=Path, default=DEFAULT_TRAIN_YAML)
     p.add_argument("--refresh-mert", action="store_true")
-    p.add_argument("--band-s", type=float, default=45.0,
-                   help="fine-placement DTW corridor half-width (0 disables)")
+    p.add_argument(
+        "--band-s",
+        type=float,
+        default=45.0,
+        help="fine-placement DTW corridor half-width (0 disables)",
+    )
+    p.add_argument(
+        "--fp-refine",
+        action="store_true",
+        help="per-span fingerprint argmax after coarse decode (needs aligning audio + fp cache)",
+    )
+    p.add_argument("--fp-band-s", type=float, default=45.0)
+    p.add_argument(
+        "--fp-gate-z",
+        type=float,
+        default=1.0,
+        help="min sharpness z-score to override coarse start",
+    )
     args = p.parse_args(argv)
 
     from workspaces.alignment_prototype.mert_model import (
-        MertLearnedAligner, TrainConfig, train_ensemble,
+        MertLearnedAligner,
+        TrainConfig,
+        train_ensemble,
     )
     from workspaces.alignment_prototype.mert_features import build_examples
     from workspaces.alignment_prototype.mert_store import load_bb12_mert
@@ -184,7 +226,10 @@ def main(argv: list[str] | None = None) -> int:
     cfg = TrainConfig(epochs=40, search_margin_s=90.0)
     train_pools = slot_candidates_from_targets(train_targets)
     examples = build_examples(
-        train_targets, train_mix, train_refs, train_pools,
+        train_targets,
+        train_mix,
+        train_refs,
+        train_pools,
         search_margin_s=cfg.search_margin_s,
     )
     print(f"training head ensemble on {len(examples)} examples (device={device})…")
@@ -196,7 +241,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"target MERT load failed: {msg}", file=sys.stderr)
             return 1
         case Ok((_sid2, mix, refs)):
-            print(f"target set={args.set_id} mix measures={mix.n_measures} refs={len(refs)}")
+            print(
+                f"target set={args.set_id} mix measures={mix.n_measures} refs={len(refs)}"
+            )
 
     rows = fetch_slot_rows(args.set_id)
     mix_end = float(mix.end_s[-1])
@@ -205,8 +252,10 @@ def main(argv: list[str] | None = None) -> int:
 
     have_ref = [t for t in targets if t.recording_id and t.recording_id in refs]
     skipped = [t for t in targets if t not in have_ref]
-    print(f"slots={len(targets)} decodable={len(have_ref)} "
-          f"skipped={len(skipped)} (no recording/MERT) cue_anchors={len(anchors)}")
+    print(
+        f"slots={len(targets)} decodable={len(have_ref)} "
+        f"skipped={len(skipped)} (no recording/MERT) cue_anchors={len(anchors)}"
+    )
     for t in skipped:
         print(f"  SKIP {t.slot_label:6} {t.label[:50]}")
     decodable = tuple(have_ref)
@@ -217,7 +266,7 @@ def main(argv: list[str] | None = None) -> int:
         refs=refs,
         slot_medians=slot_medians,
         slot_pools=pools,
-        train_medians=anchors,        # scraped cue times = placement anchors
+        train_medians=anchors,  # scraped cue times = placement anchors
         search_margin_s=cfg.search_margin_s,
         device=device,
         # Cross-set decode needs the anchor prior: without it the DP has no
@@ -231,7 +280,11 @@ def main(argv: list[str] | None = None) -> int:
     # ---- 3. fine placement (per-span DTW vs roformer mix instrumental) -----
     refined = preds
     if args.band_s > 0:
-        from workspaces.alignment_prototype.fine_refine import AudioContext, refine_placements
+        from workspaces.alignment_prototype.fine_refine import (
+            AudioContext,
+            refine_placements,
+        )
+
         ctx = AudioContext.from_set(args.set_id)
         if ctx is None:
             print("(fine refinement skipped — aligning audio missing)")
@@ -239,12 +292,38 @@ def main(argv: list[str] | None = None) -> int:
             print(f"fine-placement DTW ±{args.band_s:.0f}s…")
             refined = refine_placements(preds, decodable, ctx, band_s=args.band_s)
 
+    if args.fp_refine:
+        from workspaces.alignment_prototype.fp_placement_refine import (
+            FpPlacementContext,
+            refine_placements_fp,
+        )
+
+        mix_mid = 0.5 * (mix.start_s + mix.end_s)
+        fp_ctx = FpPlacementContext.from_set(args.set_id, measure_mid_s=mix_mid)
+        if fp_ctx is None:
+            print("(fp placement skipped — aligning audio or manifest missing)")
+        else:
+            print(
+                f"fp placement refine ±{args.fp_band_s:.0f}s gate_z={args.fp_gate_z}…"
+            )
+            refined = refine_placements_fp(
+                refined,
+                fp_ctx,
+                band_s=args.fp_band_s,
+                gate_z=args.fp_gate_z,
+            )
+
     # ---- 4. report + serialize ---------------------------------------------
-    deltas = [abs(p.set_start_s - t.set_start_s)
-              for p, t in zip(refined, decodable) if t.slot_label in anchors]
+    deltas = [
+        abs(p.set_start_s - t.set_start_s)
+        for p, t in zip(refined, decodable)
+        if t.slot_label in anchors
+    ]
     d = np.asarray(deltas)
-    print(f"\npred vs scraped cue anchors: n={len(d)} median={np.median(d):.1f}s "
-          f"mean={d.mean():.1f}s <16s:{(d < 16).sum()} <30s:{(d < 30).sum()} max={d.max():.0f}s")
+    print(
+        f"\npred vs scraped cue anchors: n={len(d)} median={np.median(d):.1f}s "
+        f"mean={d.mean():.1f}s <16s:{(d < 16).sum()} <30s:{(d < 30).sum()} max={d.max():.0f}s"
+    )
     print("(cues are coarse fan-scraped times — agreement is a sanity band, not GT)")
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -253,13 +332,13 @@ def main(argv: list[str] | None = None) -> int:
         "set_id": args.set_id,
         "train_set_id": train_gt.set_id,
         "band_s": args.band_s,
+        "fp_refine": args.fp_refine,
+        "fp_band_s": args.fp_band_s if args.fp_refine else None,
         "spans": [
             {**asdict(p), "cue_anchor_s": anchors.get(p.slot_label), "name": t.label}
             for p, t in zip(refined, decodable)
         ],
-        "skipped": [
-            {"slot_label": t.slot_label, "name": t.label} for t in skipped
-        ],
+        "skipped": [{"slot_label": t.slot_label, "name": t.label} for t in skipped],
     }
     out_path.write_text(json.dumps(payload, indent=2))
     print(f"wrote {out_path}")

@@ -1,4 +1,5 @@
 """Learned MERT retrieval head for span + identity (P5 prototype)."""
+
 from __future__ import annotations
 
 import logging
@@ -11,7 +12,12 @@ import torch.nn.functional as F
 
 log = logging.getLogger(__name__)
 
-from .mert_features import MertSpanExample, build_examples, median_duration_by_slot, slide_duration
+from .mert_features import (
+    MertSpanExample,
+    build_examples,
+    median_duration_by_slot,
+    slide_duration,
+)
 from .mert_store import MertSeries
 from .records import SpanPrediction, SpanTarget
 from .slot_priors import slot_anchor
@@ -27,13 +33,17 @@ class MertAlignHead(nn.Module):
         self.mix_span = nn.Linear(dim, dim, bias=False)
         self.ref_span = nn.Linear(dim, dim, bias=False)
 
-    def identity_logits(self, mix_seg: torch.Tensor, ref_segs: torch.Tensor) -> torch.Tensor:
+    def identity_logits(
+        self, mix_seg: torch.Tensor, ref_segs: torch.Tensor
+    ) -> torch.Tensor:
         """mix_seg (B, D), ref_segs (B, C, D) -> (B, C)."""
         m = F.normalize(self.mix_id(mix_seg), dim=-1)
         r = F.normalize(self.ref_id(ref_segs), dim=-1)
         return (m.unsqueeze(1) * r).sum(dim=-1)
 
-    def span_logits(self, mix_measures: torch.Tensor, ref_seg: torch.Tensor) -> torch.Tensor:
+    def span_logits(
+        self, mix_measures: torch.Tensor, ref_seg: torch.Tensor
+    ) -> torch.Tensor:
         """mix_measures (B, T, D), ref_seg (B, D) -> (B, T)."""
         m = F.normalize(self.mix_span(mix_measures), dim=-1)
         r = F.normalize(self.ref_span(ref_seg), dim=-1).unsqueeze(1)
@@ -53,11 +63,19 @@ class MertAlignEnsemble(nn.Module):
             raise ValueError("empty ensemble")
         self.heads = nn.ModuleList(heads)
 
-    def identity_logits(self, mix_seg: torch.Tensor, ref_segs: torch.Tensor) -> torch.Tensor:
-        return torch.stack([h.identity_logits(mix_seg, ref_segs) for h in self.heads]).mean(dim=0)
+    def identity_logits(
+        self, mix_seg: torch.Tensor, ref_segs: torch.Tensor
+    ) -> torch.Tensor:
+        return torch.stack(
+            [h.identity_logits(mix_seg, ref_segs) for h in self.heads]
+        ).mean(dim=0)
 
-    def span_logits(self, mix_measures: torch.Tensor, ref_seg: torch.Tensor) -> torch.Tensor:
-        return torch.stack([h.span_logits(mix_measures, ref_seg) for h in self.heads]).mean(dim=0)
+    def span_logits(
+        self, mix_measures: torch.Tensor, ref_seg: torch.Tensor
+    ) -> torch.Tensor:
+        return torch.stack(
+            [h.span_logits(mix_measures, ref_seg) for h in self.heads]
+        ).mean(dim=0)
 
 
 @dataclass(frozen=True)
@@ -90,7 +108,9 @@ def _ref_window_pools(
         j = min(max(j, i + 1), n)
         pools.append(rs.vectors[i:j].mean(axis=0))
         starts.append(float(rs.start_s[i]))
-    return np.stack(pools, axis=0).astype(np.float32), np.array(starts, dtype=np.float64)
+    return np.stack(pools, axis=0).astype(np.float32), np.array(
+        starts, dtype=np.float64
+    )
 
 
 def _pad_batch(
@@ -129,6 +149,7 @@ def train_head(
     cfg: TrainConfig | None = None,
     device: str = "cpu",
     seed: int | None = None,
+    init: MertAlignHead | None = None,
 ) -> MertAlignHead:
     if not examples:
         raise ValueError("no training examples")
@@ -137,11 +158,15 @@ def train_head(
         torch.manual_seed(seed)
     dim = examples[0].mix_segment.shape[0]
     model = MertAlignHead(dim).to(device)
+    if init is not None:
+        model.load_state_dict(init.state_dict())
     opt = torch.optim.Adam(model.parameters(), lr=cfg.lr)
 
     for _epoch in range(cfg.epochs):
         model.train()
-        mix_seg, ref_segs, id_mask, span_x, span_mask, span_valid, pos_idx = _pad_batch(examples)
+        mix_seg, ref_segs, id_mask, span_x, span_mask, span_valid, pos_idx = _pad_batch(
+            examples
+        )
         mix_seg = mix_seg.to(device)
         ref_segs = ref_segs.to(device)
         id_mask = id_mask.to(device)
@@ -175,13 +200,26 @@ def train_ensemble(
     *,
     cfg: TrainConfig | None = None,
     device: str = "cpu",
+    init: MertAlignHead | MertAlignEnsemble | None = None,
 ) -> MertAlignHead | MertAlignEnsemble:
     """Train `cfg.n_heads` independently-seeded heads; average their logits."""
     cfg = cfg or TrainConfig()
+    init_single: MertAlignHead | None = None
+    if isinstance(init, MertAlignEnsemble):
+        init_single = init.heads[0]
+    elif isinstance(init, MertAlignHead):
+        init_single = init
     if cfg.n_heads <= 1:
-        return train_head(examples, cfg=cfg, device=device, seed=0)
+        return train_head(examples, cfg=cfg, device=device, seed=0, init=init_single)
     heads = [
-        train_head(examples, cfg=cfg, device=device, seed=s) for s in range(cfg.n_heads)
+        train_head(
+            examples,
+            cfg=cfg,
+            device=device,
+            seed=s,
+            init=init_single if s == 0 else None,
+        )
+        for s in range(cfg.n_heads)
     ]
     ens = MertAlignEnsemble(heads)
     ens.eval()
@@ -229,7 +267,9 @@ class MertLearnedAligner:
                     preds[i] = p
         return tuple(preds)  # type: ignore[arg-type]
 
-    def predict_sequence(self, targets: tuple[SpanTarget, ...]) -> tuple[SpanPrediction, ...]:
+    def predict_sequence(
+        self, targets: tuple[SpanTarget, ...]
+    ) -> tuple[SpanPrediction, ...]:
         """Identity per slot, then one global monotonic placement decode.
 
         Placement quality no longer depends on the per-slot anchor prior:
@@ -246,7 +286,11 @@ class MertLearnedAligner:
         ordering down.
         """
         from .dataset import slot_candidates_from_targets
-        from .sequence_decode import monotonic_decode, window_mean_curve, window_mean_vectors
+        from .sequence_decode import (
+            monotonic_decode,
+            window_mean_curve,
+            window_mean_vectors,
+        )
 
         pools = self.slot_pools or slot_candidates_from_targets(targets)
         mix_mid = 0.5 * (self.mix.start_s + self.mix.end_s)
@@ -285,7 +329,9 @@ class MertLearnedAligner:
                     cached = curve_cache.get(key)
                     if cached is not None:
                         return cached
-                    _ids, _stems, ref_windows, cand_ref_win, _sc, _ch, _dur = slot_asn[label]
+                    _ids, _stems, ref_windows, cand_ref_win, _sc, _ch, _dur = slot_asn[
+                        label
+                    ]
                     ref_vec = (
                         torch.from_numpy(ref_windows[ci][cand_ref_win[ci]])
                         .unsqueeze(0)
@@ -293,7 +339,9 @@ class MertLearnedAligner:
                     )
                     # Span-head curve: mean per-measure logit over the window.
                     logits = self.head.span_logits(mix_t.unsqueeze(0), ref_vec)[0]
-                    span_curve = window_mean_curve(logits.cpu().numpy().astype(np.float64), k)
+                    span_curve = window_mean_curve(
+                        logits.cpu().numpy().astype(np.float64), k
+                    )
                     # Identity-head curve: pooled window vs the candidate's best
                     # ref window. The identity head is the discriminative one —
                     # acappella spans drown in the span head alone (the pooled
@@ -304,7 +352,9 @@ class MertLearnedAligner:
                         ).to(self.device)
                     pooled = pooled_by_k[k]
                     id_curve = (
-                        self.head.identity_logits(pooled, ref_vec.unsqueeze(0).expand(pooled.shape[0], -1, -1))
+                        self.head.identity_logits(
+                            pooled, ref_vec.unsqueeze(0).expand(pooled.shape[0], -1, -1)
+                        )
                         .squeeze(1)
                         .cpu()
                         .numpy()
@@ -334,25 +384,44 @@ class MertLearnedAligner:
                         n_anchored += 1
                     log.info(
                         "decode anchor prior: sigma=%.0fs cap=%.1f anchored=%d/%d",
-                        self.anchor_sigma_s, self.anchor_cap, n_anchored, len(decode_idx),
+                        self.anchor_sigma_s,
+                        self.anchor_cap,
+                        n_anchored,
+                        len(decode_idx),
                     )
 
                 def decode_row(label: str, ci: int, k: int, row: int) -> np.ndarray:
                     c = candidate_curve(label, ci, k)
                     return c if priors is None else c + priors[row]
 
-                curves = np.stack([
-                    decode_row(targets[i].slot_label, assigned_ci[i], ks[row_of[i]], row_of[i])
-                    for i in decode_idx
-                ])
+                curves = np.stack(
+                    [
+                        decode_row(
+                            targets[i].slot_label,
+                            assigned_ci[i],
+                            ks[row_of[i]],
+                            row_of[i],
+                        )
+                        for i in decode_idx
+                    ]
+                )
                 starts = monotonic_decode(curves)
                 assigned_ci = self._sweep_slot_assignments(
-                    targets, groups, slot_asn, assigned_ci, curves, starts,
-                    row_of, ks, candidate_curve, priors=priors,
+                    targets,
+                    groups,
+                    slot_asn,
+                    assigned_ci,
+                    curves,
+                    starts,
+                    row_of,
+                    ks,
+                    candidate_curve,
+                    priors=priors,
                 )
                 starts = monotonic_decode(curves)
 
                 import os
+
                 if os.environ.get("ALIGN_DEBUG_DUMP"):
                     np.savez(
                         os.environ["ALIGN_DEBUG_DUMP"],
@@ -364,7 +433,9 @@ class MertLearnedAligner:
                     log.info("decode debug dump -> %s", os.environ["ALIGN_DEBUG_DUMP"])
 
                 for j, i in enumerate(decode_idx):
-                    cand_ids, cand_stems, _wins, _refwin, cand_score, _ch, dur = slot_asn[targets[i].slot_label]
+                    cand_ids, cand_stems, _wins, _refwin, cand_score, _ch, dur = (
+                        slot_asn[targets[i].slot_label]
+                    )
                     ci = assigned_ci[i]
                     s_i = int(starts[j])
                     e_i = min(s_i + ks[j], self.mix.n_measures) - 1
@@ -430,7 +501,8 @@ class MertLearnedAligner:
                     options = list(permutations(range(n_cand), k_spans))
                 else:
                     options = [
-                        a for a in product(range(n_cand), repeat=k_spans)
+                        a
+                        for a in product(range(n_cand), repeat=k_spans)
                         if len(set(a)) == n_cand
                     ]
                 if len(options) > 64:
@@ -481,8 +553,19 @@ class MertLearnedAligner:
         mix_t = torch.from_numpy(self.mix.vectors).to(self.device)
 
         return tuple(
-            self._place_candidate(t, ci, cand_ids, cand_stems, ref_windows,
-                                  cand_ref_win, cand_score, band, mix_t, mix_mid, dur)
+            self._place_candidate(
+                t,
+                ci,
+                cand_ids,
+                cand_stems,
+                ref_windows,
+                cand_ref_win,
+                cand_score,
+                band,
+                mix_t,
+                mix_mid,
+                dur,
+            )
             for t, ci in zip(ts, chosen)
         )
 
@@ -550,7 +633,7 @@ class MertLearnedAligner:
         # Identity by max-over-placements: each candidate's score is its best
         # (mix window, ref window) pair in the band — MaxSim on both sides.
         cand_score: list[float] = []
-        cand_loc: list[int] = []      # index into win_starts
+        cand_loc: list[int] = []  # index into win_starts
         cand_ref_win: list[int] = []  # best ref window per candidate
         for wins in ref_windows:
             wt = torch.from_numpy(wins).to(self.device)  # (Wr, dim)
@@ -570,7 +653,15 @@ class MertLearnedAligner:
             chosen.append(by_score[0])
         chosen.sort(key=lambda c: cand_loc[c])
 
-        return (cand_ids, cand_stems, ref_windows, cand_ref_win, cand_score, chosen, dur)
+        return (
+            cand_ids,
+            cand_stems,
+            ref_windows,
+            cand_ref_win,
+            cand_score,
+            chosen,
+            dur,
+        )
 
     def _place_candidate(
         self,
@@ -653,6 +744,7 @@ def build_aligner(
     *,
     cfg: TrainConfig | None = None,
     device: str = "cpu",
+    init: MertAlignHead | MertAlignEnsemble | None = None,
 ) -> MertLearnedAligner:
     cfg = cfg or TrainConfig()
     from .slot_priors import median_start_by_label
@@ -665,7 +757,7 @@ def build_aligner(
         slot_pools,
         search_margin_s=cfg.search_margin_s,
     )
-    head = train_ensemble(examples, cfg=cfg, device=device)
+    head = train_ensemble(examples, cfg=cfg, device=device, init=init)
     return MertLearnedAligner(
         head=head,
         mix=mix,

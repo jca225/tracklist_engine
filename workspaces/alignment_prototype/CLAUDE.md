@@ -103,3 +103,55 @@ venvs/audio/bin/python -m workspaces.alignment_prototype.seed_als_from_timeline 
    placement/identity scorecard. Requires the set pulled via
    `labeling/pull_set_for_alignment.py` (slot-spine fix ed7f121 — older
    pulls silently dropped Rvmor-gap slots).
+
+## UnmixDB pretrain (external)
+
+Download [UnmixDB](https://zenodo.org/records/1422385), then:
+
+```bash
+# label parse smoke (no audio)
+venvs/audio/bin/python -m workspaces.alignment_prototype.pretrain --dry-run \\
+  --unmixdb-root ~/data/unmixdb-v1.1
+
+# chroma pretrain (pipeline validation; dim=12, no BB12 weight transfer)
+venvs/audio/bin/python -m workspaces.alignment_prototype.pretrain \\
+  --unmixdb-root ~/data/unmixdb-v1.1 --features chroma --max-mixes 50
+
+# MERT pretrain → BB12 ablation (use --features mert for weight transfer)
+venvs/audio/bin/python -m workspaces.alignment_prototype.pretrain --ablation \\
+  --pretrain-checkpoint workspaces/alignment_prototype/.cache/pretrain_mert.pt
+```
+
+Loader: `external/unmixdb.py`. Features: `external/feature_series.py` (chroma
+1 s bins or cached MERT 2 s bins). Checkpoints: `external/checkpoint.py`.
+
+## Landmark fingerprint index
+
+Backfill reference rows, then `refine_ref_offsets` reads the local cache:
+
+```bash
+venvs/audio/bin/python scripts/backfill_track_fingerprints.py --dry-run
+venvs/audio/bin/python scripts/backfill_track_fingerprints.py --limit 100
+venvs/audio/bin/python -m workspaces.alignment_prototype.refine_ref_offsets \\
+  --set-id 2nvzlh2k
+```
+
+Writes `track_fingerprints` (kind=landmark JSON) + `.cache/fp_index/`.
+Spans with weak chroma **and** weak fingerprint get `abstain_ref_offset: true`
+on the timeline JSON. This improves **ref_offset** recovery and safety; it does
+**not** fix the ~30–39 s **set_start** placement bottleneck by itself.
+
+## Mix fingerprint hits + placement refine
+
+Scan the mix per slot (cue ± band) into `set_fingerprint_hits`, then optional
+sharpness-gated per-span argmax on coarse decode:
+
+```bash
+venvs/audio/bin/python scripts/cache_set_fingerprint_hits.py --set-id 1fsnxchk --dry-run
+venvs/audio/bin/python scripts/cache_set_fingerprint_hits.py --set-id 1fsnxchk
+venvs/audio/bin/python -m workspaces.alignment_prototype.infer \\
+  --set-id 2nvzlh2k --fp-refine --fp-band-s 45 --fp-gate-z 1.0
+```
+
+Module: `mix_fp_hits.py` (scan + placement curves), `fp_placement_refine.py`
+(per-span override — **not** joint re-decode; see `docs/fine_placement_plan.md`).
