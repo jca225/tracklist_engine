@@ -15,7 +15,9 @@ the `set_section_alignment` table) — that's the labeling sense, not the model.
 - **`pull_set_for_alignment.py`** — queries pi-storage's canonical DB over SSH,
   rsyncs the mix recording + per-track stems into
   `~/aligning/<set_id>__<sanitized-title>/{mix.<ext>, tracks/, manifest.json,
-  stems/}`, ready to drag into Ableton. The only writer of that folder.
+  stems/}`, ready to drag into Ableton. Flags: `--check`, `--check-warn` (inventory
+  gate via [inventory_check.py](inventory_check.py)), `--fetch-candidates`.
+  `make check-inventory SET=<set_id>` wraps `--check`.
 - **`tag_aligning_folder.py`** — reads `manifest.json`, queries pi-storage
   `track_audio_features`, injects BPM + Camelot key + feature comment into each
   M4A's iTunes tags so Ableton's browser shows them.

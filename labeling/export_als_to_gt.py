@@ -21,6 +21,7 @@ Review table only:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -619,7 +620,32 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         case Ok(path):
             print(f"wrote {len(gt.tracks)} tracks -> {path}")
+            _write_inventory_bundle(gt, path)
     return 0
+
+
+def _write_inventory_bundle(gt, yaml_path: Path) -> None:
+    """Sidecar JSON for alignment training (ref_source + slot labels)."""
+    from collections import Counter
+
+    bundle_path = yaml_path.with_suffix(".inventory.json")
+    rows = []
+    for t in gt.tracks:
+        rows.append(
+            {
+                "label": t.slot_label or t.label,
+                "track_id": t.track_id,
+                "claimed_stem": t.claimed_stem,
+                "ref_source": t.ref_source,
+            }
+        )
+    payload = {
+        "set_id": gt.set_id,
+        "tracks": rows,
+        "ref_source_counts": dict(Counter(t.ref_source for t in gt.tracks)),
+    }
+    bundle_path.write_text(json.dumps(payload, indent=2))
+    print(f"wrote inventory bundle -> {bundle_path}")
 
 
 if __name__ == "__main__":
