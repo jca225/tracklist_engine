@@ -16,6 +16,7 @@ from yt_dlp import YoutubeDL
 from yt_dlp.utils import DownloadError as YtDlpDownloadError, ExtractorError
 
 from ..errors import DownloadError
+from ..preflight import annotate as _annotate
 from core.models import AudioAsset, MediaSource, SetAudioAsset
 from core.result import Err, Ok, Result
 
@@ -111,11 +112,13 @@ def download_one(
             kind = "network"
         else:
             kind = "parse"
-        return Err(DownloadError(kind=kind, url=source.url, detail=str(e)))
+        return Err(DownloadError(kind=kind, url=source.url, detail=_annotate(str(e))))
     except ExtractorError as e:
-        return Err(DownloadError(kind="parse", url=source.url, detail=str(e)))
+        return Err(
+            DownloadError(kind="parse", url=source.url, detail=_annotate(str(e)))
+        )
     except OSError as e:
-        return Err(DownloadError(kind="disk", url=source.url, detail=str(e)))
+        return Err(DownloadError(kind="disk", url=source.url, detail=_annotate(str(e))))
 
     final_path = Path(out_template.replace("%(ext)s", cfg.audio_format))
     if not final_path.exists():
@@ -167,11 +170,13 @@ def download_set_mix(
             kind = "network"
         else:
             kind = "parse"
-        return Err(DownloadError(kind=kind, url=source_url, detail=str(e)))
+        return Err(DownloadError(kind=kind, url=source_url, detail=_annotate(str(e))))
     except ExtractorError as e:
-        return Err(DownloadError(kind="parse", url=source_url, detail=str(e)))
+        return Err(
+            DownloadError(kind="parse", url=source_url, detail=_annotate(str(e)))
+        )
     except OSError as e:
-        return Err(DownloadError(kind="disk", url=source_url, detail=str(e)))
+        return Err(DownloadError(kind="disk", url=source_url, detail=_annotate(str(e))))
 
     final_path = Path(out_template.replace("%(ext)s", cfg.audio_format))
     if not final_path.exists():

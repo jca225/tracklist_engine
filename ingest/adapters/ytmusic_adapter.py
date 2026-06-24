@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..errors import DownloadError
+from ..preflight import annotate as _annotate
 from core.models import AudioAsset, MediaSource
 from core.result import Err, Ok, Result
 from .downloader import DownloadConfig
@@ -213,7 +214,7 @@ def _ytdlp_download(
             if ("unavailable" in msg.lower() or "not available" in msg.lower())
             else "parse"
         )
-        return Err(DownloadError(kind=kind, url=url, detail=msg))
+        return Err(DownloadError(kind=kind, url=url, detail=_annotate(msg)))
 
     if not dst.is_file():
         return Err(
