@@ -141,6 +141,24 @@ def push_to_canonical(set_audio_id: int, out_dir: Path) -> None:
     log.info("wrote 2 set_stems rows + rsynced stems for set_audio_id=%d", set_audio_id)
 
 
+def fetch_set_audio_local(db: Path, set_audio_id: int) -> tuple[str, str, float]:
+    out = subprocess.run(
+        [
+            "sqlite3", "-separator", "|", str(db),
+            f"SELECT set_id, path, COALESCE(duration_s,0) FROM set_audio "
+            f"WHERE set_audio_id={set_audio_id}",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    if not out:
+        log.error("no set_audio row for id=%d", set_audio_id)
+        sys.exit(1)
+    set_id, path, dur = out.split("|")
+    return set_id, path, float(dur)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--set-audio-id", type=int, required=True)
@@ -149,14 +167,23 @@ def main() -> int:
     ap.add_argument("--chunk-sec", type=int, default=360)
     ap.add_argument("--mix", type=Path, default=None,
                     help="local mix file (default: pull from pi-storage)")
+    ap.add_argument("--db", type=Path, default=None,
+                    help="local SQLite for set_audio lookup when --mix is set")
     ap.add_argument("--no-push", action="store_true",
                     help="render locally only; don't write to canonical DB/stems")
     args = ap.parse_args()
     sid = args.set_audio_id
 
-    set_id, remote_path, dur = fetch_set_audio(sid)
+    if args.mix is not None:
+        if args.db is not None:
+            set_id, _remote_path, dur = fetch_set_audio_local(args.db, sid)
+        else:
+            set_id, dur = f"id={sid}", 0.0
+        mix = args.mix
+    else:
+        set_id, remote_path, dur = fetch_set_audio(sid)
+        mix = pull_mix(remote_path, sid)
     log.info("set_audio_id=%d set_id=%s duration=%.0fs", sid, set_id, dur)
-    mix = args.mix or pull_mix(remote_path, sid)
 
     work = RENDER_ROOT / str(sid)
     chunks_dir = work / "chunks"

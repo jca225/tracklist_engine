@@ -21,6 +21,13 @@ Invoke from repo root, usually with `venvs/audio/bin/python scripts/<x>.py`.
 - `acquire_variant.py` — acquire a vocal/instrumental variant (staging or canonical `track_audio` row).
 - `replace_stem_audio.py` — replace a bad acappella/instrumental row by `--track-audio-id` + URL/file; logs `axis=stem`, runs fingerprint check.
 - `ingest_stem_url.py` — **Mac URL-first driver**: SSH to pi (`acquire_variant` add or `replace_stem_audio` replace), optional `--pull`, `--fail-on`, `--file` scp fallback. See [../docs/stem_discovery_playbook.md](../docs/stem_discovery_playbook.md).
+- `reconcile_gt_inventory.py` — GT YAML → inventory action CSV (dry-run); closes labeling→canonical loop.
+- `apply_stem_matches.py` — reviewed Discord `proposed_matches.csv` → `ingest_stem_url`.
+- `ingest_candidate_winners.py` — `stems/*/candidates/WINNER.txt` → canonical ingest.
+- `promote_identity_overrides.py` — `labeling/identity_overrides/<set>.yaml` → `set_track_slots.recording_id`.
+- `scan_wrong_versions.py` — corpus wrong-version scan (Topic original, live, wrong remix).
+- `aligning_refresh.py` — chain inline_tag + relink + fill_als after pull.
+- `correction_report.py` / `gt_ref_source_report.py` — ledger and GT ref_source analytics.
 - `reconcile_orphans.py` — route disk orphans (no `track_audio.path`) into delete / register / promote; dry-run by default. Use **ASCII** punctuation in print paths (pi SSH locale). Do not re-run `--apply` after a completed pass without dry-run — see [../docs/agent_handoff_reconcile_20260530.md](../docs/agent_handoff_reconcile_20260530.md).
 - `reconcile_pass1_manual.sh` — pre-apply manual delete list for dup clusters (run before bulk `--apply` when needed).
 - `migrate_identity_axes.sql` / `migrate_phase4_recording.sql` — pi-storage DB column renames + `work`/`recording`/`set_ground_truth` (run once after deploy; then `tokenizer.materialize`).
@@ -33,7 +40,9 @@ Invoke from repo root, usually with `venvs/audio/bin/python scripts/<x>.py`.
 
 **Vast provisioning / GPU workers — ⚠️ DO NOT MOVE OR RENAME:**
 - `vast_bootstrap.sh` — provisions an ephemeral Vast box.
-- `vast_run.sh` — launches a Vast run.
+- `vast_run.sh` — launches a Vast run (`vast_worker` + pi-storage sshfs).
+- `vast_taste_embed.sh` — tail MERT embed (no pi-storage; label `taste-embed`).
+- `vast_info_dynamics.sh` — info-dynamics sets: beats CPU + RoFormer/MERT CUDA (label `info-dynamics`; rent 4090 PyTorch template in UI first).
 - `vast_loop.py` — Vast-side analysis loop (drives `analysis.vast_worker`).
 
 These three are coupled to **external absolute paths** that a rename silently
