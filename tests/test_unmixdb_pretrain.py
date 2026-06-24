@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("torch")  # checkpoint/mert_model import torch; CI excludes it
+
 from workspaces.alignment_prototype.external.checkpoint import (
     PretrainMeta,
     load_head,
