@@ -19,9 +19,11 @@ tokenizer):
 The remixer qualifier (e.g. `(Madison Mars Remix)`) is deliberately preserved —
 it steers search to the remix release rather than the original cut.
 """
+
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 
 _VOCAL_QUALIFIER_RE: re.Pattern[str] = re.compile(
     r"\s*\(\s*(a[\s-]*cappella|acapella|instrumental|inst\.?|instr\.?)\s*\)",
@@ -32,6 +34,19 @@ _ID_PLACEHOLDER_RE: re.Pattern[str] = re.compile(
     r"\bID\b\s*(?:Remix|Bootleg|Edit|Mashup|VIP|Rework|Mix|Flip)?\b",
     re.IGNORECASE,
 )
+
+_ACAPELLA_QUERY_SUFFIXES = ("acapella", "acappella", "vocals only", "a cappella")
+_INSTRUMENTAL_QUERY_SUFFIX = "instrumental"
+
+
+@dataclass(frozen=True)
+class TrackSearchMeta:
+    full_name: str | None = None
+    artists_csv: str | None = None
+    title: str | None = None
+    version: str | None = None
+    claimed_stem: str = "regular"
+    layer_role: str = "solo"
 
 
 def to_search_query(
@@ -52,3 +67,47 @@ def to_search_query(
     if artists_csv:
         return f"{artists_csv} - {title}"
     return title or ""
+
+
+def to_search_query_for_claim(
+    *,
+    full_name: str | None,
+    artists_csv: str | None,
+    title: str | None,
+    claimed_stem: str = "regular",
+    layer_role: str = "solo",
+    version: str | None = None,
+) -> str:
+    """Role-aware YT Music search query."""
+    base = to_search_query(full_name, artists_csv, title)
+
+    if layer_role == "bed" or (version or "") in ("mashup", "bootleg"):
+        return base
+
+    if layer_role == "payload" or claimed_stem == "acappella":
+        stripped = _VOCAL_QUALIFIER_RE.sub("", base).strip()
+        if " - " in stripped:
+            return f"{stripped} {_ACAPELLA_QUERY_SUFFIXES[0]}"
+        return f"{base} {_ACAPELLA_QUERY_SUFFIXES[0]}"
+
+    if claimed_stem == "instrumental":
+        stripped = _VOCAL_QUALIFIER_RE.sub("", base).strip()
+        return f"{stripped} {_INSTRUMENTAL_QUERY_SUFFIX}"
+
+    return base
+
+
+def to_search_query_for_meta(
+    meta: TrackSearchMeta,
+    *,
+    layer_role: str = "solo",
+) -> str:
+    """Build query from metadata + optional layer role (redownload helper)."""
+    return to_search_query_for_claim(
+        full_name=meta.full_name,
+        artists_csv=meta.artists_csv,
+        title=meta.title,
+        claimed_stem=meta.claimed_stem,
+        layer_role=layer_role,
+        version=meta.version,
+    )

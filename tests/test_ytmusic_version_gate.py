@@ -54,6 +54,29 @@ def test_original_query_accepts_top_hit():
     assert sel is hits[0]
 
 
+def test_rejects_right_remixer_wrong_song():
+    # T-Mass remixed both songs; we asked for Don't Let Me Down, not Somebody.
+    # The wrong-song hit carries the version tokens but must NOT be picked.
+    hits = (_h("Somebody (T-Mass Remix)"), _h("Don't Let Me Down (T-Mass Remix)"))
+    sel = _select_hit(
+        "The Chainsmokers ft. Daya - Don't Let Me Down (T-Mass Remix)", hits
+    )
+    assert sel is not None and "let me down" in sel.title.lower()
+
+
+def test_refuses_when_only_wrong_song_with_right_remixer():
+    # Only WE ARE FURY remixes of *other* songs exist -> refuse, don't install.
+    hits = (_h("Alarm (WE ARE FURY Remix)"), _h("Faded (WE ARE FURY Remix)"))
+    assert _select_hit("Mako - Let Go Of The Wheel (WE ARE FURY Remix)", hits) is None
+
+
+def test_original_path_skips_wrong_song_top_hit():
+    # want=[] (original) but hits[0] is a different song -> fall through.
+    hits = (_h("Some Other Song"), _h("Around The World"))
+    sel = _select_hit("Daft Punk - Around The World", hits)
+    assert sel is not None and sel.title == "Around The World"
+
+
 def test_pick_search_hit_filters_duration():
     hits = (
         YTMSearchHit(

@@ -12,6 +12,11 @@ disk. Lands files at
 > That rule lives in [tokenizer/CLAUDE.md](../tokenizer/CLAUDE.md); don't restate
 > it here.
 
+**Slot inventory:** [core/slot_inventory.py](../core/slot_inventory.py) +
+[identity_gate.py](identity_gate.py) (`--reverify-existing` on `ingest.main`).
+Role-aware search: [search_query.py](search_query.py). Cascade stub:
+[solvability.py](solvability.py), [stem_cascade.py](stem_cascade.py).
+
 ## SoundCloud-only tracks
 
 Some scrape rows have **only** a SoundCloud `player_id` in

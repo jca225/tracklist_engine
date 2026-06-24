@@ -269,17 +269,78 @@ def _expected_version_tokens(query: str) -> list[str]:
     return [w for w in _VERSION_WORDS if w in qual][:1]  # bare version word
 
 
+_TITLE_STOP = {
+    "the",
+    "a",
+    "an",
+    "of",
+    "to",
+    "my",
+    "your",
+    "you",
+    "it",
+    "is",
+    "in",
+    "on",
+    "and",
+    "or",
+    "feat",
+    "ft",
+    "vs",
+    "with",
+    "for",
+    "me",
+    "i",
+    "we",
+    "be",
+}
+
+
+def _title_core(query: str) -> str:
+    """The song-title portion of a search query, stripped of artist and any
+    trailing version/credit parenthetical.
+
+      'The Chainsmokers ft. Daya - Don't Let Me Down (T-Mass Remix)' -> "don't let me down"
+      'Porter Robinson - Unison (Crankdat Re-Crank)'                 -> 'unison'
+    """
+    t = re.sub(r"(?:\s*\([^)]*\))+\s*$", "", query).strip()
+    if " - " in t:
+        t = t.split(" - ", 1)[1].strip()
+    return t
+
+
+def _title_tokens(s: str) -> list[str]:
+    toks = re.split(r"[\W_]+", s.lower())
+    return [t for t in toks if len(t) >= 2 and t not in _TITLE_STOP]
+
+
+def _hit_title_ok(want_title: list[str], hit_title: str) -> bool:
+    """Whether a hit's title carries enough of the query's song-title tokens.
+    Guards against right-remixer-of-WRONG-song: a 'T-Mass Remix' query must not
+    resolve to *Somebody* (T-Mass Remix) when we asked for *Don't Let Me Down*.
+    Lenient (majority, floor 1) so feat/suffix wording differences don't refuse."""
+    if not want_title:
+        return True
+    hit_toks = set(re.split(r"[\W_]+", hit_title.lower()))
+    present = sum(1 for t in want_title if t in hit_toks)
+    need = max(1, (len(want_title) + 1) // 2)
+    return present >= need
+
+
 def _select_hit(query: str, hits: tuple[YTMSearchHit, ...]) -> YTMSearchHit | None:
-    """Pick the hit matching the query's version qualifier. Returns None when
-    the query names a version/remixer that NO hit's title carries — the caller
-    then refuses the download instead of installing the wrong version."""
+    """Pick the hit matching BOTH the query's version qualifier AND its song
+    title. Returns None when the query names a version/remixer that NO hit's
+    title carries, or when no hit's title matches the song — the caller then
+    refuses the download instead of installing the wrong version/song."""
     want = _expected_version_tokens(query)
-    if not want:
-        return hits[0] if hits else None
+    want_title = _title_tokens(_title_core(query))
     for h in hits:
         tl = h.title.lower()
-        if all(t in tl for t in want):
-            return h
+        if want and not all(t in tl for t in want):
+            continue
+        if not _hit_title_ok(want_title, h.title):
+            continue
+        return h
     return None
 
 
