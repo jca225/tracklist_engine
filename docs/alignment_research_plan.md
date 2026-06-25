@@ -56,11 +56,16 @@ engineering precedent; (6) DJtransGAN — differentiable mixer for generation.
 
 **Measured on real UnmixDB (2026-06-25, `eval_bench.py`, warp-varied slice):**
 
-| method | set_start median | tempo % | identity rank@1 |
-|---|---|---|---|
-| grid_mf (matched filter, ours) | **~2.0–2.7 s** | 2–6% | 46% (chroma) |
-| **fingerprint identity** | — | — | **89.7%** (SOTA band 74–88%) |
-| NMF v0/v1 (André-style baseline) | ~25 s | 10% | (cross-talk limited) |
+| method | set_start median | set_start MAE | tempo % | identity rank@1 |
+|---|---|---|---|---|
+| grid_mf (matched filter) | ~2.0–2.7 s | ~8 s | 2–6% | 46–49% (chroma) |
+| **fused (fp id + gated placement)** | **~2.0 s** | **~5–7 s** | 4% | **84–90%** (Qfp band) |
+| NMF v0/v1 (André-style baseline) | ~13–25 s | — | 10% | cross-talk limited |
+
+The **fused** pipeline is the headline: fingerprint votes for identity, fingerprint
+offset (`set_start ≈ -offset`) agreement-gated with the matched filter for placement,
+matched-filter for tempo. It beats grid_mf on every placement axis *and* carries
+SOTA-band identity — Kim-comparable placement + Qfp-band identity in one pass.
 
 Reads: (1) our matched-filter placement is **Kim-comparable** (~2 s median);
 (2) **fingerprint nearly doubles identity (46→90%)** and reaches the Qfp SOTA
