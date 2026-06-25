@@ -44,6 +44,9 @@ def discover_root(path: Path | str) -> Path:
     nested = root / "unmixdb-v1.1"
     if nested.is_dir():
         return nested
+    # real Zenodo layout: a parent of per-set dirs (mixotic-*/mixes/*.labels.txt)
+    if list(root.glob("*/mixes")) or next(root.rglob("*.labels.txt"), None) is not None:
+        return root
     raise FileNotFoundError(f"not an UnmixDB root (no mixes/ or *.labels.txt): {root}")
 
 
@@ -172,7 +175,11 @@ def _resolve_track_paths(
 def load_mix(labels_path: Path, *, root: Path) -> UnmixMix:
     mix_id = labels_path.name.replace(".labels.txt", "")
     mixes_dir = root / "mixes"
-    tracks_dir = root / "tracks"
+    # real Zenodo layout: tracks live in the set dir's refsongs/ (labels are in
+    # <set>/mixes/, so the set dir is labels_path.parent.parent).
+    tracks_dir = labels_path.parent.parent / "refsongs"
+    if not tracks_dir.is_dir():
+        tracks_dir = root / "tracks"
     mix_dir = labels_path.parent
 
     mix_audio = _find_audio(mix_id, mixes_dir, mix_dir)

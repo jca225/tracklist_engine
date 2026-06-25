@@ -134,23 +134,19 @@ def score_sample(sample: Sample, preds: dict[int, Pred]) -> tuple[list[dict], fl
                 peak=p.score,
             )
         )
-    # identity: each true track must out-score every distractor (open-set proxy)
+    # identity: the true track must out-score every distractor — scored the SAME
+    # way (detect_offset peak) so true vs distractor is apples-to-apples.
     id_ok = 1.0
     if sample.distractor_feats:
-        hits = 0
-        for sp in sample.gt:
-            p = preds.get(sp.track_idx)
-            if p is None:
-                continue
-            best_dist = -2.0
-            tf_pos = int(p.set_start_s * SR / HOP)
-            for df in sample.distractor_feats.values():
-                if df.shape[1] >= 8 and sample.mix_feat.shape[1] > df.shape[1]:
-                    _, dpk = correlate_window(
-                        df[:, : min(df.shape[1], 516)], sample.mix_feat
-                    )
-                    best_dist = max(best_dist, dpk)
-            hits += int(p.score > best_dist)
+        dist_peaks = []
+        for df in sample.distractor_feats.values():
+            if df.shape[1] >= 8 and sample.mix_feat.shape[1] > df.shape[1]:
+                dist_peaks.append(detect_offset(df, sample.mix_feat)[1])
+        best_dist = max(dist_peaks) if dist_peaks else -2.0
+        hits = sum(
+            int((p := preds.get(sp.track_idx)) is not None and p.score > best_dist)
+            for sp in sample.gt
+        )
         id_ok = hits / max(1, len(sample.gt))
     return rows, id_ok
 
@@ -245,10 +241,29 @@ def unmixdb_samples(
     good_only: bool,
     n_distractors: int = 0,
 ) -> list[Sample]:
-    from workspaces.alignment_prototype.external.unmixdb import iter_mixes
+    from workspaces.alignment_prototype.external.unmixdb import (
+        discover_root,
+        good_mix_ids,
+        load_mix,
+    )
 
     fn = _feature_fn(feature)
-    mixes = iter_mixes(root, good_only=good_only, max_mixes=max_mixes)
+    # stride across the sorted label list so warp variants (none/resample/stretch)
+    # all appear in a small slice — iter_mixes' head-take gives only 'none'.
+    base = discover_root(root)
+    labels = sorted(base.rglob("*.labels.txt"))
+    good = good_mix_ids(base) if good_only else None
+    if good is not None:
+        labels = [p for p in labels if p.name.replace(".labels.txt", "") in good]
+    if max_mixes and len(labels) > max_mixes:
+        step = len(labels) / max_mixes
+        labels = [labels[int(i * step)] for i in range(max_mixes)]
+    mixes = []
+    for lp in labels:
+        try:
+            mixes.append(load_mix(lp, root=base))
+        except Exception:  # noqa: BLE001
+            continue
     out = []
     dpool: list[np.ndarray] = []
     for mx in mixes:
