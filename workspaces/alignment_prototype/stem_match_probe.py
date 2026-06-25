@@ -320,7 +320,7 @@ def run_real(args: argparse.Namespace) -> int:
         if ok:
             perrs.append(abs(host_off - float(t["ref_start_s"])))
         print(
-            f"  {t['slot_label']:>4s} {t['track'][:34]:34s} "
+            f"  {str(t.get('slot_label', '????')):>4s} {t['track'][:34]:34s} "
             f"id={'OK ' if ok else 'MISS'} peak={host_peak:.3f} "
             f"off={host_off:7.1f}s gt={float(t['ref_start_s']):7.1f}s"
         )
