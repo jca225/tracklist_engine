@@ -58,8 +58,9 @@ class Sample:
     track_feats: dict[int, np.ndarray]  # idx -> (D, Tk)
     gt: list[GTSpan]
     distractor_feats: dict[str, np.ndarray] = field(default_factory=dict)
-    mix_path: Path | None = None  # audio (UnmixDB only) — for NMF
+    mix_path: Path | None = None  # audio (UnmixDB only) — for NMF / fingerprint
     track_paths: dict[int, Path] = field(default_factory=dict)
+    distractor_paths: dict[str, Path] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -185,6 +186,73 @@ def summary(dfs: dict[str, pd.DataFrame]) -> pd.DataFrame:
     return pd.DataFrame(out)
 
 
+# ----------------------------------------------------------------------------- identity
+# Method-agnostic identity: score true tracks AND distractors with the SAME
+# backbone, rank@1 = true track out-scores every distractor. Fixes the earlier
+# apples-to-oranges bug and lets fingerprint vs chroma be compared honestly.
+def _id_scores_chroma(sample: Sample):
+    cands = {f"t{k}": tf for k, tf in sample.track_feats.items()}
+    cands.update(sample.distractor_feats)
+    scores = {}
+    for name, f in cands.items():
+        ok = f.shape[1] >= 8 and sample.mix_feat.shape[1] > f.shape[1]
+        scores[name] = detect_offset(f, sample.mix_feat)[1] if ok else -1.0
+    return scores, {f"t{k}" for k in sample.track_feats}
+
+
+_FP_CACHE: dict[str, dict] = {}
+
+
+def _fp_hashes(path: Path) -> dict:
+    key = str(path)
+    if key not in _FP_CACHE:
+        import librosa
+        from workspaces.alignment_prototype.landmark_fp import constellation, hashes
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            y, _ = librosa.load(str(path), sr=SR, mono=True)
+        _FP_CACHE[key] = hashes(*constellation(y))
+    return _FP_CACHE[key]
+
+
+def _id_scores_fp(sample: Sample):
+    import librosa
+    from workspaces.alignment_prototype.landmark_fp import (
+        _vote_histogram,
+        constellation,
+        hashes,
+    )
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        my, _ = librosa.load(str(sample.mix_path), sr=SR, mono=True)
+    hm = hashes(*constellation(my))  # mix hashed ONCE
+    cands = {f"t{k}": p for k, p in sample.track_paths.items()}
+    cands.update(sample.distractor_paths)
+    scores = {}
+    for name, p in cands.items():
+        votes = _vote_histogram(hm, _fp_hashes(p))
+        scores[name] = float(max(votes.values())) if votes else 0.0
+    return scores, {f"t{k}" for k in sample.track_paths}
+
+
+def run_identity(samples: list[Sample], mode: str) -> float:
+    scorer = {"chroma": _id_scores_chroma, "fingerprint": _id_scores_fp}[mode]
+    hits = tot = 0
+    for s in samples:
+        if mode == "fingerprint" and (s.mix_path is None or not s.distractor_paths):
+            continue
+        if mode == "chroma" and not s.distractor_feats:
+            continue
+        scores, truth = scorer(s)
+        best_dist = max((v for n, v in scores.items() if n not in truth), default=-1e9)
+        for t in truth:
+            tot += 1
+            hits += int(scores.get(t, -1e9) > best_dist)
+    return hits / max(1, tot)
+
+
 # ----------------------------------------------------------------------------- adapters
 def synthetic_samples(
     n: int = 6, D: int = 12, seed: int = 0, with_distractors: bool = True
@@ -266,6 +334,7 @@ def unmixdb_samples(
             continue
     out = []
     dpool: list[np.ndarray] = []
+    dpool_paths: list[Path] = []
     for mx in mixes:
         try:
             mf = fn(mx.mix_audio)
@@ -274,10 +343,13 @@ def unmixdb_samples(
             print(f"  skip {mx.mix_id}: {e}")
             continue
         gt = [GTSpan(sp.track_idx, sp.set_start_s, sp.tempo_ratio) for sp in mx.spans]
-        dist = {}
+        dist, dist_paths = {}, {}
         if n_distractors and dpool:
-            for k, df in enumerate(dpool[:n_distractors]):
+            for k, (df, dp) in enumerate(
+                zip(dpool[:n_distractors], dpool_paths[:n_distractors])
+            ):
                 dist[f"d{k}"] = df
+                dist_paths[f"d{k}"] = dp
         out.append(
             Sample(
                 mx.mix_id,
@@ -287,9 +359,11 @@ def unmixdb_samples(
                 dist,
                 mix_path=mx.mix_audio,
                 track_paths=dict(mx.track_audio),
+                distractor_paths=dist_paths,
             )
         )
         dpool.extend(tfs.values())
+        dpool_paths.extend(mx.track_audio.values())
     return out
 
 
@@ -307,6 +381,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--good-only", action="store_true")
     p.add_argument("--n-distractors", type=int, default=0)
     p.add_argument("--methods", default="grid_mf,no_warp")
+    p.add_argument(
+        "--identity",
+        action="store_true",
+        help="also run the chroma-vs-fingerprint identity benchmark",
+    )
     args = p.parse_args(argv)
 
     if args.synthetic:
@@ -339,8 +418,17 @@ def main(argv: list[str] | None = None) -> int:
             continue
         dfs[name] = run(samples, METHODS[name], name)
 
-    print("\n=== eval_bench ===")
+    print("\n=== eval_bench (placement / warp) ===")
     print(summary(dfs).to_string(index=False))
+
+    if args.identity:
+        print("\n=== identity (rank@1: true track out-scores all distractors) ===")
+        for mode in ("chroma", "fingerprint"):
+            try:
+                acc = run_identity(samples, mode)
+                print(f"  {mode:12s}: {100 * acc:5.1f}%")
+            except Exception as e:  # noqa: BLE001
+                print(f"  {mode:12s}: failed ({e})")
     return 0
 
 
