@@ -109,10 +109,52 @@ def method_nmf(sample: Sample) -> dict[int, Pred]:
     }
 
 
+def method_fused(sample: Sample) -> dict[int, Pred]:
+    """Fused pipeline (plays each backbone to its strength, from the diagnostics):
+      - placement  = fingerprint offset histogram (set_start ≈ -offset; lands
+        within ~1-3s even under tempo-stretch, no heavy tail)
+      - identity   = fingerprint vote count (SOTA-band, see --identity)
+      - tempo/warp = matched-filter stretch search (fingerprint's warp grid is coarse)
+    Needs audio (UnmixDB)."""
+    if sample.mix_path is None or not sample.track_paths:
+        return {}
+    import librosa
+    from workspaces.alignment_prototype.landmark_fp import fp_offset
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        my, _ = librosa.load(str(sample.mix_path), sr=SR, mono=True)
+    out = {}
+    for k, tp in sample.track_paths.items():
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            ty, _ = librosa.load(str(tp), sr=SR, mono=True)
+        off, votes, fp_st, _sharp = fp_offset(
+            my, ty, stretches=(0.9, 0.95, 1.0, 1.05, 1.1)
+        )
+        fp_start = max(0.0, -off)  # fingerprint placement (robust, no heavy tail)
+        tf = sample.track_feats.get(k)
+        if (
+            tf is not None
+            and tf.shape[1] >= 8
+            and sample.mix_feat.shape[1] > tf.shape[1]
+        ):
+            mf_start, _, mf_tempo = detect_offset(tf, sample.mix_feat)
+        else:
+            mf_start, mf_tempo = fp_start, fp_st
+        # agreement gate: take the matched filter's PRECISION when it agrees with
+        # the fingerprint; fall back to the fingerprint's ROBUSTNESS when the
+        # matched filter wandered to a spurious far peak (its heavy tail).
+        set_start = mf_start if abs(mf_start - fp_start) <= 8.0 else fp_start
+        out[k] = Pred(set_start, mf_tempo, float(votes))
+    return out
+
+
 METHODS: dict[str, Method] = {
     "grid_mf": method_grid_mf,
     "no_warp": method_grid_locked,
     "nmf": method_nmf,
+    "fused": method_fused,
 }
 
 
