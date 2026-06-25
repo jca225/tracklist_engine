@@ -57,8 +57,10 @@ def _stretch_cols(W: np.ndarray, s: float) -> np.ndarray:
     return W[:, idx]
 
 
-def _solve_H(V: np.ndarray, W: np.ndarray, iters: int) -> np.ndarray:
-    """Fixed-W KL-NMF: V≈W·H. W=(F,R) column-normalized, returns H=(R,Tm)."""
+def _solve_H(V: np.ndarray, W: np.ndarray, iters: int, l1: float = 0.0) -> np.ndarray:
+    """Fixed-W KL-NMF: V≈W·H. W=(F,R) column-normalized, returns H=(R,Tm).
+    l1>0 adds an L1 sparsity penalty (term in the denominator) → sharper, less
+    smeared activations on real spectra (a track is active in few mix frames)."""
     Wn = W / (W.sum(axis=0, keepdims=True) + _EPS)
     V = V.astype(np.float64)
     rng = np.random.default_rng(0)
@@ -66,8 +68,20 @@ def _solve_H(V: np.ndarray, W: np.ndarray, iters: int) -> np.ndarray:
     Wt1 = Wn.T @ np.ones((V.shape[0], V.shape[1]))
     for _ in range(iters):
         WH = Wn @ H + _EPS
-        H *= (Wn.T @ (V / WH)) / (Wt1 + _EPS)
+        H *= (Wn.T @ (V / WH)) / (Wt1 + l1 + _EPS)
     return H
+
+
+def _sustained_onset(presence: np.ndarray, thr: float, k: int = 3) -> int:
+    """First frame where presence stays above thr for >=k frames — rejects the
+    spurious single-frame blips that wreck a plain argmax onset."""
+    run = 0
+    for i, a in enumerate(presence > thr):
+        run = run + 1 if a else 0
+        if run >= k:
+            return i - k + 1
+    above = np.flatnonzero(presence > thr)
+    return int(above[0]) if above.size else 0
 
 
 def recover(
@@ -78,33 +92,51 @@ def recover(
     iters: int = 60,
     present_frac: float = 0.15,
     warps: tuple[float, ...] = _WARP_GRID,
+    l1: float = 0.5,
 ) -> dict[int, NmfPred]:
-    """Reference-conditioned NMF with a STRETCHED dictionary: each track enters at
-    several tempo-warps; NMF picks which warp activates (warp = the winning block),
-    set_start = its activation onset, gain = its envelope. Reading warp as a
-    search in reconstruction space is far more robust than reading a ridge slope."""
+    """Reference-conditioned NMF, multi-pass (André-style v1).
+
+    Pass 1 — STRETCHED dictionary: every track enters at several tempo-warps; NMF
+    picks which warp activates (= the winning block). Pass 2 — rebuild the
+    dictionary with ONLY each track's winning warp and re-solve: removes the
+    competing-warp atoms so the surviving activation is sharp (less cross-talk),
+    which is what makes the onset/gain readable on real spectra. Sparsity (l1) +
+    a sustained-onset rule do the rest."""
     blocks = [(k, s, _stretch_cols(W, s)) for k, W in dicts.items() for s in warps]
     bigW = np.concatenate([b[2] for b in blocks], axis=1).astype(np.float64)
-    H = _solve_H(V, bigW, iters)
-    # split activation back into (k, s) blocks
-    per: dict[int, list[tuple[float, np.ndarray]]] = {}
+    H = _solve_H(V, bigW, iters, l1)
+    best_warp: dict[int, float] = {}
+    per: dict[int, list[tuple[float, float]]] = {}
     off = 0
     for k, s, Wks in blocks:
         tk = Wks.shape[1]
-        per.setdefault(k, []).append((s, H[off : off + tk]))
+        # MEAN activation per atom — size-invariant. Total sum is biased to the
+        # largest stretch (more atoms -> bigger sum), which pinned warp at the grid
+        # max and corrupted placement.
+        per.setdefault(k, []).append((s, float(H[off : off + tk].sum()) / tk))
         off += tk
-    out = {}
     for k, lst in per.items():
-        s_best, H_best = max(lst, key=lambda z: float(z[1].sum()))  # winning warp
-        presence = H_best.sum(axis=0)
+        best_warp[k] = max(lst, key=lambda z: z[1])[0]
+
+    # Pass 2: winning-warp-only dictionary → clean per-track activation
+    wblocks = [(k, _stretch_cols(dicts[k], best_warp[k])) for k in dicts]
+    bigW2 = np.concatenate([b[1] for b in wblocks], axis=1).astype(np.float64)
+    H2 = _solve_H(V, bigW2, iters, l1)
+
+    out, off = {}, 0
+    for k, Wk in wblocks:
+        tk = Wk.shape[1]
+        Hk = H2[off : off + tk]
+        off += tk
+        presence = Hk.sum(axis=0)
         pk = float(presence.max())
-        active = presence > present_frac * pk
-        present = bool(active.sum() >= 3)
-        start_f = int(np.argmax(active)) if present else 0
+        thr = present_frac * pk
+        present = bool((presence > thr).sum() >= 3)
+        start_f = _sustained_onset(presence, thr) if present else 0
         out[k] = NmfPred(
             track_idx=k,
             set_start_s=start_f / fps,
-            tempo_ratio=s_best if present else 1.0,
+            tempo_ratio=best_warp[k] if present else 1.0,
             gain_peak=pk,
             present=present,
         )
