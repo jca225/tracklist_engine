@@ -259,23 +259,35 @@ def run_synthetic(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------- #
 # real arm (BB12 mix stems vs local ref stems on actual GT spans)
 # --------------------------------------------------------------------------- #
-def run_real(args: argparse.Namespace) -> int:
-    import yaml
+@dataclass
+class SpanScore:
+    slot: str
+    track: str
+    stem: str
+    id_correct: bool
+    peak: float
+    place_err_s: float  # |recovered ref_start - GT ref_start|, only if id_correct
 
-    from workspaces.alignment_prototype.refine_ref_offsets import find_aligning_dir
 
-    gt = yaml.safe_load(Path(args.gt).read_text())
-    set_dir = find_aligning_dir(gt["set_id"])
+def _score_channel(
+    stem: str,
+    feature: str,
+    args: argparse.Namespace,
+    gt: dict,
+    set_dir: Path,
+    verbose: bool = True,
+) -> list[SpanScore]:
+    """Score every GT span of one stem class with one feature, vs a distractor pool."""
     mix_file = {"vocals": "mix_vocals.flac", "instrumental": "mix_instrumental.flac"}[
-        args.stem
+        stem
     ]
-    claimed = {"vocals": "acappella", "instrumental": "instrumental"}[args.stem]
+    claimed = {"vocals": "acappella", "instrumental": "instrumental"}[stem]
     mix_path = set_dir / mix_file
     if not mix_path.is_file():
-        sys.exit(f"no {mix_file} in {set_dir}")
+        print(f"  (no {mix_file} in {set_dir}; skipping {stem})")
+        return []
 
-    # recording_id -> local stem dir (taid) via one pi query, cached
-    taid_map = _resolve_local_stem_dirs(args.stem)
+    taid_map = _resolve_local_stem_dirs(stem)
     spans = [
         t
         for t in gt["tracks"]
@@ -285,18 +297,17 @@ def run_real(args: argparse.Namespace) -> int:
         and "set_start_s" in t
         and "ref_start_s" in t
     ]
-    print(f"real arm ({args.stem}): {len(spans)} GT {claimed} spans with local stems")
+    print(f"channel {stem}/{feature}: {len(spans)} GT {claimed} spans with local stems")
     if not spans:
-        return 0
+        return []
 
-    pool = _stem_paths(args.stem)
-    cache = FeatCache(args.features[0], args.hubert_layer)
+    pool = _stem_paths(stem)
+    cache = FeatCache(feature, args.hubert_layer)
     mix_y = cache.audio(mix_path)
     wn = int(args.window_s * SR)
     rng = np.random.default_rng(args.seed)
 
-    id_ok = 0
-    perrs: list[float] = []
+    out: list[SpanScore] = []
     for t in spans:
         s0 = int(float(t["set_start_s"]) * SR)
         win = mix_y[s0 : s0 + wn]
@@ -315,23 +326,81 @@ def run_real(args: argparse.Namespace) -> int:
         best_other = max(
             (detect_offset(win_f, cache.feat(p))[1] for p in dsel), default=0.0
         )
-        ok = host_peak > best_other
-        id_ok += ok
-        if ok:
-            perrs.append(abs(host_off - float(t["ref_start_s"])))
-        print(
-            f"  {str(t.get('slot_label', '????')):>4s} {t['track'][:34]:34s} "
-            f"id={'OK ' if ok else 'MISS'} peak={host_peak:.3f} "
-            f"off={host_off:7.1f}s gt={float(t['ref_start_s']):7.1f}s"
+        ok = bool(host_peak > best_other)
+        perr = abs(host_off - float(t["ref_start_s"])) if ok else float("nan")
+        out.append(
+            SpanScore(
+                str(t.get("slot_label", "????")),
+                t["track"][:34],
+                stem,
+                ok,
+                host_peak,
+                perr,
+            )
         )
+        if verbose:
+            print(
+                f"  {out[-1].slot:>4s} {out[-1].track:34s} "
+                f"id={'OK ' if ok else 'MISS'} peak={host_peak:.3f} "
+                f"off={host_off:7.1f}s gt={float(t['ref_start_s']):7.1f}s"
+            )
+    return out
 
-    print(
-        f"\nreal {args.stem}: identity {id_ok}/{len(spans)} = {100 * id_ok / len(spans):.0f}%  "
-        f"| placement median {np.median(perrs):.1f}s  <2s {100 * np.mean(np.array(perrs) < 2):.0f}% "
-        f"(n={len(perrs)})"
-        if perrs
-        else f"\nreal {args.stem}: identity {id_ok}/{len(spans)}"
+
+def _summarize(label: str, scores: list[SpanScore]) -> None:
+    if not scores:
+        print(f"{label}: no spans")
+        return
+    n = len(scores)
+    idok = sum(s.id_correct for s in scores)
+    errs = np.array(
+        [s.place_err_s for s in scores if s.id_correct and np.isfinite(s.place_err_s)]
     )
+    pmed = f"{np.median(errs):.1f}s" if errs.size else "n/a"
+    pexact = f"{100 * np.mean(errs < 2):.0f}%" if errs.size else "n/a"
+    print(
+        f"{label}: identity {idok}/{n} = {100 * idok / n:.0f}%  "
+        f"| placement median {pmed}  <2s {pexact} (n={errs.size})"
+    )
+
+
+def run_real(args: argparse.Namespace) -> int:
+    import yaml
+
+    from workspaces.alignment_prototype.refine_ref_offsets import find_aligning_dir
+
+    gt = yaml.safe_load(Path(args.gt).read_text())
+    set_dir = find_aligning_dir(gt["set_id"])
+    scores = _score_channel(args.stem, args.features[0], args, gt, set_dir)
+    print()
+    _summarize(f"real {args.stem}/{args.features[0]}", scores)
+    return 0
+
+
+def run_routed(args: argparse.Namespace) -> int:
+    """Dual-channel scorecard: route each stem class to its best engine
+    (vocals->hubert phonetics, instrumental->chroma) -- the stem-routed aligner's
+    expected per-span performance, measured on GT spans."""
+    import yaml
+
+    from workspaces.alignment_prototype.refine_ref_offsets import find_aligning_dir
+
+    gt = yaml.safe_load(Path(args.gt).read_text())
+    set_dir = find_aligning_dir(gt["set_id"])
+    routing = {"vocals": "hubert", "instrumental": "chroma"}
+    print(
+        f"routed dual-channel on {gt['set_id']}: "
+        + ", ".join(f"{k}->{v}" for k, v in routing.items())
+        + "\n"
+    )
+
+    all_scores: list[SpanScore] = []
+    for stem, feat_name in routing.items():
+        sc = _score_channel(stem, feat_name, args, gt, set_dir, verbose=False)
+        _summarize(f"  {stem:12s}({feat_name})", sc)
+        all_scores.extend(sc)
+    print()
+    _summarize("ROUTED combined", all_scores)
     return 0
 
 
@@ -379,7 +448,9 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    p.add_argument("--arm", choices=["synthetic", "real", "both"], default="synthetic")
+    p.add_argument(
+        "--arm", choices=["synthetic", "real", "routed", "both"], default="synthetic"
+    )
     p.add_argument("--stem", choices=["vocals", "instrumental"], default="vocals")
     p.add_argument(
         "--features", default="chroma,mfcc", help="comma list of chroma,mfcc,hubert"
@@ -403,6 +474,8 @@ def main(argv: list[str] | None = None) -> int:
         rc |= run_synthetic(args)
     if args.arm in ("real", "both"):
         rc |= run_real(args)
+    if args.arm == "routed":
+        rc |= run_routed(args)
     return rc
 
 
