@@ -196,6 +196,65 @@ def recover_banded(
     return out
 
 
+def recover_editable(
+    V: np.ndarray,
+    dicts: dict[int, np.ndarray],
+    anchors: dict[int, tuple[float, float]],
+    *,
+    fps: float = NMF_FPS,
+    iters: int = 60,
+    l1: float = 0.3,
+    band_frames: int = 24,
+    n_bands: int = 8,
+) -> dict[int, tuple[np.ndarray, np.ndarray]]:
+    """The editable trio per track: (gain curve, per-band EQ).
+
+    Banded NMF as in recover_banded, but also keep each track's reconstruction
+    R_k = W_k·H_k. In a track's SOLO frames (it plays, neighbours don't), the
+    per-band ratio (mix energy / reconstruction energy) is the EQ the DJ applied:
+    H carries only broadband gain (it scales whole atom columns), so any per-band
+    discrepancy between the mix and the un-EQ'd source model IS the equalization.
+    Returns eq as `n_bands` values normalized to median 1 (flat ⇒ no EQ)."""
+    tm = V.shape[1]
+    wblocks, masks = [], []
+    for k, W in dicts.items():
+        s_start, st = anchors[k]
+        Wk = _stretch_cols(W, st)
+        start_f = int(round(s_start * fps))
+        r = np.arange(Wk.shape[1])[:, None]
+        t = np.arange(tm)[None, :]
+        masks.append((np.abs(r - (t - start_f)) <= band_frames).astype(np.float64))
+        wblocks.append((k, Wk))
+    bigW = np.concatenate([b[1] for b in wblocks], axis=1).astype(np.float64)
+    H = _solve_H(V, bigW, iters, l1, mask=np.concatenate(masks, axis=0))
+
+    gains, recons, off = {}, {}, 0
+    for k, Wk in wblocks:
+        tk = Wk.shape[1]
+        Hk = H[off : off + tk]
+        off += tk
+        gains[k] = Hk.sum(axis=0)
+        recons[k] = Wk @ Hk
+    edges = np.linspace(0, V.shape[0], n_bands + 1).astype(int)
+    out = {}
+    for k in dicts:
+        gk = gains[k]
+        act = gk > 0.2 * (gk.max() + _EPS)
+        other = np.zeros_like(gk)
+        for j in dicts:
+            if j != k:
+                other = np.maximum(other, gains[j] / (gains[j].max() + _EPS))
+        solo = act & (other < 0.2)
+        if solo.sum() < 3:
+            solo = act
+        mix_b = V[:, solo].sum(axis=1)
+        rec_b = recons[k][:, solo].sum(axis=1) + _EPS
+        eq_full = mix_b / rec_b
+        eq = np.array([eq_full[edges[b] : edges[b + 1]].mean() for b in range(n_bands)])
+        out[k] = (gk, eq / (np.median(eq) + _EPS))
+    return out
+
+
 # ----------------------------------------------------------------------------- audio
 def mel_spec(y: np.ndarray, fps: float = NMF_FPS) -> np.ndarray:
     import librosa
