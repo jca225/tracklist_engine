@@ -42,7 +42,11 @@ ratio in solo frames **is** the EQ.
 
 ## Relation to the SOTA (André, Schwarz, Fourer 2024, arXiv 2410.04198)
 
-Their public code: **https://github.com/etiandre/icassp2025-dj-transcription**.
+Their code is **gone** — the paper links `github.com/etiandre/icassp2025-dj-transcription`
+but the repo and the author's entire GitHub account 404 (verified 2026-06-25; never
+mirrored, never archived by Software Heritage/Wayback). The only routes to their exact
+method are emailing IRCAM (andre@ircam.fr / schwarz@ircam.fr) or reimplementing from the
+paper. The dataset generator survives: `github.com/Ircam-RnD/unmixdb-creation`.
 What their paper actually does, vs us:
 
 - **Identity:** they *don't* — they punt to fingerprinting (out of scope). We do it.
@@ -73,7 +77,9 @@ identity, EQ, and open-set on real scraped sets.
 
 ## Next steps (to actually become SOTA, not just match)
 
-1. **Run their public code** on UnmixDB → the true SOTA baseline number, in-repo.
+1. **Reimplement their multi-pass NMF** (repo deleted — see above) on UnmixDB → the
+   true SOTA baseline number, in-repo. Note our local UnmixDB is the *-excerpts* subset
+   (6 base mixes, 40 s refsongs), not the full 1931-mix benchmark.
 2. **Add the stem axis** — separate each recovered track into vocal/instrumental
    and recover gain/EQ per stem (the unclaimed differentiator).
 3. **Adopt their wins where cheap** — IS-NMF + a morphological line-filter (drop-in
