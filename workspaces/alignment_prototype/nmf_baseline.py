@@ -57,18 +57,30 @@ def _stretch_cols(W: np.ndarray, s: float) -> np.ndarray:
     return W[:, idx]
 
 
-def _solve_H(V: np.ndarray, W: np.ndarray, iters: int, l1: float = 0.0) -> np.ndarray:
+def _solve_H(
+    V: np.ndarray,
+    W: np.ndarray,
+    iters: int,
+    l1: float = 0.0,
+    mask: np.ndarray | None = None,
+) -> np.ndarray:
     """Fixed-W KL-NMF: V≈W·H. W=(F,R) column-normalized, returns H=(R,Tm).
     l1>0 adds an L1 sparsity penalty (term in the denominator) → sharper, less
-    smeared activations on real spectra (a track is active in few mix frames)."""
+    smeared activations. mask (R,Tm) confines activation to a region — used by
+    the fingerprint-banded variant to enforce temporal continuity (kills the
+    cross-talk between spectrally-similar tracks that wrecked the unbanded NMF)."""
     Wn = W / (W.sum(axis=0, keepdims=True) + _EPS)
     V = V.astype(np.float64)
     rng = np.random.default_rng(0)
     H = rng.random((Wn.shape[1], V.shape[1])) + _EPS
+    if mask is not None:
+        H *= mask
     Wt1 = Wn.T @ np.ones((V.shape[0], V.shape[1]))
     for _ in range(iters):
         WH = Wn @ H + _EPS
         H *= (Wn.T @ (V / WH)) / (Wt1 + l1 + _EPS)
+        if mask is not None:
+            H *= mask
     return H
 
 
@@ -140,6 +152,47 @@ def recover(
             gain_peak=pk,
             present=present,
         )
+    return out
+
+
+def recover_banded(
+    V: np.ndarray,
+    dicts: dict[int, np.ndarray],
+    anchors: dict[int, tuple[float, float]],
+    *,
+    fps: float = NMF_FPS,
+    iters: int = 60,
+    l1: float = 0.3,
+    band_frames: int = 24,
+) -> dict[int, np.ndarray]:
+    """Fingerprint-banded NMF — our shortcut to André's continuity trick.
+
+    anchors[k] = (set_start_s, stretch) from the fingerprint. We build each
+    track's dictionary at its stretch and CONFINE its activation to a band around
+    its known diagonal (r ≈ t - start_f, slope 1 after the stretch). That enforces
+    temporal continuity for free, so a track can no longer splatter onto a
+    spectrally-similar neighbour. Returns per-track GAIN curve (the activation
+    summed along the band = the recovered volume/fade envelope) — the editable
+    quantity fingerprinting alone can't give."""
+    tm = V.shape[1]
+    wblocks, masks = [], []
+    for k, W in dicts.items():
+        s_start, st = anchors[k]
+        Wk = _stretch_cols(W, st)
+        tk = Wk.shape[1]
+        start_f = int(round(s_start * fps))
+        r = np.arange(tk)[:, None]
+        t = np.arange(tm)[None, :]
+        masks.append((np.abs(r - (t - start_f)) <= band_frames).astype(np.float64))
+        wblocks.append((k, Wk))
+    bigW = np.concatenate([b[1] for b in wblocks], axis=1).astype(np.float64)
+    bigMask = np.concatenate(masks, axis=0)
+    H = _solve_H(V, bigW, iters, l1, mask=bigMask)
+    out, off = {}, 0
+    for k, Wk in wblocks:
+        tk = Wk.shape[1]
+        out[k] = H[off : off + tk].sum(axis=0)  # gain envelope over mix time
+        off += tk
     return out
 
 
