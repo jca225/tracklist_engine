@@ -54,12 +54,22 @@ beat; (2) Schwarz & Fourer UnmixDB/pipeline — benchmark + editable-param frami
 Widmer Qfp — identity SOTA + tempo-robust fingerprint; (5) Werthen-Brabants —
 engineering precedent; (6) DJtransGAN — differentiable mixer for generation.
 
-**The honest gap (our EDA, BB12, n≈40):** placement ~7.9 s median (grid-locked) —
-*behind* the SOTA; identity 80% retrieval@1 (closed ~150 pool) — below Qfp's
-mix-level numbers and on an easier setup; warp-marker recovery exact on *clean*
-spans only; instrumental-presence broken on chroma. **Verdict: not SOTA on any
-axis the field measures.** Our shot is the unclaimed quadrant in §0, validated on
-UnmixDB against André 2024.
+**Measured on real UnmixDB (2026-06-25, `eval_bench.py`, warp-varied slice):**
+
+| method | set_start median | tempo % | identity rank@1 |
+|---|---|---|---|
+| grid_mf (matched filter, ours) | **~2.0–2.7 s** | 2–6% | 46% (chroma) |
+| **fingerprint identity** | — | — | **89.7%** (SOTA band 74–88%) |
+| NMF v0/v1 (André-style baseline) | ~25 s | 10% | (cross-talk limited) |
+
+Reads: (1) our matched-filter placement is **Kim-comparable** (~2 s median);
+(2) **fingerprint nearly doubles identity (46→90%)** and reaches the Qfp SOTA
+band — the clean win; (3) our **NMF reproduction is behind** — real placement is
+~25 s, bound by **cross-talk between spectrally-similar sequential tracks**, the
+hard part André's full multipass method is built to handle. So on UnmixDB we are
+**Kim-comparable on placement, SOTA-band on identity (via fingerprint), and not
+yet matching the NMF SOTA on joint warp+placement.** The unclaimed quadrant (§0)
+remains the shot; near-term, matched-filter + fingerprint beats chasing NMF.
 
 ## 2. Problem decomposition (four tasks + one output)
 
