@@ -41,6 +41,7 @@ from labeling.als_io import (
     load_als_xml,
     parse_layer_clips,
     resolve_identity,
+    select_arrangement_mapper,
     split_clip_at_mix_span_edges,
     tempo_ratio,
     track_display_name,
@@ -453,11 +454,15 @@ def collect_kept_clip_rows(
     mix_track = _mix_track(root)
     if mix_track is None:
         raise ValueError("no 1-mix track in .als")
-    mapper = ArrangementMapper.from_mix_track(mix_track, mix_duration_s=mix_duration_s)
+    clips = parse_layer_clips(root)
+    label_arr_max = max((c.arr_end for c in clips), default=0.0)
+    mapper = select_arrangement_mapper(
+        root, mix_track, mix_duration_s=mix_duration_s, label_arr_max=label_arr_max
+    )
 
     raw_rows: list[ClipRow] = []
     review: list[ReviewRow] = []
-    for clip in parse_layer_clips(root):
+    for clip in clips:
         for part in split_clip_at_mix_span_edges(clip, mapper):
             row = _clip_row(part, mapper, manifest)
             if row is None:

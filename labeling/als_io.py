@@ -9,6 +9,7 @@ from __future__ import annotations
 import gzip
 import html
 import json
+import math
 import re
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -131,6 +132,157 @@ class ArrangementMapper:
                 frac = (arr - left.arr_end) / (right.arr_start - left.arr_end)
                 return left_sec + frac * (right_sec - left_sec)
         return None
+
+
+def parse_master_tempo(root: etree._Element) -> tuple[tuple[float, float], ...]:
+    """Master-track tempo automation as sorted ``(beat, bpm)`` breakpoints.
+
+    The newer alignment convention leaves the ``1-mix`` clip *unwarped* and
+    encodes the mix's (varying) tempo as explicit master-tempo automation, so
+    arrangement-beats map to seconds by integrating this curve — not via the
+    clip's warp markers. Ableton represents a tempo *step* as two FloatEvents at
+    the same Time; the integrator treats zero-width segments as instantaneous.
+    Sentinel "before-start" times (large negative) are clamped to beat 0.
+    """
+    tempo = root.find(".//MasterTrack//Tempo")
+    if tempo is None:
+        return ()
+    at = tempo.find("AutomationTarget")
+    target_id = at.get("Id") if at is not None else None
+    pts: list[tuple[float, float]] = []
+    if target_id is not None:
+        for env in root.xpath(
+            ".//MasterTrack//AutomationEnvelopes/Envelopes/AutomationEnvelope"
+        ):
+            pid = env.find("EnvelopeTarget/PointeeId")
+            if pid is None or pid.get("Value") != target_id:
+                continue
+            for fe in env.xpath(".//FloatEvent"):
+                t = fe.get("Time")
+                v = fe.get("Value")
+                if t is None or v is None:
+                    continue
+                pts.append((max(0.0, float(t)), float(v)))
+    if not pts:
+        manual = tempo.find("Manual")
+        if manual is not None and manual.get("Value"):
+            pts.append((0.0, float(manual.get("Value"))))
+    pts.sort(key=lambda p: p[0])
+    return tuple(pts)
+
+
+def tempo_beat_to_sec(pts: tuple[tuple[float, float], ...], beat: float) -> float:
+    """Integrate ``60/bpm`` over a piecewise-linear tempo curve → seconds.
+
+    Between consecutive breakpoints Ableton ramps tempo linearly, so the exact
+    integral of 60/bpm over a linear ramp v0→v1 is
+    ``60 * dbeat / (v1 - v0) * ln(v1 / v0)`` (and ``60 * dbeat / v0`` when flat).
+    """
+    if not pts:
+        return beat
+    if beat <= pts[0][0]:
+        return beat * 60.0 / pts[0][1]
+    sec = 0.0
+    for (b0, v0), (b1, v1) in zip(pts, pts[1:]):
+        if beat <= b0:
+            return sec
+        if b1 <= b0:
+            continue  # step (duplicate Time) — zero-width, instantaneous jump
+        e = min(beat, b1)
+        v_e = v0 + (v1 - v0) * ((e - b0) / (b1 - b0))
+        if abs(v_e - v0) < 1e-9:
+            sec += 60.0 * (e - b0) / v0
+        else:
+            sec += 60.0 * (e - b0) / (v_e - v0) * math.log(v_e / v0)
+        if beat <= b1:
+            return sec
+    return sec + (beat - pts[-1][0]) * 60.0 / pts[-1][1]
+
+
+@dataclass(frozen=True)
+class TempoArrangementMapper:
+    """Map arrangement-beats → mix-seconds via master-tempo automation.
+
+    For the unwarped-mix convention: mix-second 0 is anchored at the ``1-mix``
+    clip's left edge (its ``CurrentStart``), and any arrangement beat maps
+    through the integrated tempo curve. Duck-types ``ArrangementMapper`` so the
+    export uses it interchangeably."""
+
+    tempo_pts: tuple[tuple[float, float], ...]
+    anchor_beat: float
+    content_offset_s: float
+    mix_duration_s: float
+    _anchor_sec: float
+
+    @classmethod
+    def from_root(
+        cls,
+        root: etree._Element,
+        mix_track: etree._Element,
+        *,
+        mix_duration_s: float,
+    ) -> TempoArrangementMapper | None:
+        pts = parse_master_tempo(root)
+        if not pts:
+            return None
+        clips = mix_track.xpath(".//AudioClip")
+        if not clips:
+            return None
+        clip = clips[0]
+        anchor = float(clip.find("CurrentStart").get("Value"))
+        loop_el = clip.find(".//Loop/LoopStart")
+        # unwarped clips carry loop values in SECONDS (see MixClipSpan note);
+        # tiny float noise (~3e-15) rounds to 0.
+        content = float(loop_el.get("Value")) if loop_el is not None else 0.0
+        return cls(
+            tempo_pts=pts,
+            anchor_beat=anchor,
+            content_offset_s=content,
+            mix_duration_s=mix_duration_s,
+            _anchor_sec=tempo_beat_to_sec(pts, anchor),
+        )
+
+    @property
+    def arr_min(self) -> float:
+        return self.anchor_beat
+
+    @property
+    def arr_max(self) -> float:
+        return self.tempo_pts[-1][0] if self.tempo_pts else self.anchor_beat
+
+    def arr_to_set_sec(self, arr: float) -> float | None:
+        if arr < self.anchor_beat - 1e-3:
+            return None  # before mix-second 0
+        return (
+            tempo_beat_to_sec(self.tempo_pts, arr)
+            - self._anchor_sec
+            + self.content_offset_s
+        )
+
+
+def select_arrangement_mapper(
+    root: etree._Element,
+    mix_track: etree._Element,
+    *,
+    mix_duration_s: float,
+    label_arr_max: float,
+) -> ArrangementMapper | TempoArrangementMapper:
+    """Pick the arrangement→mix-seconds map for a session.
+
+    Default to the clip-warp ``ArrangementMapper`` (warped-mix convention, e.g.
+    BB12). Fall back to the master-tempo mapper only when the clip-warp domain
+    fails to cover the labeled clips — i.e. the unwarped-mix / varying-BPM
+    convention where the mix clip is a stub. This keeps existing warped sessions
+    bit-identical while supporting the new convention."""
+    clip_mapper = ArrangementMapper.from_mix_track(
+        mix_track, mix_duration_s=mix_duration_s
+    )
+    if clip_mapper.spans and clip_mapper.arr_max + 1.0 >= label_arr_max:
+        return clip_mapper
+    tempo_mapper = TempoArrangementMapper.from_root(
+        root, mix_track, mix_duration_s=mix_duration_s
+    )
+    return tempo_mapper if tempo_mapper is not None else clip_mapper
 
 
 MUTE_THR = 0.05  # track-volume below this is effectively silent (≈ -26 dB)
@@ -627,10 +779,14 @@ def parse_layer_clips(root: etree._Element) -> list[ParsedClip]:
                     arr_end=float(ce_el.get("Value")),
                     loop_start=float(ls_el.get("Value")),
                     loop_end=float(le_el.get("Value")),
-                    pitch_coarse=int(pc_el.get("Value") or 0)
+                    # PitchFine is detune in cents and can be fractional
+                    # (e.g. "25.5"); round rather than assume int.
+                    pitch_coarse=int(round(float(pc_el.get("Value") or 0)))
                     if pc_el is not None
                     else 0,
-                    pitch_fine=int(pf_el.get("Value") or 0) if pf_el is not None else 0,
+                    pitch_fine=int(round(float(pf_el.get("Value") or 0)))
+                    if pf_el is not None
+                    else 0,
                     warp=WarpMarkers.from_clip(clip_el),
                     vol_points=vol_pts,
                 )
