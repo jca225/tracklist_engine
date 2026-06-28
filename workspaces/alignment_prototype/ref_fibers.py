@@ -127,6 +127,87 @@ def _avg_linkage(sim: np.ndarray, thresh: float) -> list[int]:
     return label
 
 
+def _compute_fibers_core(
+    feat: np.ndarray,
+    fps: float,
+    *,
+    ds_hz: float = 8.0,
+    min_repeat_s: float = 6.0,
+    repeat_thresh: float = 0.5,
+    verify_thresh: float = 0.5,
+    audio_path: str | None = None,
+    silence_ratio: float = 0.35,
+) -> tuple[np.ndarray, float, np.ndarray, dict[int, float]]:
+    """Shared core: (labels, label_hz, membership μ, per-fiber confidence).
+
+    Pipeline: downsample -> RMS silence mask (if `audio_path`) -> scan
+    self-similarity diagonals for LONG sustained repeats -> verify+group
+    candidate segments by average-linkage on best-offset diagonal similarity.
+    The soft outputs reuse the SAME `sim` matrix the hard labels come from:
+      - μ[frame] in [0,1] = how strongly THIS instance matches its fiber-mates
+        (mean diagonal sim to the other segments in its group); 0 on
+        silence / non-repeated frames.
+      - fiber_conf[id] = mean of those per-instance confidences over the fiber.
+    A lone segment (no fiber-mate) is not a real repeat -> μ = 0 there."""
+    from collections import defaultdict
+
+    step = max(1, int(round(fps / ds_hz)))
+    g = feat[:, ::step].astype(np.float32)
+    g_hz = fps / step
+    g = g / (np.linalg.norm(g, axis=0, keepdims=True) + 1e-9)
+    t = g.shape[1]
+    labels = -np.ones(t, dtype=int)
+    mu = np.zeros(t, dtype=np.float32)
+
+    nonsil = np.ones(t, dtype=bool)
+    if audio_path is not None:
+        import librosa
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            y, _ = librosa.load(audio_path, sr=SR, mono=True)
+        rms = librosa.feature.rms(y=y, hop_length=HOP)[0][::step]
+        floor = float(np.median(rms)) * silence_ratio
+        nonsil[: rms.size] = rms[:t] >= floor
+
+    secs = _long_repeats(g, g_hz, nonsil, min_repeat_s, repeat_thresh)
+    if not secs:
+        return labels, g_hz, mu, {}
+
+    feats = [np.ascontiguousarray(g[:, a:b]) for a, b in secs]
+    m = len(secs)
+    sim = np.eye(m, dtype=np.float32)
+    for i in range(m):
+        for j in range(i + 1, m):
+            sim[i, j] = sim[j, i] = _diag_sim(feats[i], feats[j])
+    grp = _avg_linkage(sim, verify_thresh) if m > 1 else [0]
+
+    members: dict[int, list[int]] = defaultdict(list)
+    for si, gid in enumerate(grp):
+        members[gid].append(si)
+    # per-instance confidence = mean diagonal sim to fiber-mates (0 if lone).
+    seg_conf = np.zeros(m, dtype=np.float32)
+    for gid, segs in members.items():
+        if len(segs) >= 2:
+            for si in segs:
+                seg_conf[si] = float(np.mean([sim[si, sj] for sj in segs if sj != si]))
+
+    remap: dict[int, int] = {}
+    next_id = 0
+    for si, ((a, b), gid) in enumerate(zip(secs, grp)):
+        if gid not in remap:
+            remap[gid] = next_id
+            next_id += 1
+        fid = remap[gid]
+        labels[a : min(b, t)] = fid
+        mu[a : min(b, t)] = seg_conf[si]
+    fiber_conf = {
+        remap[gid]: float(np.mean([seg_conf[s] for s in segs]))
+        for gid, segs in members.items()
+    }
+    return labels, g_hz, mu, fiber_conf
+
+
 def compute_fibers(
     feat: np.ndarray,
     fps: float,
@@ -147,44 +228,48 @@ def compute_fibers(
     hook/chorus, not short fragments) -> verify+group candidate segments by
     average-linkage on the best-offset diagonal similarity. labels are per
     downsampled frame: shared id = same fiber, -1 = silence / non-repeated.
-    Use `same_fiber` for the question the decoder/scorer actually asks."""
-    step = max(1, int(round(fps / ds_hz)))
-    g = feat[:, ::step].astype(np.float32)
-    g_hz = fps / step
-    g = g / (np.linalg.norm(g, axis=0, keepdims=True) + 1e-9)
-    t = g.shape[1]
-    labels = -np.ones(t, dtype=int)
-
-    nonsil = np.ones(t, dtype=bool)
-    if audio_path is not None:
-        import librosa
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            y, _ = librosa.load(audio_path, sr=SR, mono=True)
-        rms = librosa.feature.rms(y=y, hop_length=HOP)[0][::step]
-        floor = float(np.median(rms)) * silence_ratio
-        nonsil[: rms.size] = rms[:t] >= floor
-
-    secs = _long_repeats(g, g_hz, nonsil, min_repeat_s, repeat_thresh)
-    if not secs:
-        return labels, g_hz
-
-    feats = [np.ascontiguousarray(g[:, a:b]) for a, b in secs]
-    m = len(secs)
-    sim = np.eye(m, dtype=np.float32)
-    for i in range(m):
-        for j in range(i + 1, m):
-            sim[i, j] = sim[j, i] = _diag_sim(feats[i], feats[j])
-    grp = _avg_linkage(sim, verify_thresh) if m > 1 else [0]
-    remap: dict[int, int] = {}
-    next_id = 0
-    for (a, b), gid in zip(secs, grp):
-        if gid not in remap:
-            remap[gid] = next_id
-            next_id += 1
-        labels[a : min(b, t)] = remap[gid]
+    Use `same_fiber` for the question the decoder/scorer actually asks.
+    See `compute_fibers_soft` for membership + per-fiber confidence."""
+    labels, g_hz, _mu, _fc = _compute_fibers_core(
+        feat,
+        fps,
+        ds_hz=ds_hz,
+        min_repeat_s=min_repeat_s,
+        repeat_thresh=repeat_thresh,
+        verify_thresh=verify_thresh,
+        audio_path=audio_path,
+        silence_ratio=silence_ratio,
+    )
     return labels, g_hz
+
+
+def compute_fibers_soft(
+    feat: np.ndarray,
+    fps: float,
+    *,
+    ds_hz: float = 8.0,
+    min_repeat_s: float = 6.0,
+    repeat_thresh: float = 0.5,
+    verify_thresh: float = 0.5,
+    audio_path: str | None = None,
+    silence_ratio: float = 0.35,
+) -> tuple[np.ndarray, float, np.ndarray, dict[int, float]]:
+    """Fuzzy-fiber variant: (labels, label_hz, membership μ, per-fiber confidence).
+
+    Same hard labels as `compute_fibers` plus the soft signals the fusion arbiter
+    and fiber-aware decode need: μ∈[0,1] per frame (instance-to-fiber strength)
+    and per-fiber confidence. Feeds B3 (abstain when membership/ambiguity is weak)
+    and C1 (probe-feature vector)."""
+    return _compute_fibers_core(
+        feat,
+        fps,
+        ds_hz=ds_hz,
+        min_repeat_s=min_repeat_s,
+        repeat_thresh=repeat_thresh,
+        verify_thresh=verify_thresh,
+        audio_path=audio_path,
+        silence_ratio=silence_ratio,
+    )
 
 
 def compute_fibers_fp(
