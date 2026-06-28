@@ -208,7 +208,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  ... +{len(rows) - 10} more")
         return 0
 
-    ok = skip = 0
+    ok = skip = push_fail = 0
     for row in rows:
         key = FpKey(row.recording_id, row.stem)
         audio = resolve_audio(row, local_root=args.local_audio_root, scratch=SCRATCH)
@@ -225,12 +225,23 @@ def main(argv: list[str] | None = None) -> int:
                 if args.db is not None:
                     upsert_db(fp, key, args.db)
                 elif not args.no_push_pi:
-                    push_row_to_pi(key, fp.to_blob(), fp.duration_s)
+                    # Best-effort: a transient pi SSH hiccup must not abort the
+                    # whole run — the local cache is already written above, and
+                    # only_missing re-queues failed pi pushes on the next run.
+                    try:
+                        push_row_to_pi(key, fp.to_blob(), fp.duration_s)
+                    except (subprocess.CalledProcessError, OSError) as e:
+                        push_fail += 1
+                        print(
+                            f"  pi-push failed {key.recording_id}/{key.stem}: {e} "
+                            f"(cached locally; retry later)",
+                            file=sys.stderr,
+                        )
                 ok += 1
                 if ok % 25 == 0:
-                    print(f"  … {ok} indexed")
+                    print(f"  … {ok} indexed ({push_fail} pi-push fails)")
 
-    print(f"done ok={ok} skip={skip}")
+    print(f"done ok={ok} skip={skip} pi_push_fail={push_fail}")
     return 0 if ok or not rows else 1
 
 
