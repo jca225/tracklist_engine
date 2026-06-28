@@ -422,3 +422,45 @@ def fiber_intervals(
                 out.append((s / label_hz, i / label_hz, int(labels[s])))
             s = i
     return out
+
+
+def fiber_ambiguity(
+    labels: np.ndarray,
+    label_hz: float,
+    ref_start_s: float,
+    *,
+    mu: np.ndarray | None = None,
+    min_len_s: float = 4.0,
+) -> dict:
+    """Instance-ambiguity of a decoded ref placement (the B3 abstain signal).
+
+    Returns ``{fiber_id, n_instances, membership, ambiguous}``. When the placement
+    falls in a repeat class with >= 2 instances, content alone CANNOT fix which
+    instance played — the decode rests on the monotonic/continuity prior, not the
+    audio — so ``ambiguous=True`` and the caller should flag the *instance* (lower
+    its confidence / abstain on exact placement) while still trusting the fiber
+    (content) identity. A placement outside any repeat class (fiber_id < 0) is
+    content-unambiguous (n_instances=1). ``membership`` (if ``mu`` from
+    compute_fibers_soft is given) is the soft confidence the frame is really in
+    the fiber; near 0 is itself a reason to distrust the placement."""
+    fid = fiber_at(labels, label_hz, ref_start_s)
+    membership = 0.0
+    if mu is not None and mu.size:
+        b = int(round(ref_start_s * label_hz))
+        membership = float(mu[min(max(b, 0), mu.size - 1)])
+    if fid < 0:
+        return {
+            "fiber_id": fid,
+            "n_instances": 1,
+            "membership": membership,
+            "ambiguous": False,
+        }
+    n_instances = sum(
+        1 for iv in fiber_intervals(labels, label_hz, min_len_s) if iv[2] == fid
+    )
+    return {
+        "fiber_id": fid,
+        "n_instances": max(1, n_instances),
+        "membership": membership,
+        "ambiguous": n_instances >= 2,
+    }
