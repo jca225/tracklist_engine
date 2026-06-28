@@ -22,20 +22,33 @@ def merge(
     offset_tol_s: float = 2.0,
     min_confidence: float = 0.0,
     agreement_bonus: float = 0.1,
+    source_priority: tuple[str, ...] | None = None,
 ) -> AlignmentResult:
     """Fuse probe results into one decision.
 
-    Picks the highest-confidence non-abstaining result as the winner, then boosts
-    its confidence by ``agreement_bonus`` per *other* probe that independently
-    agrees (same recording_id, offset within ``offset_tol_s``), capped at 1.0.
-    Returns AlignmentResult.abstained when no probe commits or the winner is below
+    Without ``source_priority``: picks the highest-confidence non-abstaining
+    result. But raw confidences are NOT comparable across axes — chroma cosine
+    peaks run high-everywhere on repetitive vocals and spuriously outrank a
+    modest-but-correct HuBERT peak (measured: BB11 001w3). So when
+    ``source_priority`` is given (e.g. axes.route_for_stem(stem).placement_probes,
+    the invariant-axis order), the winner is the non-abstaining result from the
+    EARLIEST-priority source — trust the right axis unless it abstains — with
+    confidence only breaking ties within a priority. Either way the winner's
+    confidence is boosted by ``agreement_bonus`` per other probe that
+    independently agrees (same recording_id, offset within ``offset_tol_s``),
+    capped at 1.0; abstains when nothing commits or the winner is below
     ``min_confidence``.
     """
     live = [r for r in results if not r.abstain]
     if not live:
         return AlignmentResult.abstained(source="merge")
 
-    winner = max(live, key=lambda r: r.confidence)
+    if source_priority:
+        rank = {s: i for i, s in enumerate(source_priority)}
+        # earliest-priority source wins; within a priority, higher confidence.
+        winner = min(live, key=lambda r: (rank.get(r.source, len(rank)), -r.confidence))
+    else:
+        winner = max(live, key=lambda r: r.confidence)
     agree = [
         r
         for r in live
