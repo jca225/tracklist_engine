@@ -147,6 +147,21 @@ def _norm(words: list[dict]) -> list[tuple[str, float]]:
     return out
 
 
+def _word_window(seq: list[tuple[str, float]], t: float, half: float = 8.0) -> set[str]:
+    """Distinctive words within +/-half seconds of time t (drops 2-char fillers)."""
+    return {w for (w, wt) in seq if abs(wt - t) <= half and len(w) > 2}
+
+
+def same_fiber(seq, t1: float, t2: float, thresh: float = 0.5) -> bool:
+    """Are the lyrics at t1 and t2 the SAME (a repeated section = one fiber)? Jaccard
+    of the surrounding word windows. Lets ref_start scoring credit picking a
+    different-but-equivalent chorus instance, the ref-side repeat ambiguity."""
+    a, b = _word_window(seq, t1), _word_window(seq, t2)
+    if len(a) < 3 or len(b) < 3:
+        return False
+    return len(a & b) / len(a | b) >= thresh
+
+
 def _bigram_times(seq: list[tuple[str, float]]) -> dict[str, list[float]]:
     g: dict[str, list[float]] = {}
     for i in range(len(seq) - 1):
@@ -305,6 +320,7 @@ def _build_spans(set_dir: Path, gt: dict, cached_only: bool):
                 float(s["set_start_s"]),
                 float(s.get("ref_start_s") or 0.0),
                 cands,
+                _norm(cw),  # candidate word stream (for lyric-fiber scoring)
             )
         )
     return spans, meta
@@ -336,25 +352,39 @@ def main(argv: list[str] | None = None) -> int:
 
     chosen = monotonic_decode(spans)
     mono, strong, oracle = [], [], []
-    ref_mono, ref_oracle = [], []
-    print("\n  slot  track                          GT_ss   mono_ss  | GT_rs  mono_rs")
-    for (slot, name, gt_ss, gt_rs, cands), (ch_ss, ch_rs) in zip(meta, chosen):
+    ref_mono, ref_oracle, ref_fiber = [], [], []
+    n_fiber_credit = 0
+    print(
+        "\n  slot  track                          GT_ss   mono_ss  | GT_rs  mono_rs  fib"
+    )
+    for (slot, name, gt_ss, gt_rs, cands, cseq), (ch_ss, ch_rs) in zip(meta, chosen):
         strong.append(abs(max(cands, key=lambda c: c[2])[0] - gt_ss))
         oracle.append(abs(min(cands, key=lambda c: abs(c[0] - gt_ss))[0] - gt_ss))
-        # ref_start oracle = candidate whose ref_start is nearest GT ref_start
         ref_oracle.append(abs(min(cands, key=lambda c: abs(c[1] - gt_rs))[1] - gt_rs))
+        fib = ""
         if ch_ss is not None:
             mono.append(abs(ch_ss - gt_ss))
-            ref_mono.append(abs(ch_rs - gt_rs))
-            ms, mr = f"{abs(ch_ss - gt_ss):.1f}", f"{abs(ch_rs - gt_rs):.1f}"
+            re_err = abs(ch_rs - gt_rs)
+            ref_mono.append(re_err)
+            # fiber-aware: a different chorus instance with the SAME lyrics counts
+            if re_err < 5 or same_fiber(cseq, ch_rs, gt_rs):
+                ref_fiber.append(0.0)
+                if re_err >= 5:
+                    n_fiber_credit += 1
+                    fib = "=fiber"
+            else:
+                ref_fiber.append(re_err)
+            ms, mr = f"{abs(ch_ss - gt_ss):.1f}", f"{re_err:.1f}"
         else:
             ms = mr = "abstain"
-        print(f"  {slot:5s} {name:30s} {gt_ss:6.0f}  {ms:>8s} | {gt_rs:6.0f} {mr:>8s}")
+        print(
+            f"  {slot:5s} {name:30s} {gt_ss:6.0f}  {ms:>8s} | {gt_rs:6.0f} {mr:>8s}  {fib}"
+        )
 
     def stat(x, lab):
         a = np.array(x)
         print(
-            f"  {lab:30s} median {np.median(a):6.1f}s  <5s {100 * np.mean(a < 5):3.0f}%"
+            f"  {lab:32s} median {np.median(a):6.1f}s  <5s {100 * np.mean(a < 5):3.0f}%"
             f"  <15s {100 * np.mean(a < 15):3.0f}%   (n={len(a)})"
         )
 
@@ -362,9 +392,10 @@ def main(argv: list[str] | None = None) -> int:
     stat(strong, "strongest-line (IDF)")
     stat(mono, "MONOTONIC + position prior")
     stat(oracle, "oracle ceiling")
-    print("\n=== acappella REF_START error (which part of the song) ===")
-    stat(ref_mono, "MONOTONIC decode")
-    stat(ref_oracle, "oracle ceiling")
+    print("\n=== acappella REF_START error (which part of the song; ~50s wall) ===")
+    stat(ref_mono, "MONOTONIC (strict)")
+    stat(ref_fiber, f"MONOTONIC (fiber-aware, +{n_fiber_credit} equiv-repeat)")
+    stat(ref_oracle, "oracle ceiling (strict)")
     print(f"\nabstained: {sum(1 for c in chosen if c[0] is None)}/{len(chosen)}")
     return 0
 
