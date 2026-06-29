@@ -110,14 +110,30 @@ default on). Identity still comes from `predict_sequence` (recording_id per span
 the ~30s MERT placement is replaced by the landmark-fp vote-extent, and
 `ref_start_s = set_start_s + offset_s` (surfaced via `decode_placements(...,
 with_offset=True)`). Spans with no cached `regular` fp (or no diagonal) keep their
-MERT placement. **In-domain BB12 (1fsnxchk) end-to-end vs GT:** set placement
-median **30.5s → 9.2s** (<15s 31% → 57%), ref offset median 50 → 31s, identity
-unchanged (~74%) — A/B via `--no-fp-placement`. Caveat: **p90 worsened 78 → 340s**
-— MERT's anchor prior leashed every span to a ~78s band; fp has no leash, so
-wrong-diagonal / wrong-identity spans place catastrophically (the identity→placement
-coupling). The outlier tail is the deferred per-stem + fibers work. `--fp-placement-compare`
-writes `mert_set_start_s` per span for A/B; `--no-fp-placement` restores the old
-MERT + DTW/`--fp-refine` path.
+MERT placement.
+
+**Consistency gate (`--fp-placement-gate-s`, default 90s):** fp is precise but
+UNLEASHED — a wrong-diagonal / wrong-identity pick places a span hundreds of
+seconds off (raw fp p90 was 340s). MERT is coarse but anchored (cue prior +
+monotonic decode, p90 ~78s). So fp is trusted only as a LOCAL refinement of MERT;
+when `|fp-mert| > gate`, keep the MERT placement. NB the scraped cue is **0.0 for
+every `w`-row** (concurrent mashup layers), so the leash must be MERT, not the cue.
+
+**In-domain BB12 (1fsnxchk) end-to-end vs GT** (A/B via `--no-fp-placement`):
+
+| metric | MERT (old) | fp, no gate | fp + gate 90s |
+|---|---|---|---|
+| set placement median | 30.5s | 9.2s | **6.6s** |
+| <15s | 31% | 57% | **63%** |
+| p90 | 78s | 340s | **61s** |
+| ref offset median | 50s | 31s | 26.5s |
+
+The gate improves BOTH median and p90 (reverting wrong-diagonal outliers helps
+everywhere, not just the tail). Band sweep: 90s optimal; ≤0 disables.
+`--fp-placement-compare` writes `mert_set_start_s` per span for A/B;
+`--no-fp-placement` restores the old MERT + DTW/`--fp-refine` path. The remaining
+tail is wrong-IDENTITY spans (no placement helps those) + the 38 no-fp acappella/
+instrumental spans → the deferred per-stem work.
 
 ## Not wired yet
 

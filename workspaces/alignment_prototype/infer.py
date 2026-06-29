@@ -207,6 +207,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--fp-placement-topk", type=int, default=6)
     p.add_argument("--fp-placement-gap-s", type=float, default=6.0)
     p.add_argument(
+        "--fp-placement-gate-s",
+        type=float,
+        default=90.0,
+        help="keep MERT placement when |fp-mert| exceeds this (re-leash the fp "
+        "outlier tail to the anchored prior; <=0 disables, BB12-tuned 90s)",
+    )
+    p.add_argument(
         "--fp-placement-compare",
         action="store_true",
         help="also record the MERT set_start per span (mert_set_start_s) for A/B",
@@ -338,13 +345,24 @@ def main(argv: list[str] | None = None) -> int:
                 with_offset=True,
             )
             new_preds = list(preds)
-            n_placed = 0
+            n_placed = n_gated = 0
+            gate = args.fp_placement_gate_s
             for r, i in enumerate(keep):
                 pl = placements[r]
                 if pl is None:
                     continue
                 ss, se, off = pl
-                mert_starts[i] = preds[i].set_start_s
+                mert_start = preds[i].set_start_s
+                mert_starts[i] = mert_start
+                # Consistency gate: fp is precise but UNLEASHED — a wrong-diagonal
+                # or wrong-identity pick can place a span hundreds of seconds off.
+                # MERT is coarse but anchored (cue prior + monotonic decode, p90
+                # ~78s). Trust fp only as a local refinement of MERT; when it
+                # wildly disagrees, the anchored prior is safer. Validated on BB12
+                # (band 90s: p90 340->61s, median 9.2->6.6s).
+                if gate > 0 and abs(ss - mert_start) > gate:
+                    n_gated += 1
+                    continue  # keep MERT placement untouched
                 new_preds[i] = dataclasses.replace(
                     preds[i],
                     set_start_s=ss,
@@ -356,7 +374,8 @@ def main(argv: list[str] | None = None) -> int:
             preds = tuple(new_preds)
             print(
                 f"fp placement: {n_placed}/{len(preds)} spans placed "
-                f"({len(preds) - n_placed} kept MERT — no fp / no diagonal)"
+                f"({n_gated} gated to MERT |fp-mert|>{gate:.0f}s, "
+                f"{len(preds) - n_placed - n_gated} kept MERT — no fp / no diagonal)"
             )
 
     # ---- 3. fine placement (per-span DTW vs roformer mix instrumental) -----
