@@ -46,13 +46,36 @@ metrics.
 > 50 s on straight clips (repeat ambiguity dominates; needs continuity
 > decode). The mix-side timebase bug (c43fa62) is fixed in this number.
 
-**Measured limitation:** pooled-MERT cosine does not *localize* content in
-the mix — with the oracle ref segment, the unconstrained argmax is ~900 s
-off at every layer (0–24), raw or learned, centered or whitened. The 39 s
-placement comes from the monotonic tiling prior, not audio matching.
-Sub-bar placement needs a different emission signal (stem-aware chroma /
-DTW or stretch-tolerant fingerprinting — `set_fingerprint_hits` exists but
-is empty corpus-wide), not a better MERT head.
+**Measured limitation (MERT):** pooled-MERT cosine does not *localize* content
+in the mix — with the oracle ref segment, the unconstrained argmax is ~900 s
+off at every layer (0–24). MERT is identity, not placement. (The old ~39 s
+"placement wall" was read off the monotonic tiling prior.)
+
+**PLACEMENT REFRAME (2026-06-28) — the ~30 s "wall" was a decomposition error.**
+The landmark fingerprint localizes the mix↔ref *alignment diagonal* to **0.2 s
+median / 76 %** (BB12 regular). set_start looked stuck at ~30 s only because we
+measured it as the alignment offset, but DJs start tracks mid-song (GT ref_start
+median ~56 s), so **set_start = ref_start + d**. The fingerprint's own
+vote-density extent along the diagonal gives the span directly:
+`mix_fp_hits.span_from_offset_votes` (single ref, set_start median 5.7 s) →
+`offset_candidates` (top-K diagonals) → `decode_placements` (monotonic decode
+over tracklist order, rejects out-of-order wrong-diagonal/repeat picks): **BB12
+regular set_start median 4.1 s, <15 s 73 %.** Run: `python -m
+workspaces.alignment_prototype.eval_placement`. Requires the fingerprint backfill
+(`scripts/backfill_track_fingerprints.py`, done corpus-wide). The ~27 % outliers
+are weak-fp / repeat spans (true diagonal absent from top-K) → per-stem + fibers;
+cheap post-hoc fixes (cluster-strength, isotonic, boundary-snap) were all measured
+and REJECTED — see the `project_placement_wall_was_decomposition_error` memory.
+
+**Axis decomposition (the unifying principle).** song ≈ timbre × harmony ×
+language, near-orthogonal: timbre=MERT (identity only), harmony=chroma,
+language=HuBERT. Match/fiber on the NUISANCE-INVARIANT axis per stem — vocals →
+HuBERT ("lyrics don't transpose"; key-invariant, beats chroma on acappella
+ref-offset 2.1 s vs 39.6 s median), instrumental → chroma+fingerprint. `harness/
+axes.py` routes stem → (mix_file, ref_stem, invariant_feature, placement_probes,
+in priority order). Key changes break chroma (31 % of BB11 acappellas re-pitched;
+transposition search adds spurious peaks) — HuBERT sidesteps it. Fusion must use
+the axis prior, not raw cross-probe confidence (`harness/merge.py` source_priority).
 
 **Design decision (2026-06-11) — stem-wise alignment.** A mix moment is a
 sum of layers (host instrumental + overlaid acappellas), so full-mix-only
@@ -68,11 +91,28 @@ acappellas beat-synced to it ⇒ stretch = ref_bpm / mix_local_bpm from
 set_measures × track_measures, search in beat space with bar-quantized
 offsets — v1's seconds-space stretch grid saturated at its 0.92/1.08 edges).
 
+## Harness + new modules (2026-06-28)
+
+The unified-aligner consolidation (plan: `.claude/plans/and-then-can-we-cuddly-sparrow.md`):
+- `harness/` Probe/AlignmentResult/DeterministicDriver contract; probes:
+  `chroma_probe`, `fingerprint_probe`, `path_decode_probe`, **`hubert_probe`**
+  (vocal/language axis), **`continuity_probe`** (repeat-robust stack). `axes.py`
+  = the stem→axis routing. `merge.py` `source_priority` = axis-priority arbitration.
+- `ref_fibers.compute_fibers_soft` (μ membership + per-fiber confidence) +
+  `fiber_ambiguity` (instance-abstain signal). Fibers are HuBERT+silence-gate, never chroma.
+- `mix_fp_hits.{span_from_offset_votes, offset_candidates, decode_placements}` =
+  the placement pipeline; `eval_placement.py` runs it vs GT.
+
 ## Not wired yet
 
-- PyTorch training loop beyond the small `MertAlignHead` (`--train-mert`)
-- Learned weighted-sum over all MERT layers (still layer-6 probe)
-- Full-corpus ref candidate pool (slot pool = GT-distinct ids per slot today)
+- `decode_placements` is a standalone module — NOT yet called by `infer.py` (the
+  cross-set inference still uses `predict_sequence`). Wiring it in is the next integration.
+- Per-stem placement: only `stem='regular'` fingerprints are backfilled; acappella/
+  instrumental set_start needs their stem fingerprints (or HuBERT) backfilled.
+- B3 live decode: `fiber_ambiguity`/μ computed but not yet fed into the live decode.
+- Learned fusion arbiter (C1/C2): probe-feature extractor + small head over
+  {axis scores, fiber conf, fp sharpness} — needs more GT (leave-one-set-out CV).
+- PyTorch training loop beyond the small `MertAlignHead`; learned weighted-sum over MERT layers.
 
 ## Commands
 
