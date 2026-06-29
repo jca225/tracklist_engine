@@ -184,8 +184,54 @@ def span_from_offset_votes(
     Pass ``mix_hashes`` = landmark_fp.hashes(*constellation(mix)) computed ONCE
     per set and reused across refs.
     """
+    votes, pairs = _vote_pairs(mix_hashes, ref_fp)
+    if not votes:
+        return None
+    d = max(votes.items(), key=lambda kv: kv[1])[0]  # dominant diagonal
+    return _cluster_at(pairs, d, tol=tol, gap_s=gap_s)
+
+
+def offset_candidates(
+    mix_hashes: dict,
+    ref_fp: LandmarkFingerprint,
+    *,
+    topk: int = 6,
+    gap_s: float = 6.0,
+    tol: int = 1,
+) -> list[tuple[float, float, int, float]]:
+    """Top-K alignment-diagonal candidates, each (set_start_s, set_end_s, votes,
+    offset_s) from that offset's densest contiguous vote-cluster, ordered by
+    total votes.
+
+    Feeds the monotonic placement decode: pass all spans' candidates (in
+    tracklist order) to sequence_decode.monotonic_decode so a high-vote but
+    out-of-order candidate (a wrong-diagonal / repeat-instance pick) is rejected
+    for a lower-vote IN-ORDER one. Measured BB12 regular vs argmax-only:
+    outliers>15s 11->9, mean 44->28s, <15s 70->76% — the proper outlier fix the
+    post-hoc tricks (cluster-strength, isotonic, boundary-snap) could not do.
+    """
+    votes, pairs = _vote_pairs(mix_hashes, ref_fp)
+    if not votes:
+        return []
+    cands: list[int] = []
+    for off, _ in sorted(votes.items(), key=lambda kv: -kv[1]):
+        if all(abs(off - c) > tol for c in cands):
+            cands.append(off)
+        if len(cands) >= topk:
+            break
+    out = []
+    for c in cands:
+        r = _cluster_at(pairs, c, tol=tol, gap_s=gap_s)
+        if r:
+            out.append(r)
+    return out
+
+
+def _vote_pairs(mix_hashes: dict, ref_fp: LandmarkFingerprint):
+    """(offset->count, [(offset, mix_frame)]) for matching landmark hash keys.
+    off = ref_frame - mix_frame; the dominant offset is the alignment diagonal."""
     votes: dict[int, int] = {}
-    pairs: list[tuple[int, int]] = []  # (offset, mix_frame)
+    pairs: list[tuple[int, int]] = []
     for key, mts in mix_hashes.items():
         rts = ref_fp.hashes.get(key)
         if not rts:
@@ -195,18 +241,22 @@ def span_from_offset_votes(
                 off = rt - mt
                 votes[off] = votes.get(off, 0) + 1
                 pairs.append((off, mt))
-    if not votes:
-        return None
-    d = max(votes.items(), key=lambda kv: kv[1])[0]
-    mts = sorted(mt for off, mt in pairs if abs(off - d) <= tol)
+    return votes, pairs
+
+
+def _cluster_at(
+    pairs: list[tuple[int, int]], off: int, *, tol: int, gap_s: float
+) -> tuple[float, float, int, float] | None:
+    """Densest contiguous mix-time cluster of votes for diagonal ``off`` ->
+    (set_start_s, set_end_s, votes_in_cluster, offset_s)."""
+    mts = sorted(mt for o, mt in pairs if abs(o - off) <= tol)
     if not mts:
         return None
     ts = np.array(mts, dtype=np.float64) * FHOP / SR
-    splits = np.where(np.diff(ts) > gap_s)[0] + 1
-    cluster = max(np.split(ts, splits), key=len)
+    cluster = max(np.split(ts, np.where(np.diff(ts) > gap_s)[0] + 1), key=len)
     return (
         float(cluster[0]),
         float(cluster[-1]),
         int(len(cluster)),
-        float(d * FHOP / SR),
+        float(off * FHOP / SR),
     )
