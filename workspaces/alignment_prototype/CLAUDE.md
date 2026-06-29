@@ -154,8 +154,31 @@ sometimes overrides an already-good MERT placement). Net end-to-end: p90 61→55
 search under chorus repeats. Instrumental set_start NOT wired (chroma fails on
 instrumental presence; GT n=5 can't validate).
 
+**Segment-list output (2026-06-29) — 63% of spans are non-straight.** BB12 GT is
+37% straight / 44% multiseg / 13% odd-ratio / 6% loop; a single `ref_start` can't
+represent the majority. Now the aligner emits per-span `ref_segments`
+(`[{mix_start_s, ref_start_s, ref_end_s}]`, the GT schema) and they're **scored**:
+- `joint_ref_decode.py` runs `path_decode.decode_path` (Viterbi: stay-on-diagonal
+  free, jump = loop/edit) **feature-routed** (acappella→HuBERT, else chroma),
+  post-infer, writing `ref_segments` into the timeline JSON.
+- `score_timeline_vs_gt.py --fibers` scores every span via `path_decode.trajectory_acc`
+  (ref(mix_t) coverage within 2s, fiber-aware repeat-equivalence) per class
+  (linear/multiseg/loop/oddratio) + stem; **headline = multiseg+loop fiber-aware**.
+- `seed_als_from_timeline.py` renders one warped clip per segment (round-trip:
+  BB12 799 clips parse back; content-based validation; `.seedbak` backup guard).
+
+BB12 fiber-aware traj-acc (real placement): HEADLINE multiseg+loop **26%**,
+acappella 11→**18%** (HuBERT routing), regular ~23%. Oracle upper bound
+(`path_decode --eval`, GT placement) = 59% ALL / 62% multiseg — the gap is real-vs-GT
+placement + repeat ambiguity. `SpanPrediction` stays scalar; `ref_segments` lives on
+the timeline JSON dict only (minimal blast radius).
+
 ## Not wired yet
 
+- **Segment traj-acc is still low (26%)** — bounded by set_start placement error
+  (segments decode off the placed mix window) + repeat ambiguity. Levers: tighter
+  octave band for regular (a small Phase-2 regression source), per-segment
+  confidence/abstain, better placement.
 - Per-stem acappella **ref_start** (which part of the song): the joint ref_start is
   repeat-ambiguous; route `refine_ref_offsets` vocals→HuBERT + fibers/continuity.
 - Per-stem **instrumental** set_start: needs a validated feature (stem fp backfill
