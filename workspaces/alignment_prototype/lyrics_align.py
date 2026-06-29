@@ -214,30 +214,30 @@ def _slot_order(slot: str) -> tuple[int, int]:
 
 
 def monotonic_decode(spans):
-    """spans = [(cands, expected_pos)] in slot order. Returns chosen set_start per
-    span (None=abstain). DP maximizing total position-weighted score s.t. set_start
-    non-decreasing across tracklist order."""
+    """spans = [(cands, expected_pos)] in slot order. Returns chosen (set_start,
+    ref_start) per span ((None, None)=abstain). DP maximizing total position-
+    weighted score s.t. set_start non-decreasing across tracklist order."""
     opts = []
     for cands, epos in spans:
         o = []
-        for ss, _rs, score in cands:
+        for ss, rs, score in cands:
             w = (
                 1.0
                 if epos is None
                 else float(np.exp(-0.5 * ((ss - epos) / POS_SIGMA) ** 2))
             )
-            o.append((ss, score * w))
-        o.append((None, ABSTAIN_PEN))
+            o.append((ss, rs, score * w))
+        o.append((None, None, ABSTAIN_PEN))
         opts.append(o)
     n = len(opts)
     NEG = -1e18
     dp = [[NEG] * len(opts[i]) for i in range(n)]
     back = [[-1] * len(opts[i]) for i in range(n)]
-    for j, (_ss, sc) in enumerate(opts[0]):
+    for j, (_ss, _rs, sc) in enumerate(opts[0]):
         dp[0][j] = sc
     for i in range(1, n):
-        for j, (ss, sc) in enumerate(opts[i]):
-            for k, (pss, _psc) in enumerate(opts[i - 1]):
+        for j, (ss, _rs, sc) in enumerate(opts[i]):
+            for k, (pss, _prs, _psc) in enumerate(opts[i - 1]):
                 if dp[i - 1][k] <= NEG:
                     continue
                 if not ((ss is None) or (pss is None) or (ss >= pss - MONO_SLACK)):
@@ -247,9 +247,9 @@ def monotonic_decode(spans):
                     dp[i][j] = v
                     back[i][j] = k
     j = int(np.argmax(dp[-1]))
-    chosen = [None] * n
+    chosen = [(None, None)] * n
     for i in range(n - 1, -1, -1):
-        chosen[i] = opts[i][j][0]
+        chosen[i] = (opts[i][j][0], opts[i][j][1])
         if i > 0:
             j = back[i][j]
     return chosen
@@ -298,7 +298,15 @@ def _build_spans(set_dir: Path, gt: dict, cached_only: bool):
             continue
         epos = _slot_order(s["slot_label"])[0] / max_slot * mix_dur
         spans.append((cands, epos))
-        meta.append((s["slot_label"], s["track"][:30], float(s["set_start_s"]), cands))
+        meta.append(
+            (
+                s["slot_label"],
+                s["track"][:30],
+                float(s["set_start_s"]),
+                float(s.get("ref_start_s") or 0.0),
+                cands,
+            )
+        )
     return spans, meta
 
 
@@ -328,29 +336,36 @@ def main(argv: list[str] | None = None) -> int:
 
     chosen = monotonic_decode(spans)
     mono, strong, oracle = [], [], []
-    print("\n  slot  track                          GT      mono      strong oracle")
-    for (slot, name, gt_ss, cands), ch in zip(meta, chosen):
-        s_err = abs(max(cands, key=lambda c: c[2])[0] - gt_ss)
-        o_err = abs(min(cands, key=lambda c: abs(c[0] - gt_ss))[0] - gt_ss)
-        strong.append(s_err)
-        oracle.append(o_err)
-        m = f"{abs(ch - gt_ss):.1f}" if ch is not None else "abstain"
-        if ch is not None:
-            mono.append(abs(ch - gt_ss))
-        print(f"  {slot:5s} {name:30s} {gt_ss:6.0f}  {m:>9s} {s_err:6.0f} {o_err:6.0f}")
+    ref_mono, ref_oracle = [], []
+    print("\n  slot  track                          GT_ss   mono_ss  | GT_rs  mono_rs")
+    for (slot, name, gt_ss, gt_rs, cands), (ch_ss, ch_rs) in zip(meta, chosen):
+        strong.append(abs(max(cands, key=lambda c: c[2])[0] - gt_ss))
+        oracle.append(abs(min(cands, key=lambda c: abs(c[0] - gt_ss))[0] - gt_ss))
+        # ref_start oracle = candidate whose ref_start is nearest GT ref_start
+        ref_oracle.append(abs(min(cands, key=lambda c: abs(c[1] - gt_rs))[1] - gt_rs))
+        if ch_ss is not None:
+            mono.append(abs(ch_ss - gt_ss))
+            ref_mono.append(abs(ch_rs - gt_rs))
+            ms, mr = f"{abs(ch_ss - gt_ss):.1f}", f"{abs(ch_rs - gt_rs):.1f}"
+        else:
+            ms = mr = "abstain"
+        print(f"  {slot:5s} {name:30s} {gt_ss:6.0f}  {ms:>8s} | {gt_rs:6.0f} {mr:>8s}")
 
     def stat(x, lab):
         a = np.array(x)
         print(
-            f"  {lab:28s} median {np.median(a):6.1f}s  <5s {100 * np.mean(a < 5):3.0f}%"
+            f"  {lab:30s} median {np.median(a):6.1f}s  <5s {100 * np.mean(a < 5):3.0f}%"
             f"  <15s {100 * np.mean(a < 15):3.0f}%   (n={len(a)})"
         )
 
-    print("\n=== acappella set_start error (prior pipeline baseline: 42.5s) ===")
+    print("\n=== acappella SET_START error (prior pipeline baseline: 42.5s) ===")
     stat(strong, "strongest-line (IDF)")
     stat(mono, "MONOTONIC + position prior")
     stat(oracle, "oracle ceiling")
-    print(f"abstained: {sum(1 for c in chosen if c is None)}/{len(chosen)}")
+    print("\n=== acappella REF_START error (which part of the song) ===")
+    stat(ref_mono, "MONOTONIC decode")
+    stat(ref_oracle, "oracle ceiling")
+    print(f"\nabstained: {sum(1 for c in chosen if c[0] is None)}/{len(chosen)}")
     return 0
 
 
