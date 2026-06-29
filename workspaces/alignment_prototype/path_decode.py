@@ -221,14 +221,18 @@ def decode_path(
         # emission E[p, r0] = curve_p at clip-start r0 (= ref start minus the
         # window's own diagonal advance round(rel_p * s))
         shifts = [int(round(r * s)) for r in rel]
-        valid = [(c, sh) for c, sh in zip(curves, shifts) if c.size - sh > 1]
+        # keep rel alongside the (c, sh) filter — else the stored `rel` (all
+        # windows) desyncs from `path_r0` (only valid windows), overrunning the
+        # segment loop below when a large stretch drops late windows.
+        valid = [(c, sh, r) for c, sh, r in zip(curves, shifts, rel) if c.size - sh > 1]
         if not valid:
             continue
-        lr0 = min(c.size - sh for c, sh in valid)
-        e = np.stack([c[sh : sh + lr0] for c, sh in valid]).astype(np.float32)
+        lr0 = min(c.size - sh for c, sh, _ in valid)
+        e = np.stack([c[sh : sh + lr0] for c, sh, _ in valid]).astype(np.float32)
         score, path_r0 = _viterbi(e, lam, lam_back)  # path over windows
+        rel_v = [r for _, _, r in valid]
         if best is None or score > best[0]:
-            best = (score, s, np.asarray(rel), path_r0)
+            best = (score, s, np.asarray(rel_v), path_r0)
     if best is None:
         return [], -1.0
     score, s, rel, path_r0 = best
