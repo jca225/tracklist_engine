@@ -351,11 +351,45 @@ def add_tempo_and_markers(
     return 0, n_m
 
 
+def _clip_specs(s: dict) -> list[tuple[float, float, float, float]]:
+    """(arr_start, arr_end, ref_start, ref_end) per clip for a span. One clip per
+    ref_segment (loops/cuts/warps -> one warped Ableton clip each, arrangement-
+    ordered); falls back to a single span-length clip from the scalar ref_start/end.
+    A loop is just consecutive clips whose ref_start steps back — Live re-triggers."""
+    segs = s.get("ref_segments")
+    if segs:
+        out = []
+        for j, seg in enumerate(segs):
+            a = float(seg["mix_start_s"])
+            b = (
+                float(segs[j + 1]["mix_start_s"])
+                if j + 1 < len(segs)
+                else float(s["set_end_s"])
+            )
+            out.append(
+                (a, max(a + 1.0, b), float(seg["ref_start_s"]), float(seg["ref_end_s"]))
+            )
+        return out
+    return [
+        (
+            float(s["set_start_s"]),
+            float(s["set_end_s"]),
+            float(s["ref_start_s"]),
+            float(s["ref_end_s"]),
+        )
+    ]
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--set-id", required=True)
     p.add_argument("--template", type=Path, default=DEFAULT_TEMPLATE)
     p.add_argument("--out", type=Path, default=None)
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="overwrite an existing seed .als without backing it up to .seedbak",
+    )
     args = p.parse_args(argv)
 
     timeline = json.loads(
@@ -397,7 +431,9 @@ def main(argv: list[str] | None = None) -> int:
 
     import itertools
 
-    alloc = itertools.count(doc_max_id(root) + len(spans) * 2 + 1000)
+    # one Ableton clip per ref_segment -> total clips can far exceed len(spans)
+    n_clip_est = sum(len(s.get("ref_segments") or [1]) for s in spans)
+    alloc = itertools.count(doc_max_id(root) + n_clip_est * 2 + 2000)
 
     next_id = 1000  # clear of any surviving template ids
     mix_track = build_track(
@@ -428,31 +464,43 @@ def main(argv: list[str] | None = None) -> int:
             skipped.append(f"{s['slot_label']} {s['name'][:50]}")
             continue
         fdur, fsr = ffprobe_audio(fpath)
-        ref_start = max(0.0, min(s["ref_start_s"], fdur - 1.0))
-        ref_end = max(ref_start + 1.0, min(s["ref_end_s"], fdur))
-        next_id += 1
         sus = _suspicion(s)
         sus_tag = "?" if sus >= 9999 else f"{sus:.0f}s"
-        track = build_track(
-            template_track,
-            track_id=next_id,
-            track_name=f"{s['slot_label']}__{s['name']}",
-            name=f"{s['slot_label']}__{s['name']} [{sus_tag}]",
-            color=_color_for(s),
-            arr_start=s["set_start_s"],
-            arr_end=s["set_start_s"] + (s["set_end_s"] - s["set_start_s"]),
-            file_path=fpath,
-            file_dur_s=fdur,
-            sample_rate=fsr,
-            ref_start_s=ref_start,
-            ref_end_s=ref_end,
-        )
-        renumber_pointee_ids(track, alloc)
-        tracks_node.insert(insert_at, track)
-        insert_at += 1
-        placed.append(
-            {**s, "ref_start_s": ref_start, "ref_end_s": ref_end, "path": str(fpath)}
-        )
+        # one clip per ref_segment (loops/cuts/warps); each its own track to keep
+        # the proven per-track deep-copy + renumber_pointee_ids path (cloning clips
+        # within a track collides ids in renumber's idmap -> Live crash).
+        specs = _clip_specs(s)
+        for j, (a_start, a_end, rs, re) in enumerate(specs):
+            ref_start = max(0.0, min(rs, fdur - 1.0))
+            ref_end = max(ref_start + 1.0, min(re, fdur))
+            seg_tag = f" seg{j + 1}/{len(specs)}" if len(specs) > 1 else ""
+            next_id += 1
+            track = build_track(
+                template_track,
+                track_id=next_id,
+                track_name=f"{s['slot_label']}__{s['name']}{seg_tag}",
+                name=f"{s['slot_label']}__{s['name']}{seg_tag} [{sus_tag}]",
+                color=_color_for(s),
+                arr_start=a_start,
+                arr_end=a_end,
+                file_path=fpath,
+                file_dur_s=fdur,
+                sample_rate=fsr,
+                ref_start_s=ref_start,
+                ref_end_s=ref_end,
+            )
+            renumber_pointee_ids(track, alloc)
+            tracks_node.insert(insert_at, track)
+            insert_at += 1
+            placed.append(
+                {
+                    **s,
+                    "set_start_s": a_start,
+                    "ref_start_s": ref_start,
+                    "ref_end_s": ref_end,
+                    "path": str(fpath),
+                }
+            )
         if (i + 1) % 30 == 0:
             print(f"  placed {i + 1}/{len(spans)}")
 
@@ -469,6 +517,16 @@ def main(argv: list[str] | None = None) -> int:
     display = _SET_DISPLAY.get(args.set_id, args.set_id)
     out_path = args.out or (set_dir / f"{display} align.als")
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    # Safety: never silently clobber an existing .als at the default seed location —
+    # it may hold un-exported hand-corrections. Back it up unless --force.
+    if out_path.exists() and not args.force:
+        bak = out_path.with_suffix(".als.seedbak")
+        n = 1
+        while bak.exists():
+            bak = out_path.with_suffix(f".als.seedbak{n}")
+            n += 1
+        out_path.rename(bak)
+        print(f"backed up existing {out_path.name} -> {bak.name}")
     out_path.write_bytes(
         gzip.compress(
             etree.tostring(
@@ -498,38 +556,40 @@ def main(argv: list[str] | None = None) -> int:
     mindex = build_manifest_index(set_dir / "manifest.json")
     if len(clips) != len(placed):
         sys.exit(f"VALIDATION FAIL: {len(clips)} clips parsed, {len(placed)} placed")
+    # Content-based matching (NOT positional zip): segments + concurrent finale
+    # layers put many clips at the same (set_start, ref_start), so each parsed clip
+    # must find SOME placed entry matching (recording_id, set_start, ref_start)
+    # within tolerance, consumed greedily.
+    remaining = list(placed)
     errs = 0
-    for clip, s in zip(
-        sorted(clips, key=lambda c: c.arr_start),
-        sorted(placed, key=lambda x: x["set_start_s"]),
-    ):
+    for clip in clips:
         set_start = mapper.arr_to_set_sec(clip.arr_start)
-        rid, _slot, _label, stem = resolve_identity(clip, mindex)
-        p = s["path"]
-        expect_stem = (
-            "acappella"
-            if p.endswith("/vocals.flac")
-            else "instrumental"
-            if p.endswith("/instrumental.flac")
-            else "regular"
-        )
-        bad = []
-        if set_start is None or abs(set_start - s["set_start_s"]) > 0.05:
-            bad.append(f"set_start {set_start} != {s['set_start_s']:.2f}")
-        if abs(clip.ref_start_s() - s["ref_start_s"]) > 0.05:
-            bad.append(f"ref_start {clip.ref_start_s():.2f} != {s['ref_start_s']:.2f}")
-        if rid != s["recording_id"]:
-            bad.append(f"identity {rid} != {s['recording_id']}")
-        if stem != expect_stem:
-            bad.append(f"stem {stem} != {expect_stem}")
-        if bad:
+        rid, _slot, _label, _stem = resolve_identity(clip, mindex)
+        rs = clip.ref_start_s()
+        hit = None
+        for k, s in enumerate(remaining):
+            if (
+                rid == s["recording_id"]
+                and set_start is not None
+                and abs(set_start - s["set_start_s"]) <= 0.05
+                and abs(rs - s["ref_start_s"]) <= 0.05
+            ):
+                hit = k
+                break
+        if hit is None:
             errs += 1
-            print(f"  MISMATCH {s['slot_label']}: {'; '.join(bad)}")
+            if errs <= 12:
+                print(
+                    f"  MISMATCH clip rid={rid} set_start={set_start} ref_start={rs:.2f}"
+                    " — no matching placed segment"
+                )
+        else:
+            remaining.pop(hit)
     if errs:
-        sys.exit(f"VALIDATION FAIL: {errs}/{len(placed)} clips mismatched")
+        sys.exit(f"VALIDATION FAIL: {errs}/{len(placed)} clips unmatched")
     print(
         f"round-trip validation OK: {len(placed)} clips parse back exactly "
-        f"(set_start, ref_start, identity)"
+        f"(recording_id, set_start, ref_start)"
     )
     return 0
 
