@@ -214,6 +214,19 @@ def main(argv: list[str] | None = None) -> int:
     als = _resolve_glob(args.als)
     set_dir = _resolve_glob(args.set_dir)
     _set_id, rows, _ = collect_kept_clip_rows(als, set_dir)
+    # Footgun guard: a SEEDED/re-exported session (e.g. "BB12 align.als") splits
+    # every warped clip into one 2-marker clip per segment, so ~all clips have
+    # exactly 2 warp markers and the warp analysis is meaningless. The canonical
+    # hand-label ("…labeling_fast.als") keeps multi-marker warped clips.
+    if rows:
+        two = sum(1 for r in rows if len(r.clip.warp.points) <= 2)
+        if two / len(rows) > 0.95:
+            print(
+                f"WARNING: {100 * two / len(rows):.0f}% of clips have <=2 warp "
+                f"markers — this looks like a SEEDED session, not the canonical "
+                f"hand-label. Point --als at '…labeling_fast.als'.",
+                file=sys.stderr,
+            )
     want = {s.strip() for s in args.stems.split(",") if s.strip()}
 
     for stem in sorted(want):
