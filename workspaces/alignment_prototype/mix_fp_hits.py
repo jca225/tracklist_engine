@@ -272,11 +272,15 @@ def decode_placements(
     gap_s: float = 6.0,
     tol: int = 1,
     min_step: int = 0,
-) -> list[tuple[float, float] | None]:
+    with_offset: bool = False,
+) -> list[tuple[float, ...] | None]:
     """Set-level fingerprint placement: per-span top-K diagonal candidates ->
     monotonic decode over tracklist order. ``ref_fps`` are LandmarkFingerprints
     in tracklist (slot) order; returns [(set_start_s, set_end_s) | None] aligned
-    to that order (None where a ref produced no candidates).
+    to that order (None where a ref produced no candidates). With
+    ``with_offset=True`` each entry is (set_start_s, set_end_s, offset_s) instead
+    — offset_s = ref_frame-mix_frame in seconds, so ref_start_s = set_start_s +
+    offset_s (the part of the song the DJ started on).
 
     The decode enforces non-decreasing set_start (min_step=0 admits the
     near-simultaneous starts of mashup layers), so a high-vote but out-of-order
@@ -307,5 +311,5 @@ def decode_placements(
     for r, i in enumerate(keep):
         ss_pred = float(starts[r]) * dt
         best = min(cand_lists[i], key=lambda c: abs(c[0] - ss_pred))
-        out[i] = (best[0], best[1])
+        out[i] = (best[0], best[1], best[3]) if with_offset else (best[0], best[1])
     return out

@@ -196,6 +196,21 @@ def main(argv: list[str] | None = None) -> int:
         default=1.0,
         help="min sharpness z-score to override coarse start",
     )
+    p.add_argument(
+        "--fp-placement",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="source placement from the landmark-fp vote-extent (decode_placements) "
+        "instead of the MERT monotonic DP; identity still comes from predict_sequence. "
+        "--no-fp-placement falls back to the old MERT placement + DTW/fp-refine.",
+    )
+    p.add_argument("--fp-placement-topk", type=int, default=6)
+    p.add_argument("--fp-placement-gap-s", type=float, default=6.0)
+    p.add_argument(
+        "--fp-placement-compare",
+        action="store_true",
+        help="also record the MERT set_start per span (mert_set_start_s) for A/B",
+    )
     args = p.parse_args(argv)
 
     from workspaces.alignment_prototype.mert_model import (
@@ -277,9 +292,79 @@ def main(argv: list[str] | None = None) -> int:
     print("decoding sequence…")
     preds = aligner.predict_sequence(decodable)
 
+    # ---- 2b. fingerprint placement (regular spans) -------------------------
+    # Identity stays with predict_sequence (recording_id per span); the ~30s MERT
+    # placement is replaced by the landmark-fp vote-extent, which localizes the
+    # mix<->ref diagonal to ~0.2s and gives set_start ~4s median (BB12 regular).
+    # ref_start_s = set_start_s + offset_s (off = ref_frame - mix_frame). Spans
+    # with no cached fp (or no candidate diagonal) keep their MERT placement.
+    fp_active = args.fp_placement
+    mert_starts: dict[int, float] = {}
+    if fp_active:
+        import dataclasses
+
+        from workspaces.alignment_prototype.fp_index import FpKey
+        from workspaces.alignment_prototype.fp_index import load as fp_load
+        from workspaces.alignment_prototype.fp_placement_refine import find_aligning_dir
+        from workspaces.alignment_prototype.landmark_fp import constellation, hashes
+        from workspaces.alignment_prototype.mix_fp_hits import (
+            decode_placements,
+            load_mix_mono,
+        )
+
+        set_dir = find_aligning_dir(args.set_id)
+        mix_file = set_dir / "mix.m4a" if set_dir is not None else None
+        # ref fps in tracklist (decodable) order — DO NOT sort
+        fps = [
+            fp_load(FpKey(p.recording_id, "regular")) if p.recording_id else None
+            for p in preds
+        ]
+        keep = [i for i, fp in enumerate(fps) if fp is not None]
+        if mix_file is None or not mix_file.is_file():
+            print("(fp placement skipped — aligning mix.m4a missing)")
+            fp_active = False
+        elif not keep:
+            print("(fp placement skipped — no ref fingerprints cached for chosen ids)")
+            fp_active = False
+        else:
+            print(f"fp placement: hashing mix once ({set_dir.name})…")
+            hm = hashes(*constellation(load_mix_mono(mix_file)))
+            placements = decode_placements(
+                hm,
+                [fps[i] for i in keep],
+                mix_dur_s=mix_end,
+                topk=args.fp_placement_topk,
+                gap_s=args.fp_placement_gap_s,
+                with_offset=True,
+            )
+            new_preds = list(preds)
+            n_placed = 0
+            for r, i in enumerate(keep):
+                pl = placements[r]
+                if pl is None:
+                    continue
+                ss, se, off = pl
+                mert_starts[i] = preds[i].set_start_s
+                new_preds[i] = dataclasses.replace(
+                    preds[i],
+                    set_start_s=ss,
+                    set_end_s=se,
+                    ref_start_s=ss + off,
+                    ref_end_s=off + se,  # ref_start + span_duration
+                )
+                n_placed += 1
+            preds = tuple(new_preds)
+            print(
+                f"fp placement: {n_placed}/{len(preds)} spans placed "
+                f"({len(preds) - n_placed} kept MERT — no fp / no diagonal)"
+            )
+
     # ---- 3. fine placement (per-span DTW vs roformer mix instrumental) -----
+    # Skipped when fp placement is active: DTW/fp-refine were refinements of the
+    # coarse MERT placement and risk pulling a good fp start onto a spurious
+    # chroma match. Use --no-fp-placement to get the old refinement path.
     refined = preds
-    if args.band_s > 0:
+    if not fp_active and args.band_s > 0:
         from workspaces.alignment_prototype.fine_refine import (
             AudioContext,
             refine_placements,
@@ -292,7 +377,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"fine-placement DTW ±{args.band_s:.0f}s…")
             refined = refine_placements(preds, decodable, ctx, band_s=args.band_s)
 
-    if args.fp_refine:
+    if not fp_active and args.fp_refine:
         from workspaces.alignment_prototype.fp_placement_refine import (
             FpPlacementContext,
             refine_placements_fp,
@@ -334,9 +419,19 @@ def main(argv: list[str] | None = None) -> int:
         "band_s": args.band_s,
         "fp_refine": args.fp_refine,
         "fp_band_s": args.fp_band_s if args.fp_refine else None,
+        "fp_placement": fp_active,
         "spans": [
-            {**asdict(p), "cue_anchor_s": anchors.get(p.slot_label), "name": t.label}
-            for p, t in zip(refined, decodable)
+            {
+                **asdict(p),
+                "cue_anchor_s": anchors.get(p.slot_label),
+                "name": t.label,
+                **(
+                    {"mert_set_start_s": mert_starts.get(i)}
+                    if args.fp_placement_compare
+                    else {}
+                ),
+            }
+            for i, (p, t) in enumerate(zip(refined, decodable))
         ],
         "skipped": [{"slot_label": t.slot_label, "name": t.label} for t in skipped],
     }

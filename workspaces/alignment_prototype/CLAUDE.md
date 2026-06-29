@@ -103,12 +103,28 @@ The unified-aligner consolidation (plan: `.claude/plans/and-then-can-we-cuddly-s
 - `mix_fp_hits.{span_from_offset_votes, offset_candidates, decode_placements}` =
   the placement pipeline; `eval_placement.py` runs it vs GT.
 
+## Wired (2026-06-28) — fp placement is the infer default
+
+`decode_placements` is now the placement source in `infer.py` (`--fp-placement`,
+default on). Identity still comes from `predict_sequence` (recording_id per span);
+the ~30s MERT placement is replaced by the landmark-fp vote-extent, and
+`ref_start_s = set_start_s + offset_s` (surfaced via `decode_placements(...,
+with_offset=True)`). Spans with no cached `regular` fp (or no diagonal) keep their
+MERT placement. **In-domain BB12 (1fsnxchk) end-to-end vs GT:** set placement
+median **30.5s → 9.2s** (<15s 31% → 57%), ref offset median 50 → 31s, identity
+unchanged (~74%) — A/B via `--no-fp-placement`. Caveat: **p90 worsened 78 → 340s**
+— MERT's anchor prior leashed every span to a ~78s band; fp has no leash, so
+wrong-diagonal / wrong-identity spans place catastrophically (the identity→placement
+coupling). The outlier tail is the deferred per-stem + fibers work. `--fp-placement-compare`
+writes `mert_set_start_s` per span for A/B; `--no-fp-placement` restores the old
+MERT + DTW/`--fp-refine` path.
+
 ## Not wired yet
 
-- `decode_placements` is a standalone module — NOT yet called by `infer.py` (the
-  cross-set inference still uses `predict_sequence`). Wiring it in is the next integration.
 - Per-stem placement: only `stem='regular'` fingerprints are backfilled; acappella/
-  instrumental set_start needs their stem fingerprints (or HuBERT) backfilled.
+  instrumental set_start needs their stem fingerprints (or HuBERT) backfilled. This
+  is the next integration — a HuBERT set_start primitive (inverse of
+  `acappella_ref_offset_eval`'s ref-offset direction) fused with the full-mix decode.
 - B3 live decode: `fiber_ambiguity`/μ computed but not yet fed into the live decode.
 - Learned fusion arbiter (C1/C2): probe-feature extractor + small head over
   {axis scores, fiber conf, fp sharpness} — needs more GT (leave-one-set-out CV).
