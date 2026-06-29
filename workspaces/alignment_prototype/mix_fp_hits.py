@@ -260,3 +260,52 @@ def _cluster_at(
         int(len(cluster)),
         float(off * FHOP / SR),
     )
+
+
+def decode_placements(
+    mix_hashes: dict,
+    ref_fps: list,
+    *,
+    mix_dur_s: float,
+    dt: float = 2.0,
+    topk: int = 6,
+    gap_s: float = 6.0,
+    tol: int = 1,
+    min_step: int = 0,
+) -> list[tuple[float, float] | None]:
+    """Set-level fingerprint placement: per-span top-K diagonal candidates ->
+    monotonic decode over tracklist order. ``ref_fps`` are LandmarkFingerprints
+    in tracklist (slot) order; returns [(set_start_s, set_end_s) | None] aligned
+    to that order (None where a ref produced no candidates).
+
+    The decode enforces non-decreasing set_start (min_step=0 admits the
+    near-simultaneous starts of mashup layers), so a high-vote but out-of-order
+    candidate (wrong-diagonal / repeat instance) is rejected for the best in-order
+    one — the outlier fix validated on BB12 regular (mean 44->28s, outliers 11->9
+    vs argmax-only). Spans whose true diagonal is absent from top-K (genuine
+    weak-fp / heavy-crosstalk) remain errors -> per-stem + fibers.
+    """
+    from .sequence_decode import NEG, monotonic_decode
+
+    cand_lists = [
+        offset_candidates(mix_hashes, fp, topk=topk, gap_s=gap_s, tol=tol)
+        for fp in ref_fps
+    ]
+    out: list[tuple[float, float] | None] = [None] * len(ref_fps)
+    keep = [i for i, c in enumerate(cand_lists) if c]
+    if not keep:
+        return out
+    T = int(mix_dur_s / dt) + 1
+    curves = np.full((len(keep), T), NEG, dtype=np.float64)
+    for r, i in enumerate(keep):
+        cands = cand_lists[i]
+        mx = max(c[2] for c in cands) or 1.0
+        for ss, _se, votes, _off in cands:
+            b = min(T - 1, int(ss / dt))
+            curves[r, b] = max(curves[r, b], votes / mx)
+    starts = monotonic_decode(curves, min_step=min_step)
+    for r, i in enumerate(keep):
+        ss_pred = float(starts[r]) * dt
+        best = min(cand_lists[i], key=lambda c: abs(c[0] - ss_pred))
+        out[i] = (best[0], best[1])
+    return out
