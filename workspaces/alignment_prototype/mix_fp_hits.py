@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .landmark_fp import LandmarkFingerprint, SR, fp_offset
+from .landmark_fp import FHOP, LandmarkFingerprint, SR, fp_offset
 
 HIT_MIN_VOTES = 25
 HIT_MIN_SHARPNESS = 1.2
@@ -160,3 +160,53 @@ def load_mix_mono(path: Path, *, sr: int = SR) -> np.ndarray:
 
     y, _ = librosa.load(str(path), sr=sr, mono=True)
     return y
+
+
+def span_from_offset_votes(
+    mix_hashes: dict,
+    ref_fp: LandmarkFingerprint,
+    *,
+    gap_s: float = 6.0,
+    tol: int = 1,
+) -> tuple[float, float, int, float] | None:
+    """(set_start_s, set_end_s, votes, offset_s) from the fingerprint's own
+    vote-extent — the placement primitive behind the 2026-06-28 reframe.
+
+    The landmark vote bins are off = ref_frame - mix_frame; the dominant bin is
+    the alignment diagonal d. The mix-times voting for d are exactly where the
+    ref plays in the mix, so the densest contiguous cluster of them (gap-split at
+    ``gap_s``) is the played span [set_start, set_end] — directly, with no
+    ref_start, cue, or GT. This is why the ~30s set_start "wall" was illusory:
+    the fingerprint localizes the diagonal to ~0.2s and its vote-extent gives
+    set_start to ~5.7s median (BB12 regular). Outliers (repeat / weak-fp /
+    heavy-crossfade) want a boundary-snap (D2) + fiber handling on top.
+
+    Pass ``mix_hashes`` = landmark_fp.hashes(*constellation(mix)) computed ONCE
+    per set and reused across refs.
+    """
+    votes: dict[int, int] = {}
+    pairs: list[tuple[int, int]] = []  # (offset, mix_frame)
+    for key, mts in mix_hashes.items():
+        rts = ref_fp.hashes.get(key)
+        if not rts:
+            continue
+        for mt in mts:
+            for rt in rts:
+                off = rt - mt
+                votes[off] = votes.get(off, 0) + 1
+                pairs.append((off, mt))
+    if not votes:
+        return None
+    d = max(votes.items(), key=lambda kv: kv[1])[0]
+    mts = sorted(mt for off, mt in pairs if abs(off - d) <= tol)
+    if not mts:
+        return None
+    ts = np.array(mts, dtype=np.float64) * FHOP / SR
+    splits = np.where(np.diff(ts) > gap_s)[0] + 1
+    cluster = max(np.split(ts, splits), key=len)
+    return (
+        float(cluster[0]),
+        float(cluster[-1]),
+        int(len(cluster)),
+        float(d * FHOP / SR),
+    )
