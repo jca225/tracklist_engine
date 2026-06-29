@@ -228,6 +228,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--stem-placement-band-s", type=float, default=90.0)
     p.add_argument("--stem-placement-guard-s", type=float, default=8.0)
+    p.add_argument(
+        "--lyrics-placement",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="place acappella spans via the LYRICS channel (Whisper word-timestamps "
+        "+ IDF diagonal + tracklist-order monotonic decode + position prior). Sets "
+        "BOTH set_start AND ref_start; abstains on weak spans. Strictly dominates "
+        "HuBERT stem-placement on BB12 (set_start 2.3s vs ~tail; ref_start 6.3s vs "
+        "~50s wall). Needs mix_vocals.flac + ref vocals stems; transcribes on demand "
+        "(cached). Lyrics-placed spans are skipped by HuBERT stem-placement.",
+    )
     args = p.parse_args(argv)
 
     from workspaces.alignment_prototype.mert_model import (
@@ -388,6 +399,92 @@ def main(argv: list[str] | None = None) -> int:
                 f"{len(preds) - n_placed - n_gated} kept MERT — no fp / no diagonal)"
             )
 
+    # ---- 2b'. lyrics placement (acappella set_start + ref_start via Whisper) -
+    # Words are key/tempo/pitch invariant — the axis the acoustic matched-filter
+    # lacks. Whisper-transcribe mix_vocals + each candidate vocals stem, find
+    # alignment diagonals by IDF/distinct-rare-bigram Hough, joint monotonic decode
+    # over tracklist order + a Gaussian position prior, abstain on weak spans.
+    # BB12 acappella: set_start 2.3s median (was 42.5s), ref_start 6.3s (was ~50s
+    # repeat wall). Sets BOTH axes; HuBERT stem-placement below fills abstentions.
+    lyrics_placed: set[int] = set()
+    if args.lyrics_placement:
+        import dataclasses
+
+        from workspaces.alignment_prototype.fp_placement_refine import find_aligning_dir
+        from workspaces.alignment_prototype.lyrics_align import (
+            _bigram_times,
+            _norm,
+            _slot_order,
+            candidate_diagonals,
+            monotonic_decode,
+            transcribe_words,
+        )
+
+        ac_idx = [
+            i
+            for i, p in enumerate(preds)
+            if (p.claimed_stem or "regular") == "acappella"
+        ]
+        set_dir = find_aligning_dir(args.set_id)
+        mixv = set_dir / "mix_vocals.flac" if set_dir is not None else None
+        if not ac_idx:
+            pass
+        elif mixv is None or not mixv.is_file():
+            print("(lyrics placement skipped — mix_vocals.flac missing)")
+        else:
+            manifest = json.loads((set_dir / "manifest.json").read_text())
+            by_tid = {t["track_id"]: t for t in manifest["tracks"]}
+            mix_dur = float(manifest.get("mix_duration_s") or 0) or max(
+                p.set_end_s for p in preds
+            )
+            max_slot = (
+                max(
+                    (_slot_order(p.slot_label)[0] for p in preds if p.slot_label),
+                    default=1,
+                )
+                or 1
+            )
+            print(
+                f"lyrics placement: transcribing mix_vocals + {len(ac_idx)} acappella "
+                "refs (cached)…"
+            )
+            mix_bt = _bigram_times(_norm(transcribe_words(mixv)))
+            spans, idxs = [], []
+            for i in ac_idx:
+                p = preds[i]
+                t = by_tid.get(p.recording_id)
+                vpath = (t.get("stems") or {}).get("vocals") if t else None
+                if not vpath or not Path(vpath).is_file():
+                    continue
+                cw = transcribe_words(vpath)
+                if not cw:
+                    continue
+                cands = candidate_diagonals(_norm(cw), mix_bt)
+                if not cands:
+                    continue
+                epos = _slot_order(p.slot_label)[0] / max_slot * mix_dur
+                spans.append((cands, epos))
+                idxs.append(i)
+            if spans:
+                chosen = monotonic_decode(spans)
+                new_preds = list(preds)
+                n_lyr = 0
+                for i, (ss, rs) in zip(idxs, chosen):
+                    if ss is None:
+                        continue
+                    p = preds[i]
+                    dur = p.set_end_s - p.set_start_s
+                    new_preds[i] = dataclasses.replace(
+                        p, set_start_s=ss, set_end_s=ss + dur, ref_start_s=rs
+                    )
+                    lyrics_placed.add(i)
+                    n_lyr += 1
+                preds = tuple(new_preds)
+                print(
+                    f"lyrics placement: {n_lyr}/{len(idxs)} acappella spans placed "
+                    f"({len(idxs) - n_lyr} abstained)"
+                )
+
     # ---- 2c. per-stem placement (acappella set_start via banded HuBERT) -----
     # The full-mix fp is weak on vocals, so acappella spans fall back to the ~30s
     # MERT placement above. HuBERT (phonetic, key-invariant) localizes the vocal
@@ -404,7 +501,7 @@ def main(argv: list[str] | None = None) -> int:
         ac_idx = [
             i
             for i, p in enumerate(preds)
-            if (p.claimed_stem or "regular") == "acappella"
+            if (p.claimed_stem or "regular") == "acappella" and i not in lyrics_placed
         ]
         set_dir = find_aligning_dir(args.set_id)
         mixv = set_dir / "mix_vocals.flac" if set_dir is not None else None
