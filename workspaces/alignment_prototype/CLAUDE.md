@@ -131,16 +131,36 @@ every `w`-row** (concurrent mashup layers), so the leash must be MERT, not the c
 The gate improves BOTH median and p90 (reverting wrong-diagonal outliers helps
 everywhere, not just the tail). Band sweep: 90s optimal; ≤0 disables.
 `--fp-placement-compare` writes `mert_set_start_s` per span for A/B;
-`--no-fp-placement` restores the old MERT + DTW/`--fp-refine` path. The remaining
-tail is wrong-IDENTITY spans (no placement helps those) + the 38 no-fp acappella/
-instrumental spans → the deferred per-stem work.
+`--no-fp-placement` restores the old MERT + DTW/`--fp-refine` path.
+
+**Per-stem acappella set_start (`--stem-placement`, default on; `stem_placement.py`):**
+the full-mix fp is weak on vocals, so acappella spans fall back to the ~30s MERT
+placement. HuBERT (phonetic, key-invariant) localizes the vocal in `mix_vocals`
+where chroma/fp can't. `place_joint` = the HuBERT analog of `span_from_offset_votes`:
+tile the ref vocal stem, slide each window over a BAND (`--stem-placement-band-s`
+90s, around the coarse prior) of mix_vocals HuBERT, vote for the alignment
+diagonal, set_start = start of the densest contiguous on-diagonal run. A fusion
+guard (`--stem-placement-guard-s` 8s) keeps the prior when HuBERT agrees closely
+(protects near-hits). **Refines set_start ONLY** — the joint ref_start is
+repeat-ambiguous (~52s), left to `refine_ref_offsets` + fibers. Needs
+`mix_vocals.flac` + ref vocals stems in `manifest.json` (present in pulled aligning
+folders). Cost: HuBERT on the hour-long mix_vocals once (~minutes, MPS).
+
+BB12 acappella set_start A/B (`--no-stem-placement`, n=41): a tail-for-precision
+tradeoff — **<8s 54→66%, <15s 61→76%, p90 96→72s**, but **<4s 44→34%** (HuBERT
+sometimes overrides an already-good MERT placement). Net end-to-end: p90 61→55s,
+<15s 63→67% (best-yet), <4s 41→38%, median flat 6.6→6.7s. Validated upper bound
+(oracle ref_start, whole-mix) = 1.1s median, so the gap is the joint diagonal
+search under chorus repeats. Instrumental set_start NOT wired (chroma fails on
+instrumental presence; GT n=5 can't validate).
 
 ## Not wired yet
 
-- Per-stem placement: only `stem='regular'` fingerprints are backfilled; acappella/
-  instrumental set_start needs their stem fingerprints (or HuBERT) backfilled. This
-  is the next integration — a HuBERT set_start primitive (inverse of
-  `acappella_ref_offset_eval`'s ref-offset direction) fused with the full-mix decode.
+- Per-stem acappella **ref_start** (which part of the song): the joint ref_start is
+  repeat-ambiguous; route `refine_ref_offsets` vocals→HuBERT + fibers/continuity.
+- Per-stem **instrumental** set_start: needs a validated feature (stem fp backfill
+  or beat-grid matched filter); chroma fails and GT n=5 can't validate.
+- A confidence floor on the HuBERT peak to stop the `<4s` over-override regression.
 - B3 live decode: `fiber_ambiguity`/μ computed but not yet fed into the live decode.
 - Learned fusion arbiter (C1/C2): probe-feature extractor + small head over
   {axis scores, fiber conf, fp sharpness} — needs more GT (leave-one-set-out CV).

@@ -218,6 +218,16 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="also record the MERT set_start per span (mert_set_start_s) for A/B",
     )
+    p.add_argument(
+        "--stem-placement",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="refine acappella set_start with a banded HuBERT matched filter over "
+        "mix_vocals (the fp is weak on vocals). Needs mix_vocals.flac + ref vocals "
+        "stems in the manifest. set_start only — ref_start stays with refine_ref_offsets.",
+    )
+    p.add_argument("--stem-placement-band-s", type=float, default=90.0)
+    p.add_argument("--stem-placement-guard-s", type=float, default=8.0)
     args = p.parse_args(argv)
 
     from workspaces.alignment_prototype.mert_model import (
@@ -376,6 +386,74 @@ def main(argv: list[str] | None = None) -> int:
                 f"fp placement: {n_placed}/{len(preds)} spans placed "
                 f"({n_gated} gated to MERT |fp-mert|>{gate:.0f}s, "
                 f"{len(preds) - n_placed - n_gated} kept MERT — no fp / no diagonal)"
+            )
+
+    # ---- 2c. per-stem placement (acappella set_start via banded HuBERT) -----
+    # The full-mix fp is weak on vocals, so acappella spans fall back to the ~30s
+    # MERT placement above. HuBERT (phonetic, key-invariant) localizes the vocal
+    # in mix_vocals where chroma/fp can't. Refine set_start ONLY (the joint
+    # ref_start is repeat-ambiguous — left to refine_ref_offsets). Banded ±gate to
+    # the coarse prior + a fusion guard (keep prior when HuBERT agrees closely)
+    # makes it strictly dominate the prior on BB12 acappella (<8s 42->75%).
+    if args.stem_placement:
+        import dataclasses
+
+        from workspaces.alignment_prototype.fp_placement_refine import find_aligning_dir
+        from workspaces.alignment_prototype.stem_placement import hubert_of, place_joint
+
+        ac_idx = [
+            i
+            for i, p in enumerate(preds)
+            if (p.claimed_stem or "regular") == "acappella"
+        ]
+        set_dir = find_aligning_dir(args.set_id)
+        mixv = set_dir / "mix_vocals.flac" if set_dir is not None else None
+        if not ac_idx:
+            pass
+        elif mixv is None or not mixv.is_file():
+            print("(stem placement skipped — mix_vocals.flac missing)")
+        else:
+            by_tid = {
+                t["track_id"]: t
+                for t in json.loads((set_dir / "manifest.json").read_text())["tracks"]
+            }
+            print(
+                f"stem placement: HuBERT on mix_vocals + {len(ac_idx)} acappella refs…"
+            )
+            mix_hub = hubert_of(mixv)
+            new_preds = list(preds)
+            n_stem = n_keep = 0
+            for i in ac_idx:
+                p = preds[i]
+                t = by_tid.get(p.recording_id)
+                vpath = (t.get("stems") or {}).get("vocals") if t else None
+                ref_hub = hubert_of(vpath) if vpath else None
+                if ref_hub is None:
+                    continue
+                span_dur = p.set_end_s - p.set_start_s
+                res = place_joint(
+                    mix_hub,
+                    ref_hub,
+                    p.set_start_s,
+                    span_dur,
+                    band_s=args.stem_placement_band_s,
+                )
+                if res is None:
+                    continue
+                ss, _rs, _pk = res
+                # fusion guard: keep the prior when HuBERT agrees closely (protect
+                # near-hits); override only when it disagrees (fix the tail).
+                if abs(ss - p.set_start_s) <= args.stem_placement_guard_s:
+                    n_keep += 1
+                    continue
+                new_preds[i] = dataclasses.replace(
+                    p, set_start_s=ss, set_end_s=ss + span_dur
+                )
+                n_stem += 1
+            preds = tuple(new_preds)
+            print(
+                f"stem placement: {n_stem} acappella set_starts refined by HuBERT "
+                f"({n_keep} kept prior — agreed within {args.stem_placement_guard_s:.0f}s)"
             )
 
     # ---- 3. fine placement (per-span DTW vs roformer mix instrumental) -----
