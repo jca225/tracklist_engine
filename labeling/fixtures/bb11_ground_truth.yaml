@@ -1702,9 +1702,9 @@ tracks:
   - track:       "mix"
     set_start_s: 2472.16
     set_end_s:   2547.13
-    ref_start_s: 3666.32
-    ref_end_s:   3724.91
-    tempo_ratio: 0.781514
+    ref_start_s: 2472.18
+    ref_end_s:   2547.15
+    tempo_ratio: 1
     unalignable: true
     source_note: "mix self-reference — too difficult to align ()"
   - track:       "Fall Out Boy-Sugar We're Goin Down(Vocals only)"
