@@ -104,3 +104,85 @@ class SpanBelief:
 
     def cost_spent(self) -> float:
         return sum(o.cost for o in self.observations)
+
+
+# ---------------------------------------------------------------------------
+# Precedence / temporal masking gate (auditory scene analysis)
+# ---------------------------------------------------------------------------
+# The ear suppresses a quiet sound sitting in the time-frequency shadow of a
+# louder one (masking) or arriving just after a leading sound (precedence). The
+# harness analog: an observation placing a quiet overlay *inside* a loud
+# region's shadow is less trustworthy — down-weight its precision before it
+# votes, so the LLM doesn't commit a vocal-under-drop placement on thin evidence.
+
+
+def masking_gate(
+    obs: Observation,
+    loud_spans_s: tuple[tuple[float, float], ...],
+    *,
+    floor: float = 0.5,
+) -> Observation:
+    """Down-weight ``obs``'s precision when its placement lands in a loud span.
+
+    ``loud_spans_s`` are (start, end) windows where a louder source dominates
+    (e.g. the host bed's drops). An observation whose ``set_start_s`` falls in
+    one is masked: its precision is scaled by ``floor`` (≤1). Non-overlay
+    observations and placements outside every shadow are returned unchanged.
+    """
+    if obs.abstained or obs.set_start_s is None:
+        return obs
+    t = obs.set_start_s
+    in_shadow = any(lo <= t <= hi for lo, hi in loud_spans_s)
+    if not in_shadow:
+        return obs
+    return replace(
+        obs, precision=obs.precision * floor, detail=(obs.detail + " [masked]").strip()
+    )
+
+
+# ---------------------------------------------------------------------------
+# Predictive-coding surprise prior (info-dynamics → ordering-free placement)
+# ---------------------------------------------------------------------------
+# The brain predicts the next sound and spikes on surprise; a boundary/novelty
+# spike marks where a *new* track likely entered. Unlike the cue prior and
+# monotonic decode, this needs no tracklist order — it is a pure "something new
+# started here" signal, usable to seed or sanity-check any span's placement.
+
+
+def surprise_prior(
+    surprise_curve: tuple[tuple[float, float], ...],
+    *,
+    precision: float = 0.45,
+    min_z: float = 1.0,
+) -> tuple[Observation, ...]:
+    """Turn a (time_s, surprise) novelty curve into candidate-boundary Observations.
+
+    Peaks in the surprise curve rising ``min_z`` standard deviations above the
+    mean become weak, order-independent placement candidates (probe
+    ``"surprise"``). Confidence scales with the peak's z-score. These seed the
+    belief where boundary novelty says a track entered — cheap, and complementary
+    to the identity probes.
+    """
+    if len(surprise_curve) < 3:
+        return ()
+    times = [t for t, _ in surprise_curve]
+    vals = [v for _, v in surprise_curve]
+    mean = sum(vals) / len(vals)
+    var = sum((v - mean) ** 2 for v in vals) / len(vals)
+    sd = var**0.5
+    if sd <= 0:
+        return ()
+    out: list[Observation] = []
+    for i in range(1, len(vals) - 1):
+        z = (vals[i] - mean) / sd
+        if z >= min_z and vals[i] >= vals[i - 1] and vals[i] >= vals[i + 1]:
+            out.append(
+                Observation(
+                    probe="surprise",
+                    set_start_s=times[i],
+                    confidence=min(1.0, z / 4.0),
+                    precision=precision,
+                    detail=f"novelty z={z:.1f}",
+                )
+            )
+    return tuple(out)

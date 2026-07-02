@@ -30,6 +30,7 @@ class ActionSpec:
     cost: float  # relative units (fp-cached ≈ 0.1)
     precision: float  # calibrated P(correct | probe fired)
     stems: tuple[str, ...]  # where this action is NOT dominated
+    validated: bool = True  # False = precision is a PROVISIONAL guess, not GT-measured
 
 
 REGISTRY: dict[str, ActionSpec] = {
@@ -50,6 +51,46 @@ REGISTRY: dict[str, ActionSpec] = {
         # chroma matched-filter refine (instrumental/regular ref offsets)
         ActionSpec(
             "chroma_refine", cost=0.5, precision=0.70, stems=("regular", "instrumental")
+        ),
+        # --- auditory-neuroscience probes (auditory.py) — PROVISIONAL precisions,
+        #     unvalidated until an eval pass measures P(correct|fired) on GT. The
+        #     ladder must treat validated=False as suggest-only, never auto-commit.
+        # onset-envelope cross-correlation placement: the flagship onset-alignment
+        # probe. Cheap; a DJ's beatmatch preserves the onset grid.
+        ActionSpec(
+            "onset_align", cost=0.3, precision=0.60, stems=STEMS, validated=False
+        ),
+        # onset-asynchrony source-count: "is a second (overlay) onset stream here"
+        ActionSpec(
+            "onset_async",
+            cost=0.2,
+            precision=0.55,
+            stems=("acappella", "instrumental"),
+            validated=False,
+        ),
+        # harmonic-sieve pitch-invariant identity: robust to DJ re-pitching
+        ActionSpec(
+            "harmonic_sieve",
+            cost=0.4,
+            precision=0.60,
+            stems=("acappella",),
+            validated=False,
+        ),
+        # modulation-spectrum tempo/stretch estimate (first-class ref→mix ratio)
+        ActionSpec(
+            "modulation", cost=0.3, precision=0.55, stems=STEMS, validated=False
+        ),
+        # predictive-coding surprise: order-free "a new track entered here" prior
+        ActionSpec("surprise", cost=0.1, precision=0.45, stems=STEMS, validated=False),
+        # cocktail-party belief-shaping action: subtract a committed bed, re-probe
+        # the residual for the overlay (old-plus-new). Not a placement probe on its
+        # own — it re-runs a stem probe on the residual signal.
+        ActionSpec(
+            "cocktail_party",
+            cost=2.0,
+            precision=0.65,
+            stems=("acappella",),
+            validated=False,
         ),
     )
 }
