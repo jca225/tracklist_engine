@@ -78,6 +78,7 @@ def parse_layer_clips(root: etree._Element) -> list[ParsedClip]:
                 continue
             pc_el = clip_el.find("PitchCoarse")
             pf_el = clip_el.find("PitchFine")
+            iw_el = clip_el.find("IsWarped")
             vol_id = volume_automation_id(track_el)
             vol_pts = tuple(vol_envs.get(vol_id, ())) if vol_id else ()
             try:
@@ -99,6 +100,9 @@ def parse_layer_clips(root: etree._Element) -> list[ParsedClip]:
                     else 0,
                     warp=WarpMarkers.from_clip(clip_el),
                     vol_points=vol_pts,
+                    # missing element defaults to warped (pre-Live-8 sets
+                    # don't occur here; warped is the 295/301 common case)
+                    is_warped=iw_el is None or iw_el.get("Value") == "true",
                 )
             except (TypeError, ValueError, OverflowError):
                 continue  # malformed clip numerics — validate reports clip-malformed

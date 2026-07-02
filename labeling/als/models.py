@@ -102,6 +102,7 @@ class ParsedClip:
     pitch_fine: int
     warp: WarpMarkers
     vol_points: tuple[tuple[float, float], ...] = ()
+    is_warped: bool = True
 
     @property
     def content_beat_start(self) -> float:
@@ -119,9 +120,18 @@ class ParsedClip:
         # learned to predict ~0 ref offsets (found 2026-06-11 when the
         # matched-filter detector disagreed with GT at peak 0.99-1.00 and
         # loop_start mapped exactly to the detector's answer).
+        #
+        # UNWARPED clips store Loop values in SECONDS (same Live rule as
+        # MixClipSpan) and carry only sentinel warp markers, so the warp
+        # map would scale a seconds value as if it were beats (found
+        # 2026-07-02: BB12 Faded/Embrace ref offsets off by 39-112 s).
+        if not self.is_warped:
+            return self.loop_start
         return self.warp.beat_to_sec(self.content_beat_start)
 
     def ref_end_s(self) -> float:
+        if not self.is_warped:
+            return self.loop_end
         return self.warp.beat_to_sec(self.content_beat_end)
 
 

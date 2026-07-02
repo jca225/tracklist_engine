@@ -117,3 +117,21 @@ def test_fixture_dir_wired():
     # the discovery glob must point at a real directory even before any
     # fixture lands, so a typo'd path can't silently skip everything
     assert FIXTURE_DIR.is_dir()
+
+
+def test_bb12_unwarped_clip_ref_offsets_golden():
+    # The 2026-07-02 unit-clash fix: unwarped layer clips (BB12 Faded pair +
+    # Embrace stab) store Loop values in SECONDS; ref offsets must equal them
+    # directly instead of scaling through the sentinel warp map (which was
+    # 39-112 s wrong). Golden-pinned so a regression can't ship silently.
+    path, _ = GOLDEN["bb12_canonical"]
+    if not path.exists():
+        pytest.skip(f"golden session not on this machine: {path}")
+    clips = parse_layer_clips(load_als_xml(path))
+    unwarped = [c for c in clips if not c.is_warped]
+    assert len(unwarped) == 6
+    for c in unwarped:
+        assert c.ref_start_s() == c.loop_start
+        assert c.ref_end_s() == c.loop_end
+    faded = [c for c in unwarped if "Faded" in c.track_name]
+    assert sorted(round(c.ref_start_s(), 3) for c in faded) == [59.053, 110.293]

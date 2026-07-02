@@ -277,3 +277,72 @@ def test_match_manifest_tag_insensitive(tmp_path):
     # a genuinely different song must NOT match tag-stripped
     other = str(tracks / "031__Other Artist - Other Song [126bpm 8B].m4a")
     assert match_manifest_for_path(other, index) is None
+
+
+def _clip(**overrides) -> ParsedClip:
+    base = dict(
+        group_name="g",
+        track_name="t",
+        path="/aligning/set/tracks/001__A - B.m4a",
+        arr_start=5066.0,
+        arr_end=5120.0,
+        loop_start=59.053,
+        loop_end=95.053,
+        pitch_coarse=0,
+        pitch_fine=0,
+        # sentinel-pair markers as Live writes on never-hand-warped clips
+        warp=WarpMarkers(points=((0.0, 0.229), (0.03125, 0.244))),
+    )
+    base.update(overrides)
+    return ParsedClip(**base)
+
+
+def test_unwarped_ref_offsets_are_loop_seconds():
+    # BB12 Faded shape (found 2026-07-02): unwarped clips store Loop values in
+    # SECONDS; pushing them through the sentinel warp map scaled them ~0.48x
+    # and exported ref offsets 39-112 s wrong.
+    clip = _clip(is_warped=False)
+    assert clip.ref_start_s() == 59.053
+    assert clip.ref_end_s() == 95.053
+
+
+def test_warped_ref_offsets_still_use_warp_map():
+    clip = _clip(
+        is_warped=True,
+        loop_start=16.0,
+        warp=WarpMarkers(points=((0.0, 0.0), (100.0, 50.0))),
+    )
+    assert clip.ref_start_s() == 8.0  # 16 beats * 0.5 s/beat
+    assert clip.ref_end_s() == 35.0  # (16 + 54 arr beats) * 0.5
+
+
+def test_is_warped_defaults_true():
+    assert _clip().is_warped is True
+
+
+def test_unwarped_trim_uses_mix_seconds():
+    # One mix span at 0.5 s/beat: trimming 10 arrangement beats off the left
+    # edge must advance an unwarped clip's loop values by 5 SECONDS (elapsed
+    # mix time), not 10 (beats).
+    span = type(
+        "S",
+        (),
+        {
+            "arr_start": 5000.0,
+            "arr_end": 5200.0,
+            "arr_to_set_sec": lambda self, arr: 2000.0 + (arr - 5000.0) * 0.5,
+        },
+    )()
+    mapper = ArrangementMapper(spans=(span,), mix_duration_s=4000.0)  # type: ignore[arg-type]
+    clip = _clip(is_warped=False)
+    from labeling.als.semantics import _trim_to_interval
+
+    trimmed = _trim_to_interval(clip, mapper, 5076.0, 5120.0)
+    assert trimmed.loop_start == 59.053 + 5.0
+    assert trimmed.loop_end == 59.053 + 5.0 + 22.0  # 44 beats * 0.5 s
+    # warped clip: same trim advances loop_start by BEATS
+    warped = _clip(is_warped=True)
+    trimmed_w = _trim_to_interval(warped, mapper, 5076.0, 5120.0)
+    assert trimmed_w.loop_start == 59.053 + 10.0
+    # untouched interval returns the clip unchanged
+    assert _trim_to_interval(clip, mapper, 5066.0, 5120.0) is clip

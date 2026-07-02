@@ -254,6 +254,40 @@ def _find_mix_splice_beat(
     return arr_hi
 
 
+def _trim_to_interval(
+    clip: ParsedClip,
+    mapper: ArrangementMapper,
+    arr_lo: float,
+    arr_hi: float,
+) -> ParsedClip:
+    if arr_lo == clip.arr_start and arr_hi == clip.arr_end:
+        return clip
+    if clip.is_warped:
+        return replace(
+            clip,
+            arr_start=arr_lo,
+            arr_end=arr_hi,
+            loop_start=clip.loop_start + (arr_lo - clip.arr_start),
+        )
+    # Unwarped clips index content in SECONDS at 1:1 with wall clock, so the
+    # trim advances loop values by elapsed mix-seconds, not arrangement beats.
+    # Caveat: across a 1-mix splice mix-sec jumps while the clip's wall clock
+    # doesn't — no GT session has an unwarped clip straddling a splice
+    # (BB11/BB12 scan 2026-07-02); when unmappable, keep loop values untrimmed.
+    s0 = mapper.arr_to_set_sec(clip.arr_start)
+    s1 = mapper.arr_to_set_sec(arr_lo)
+    s2 = mapper.arr_to_set_sec(arr_hi)
+    loop_start = clip.loop_start
+    if s0 is not None and s1 is not None and s1 >= s0:
+        loop_start = clip.loop_start + (s1 - s0)
+    loop_end = clip.loop_end
+    if s1 is not None and s2 is not None and s2 >= s1:
+        loop_end = loop_start + (s2 - s1)
+    return replace(
+        clip, arr_start=arr_lo, arr_end=arr_hi, loop_start=loop_start, loop_end=loop_end
+    )
+
+
 def _split_monotonic_arr_interval(
     clip: ParsedClip,
     mapper: ArrangementMapper,
@@ -263,24 +297,10 @@ def _split_monotonic_arr_interval(
     sec_lo = mapper.arr_to_set_sec(arr_lo)
     sec_hi = mapper.arr_to_set_sec(arr_hi)
     if sec_lo is not None and sec_hi is not None and sec_hi >= sec_lo:
-        return (
-            replace(
-                clip,
-                arr_start=arr_lo,
-                arr_end=arr_hi,
-                loop_start=clip.loop_start + (arr_lo - clip.arr_start),
-            ),
-        )
+        return (_trim_to_interval(clip, mapper, arr_lo, arr_hi),)
     splice = _find_mix_splice_beat(mapper, arr_lo, arr_hi)
     if splice is None or splice <= arr_lo + 1e-6 or splice >= arr_hi - 1e-6:
-        return (
-            replace(
-                clip,
-                arr_start=arr_lo,
-                arr_end=arr_hi,
-                loop_start=clip.loop_start + (arr_lo - clip.arr_start),
-            ),
-        )
+        return (_trim_to_interval(clip, mapper, arr_lo, arr_hi),)
     left_end = splice - 1e-4
     if left_end <= arr_lo + 1e-6:
         return _split_monotonic_arr_interval(clip, mapper, splice, arr_hi)

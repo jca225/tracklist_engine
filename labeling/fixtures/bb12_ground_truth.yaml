@@ -962,8 +962,8 @@ tracks:
     set_start_s: 1004.12
     set_end_s:   1078.25
     ref_start_s: 60.5622
-    ref_end_s:   354.551
-    tempo_ratio: 1.01309
+    ref_end_s:   242.658
+    tempo_ratio: 1.01347
     is_loop:     true
     ref_segments:
       - mix_start_s: 1004.12
@@ -976,8 +976,8 @@ tracks:
         ref_start_s: 85.34
         ref_end_s:   106.662
       - mix_start_s: 1070.56
-        ref_start_s: 346.885
-        ref_end_s:   354.551
+        ref_start_s: 234.975
+        ref_end_s:   242.658
     audible_frac: 0.97
     audible_start_s: 1006.35
     gain_curve:
@@ -1323,9 +1323,9 @@ tracks:
   - track:       "mix"
     set_start_s: 1453.33
     set_end_s:   1555.62
-    ref_start_s: 2109.06
-    ref_end_s:   2200.72
-    tempo_ratio: 0.896152
+    ref_start_s: 1453.33
+    ref_end_s:   1555.63
+    tempo_ratio: 1
     audible_frac: 0.99
     audible_end_s: 1554.59
     gain_curve:
@@ -2034,16 +2034,16 @@ tracks:
     track_id:    z059fc5
     set_start_s: 2393.53
     set_end_s:   2446.53
-    ref_start_s: 98.4219
-    ref_end_s:   180.095
-    tempo_ratio: 0.793167
+    ref_start_s: 59.0531
+    ref_end_s:   127.288
+    tempo_ratio: 1
     ref_segments:
       - mix_start_s: 2393.53
-        ref_start_s: 98.4219
-        ref_end_s:   128.317
+        ref_start_s: 59.0531
+        ref_end_s:   95.0531
       - mix_start_s: 2429.53
-        ref_start_s: 167.956
-        ref_end_s:   180.095
+        ref_start_s: 110.293
+        ref_end_s:   127.288
     audible_frac: 0.995
     audible_start_s: 2393.8
     gain_curve:
@@ -2231,9 +2231,9 @@ tracks:
     claimed_stem: instrumental
     set_start_s: 2636.46
     set_end_s:   2688.84
-    ref_start_s: 3800.14
-    ref_end_s:   3848.72
-    tempo_ratio: 0.927536
+    ref_start_s: 2636.47
+    ref_end_s:   2688.85
+    tempo_ratio: 1
     unalignable: true
     source_note: "mix_instrumental substituted as host — original unavailable (Lux x Spaceman)"
   - track:       "The Killers - Spaceman"
