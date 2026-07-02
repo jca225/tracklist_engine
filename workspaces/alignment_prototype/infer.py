@@ -320,6 +320,11 @@ def main(argv: list[str] | None = None) -> int:
     print("decoding sequence…")
     preds = aligner.predict_sequence(decodable)
 
+    # Per-span placement provenance (serialized as start_source) — which
+    # channel produced the final set_start. Starts as the MERT decode and is
+    # overwritten at each override site, so engagement is auditable from the
+    # timeline artifact itself, not the run log.
+    start_source: dict[int, str] = {i: "mert" for i in range(len(preds))}
     # ---- 2b. fingerprint placement (regular spans) -------------------------
     # Identity stays with predict_sequence (recording_id per span); the ~30s MERT
     # placement is replaced by the landmark-fp vote-extent, which localizes the
@@ -391,6 +396,7 @@ def main(argv: list[str] | None = None) -> int:
                     ref_start_s=ss + off,
                     ref_end_s=off + se,  # ref_start + span_duration
                 )
+                start_source[i] = "fp"
                 n_placed += 1
             preds = tuple(new_preds)
             print(
@@ -477,6 +483,7 @@ def main(argv: list[str] | None = None) -> int:
                     new_preds[i] = dataclasses.replace(
                         p, set_start_s=ss, set_end_s=ss + dur, ref_start_s=rs
                     )
+                    start_source[i] = "lyrics"
                     lyrics_placed.add(i)
                     n_lyr += 1
                 preds = tuple(new_preds)
@@ -546,6 +553,7 @@ def main(argv: list[str] | None = None) -> int:
                 new_preds[i] = dataclasses.replace(
                     p, set_start_s=ss, set_end_s=ss + span_dur
                 )
+                start_source[i] = "stem_hubert"
                 n_stem += 1
             preds = tuple(new_preds)
             print(
@@ -619,6 +627,7 @@ def main(argv: list[str] | None = None) -> int:
                 **asdict(p),
                 "cue_anchor_s": anchors.get(p.slot_label),
                 "name": t.label,
+                "start_source": start_source.get(i, "mert"),
                 **(
                     {"mert_set_start_s": mert_starts.get(i)}
                     if args.fp_placement_compare

@@ -120,6 +120,23 @@ def main(argv: list[str] | None = None) -> int:
         for r in yaml.safe_load(args.gt.read_text())["tracks"]
         if str(r.get("slot_label")) != "mix"
     ]
+    # Identity is scored in the CANONICAL recording_id namespace. GT rows that
+    # path-matched the pull manifest carry scrape-namespace tlp* ids; map them
+    # through labeling/fixtures/id_maps/<set>.json (tlp_id -> recording_id,
+    # from set_track_slots) so namespace mismatch can't masquerade as an
+    # identity miss.
+    id_map_path = _REPO / "labeling" / "fixtures" / "id_maps" / f"{args.set_id}.json"
+    id_map: dict[str, str] = (
+        json.loads(id_map_path.read_text()) if id_map_path.exists() else {}
+    )
+    if id_map:
+        mapped = 0
+        for r in gt_rows:
+            tid = str(r.get("track_id") or "")
+            if tid in id_map and id_map[tid] != tid:
+                r["track_id"] = id_map[tid]
+                mapped += 1
+        print(f"(id map: {mapped} GT ids normalized via {id_map_path.name})")
     # GT slot labels are the HUMAN's section numbering (002-155 on BB12),
     # not the tracklist's slot space — match by recording + time, never by
     # slot label.
