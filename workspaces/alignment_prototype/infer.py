@@ -364,6 +364,12 @@ def main(argv: list[str] | None = None) -> int:
     # overwritten at each override site, so engagement is auditable from the
     # timeline artifact itself, not the run log.
     start_source: dict[int, str] = {i: "mert" for i in range(len(preds))}
+    # Every probe's raw proposal, kept even when another probe wins — the
+    # agentic replay needs the losing candidates to measure cross-probe
+    # agreement (without them, single-source beliefs underestimate quality).
+    probe_proposals: dict[int, dict[str, float]] = {
+        i: {"mert_decode": p.set_start_s} for i, p in enumerate(preds)
+    }
     # ---- 2b. fingerprint placement (regular spans) -------------------------
     # Identity stays with predict_sequence (recording_id per span); the ~30s MERT
     # placement is replaced by the landmark-fp vote-extent, which localizes the
@@ -419,6 +425,7 @@ def main(argv: list[str] | None = None) -> int:
                 ss, se, off = pl
                 mert_start = preds[i].set_start_s
                 mert_starts[i] = mert_start
+                probe_proposals[i]["fp"] = ss
                 # Consistency gate: fp is precise but UNLEASHED — a wrong-diagonal
                 # or wrong-identity pick can place a span hundreds of seconds off.
                 # MERT is coarse but anchored (cue prior + monotonic decode, p90
@@ -522,6 +529,7 @@ def main(argv: list[str] | None = None) -> int:
                     new_preds[i] = dataclasses.replace(
                         p, set_start_s=ss, set_end_s=ss + dur, ref_start_s=rs
                     )
+                    probe_proposals[i]["lyrics"] = ss
                     start_source[i] = "lyrics"
                     lyrics_placed.add(i)
                     n_lyr += 1
@@ -583,6 +591,7 @@ def main(argv: list[str] | None = None) -> int:
                 if res is None:
                     continue
                 ss, _rs, _pk = res
+                probe_proposals[i]["stem_hubert"] = ss
                 # fusion guard: keep the prior when HuBERT agrees closely (protect
                 # near-hits); override only when it disagrees (fix the tail).
                 if abs(ss - p.set_start_s) <= args.stem_placement_guard_s:
@@ -666,6 +675,7 @@ def main(argv: list[str] | None = None) -> int:
                 "cue_anchor_s": anchors.get(p.slot_label),
                 "name": t.label,
                 "start_source": start_source.get(i, "mert"),
+                "probe_proposals": probe_proposals.get(i, {}),
                 **(
                     {"mert_set_start_s": mert_starts.get(i)}
                     if args.fp_placement_compare

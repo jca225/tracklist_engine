@@ -63,7 +63,19 @@ def _replay_runner(probe: str):
                 precision=spec.precision,
                 cost=spec.cost,
             )
-        if data.get("start_source") == probe:
+        proposals = data.get("probe_proposals") or {}
+        if probe in proposals:  # rich artifact: every probe's raw proposal
+            won = data.get("start_source") == probe
+            conf = float(data.get("confidence") or 0.8) if won else 0.7
+            return Observation(
+                probe=probe,
+                set_start_s=float(proposals[probe]),
+                ref_start_s=data.get("ref_start_s") if won else None,
+                confidence=max(0.3, min(conf, 1.0)),
+                precision=spec.precision,
+                cost=spec.cost,
+            )
+        if data.get("start_source") == probe:  # legacy artifact: winner only
             conf = float(data.get("confidence") or 0.8)
             return Observation(
                 probe=probe,
@@ -103,6 +115,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--set-id", required=True)
     p.add_argument("--gt", type=Path, required=True)
     p.add_argument("--timeline", type=Path, default=None)
+    p.add_argument("--sweep", action="store_true", help="grid-sweep ladder thresholds")
     args = p.parse_args(argv)
 
     tl_path = args.timeline or OUT_DIR / f"{args.set_id}_predicted_timeline.json"
@@ -156,6 +169,18 @@ def main(argv: list[str] | None = None) -> int:
             f"  {name:12} n={len(group):3}  scored={s['n']:3}  "
             f"clean<=15s={s['clean_15s_pct']}%  <=5s={s['clean_5s_pct']}%  median={s['median_s']}s"
         )
+    if args.sweep:
+        all_beliefs = {**res.committed, **res.review, **res.suggested, **res.escalated}
+        print("\nladder sweep (auto rung: coverage / clean<=15s / median):")
+        for auto in (0.50, 0.60, 0.70, 0.75, 0.80, 0.85, 0.90):
+            grp = {k: b for k, b in all_beliefs.items() if b.quality() >= auto}
+            s = _score(grp, gt_by_tid)
+            cov = round(100 * len(grp) / max(1, len(all_beliefs)))
+            print(
+                f"  auto>={auto:.2f}  cov={cov:3}%  n={s['n']:3}  "
+                f"clean15={s['clean_15s_pct']}%  clean5={s['clean_5s_pct']}%  med={s['median_s']}s"
+            )
+
     print(f"\nevent log: {log_path}")
     return 0
 
