@@ -28,6 +28,7 @@ Output: out/<set_id>_als_audit.json + a per-clip status table.
     venvs/audio/bin/python -m workspaces.source_detection.als_audit \\
         --set-id 1fsnxchk [--als <path>] [--limit N] [--workers 6]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -44,15 +45,16 @@ _REPO = Path(__file__).resolve().parents[2]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from labeling import als_io  # noqa: E402
+from labeling import als as als_io  # noqa: E402
+from labeling.als.identity import _stem_folder_name  # noqa: E402
 from workspaces.source_detection import config, features  # noqa: E402
 from workspaces.source_detection.matcher import _match_curve, _resample_cols  # noqa: E402
 
 FRAME_S = config.FRAME_S
-VERIFY_WINDOW_S = 24.0      # max source seconds used as the matched-filter template
-POS_TOL_S = 3.0            # placed vs detected within this == placement confirmed
-SCORE_OK = 0.50           # matched-filter score floor to call a peak "real"
-SCORE_WEAK = 0.40         # below this everywhere == source doesn't appear
+VERIFY_WINDOW_S = 24.0  # max source seconds used as the matched-filter template
+POS_TOL_S = 3.0  # placed vs detected within this == placement confirmed
+SCORE_OK = 0.50  # matched-filter score floor to call a peak "real"
+SCORE_WEAK = 0.40  # below this everywhere == source doesn't appear
 
 
 # --------------------------------------------------------------------------- records
@@ -63,11 +65,11 @@ class ClipFacts:
     idx: int
     track_name: str
     group: str
-    als_path: str            # OriginalFileRef path (or flattened fallback)
-    src_path: str | None     # resolved audio file on disk
-    id_method: str           # orig-path | size-match | crc-match | ambiguous | unresolved
+    als_path: str  # OriginalFileRef path (or flattened fallback)
+    src_path: str | None  # resolved audio file on disk
+    id_method: str  # orig-path | size-match | crc-match | ambiguous | unresolved
     song: str
-    claimed_stem: str        # acappella | instrumental | regular
+    claimed_stem: str  # acappella | instrumental | regular
     slot: str
     mix_start_s: float
     mix_end_s: float
@@ -76,9 +78,11 @@ class ClipFacts:
     pitch_coarse: int
     asserted_stretch: float  # mix seconds per source second (warp ratio)
     audible_frac: float = 1.0  # fraction of the span where track volume > mute floor
-    unwarped: bool = False     # IsWarped=false: 1:1 playback, warp markers don't apply
-    n_warp_markers: int = 0    # >2 == variable internal stretch (asserted_stretch is an avg)
-    warp_points: tuple = ()    # (beat, sec) pairs — the real warp curve, for B1 warp eval
+    unwarped: bool = False  # IsWarped=false: 1:1 playback, warp markers don't apply
+    n_warp_markers: int = (
+        0  # >2 == variable internal stretch (asserted_stretch is an avg)
+    )
+    warp_points: tuple = ()  # (beat, sec) pairs — the real warp curve, for B1 warp eval
 
 
 @dataclass
@@ -90,7 +94,7 @@ class ClipVerdict:
     id_method: str
     mix_start_s: float
     mix_end_s: float
-    status: str              # OK | POSITION_MISMATCH | WRONG_AUDIO | UNRESOLVED | NO_AUDIO
+    status: str  # OK | POSITION_MISMATCH | WRONG_AUDIO | UNRESOLVED | NO_AUDIO
     flags: list[str] = field(default_factory=list)
     placed_score: float = 0.0
     best_score: float = 0.0
@@ -110,7 +114,7 @@ def song_label(path: str) -> str:
     tracks/<HERE> folder (real acapella candidates live under
     stems/<song>/candidates/vocals/, so the immediate parent is useless), with
     the slot prefix and annotator [bpm key] tags stripped."""
-    folder = als_io._stem_folder_name(path) or Path(path).stem
+    folder = _stem_folder_name(path) or Path(path).stem
     return als_io.strip_user_tags(_SLOT_PREFIX.sub("", folder)).strip()
 
 
@@ -126,8 +130,9 @@ def _stem_kind(path: str) -> str:
 def build_stem_size_index(set_dir: Path) -> dict[tuple[int, str], list[str]]:
     """(file_size, kind) -> [source folder names] for canonical stems + tracks."""
     idx: dict[tuple[int, str], list[str]] = {}
-    for f in list((set_dir / "stems").glob("*/vocals.flac")) + \
-             list((set_dir / "stems").glob("*/instrumental.flac")):
+    for f in list((set_dir / "stems").glob("*/vocals.flac")) + list(
+        (set_dir / "stems").glob("*/instrumental.flac")
+    ):
         try:
             key = (f.stat().st_size, _stem_kind(f.name))
         except OSError:
@@ -142,8 +147,10 @@ def _orig_size_crc(clip_el) -> tuple[int | None, str | None]:
         return None, None
     sz = fr.find("OriginalFileSize")
     crc = fr.find("OriginalCrc")
-    return (int(sz.get("Value")) if sz is not None else None,
-            crc.get("Value") if crc is not None else None)
+    return (
+        int(sz.get("Value")) if sz is not None else None,
+        crc.get("Value") if crc is not None else None,
+    )
 
 
 def resolve_source(als_path: str, clip_el, size_index) -> tuple[str | None, str]:
@@ -162,7 +169,7 @@ def resolve_source(als_path: str, clip_el, size_index) -> tuple[str | None, str]
             return cands[0], "size-match"
         if len(cands) > 1:
             return cands[0], "ambiguous"
-    if p and p.is_file():           # flattened file exists but identity unknown
+    if p and p.is_file():  # flattened file exists but identity unknown
         return str(p), "unresolved"
     return None, "unresolved"
 
@@ -173,6 +180,7 @@ def _mix_duration_s(set_dir: Path) -> float:
         f = set_dir / name
         if f.is_file():
             import soundfile as sf
+
             try:
                 return float(sf.info(str(f)).duration)
             except Exception:
@@ -180,7 +188,9 @@ def _mix_duration_s(set_dir: Path) -> float:
     return 3600.0
 
 
-def parse_als(als_path: Path, set_dir: Path, size_index) -> tuple[list[ClipFacts], list[dict]]:
+def parse_als(
+    als_path: Path, set_dir: Path, size_index
+) -> tuple[list[ClipFacts], list[dict]]:
     root = als_io.load_als_xml(als_path)
     # mix lane -> arrangement mapper
     mix_track = None
@@ -191,16 +201,22 @@ def parse_als(als_path: Path, set_dir: Path, size_index) -> tuple[list[ClipFacts
             break
     if mix_track is None:  # fall back: any lane referencing mix.*
         for tr in root.xpath(".//LiveSet/Tracks/AudioTrack"):
-            if tr.xpath(".//AudioClip") and "mix" in (
-                    als_io.clip_original_path(tr.xpath(".//AudioClip")[0]) or "").lower():
+            if (
+                tr.xpath(".//AudioClip")
+                and "mix"
+                in (
+                    als_io.clip_original_path(tr.xpath(".//AudioClip")[0]) or ""
+                ).lower()
+            ):
                 mix_track = tr
                 break
     mapper = als_io.ArrangementMapper.from_mix_track(
-        mix_track, mix_duration_s=_mix_duration_s(set_dir))
+        mix_track, mix_duration_s=_mix_duration_s(set_dir)
+    )
     vol_envs = als_io.build_vol_envelopes(root)
 
     facts: list[ClipFacts] = []
-    dropped: list[dict] = []           # clips we couldn't place — logged, never silent
+    dropped: list[dict] = []  # clips we couldn't place — logged, never silent
     i = 0
     current_group = ""
     for tr in root.xpath(".//LiveSet/Tracks/*"):
@@ -215,18 +231,27 @@ def parse_als(als_path: Path, set_dir: Path, size_index) -> tuple[list[ClipFacts
         vpts = vol_envs.get(als_io.volume_automation_id(tr), [])
         for clip_el in tr.xpath(".//AudioClip"):
             path = als_io.clip_original_path(clip_el)
-            cs = clip_el.find("CurrentStart"); ce = clip_el.find("CurrentEnd")
+            cs = clip_el.find("CurrentStart")
+            ce = clip_el.find("CurrentEnd")
             if cs is None or ce is None:
                 dropped.append({"track": nm, "reason": "no CurrentStart/End"})
                 continue
             warp = als_io.WarpMarkers.from_clip(clip_el)
-            arr_s = float(cs.get("Value")); arr_e = float(ce.get("Value"))
-            ms = mapper.arr_to_set_sec(arr_s); me = mapper.arr_to_set_sec(arr_e)
+            arr_s = float(cs.get("Value"))
+            arr_e = float(ce.get("Value"))
+            ms = mapper.arr_to_set_sec(arr_s)
+            me = mapper.arr_to_set_sec(arr_e)
             if ms is None or me is None or me <= ms:
-                dropped.append({"track": nm, "arr_start": arr_s, "song": song_label(path),
-                                "reason": "arrangement beat is outside every mix-reference "
-                                          "warp (parked past the mix) — staged/unaligned clip "
-                                          "with no derivable mix position"})
+                dropped.append(
+                    {
+                        "track": nm,
+                        "arr_start": arr_s,
+                        "song": song_label(path),
+                        "reason": "arrangement beat is outside every mix-reference "
+                        "warp (parked past the mix) — staged/unaligned clip "
+                        "with no derivable mix position",
+                    }
+                )
                 continue
             anchor = warp.points[0][0] if warp.points else 0.0
             ref_s = warp.beat_to_sec(anchor)
@@ -242,26 +267,45 @@ def parse_als(als_path: Path, set_dir: Path, size_index) -> tuple[list[ClipFacts
             claimed_stem, _ = als_io.classify_path(path)
             src, method = resolve_source(path, clip_el, size_index)
             song = song_label(src or path) or als_io.track_display_name(tr)
-            ref_span = max(ref_e - ref_s, 1e-3); mix_span = max(me - ms, 1e-3)
-            facts.append(ClipFacts(
-                idx=i, track_name=nm, group=current_group, als_path=path,
-                src_path=src, id_method=method, song=song,
-                claimed_stem=claimed_stem, slot=als_io.slot_from_path(path) or "",
-                mix_start_s=ms, mix_end_s=me, ref_start_s=ref_s, ref_end_s=ref_e,
-                pitch_coarse=pitch, asserted_stretch=mix_span / ref_span,
-                audible_frac=round(
-                    als_io.audible_span(vpts, arr_s, arr_e).fraction, 3),
-                unwarped=unwarped, n_warp_markers=len(warp.points),
-                warp_points=tuple((round(b, 3), round(s, 3)) for b, s in warp.points),
-            ))
+            ref_span = max(ref_e - ref_s, 1e-3)
+            mix_span = max(me - ms, 1e-3)
+            facts.append(
+                ClipFacts(
+                    idx=i,
+                    track_name=nm,
+                    group=current_group,
+                    als_path=path,
+                    src_path=src,
+                    id_method=method,
+                    song=song,
+                    claimed_stem=claimed_stem,
+                    slot=als_io.slot_from_path(path) or "",
+                    mix_start_s=ms,
+                    mix_end_s=me,
+                    ref_start_s=ref_s,
+                    ref_end_s=ref_e,
+                    pitch_coarse=pitch,
+                    asserted_stretch=mix_span / ref_span,
+                    audible_frac=round(
+                        als_io.audible_span(vpts, arr_s, arr_e).fraction, 3
+                    ),
+                    unwarped=unwarped,
+                    n_warp_markers=len(warp.points),
+                    warp_points=tuple(
+                        (round(b, 3), round(s, 3)) for b, s in warp.points
+                    ),
+                )
+            )
             i += 1
     return facts, dropped
 
 
 # --------------------------------------------------------------------------- verify
 def _mix_chroma_for(stem: str, set_dir: Path):
-    name = {"acappella": "mix_vocals.flac", "instrumental": "mix_instrumental.flac"}.get(
-        stem, "mix_instrumental.flac")
+    name = {
+        "acappella": "mix_vocals.flac",
+        "instrumental": "mix_instrumental.flac",
+    }.get(stem, "mix_instrumental.flac")
     f = set_dir / name
     if not f.is_file():
         f = set_dir / "mix_instrumental.flac"
@@ -269,34 +313,54 @@ def _mix_chroma_for(stem: str, set_dir: Path):
 
 
 def verify_clip(fact: ClipFacts, set_dir: Path) -> ClipVerdict:
-    v = ClipVerdict(idx=fact.idx, song=fact.song, claimed_stem=fact.claimed_stem,
-                    slot=fact.slot, id_method=fact.id_method,
-                    mix_start_s=fact.mix_start_s, mix_end_s=fact.mix_end_s,
-                    pitch_coarse=fact.pitch_coarse, status="OK")
+    v = ClipVerdict(
+        idx=fact.idx,
+        song=fact.song,
+        claimed_stem=fact.claimed_stem,
+        slot=fact.slot,
+        id_method=fact.id_method,
+        mix_start_s=fact.mix_start_s,
+        mix_end_s=fact.mix_end_s,
+        pitch_coarse=fact.pitch_coarse,
+        status="OK",
+    )
     if fact.audible_frac < 0.1:
         v.status = "MUTED"
         v.note = f"track volume automated to silence (audible {fact.audible_frac:.0%}) — not in mix"
         return v
     if not fact.src_path or not Path(fact.src_path).is_file():
-        v.status = "UNRESOLVED"; v.note = "no source audio on disk"; return v
+        v.status = "UNRESOLVED"
+        v.note = "no source audio on disk"
+        return v
 
     mixc = _mix_chroma_for(fact.claimed_stem, set_dir)
     srcc = features.chroma_of(Path(fact.src_path))
     if mixc is None or srcc is None or srcc.shape[1] < 4:
-        v.status = "NO_AUDIO"; v.note = "missing chroma"; return v
+        v.status = "NO_AUDIO"
+        v.note = "missing chroma"
+        return v
 
     # source segment as asserted, warped to mix tempo
     r0 = int(round(fact.ref_start_s / FRAME_S))
-    seg = srcc[:, r0:r0 + int(round(min(VERIFY_WINDOW_S, fact.ref_end_s - fact.ref_start_s) / FRAME_S))]
+    seg = srcc[
+        :,
+        r0 : r0
+        + int(round(min(VERIFY_WINDOW_S, fact.ref_end_s - fact.ref_start_s) / FRAME_S)),
+    ]
     if seg.shape[1] < 8:
-        v.status = "NO_AUDIO"; v.note = "ref window too short"; return v
+        v.status = "NO_AUDIO"
+        v.note = "ref window too short"
+        return v
     tmpl = _resample_cols(seg, fact.asserted_stretch)
     if tmpl.shape[1] >= mixc.shape[1]:
         tmpl = tmpl[:, : mixc.shape[1] - 1]
 
     placed_frame = int(round(fact.mix_start_s / FRAME_S))
-    best_score = -2.0; best_frame = 0; best_rot = 0
-    placed_score = -2.0; placed_rot = 0
+    best_score = -2.0
+    best_frame = 0
+    best_rot = 0
+    placed_score = -2.0
+    placed_rot = 0
     placed_by_rot = [-2.0] * 12
     for r in range(12):
         curve = _match_curve(np.roll(tmpl, r, axis=0), mixc)
@@ -331,10 +395,16 @@ def verify_clip(fact: ClipFacts, set_dir: Path) -> ClipVerdict:
         v.note = f"strong peak {v.best_score:.2f} at {v.best_pos_s:.1f}s, not placed {fact.mix_start_s:.1f}s"
     # flag pitch only when the asserted transpose matches clearly WORSE than the
     # best rotation at the placed position (chroma pitch is ambiguous when tied).
-    if (v.status in ("OK", "POSITION_MISMATCH") and placed_rot != fact.pitch_coarse % 12
-            and placed_score >= 0.55 and placed_score - placed_at_asserted > 0.10):
-        v.flags.append(f"pitch: als={fact.pitch_coarse} audio≈{v.detected_pitch:+d} "
-                       f"(Δ{placed_score - placed_at_asserted:.2f})")
+    if (
+        v.status in ("OK", "POSITION_MISMATCH")
+        and placed_rot != fact.pitch_coarse % 12
+        and placed_score >= 0.55
+        and placed_score - placed_at_asserted > 0.10
+    ):
+        v.flags.append(
+            f"pitch: als={fact.pitch_coarse} audio≈{v.detected_pitch:+d} "
+            f"(Δ{placed_score - placed_at_asserted:.2f})"
+        )
     if fact.id_method in ("ambiguous", "unresolved"):
         v.flags.append(f"identity:{fact.id_method}")
     return v
@@ -344,22 +414,31 @@ def verify_clip(fact: ClipFacts, set_dir: Path) -> ClipVerdict:
 def find_als(set_id: str) -> list[Path]:
     # CANONICAL = the hand-edited "_fast" session; prefer it, then _slow, then rest.
     home = Path.home()
-    hits = set((home / "Desktop").glob("*labeling*/*.als")) | \
-           set((home / "Desktop").glob(f"*{set_id}*/*.als"))
-    return sorted(hits, key=lambda p: (0 if "_fast" in p.name else 1 if "_slow" in p.name else 2,
-                                       p.name))
+    hits = set((home / "Desktop").glob("*labeling*/*.als")) | set(
+        (home / "Desktop").glob(f"*{set_id}*/*.als")
+    )
+    return sorted(
+        hits,
+        key=lambda p: (
+            0 if "_fast" in p.name else 1 if "_slow" in p.name else 2,
+            p.name,
+        ),
+    )
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--set-id", required=True)
     ap.add_argument("--als", help="explicit .als path (else auto-discover)")
     ap.add_argument("--limit", type=int, default=0, help="verify only first N clips")
     ap.add_argument("--out", default=None)
     args = ap.parse_args(argv)
 
-    set_dir = next(iter(sorted((Path.home() / "aligning").glob(f"{args.set_id}__*"))), None)
+    set_dir = next(
+        iter(sorted((Path.home() / "aligning").glob(f"{args.set_id}__*"))), None
+    )
     if set_dir is None:
         sys.exit(f"no ~/aligning folder for {args.set_id}")
 
@@ -389,34 +468,61 @@ def main(argv=None) -> int:
 
     # summary
     from collections import Counter
+
     by_status = Counter(v.status for v in verdicts)
     by_id = Counter(f.id_method for f in facts)
     print("\n=== identity resolution ===")
     for k, n in by_id.most_common():
         print(f"  {n:4}  {k}")
     print("\n=== audio-verification status ===")
-    for k in ("OK", "MUTED", "POSITION_MISMATCH", "WRONG_AUDIO", "UNRESOLVED", "NO_AUDIO"):
+    for k in (
+        "OK",
+        "MUTED",
+        "POSITION_MISMATCH",
+        "WRONG_AUDIO",
+        "UNRESOLVED",
+        "NO_AUDIO",
+    ):
         if by_status.get(k):
             print(f"  {by_status[k]:4}  {k}")
     flagged = [v for v in verdicts if v.flags or v.status != "OK"]
     print(f"\n=== {len(flagged)} clips needing attention (worst first) ===")
     for v in sorted(flagged, key=lambda x: (x.status == "OK", -x.pos_error_s))[:40]:
         fl = (" | " + "; ".join(v.flags)) if v.flags else ""
-        print(f"  [{v.status:17}] {v.mix_start_s:7.1f}s {v.song[:42]:42} "
-              f"placed={v.placed_score:+.2f} best={v.best_score:+.2f}@{v.best_pos_s:.0f}s{fl}")
+        print(
+            f"  [{v.status:17}] {v.mix_start_s:7.1f}s {v.song[:42]:42} "
+            f"placed={v.placed_score:+.2f} best={v.best_score:+.2f}@{v.best_pos_s:.0f}s{fl}"
+        )
 
-    out = Path(args.out) if args.out else config.OUT_ROOT / f"{args.set_id}_als_audit.json"
+    out = (
+        Path(args.out)
+        if args.out
+        else config.OUT_ROOT / f"{args.set_id}_als_audit.json"
+    )
     out.parent.mkdir(parents=True, exist_ok=True)
-    print(f"\nparsing notes: {len(dropped)} dropped, {n_unwarped} unwarped (stretch forced 1.0), "
-          f"{n_varwarp} with variable internal warp (full curve stored)")
-    out.write_text(json.dumps({
-        "set_id": args.set_id, "als": str(als_path),
-        "facts": [asdict(f) for f in facts],
-        "verdicts": [asdict(v) for v in verdicts],
-        "dropped": dropped,
-        "summary": {"status": dict(by_status), "identity": dict(by_id),
-                    "dropped": len(dropped), "unwarped": n_unwarped, "variable_warp": n_varwarp},
-    }, indent=2))
+    print(
+        f"\nparsing notes: {len(dropped)} dropped, {n_unwarped} unwarped (stretch forced 1.0), "
+        f"{n_varwarp} with variable internal warp (full curve stored)"
+    )
+    out.write_text(
+        json.dumps(
+            {
+                "set_id": args.set_id,
+                "als": str(als_path),
+                "facts": [asdict(f) for f in facts],
+                "verdicts": [asdict(v) for v in verdicts],
+                "dropped": dropped,
+                "summary": {
+                    "status": dict(by_status),
+                    "identity": dict(by_id),
+                    "dropped": len(dropped),
+                    "unwarped": n_unwarped,
+                    "variable_warp": n_varwarp,
+                },
+            },
+            indent=2,
+        )
+    )
     print(f"\nwrote {out}")
     return 0
 

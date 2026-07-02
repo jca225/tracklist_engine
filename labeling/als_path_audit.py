@@ -21,7 +21,7 @@ _REPO = Path(__file__).resolve().parents[1]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from labeling.als_io import build_manifest_index, display_from_path, match_manifest_for_path, slot_from_path
+from labeling.als import build_manifest_index, display_from_path, match_manifest_for_path, slot_from_path
 from labeling.export_als_to_gt import DEFAULT_ALS, DEFAULT_SET_DIR, ClipRow, collect_kept_clip_rows
 
 

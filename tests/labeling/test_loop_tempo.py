@@ -6,7 +6,7 @@ segment at 1.0x (jumping between non-contiguous song sections) was reported at
 ref region the DJ jumped over and never played."""
 from __future__ import annotations
 
-from labeling.als_io import ParsedClip, WarpMarkers
+from labeling.als import ParsedClip, WarpMarkers
 from labeling.export_als_to_gt import ClipRow, _detect_loops
 
 

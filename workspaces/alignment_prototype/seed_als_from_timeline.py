@@ -44,7 +44,7 @@ if str(_REPO) not in sys.path:
 
 from lxml import etree
 
-from labeling.als_io import (
+from labeling.als import (
     ArrangementMapper,
     build_manifest_index,
     load_als_xml,
@@ -323,7 +323,7 @@ def add_tempo_and_markers(
     tempo automation are mutually exclusive, so BPM lives in the readout, not by
     warping time. Best-effort: returns 0 if no bed spans. Returns marker count.
     """
-    from labeling.als_io import write_locators
+    from labeling.als import write_locators
 
     bed = sorted(
         (
@@ -422,7 +422,7 @@ def main(argv: list[str] | None = None) -> int:
     # write_tempo_envelope sets Manual AND replaces any drawn tempo automation
     # with a flat line, so nothing overrides 60.
     try:
-        from labeling.als_io import write_tempo_envelope
+        from labeling.als import write_tempo_envelope
 
         write_tempo_envelope(root, [(0.0, _TEMPO_BPM)])
     except Exception:

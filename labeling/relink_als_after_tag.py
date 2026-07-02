@@ -31,7 +31,7 @@ _REPO = Path(__file__).resolve().parents[1]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from labeling.als_io import strip_user_tags
+from labeling.als import strip_user_tags
 
 AUDIO_EXTS = {".m4a", ".mp3", ".wav"}
 

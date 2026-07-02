@@ -35,7 +35,7 @@ _REPO = Path(__file__).resolve().parents[2]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from labeling.als_io import load_als_xml, write_locators, write_tempo_envelope  # noqa: E402
+from labeling.als import load_als_xml, write_locators, write_tempo_envelope  # noqa: E402
 
 DEFAULT_TEMPLATE = (
     Path.home()

@@ -30,7 +30,7 @@ _REPO = Path(__file__).resolve().parent.parent
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from labeling.als_io import (
+from labeling.als import (
     ArrangementMapper,
     MUTE_THR,
     ParsedClip,
@@ -551,7 +551,7 @@ def export_gt(
 
 
 def slot_from_path(path: str) -> str | None:
-    from labeling.als_io import slot_from_path as _slot
+    from labeling.als import slot_from_path as _slot
 
     return _slot(path)
 

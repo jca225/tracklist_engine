@@ -3,14 +3,14 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from labeling.als_io import ManifestIndex, ManifestSlot
+from labeling.als import ManifestIndex, ManifestSlot
 from labeling.enrich_gt_track_ids import (
     SlotRow,
     enrich_track,
     lookup_db_label,
 )
 from labeling.export_als_to_gt import ClipRow
-from labeling.als_io import ParsedClip, WarpMarkers
+from labeling.als import ParsedClip, WarpMarkers
 from labeling.ground_truth.schema import GroundTruthTrack
 
 
