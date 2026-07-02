@@ -97,11 +97,16 @@ def main(argv: list[str] | None = None) -> int:
         "per ref — expensive)",
     )
     p.add_argument("--hubert-layer", type=int, default=9)
+    p.add_argument(
+        "--timeline",
+        type=Path,
+        default=None,
+        help="score an arbitrary timeline JSON (default: out/<set-id>_predicted_timeline.json)",
+    )
     args = p.parse_args(argv)
 
-    timeline = json.loads(
-        (OUT_DIR / f"{args.set_id}_predicted_timeline.json").read_text()
-    )
+    tl_path = args.timeline or (OUT_DIR / f"{args.set_id}_predicted_timeline.json")
+    timeline = json.loads(Path(tl_path).read_text())
     # manifest by track_id — only needed for fiber ref-audio resolution
     by_tid: dict[str, dict] = {}
     if args.fibers:
