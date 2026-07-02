@@ -42,12 +42,9 @@ GOLDEN = {
         / "BB11 align Project/BB11 align.als",
         None,  # live session — clip count changes as John labels
     ),
-    "bb12_seeded": (
-        Path.home()
-        / "aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/BB12 align.als",
-        799,
-    ),
 }
+# (the seeded-BB12 machine-dialect session is a committed fixture now:
+# fixtures/als/bb12_seeded.als — auto-discovered, no golden entry needed)
 
 
 def test_tempo_write_roundtrip_flat():
