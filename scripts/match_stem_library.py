@@ -107,6 +107,36 @@ class Parsed:
     provenance: str  # official|studio|diy|uvr|... or ""
 
 
+# Discord/Dropbox rips arrive with percent-encoding whose "%" was sanitized to
+# "_" ("Martin_20Garrix_20_26_20MOti" = "Martin Garrix & MOti"). Only uppercase
+# hex pairs are real escapes (percent-encoding never encodes letters/digits and
+# emits uppercase hex) — "_feat." / "_Acapella" must survive untouched.
+_ESCAPE_RUN = re.compile(r"(?:_[0-9A-F]{2})+")
+
+
+def _decode_escape_run(m: re.Match[str]) -> str:
+    run = m.group(0)
+    raw = bytes(int(run[i + 1 : i + 3], 16) for i in range(0, len(run), 3))
+    try:
+        decoded = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return run  # lone high byte ("_AC" in "X_ACAPELLA") — not an escape
+    if any(ord(c) < 0x20 or ord(c) == 0x7F for c in decoded):
+        return run  # control chars ("_12" track numbers) — not an escape
+    if any(c.isascii() and c.isalnum() for c in decoded):
+        return run  # alnum is never percent-encoded ("_7258" ids, "_2A" Camelot)
+    return decoded
+
+
+def decode_escaped(name: str) -> str:
+    """Reverse the ``%``→``_`` sanitized percent-encoding in library filenames."""
+    if "_20" not in name:
+        # A genuinely encoded name all but always carries an escaped space;
+        # without one, "_3Dee" is a DJ handle and "_2A" a Camelot key.
+        return name
+    return _ESCAPE_RUN.sub(_decode_escape_run, name)
+
+
 def _norm(s: str) -> str:
     s = s.lower()
     s = re.sub(r"\b(feat|ft|featuring|with)\.?\b", " ", s)
@@ -116,7 +146,7 @@ def _norm(s: str) -> str:
 
 def parse_filename(path: Path) -> Parsed:
     raw = path.stem
-    s = raw.replace("_", " ").replace("–", "-").replace("—", "-")
+    s = decode_escaped(raw).replace("_", " ").replace("–", "-").replace("—", "-")
     s = _LEAD_TAG.sub("", s)
     s = _LEAD_CAMELOT.sub("", s)
     s = _LEAD_TRACKNO.sub("", s)
