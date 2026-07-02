@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Pretrain MertAlignHead on UnmixDB, then optionally ablate vs BB12 finetune.
+"""Pretrain MertAlignHead on UnmixDB or synthetic mashup corpus, then ablate.
 
 UnmixDB download: https://zenodo.org/records/1422385
+Synthetic generator: workspaces.alignment_prototype.synthetic_mix.generate
 
 Examples:
   # Parse-only / pipeline smoke (no audio):
@@ -21,6 +22,11 @@ Examples:
   # Decisive ablation (frozen BB12 held-out):
   venvs/audio/bin/python -m workspaces.alignment_prototype.pretrain --ablation \\
     --pretrain-checkpoint workspaces/alignment_prototype/.cache/pretrain_mert.pt
+
+  # Synthetic corpus pretrain (fast chroma smoke):
+  venvs/audio/bin/python -m workspaces.alignment_prototype.pretrain \\
+    --synthetic-root data/synthetic_mixes --features chroma --max-mixes 50 \\
+    --out workspaces/alignment_prototype/.cache/pretrain_synthetic_chroma.pt
 """
 
 from __future__ import annotations
@@ -81,16 +87,30 @@ def collect_unmix_examples(
     feature_kind: str,
     device: str,
     search_margin_s: float,
+    synthetic: bool = False,
 ):
     from workspaces.alignment_prototype.mert_features import MertSpanExample
+
+    if synthetic:
+        from workspaces.alignment_prototype.synthetic_mix.corpus import (
+            slot_pools_for_mix as synthetic_slot_pools,
+            targets_for_mix,
+        )
+        from workspaces.alignment_prototype.external.unmixdb import _recording_id
 
     examples: list[MertSpanExample] = []
     skipped = 0
     for mix in mixes:
-        ref_paths = {
-            _recording_id(sp.filename): mix.track_audio[sp.track_idx]
-            for sp in mix.spans
-        }
+        if synthetic:
+            ref_paths = {
+                _recording_id(sp.filename): mix.track_audio[sp.track_idx]
+                for sp in mix.spans
+            }
+        else:
+            ref_paths = {
+                _recording_id(sp.filename): mix.track_audio[sp.track_idx]
+                for sp in mix.spans
+            }
         try:
             mix_series, refs = build_mix_bundle(
                 mix.mix_audio,
@@ -102,8 +122,12 @@ def collect_unmix_examples(
             skipped += 1
             print(f"  skip {mix.mix_id}: {exc}", file=sys.stderr)
             continue
-        targets = labels_to_targets(mix)
-        pools = slot_pools_for_mix(mix)
+        if synthetic:
+            targets = targets_for_mix(mix)
+            pools = synthetic_slot_pools(mix)
+        else:
+            targets = labels_to_targets(mix)
+            pools = slot_pools_for_mix(mix)
         rows = build_examples(
             targets,
             mix_series,
@@ -116,16 +140,24 @@ def collect_unmix_examples(
 
 
 def run_pretrain(args: argparse.Namespace) -> int:
-    if args.unmixdb_root is None:
-        print("--unmixdb-root required", file=sys.stderr)
-        return 1
+    if args.synthetic_root is not None:
+        from workspaces.alignment_prototype.synthetic_mix.corpus import (
+            iter_mixes as iter_synthetic,
+            summarize_mixes as summarize_synthetic,
+        )
 
-    mixes = iter_mixes(
-        args.unmixdb_root,
-        good_only=not args.all_mixes,
-        max_mixes=args.max_mixes,
-    )
-    print(summarize_mixes(mixes))
+        mixes = iter_synthetic(args.synthetic_root, max_mixes=args.max_mixes)
+        print(summarize_synthetic(mixes))
+    elif args.unmixdb_root is not None:
+        mixes = iter_mixes(
+            args.unmixdb_root,
+            good_only=not args.all_mixes,
+            max_mixes=args.max_mixes,
+        )
+        print(summarize_mixes(mixes))
+    else:
+        print("--unmixdb-root or --synthetic-root required", file=sys.stderr)
+        return 1
     if args.dry_run:
         for mix in mixes[:3]:
             print(f"  {mix.mix_id} spans={len(mix.spans)} mix={mix.mix_audio.name}")
@@ -149,6 +181,7 @@ def run_pretrain(args: argparse.Namespace) -> int:
         feature_kind=args.features,
         device=device,
         search_margin_s=cfg.search_margin_s,
+        synthetic=args.synthetic_root is not None,
     )
     print(f"examples={len(examples)} skipped_mixes={skipped}")
     if not examples:
@@ -276,6 +309,12 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         default=None,
         help="Path to UnmixDB root or v1.1 dir",
+    )
+    p.add_argument(
+        "--synthetic-root",
+        type=Path,
+        default=None,
+        help="Path to synthetic mashup corpus (from synthetic_mix.generate)",
     )
     p.add_argument(
         "--out", type=Path, default=DEFAULT_OUT, help="Checkpoint output path"
