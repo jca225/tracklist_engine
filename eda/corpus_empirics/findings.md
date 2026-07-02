@@ -507,3 +507,37 @@ This is a holding pen, not production schema. Signals graduate to the main
 DB only after they prove useful for downstream modeling. Rebuild any time
 via [aux_db_sync.py](aux_db_sync.py), which is idempotent
 and reads the existing CSV/JSON caches.
+
+## Acappella density is a DJ-level style fingerprint (survives the uploader confound)
+
+Cross-DJ (not just Big Bootie): does acappella density vary *by DJ*, or is it just an
+artifact of which 1001tracklists **uploader** annotated the set? The naive cross-tab is
+confounded — `creator_name` is the uploader, and the DJ isn't in a clean column
+(`artists` is empty corpus-wide; DJ lives in `title`). [dj_acappella_density.py](dj_acappella_density.py)
+parses the DJ from `title`, counts acappella-indicating rows / `total_tracks` per set, and
+runs a **within-uploader label-permutation null** (shuffle DJ labels across sets sharing an
+uploader, preserving each uploader's annotation rate).
+
+- n = 108 DJs with ≥20 sets, 35,331 sets. **DJ↔uploader collinearity = 0%** — every kept DJ
+  is transcribed by *many* uploaders (Hardwell: 157, Afrojack: 114), so annotation style
+  averages out and DJ vs uploader is separable.
+- **DJ effect survives the confound: observed between-DJ variance p = 0.002.** Acappella
+  density genuinely varies by DJ, not just by who annotated.
+- The ordering is a clean **genre/style fingerprint**: high — Alesso 0.19, James Hype 0.16,
+  Two Friends 0.15, Hardwell 0.15, Afrojack 0.13 (big-room / mashup / festival EDM, vocal-hook
+  heavy); low — Ben Böhmer, Wax Motif, Walker & Royce ~0.00, Armin b2b / AC Slater 0.00
+  (melodic / trance / underground, instrumental-leaning). ~60× top-to-bottom spread.
+- **Within-set position is nearly flat**: acap rows by row-order quintile =
+  [0.21, 0.21, 0.21, 0.21, 0.16] — roughly uniform with a mild dip in the final fifth. So the
+  "acappellas at specific *times within a set*" hypothesis is **weak**; the real structure is
+  DJ-identity (this result) and career-era (Two Friends stacked more over volumes, above).
+
+**Method caveat:** acappella detection is raw-text (annotation-dependent), so absolute rates
+are a proxy — the trustworthy claims are the *relative DJ ordering* and the *confound-controlled
+variance test*, not the exact rates. The clean version uses pi-materialized
+`set_track_slots.claimed_stem` (empty in the local dev DB): run with `--db` on a pi-synced copy.
+
+**So what:** acappella density is a usable **DJ-style prior**. For the aligner (Job A): a DJ's
+historical acap-rate predicts vocal-layer density → pre-route probing (high-acap DJ → expect
+stacked vocals, lean on the lyrics grader). For generation/emulation (Job B): a stylistic axis
+of DJ identity. NOT a within-set timing signal.
