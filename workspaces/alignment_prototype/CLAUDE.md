@@ -175,6 +175,22 @@ the timeline JSON dict only (minimal blast radius).
 
 ## Not wired yet
 
+- **Multi-set co-train (SCOPED 2026-07-02, not small):** train.py's `--yaml` is
+  single-set because `_run_mert_eval` binds ONE set's stores by `gt.set_id`
+  (`load_bb12_mert`, `AudioContext.from_set`, `FpPlacementContext.from_set`) and
+  `SpanTarget` carries no set tag. Real design: SpanTarget += set_id; a
+  per-set store map {set_id -> (mert, audio_ctx, fp_ctx)}; batches routed by
+  tag. Gated anyway on a third COMPLETE GT set to hold out (BB12+BB11 exist;
+  BB10/Murph not started). Don't bolt a concat hack.
+- **Seeder KNOWN BUG (John, 2026-07-02): master-tempo BPM automation placements
+  are WRONG in seeded sessions** — and mis-placed tempo automation is the worst
+  kind of wrong (edits ripple; correcting is slower than starting clean). All
+  Jun-16 seeded `<SET> align.als` sessions were trashed for this. Before
+  seeding is useful for labeling acceleration, fix the tempo-breakpoint
+  placement and STAMP provenance (e.g. a `SEEDED` locator + a distinct output
+  name, never `<SET> align.als`) so machine sessions can't impersonate hand GT
+  again (see labeling/CLAUDE.md "Session provenance").
+
 - **Segment traj-acc is still low (26%)** — bounded by set_start placement error
   (segments decode off the placed mix window) + repeat ambiguity. Levers: tighter
   octave band for regular (a small Phase-2 regression source), per-segment
