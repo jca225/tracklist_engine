@@ -26,7 +26,6 @@ law set: validate-clean, reparse stability, tempo/locator write round-trips.
 |---|---|---|
 | `warped_basic` | 1-mix track with a **warped** clip + 2 layer clips, flat tempo | `ArrangementMapper` (BB12 convention) |
 | `master_tempo` | **unwarped** 1-mix stub + tempo automation with a ramp AND a step (two nodes at one beat) | `TempoArrangementMapper` + exact ramp integral (BB11 convention) |
-| `loops_jumps` | a layer clip with loop enabled + a clip crossing a 1-mix splice (two mix clips, second restarts earlier content) | loop domains, `split_clip_at_mix_span_edges` |
 | `pitch` | clips with PitchCoarse ±N and a **fractional** PitchFine (e.g. 25.5¢) | pitch parsing (detune rounding) |
 | `volume_rides` | fader automation riding a clip, one clip fully muted (slider at -inf), one clip with **no** automation | envelope/audibility semantics + the muted-but-"playing" class |
 | `group_tracks` | layer tracks inside a Group track | `group_name` attribution |
@@ -36,6 +35,15 @@ law set: validate-clean, reparse stability, tempo/locator write round-trips.
 Name variations `<base>_v2.als` etc. Live-version coverage matters more than
 quantity: re-saving the same set in a different Live version is a cheap,
 high-value fixture.
+
+## Bundled audio
+
+`audio/` mirrors the aligning-folder layout (`tracks/`, `stems/<song>/`,
+`.../candidates/vocals/`) so `classify_path` semantics stay realistic, and the
+fixtures' `Path` refs point at it — the sets stay openable in Live even after
+the source `~/aligning/` folder is deleted. When authoring a new fixture, use
+files already in `audio/` where possible; otherwise copy the new file in
+(mirroring its subpath) and keep it small.
 
 ## What does NOT belong here
 
