@@ -39,6 +39,25 @@ import numpy as np
 from core.result import Err, Ok, Result
 
 
+def _vocal_ref_path(row: dict | None) -> str | None:
+    """Vocal-reference audio for a manifest row.
+
+    Demucs never runs on non-regular recordings, so acappella-claimed rows
+    have empty ``stems`` (BB11: 0/64, BB12: 0/33) — but their own audio IS
+    vocals. Priority: separated vocals stem, else the acappella master
+    itself. (Stem/lyrics channels only ever engaged on BB12 by accident,
+    via spans whose predicted recording was the regular sibling.)
+    """
+    if not row:
+        return None
+    vpath = (row.get("stems") or {}).get("vocals")
+    if vpath:
+        return vpath
+    if row.get("stem") == "acappella":
+        return row.get("local_path") or None
+    return None
+
+
 def _manifest_by_tid(set_dir: Path, set_id: str) -> dict[str, dict]:
     """Manifest rows keyed by track_id AND canonical recording_id.
 
@@ -479,7 +498,7 @@ def main(argv: list[str] | None = None) -> int:
             for i in ac_idx:
                 p = preds[i]
                 t = by_tid.get(p.recording_id)
-                vpath = (t.get("stems") or {}).get("vocals") if t else None
+                vpath = _vocal_ref_path(t)
                 if not vpath or not Path(vpath).is_file():
                     continue
                 cw = transcribe_words(vpath)
@@ -547,7 +566,9 @@ def main(argv: list[str] | None = None) -> int:
             for i in ac_idx:
                 p = preds[i]
                 t = by_tid.get(p.recording_id)
-                vpath = (t.get("stems") or {}).get("vocals") if t else None
+                vpath = _vocal_ref_path(t)
+                if vpath and not Path(vpath).is_file():
+                    vpath = None
                 ref_hub = hubert_of(vpath) if vpath else None
                 if ref_hub is None:
                     continue
