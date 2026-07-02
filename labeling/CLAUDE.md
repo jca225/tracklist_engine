@@ -10,6 +10,16 @@ Do NOT confuse this with `alignment/` (the algorithmic aligner). Many *names*
 here use "align" for legacy reasons (`~/aligning/`, `pull_set_for_alignment`,
 the `set_section_alignment` table) — that's the labeling sense, not the model.
 
+## The `.als` codec — `labeling/als/`
+
+The Ableton-`.als` ↔ structured-data layer lives in the **`labeling/als/`
+sub-package** (`models` / `read` / `identity` / `tags` / `write`), extracted
+from the old `labeling/als_io.py` (now a deprecated re-export shim — import
+from `labeling.als`). Round-trip law `parse ∘ print = id` is the verification
+pillar; plan: [../docs/als_codec_subpackage_plan.md](../docs/als_codec_subpackage_plan.md).
+Manifest matching is tag-insensitive (annotator `[NNNbpm KK]` renames are
+stripped on both sides — see `match_manifest_for_path`).
+
 ## Scripts
 
 - **`pull_set_for_alignment.py`** — queries pi-storage's canonical DB over SSH,

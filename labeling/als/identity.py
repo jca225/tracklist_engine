@@ -39,6 +39,19 @@ def _stem_folder_name(path: str) -> str | None:
     return None
 
 
+def _tagless_path(path: str) -> str:
+    """Path with annotator bracket tags stripped from every component.
+
+    The annotator renames files/subdirs with ``[NNNbpm KK]`` tags on the Mac
+    only; ``manifest.json`` keeps canonical (un-tagged) names. Comparing paths
+    tag-stripped lets a tagged clip path resolve to its un-tagged manifest row.
+    """
+    parts = Path(path.replace("\\", "/")).parts
+    if not parts:
+        return ""
+    return str(Path(*(strip_user_tags(part) or part for part in parts)))
+
+
 def build_manifest_index(manifest_path: Path) -> ManifestIndex:
     payload = json.loads(manifest_path.read_text())
     by_slot: dict[str, ManifestSlot] = {}
@@ -74,26 +87,38 @@ def match_manifest_for_path(path: str, manifest: ManifestIndex) -> ManifestSlot 
 
     No label guessing — the ALS path is canonical; manifest is a pull inventory
     used only when the clip points at the exact file (or stem tree) we synced.
+    "Exact" is tag-insensitive: annotator ``[NNNbpm KK]`` renames are stripped
+    from both sides before comparison (they never reach the manifest).
     """
     norm = _normalize_path(path)
     if norm in manifest.by_path:
         return manifest.by_path[norm]
 
+    # Annotator [NNNbpm KK] renames live only on the Mac; the manifest keeps
+    # canonical names. Every tier below compares tag-stripped so a tagged clip
+    # path still resolves (BB11 GT export: 0/127 rows matched before this).
+    tagless = _tagless_path(norm)
+    for key, row in manifest.by_path.items():
+        if _tagless_path(key) == tagless:
+            return row
+
     folder = _stem_folder_name(path)
     if folder:
+        folder = strip_user_tags(folder) or folder
         for row in manifest.rows:
-            if row.local_path and _stem_folder_name(row.local_path) == folder:
+            row_folder = _stem_folder_name(row.local_path) if row.local_path else None
+            if row_folder and (strip_user_tags(row_folder) or row_folder) == folder:
                 return row
 
     for row in manifest.rows:
         if not row.local_path:
             continue
         stem_root = (
-            _normalize_path(row.local_path)
+            _tagless_path(_normalize_path(row.local_path))
             .replace("/tracks/", "/stems/")
             .rsplit(".", 1)[0]
         )
-        if norm.startswith(stem_root + "/"):
+        if tagless.startswith(stem_root + "/"):
             return row
 
     return None

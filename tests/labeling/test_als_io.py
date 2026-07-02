@@ -232,3 +232,48 @@ def test_beat_to_sec_extrapolates_past_duplicated_markers():
     assert w.beat_to_sec(3.475) > 2.0          # was clamped to 0.388
     assert w.beat_to_sec(93.5) > 60.0          # was clamped to 0.388
     assert w.beat_to_sec(93.5) > w.beat_to_sec(3.475)
+
+
+def test_match_manifest_tag_insensitive(tmp_path):
+    """REGRESSION: annotator [NNNbpm KK] renames must not break manifest
+    matching. BB11's export produced track_id=None on all 127 rows because the
+    clip paths carried tags while manifest.json keeps canonical names — the
+    matcher compared them verbatim (found 2026-07-02)."""
+    set_dir = tmp_path / "set"
+    tracks = set_dir / "tracks"
+    tracks.mkdir(parents=True)
+    canonical = tracks / "030__Going Deeper - Little Big Adventure.m4a"
+    manifest = {
+        "set_id": "testset",
+        "tracks": [
+            {
+                "label": "030",
+                "track_id": "gd030x",
+                "artist": "Going Deeper",
+                "title": "Little Big Adventure",
+                "local_path": str(canonical),
+            },
+        ],
+    }
+    (set_dir / "manifest.json").write_text(__import__("json").dumps(manifest))
+    index = build_manifest_index(set_dir / "manifest.json")
+
+    # tagged master file in tracks/
+    tagged = str(tracks / "030__Going Deeper - Little Big Adventure [126bpm 8B].m4a")
+    row = match_manifest_for_path(tagged, index)
+    assert row is not None and row.track_id == "gd030x"
+
+    # demucs stem inside a tagged stems/ subdir
+    tagged_stem = str(
+        set_dir / "stems" / "030__Going Deeper - Little Big Adventure [126bpm 8B]" / "vocals.flac"
+    )
+    row = match_manifest_for_path(tagged_stem, index)
+    assert row is not None and row.track_id == "gd030x"
+
+    # un-tagged exact match still works
+    row = match_manifest_for_path(str(canonical), index)
+    assert row is not None and row.track_id == "gd030x"
+
+    # a genuinely different song must NOT match tag-stripped
+    other = str(tracks / "031__Other Artist - Other Song [126bpm 8B].m4a")
+    assert match_manifest_for_path(other, index) is None
