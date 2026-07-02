@@ -76,7 +76,12 @@ def _hubert_model():
         import torch
         from transformers import AutoFeatureExtractor, AutoModel
 
-        dev = "mps" if torch.backends.mps.is_available() else "cpu"
+        if torch.cuda.is_available():
+            dev = "cuda"
+        elif torch.backends.mps.is_available():
+            dev = "mps"
+        else:
+            dev = "cpu"
         fe = AutoFeatureExtractor.from_pretrained(_HUBERT_MODEL)
         m = AutoModel.from_pretrained(_HUBERT_MODEL).to(dev).eval()
         _hub_cache.update(m=m, fe=fe, dev=dev)
