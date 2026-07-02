@@ -24,7 +24,7 @@ law set: validate-clean, reparse stability, tempo/locator write round-trips.
 
 | Fixture name | What to build | Code path it pins |
 |---|---|---|
-| `warped_basic` | 1-mix track with a **warped** clip + 2 layer clips, flat tempo | `ArrangementMapper` (BB12 convention) |
+| `warped_basic` | 1-mix clip with hand-placed **warp markers** (Warp ON) + layer clip(s), flat tempo | `ArrangementMapper` — maps via marker data, ignores `IsWarped`. NB the real BB12 shape is `IsWarped=false` *with* parked markers, but modern Live destroys markers on the Warp toggle so that shape can't be re-authored; it's pinned by the Mac-local BB12 goldens instead. |
 | `master_tempo` | **unwarped** 1-mix stub + tempo automation with a ramp AND a step (two nodes at one beat) | `TempoArrangementMapper` + exact ramp integral (BB11 convention) |
 | `pitch` | clips with PitchCoarse ±N and a **fractional** PitchFine (e.g. 25.5¢) | pitch parsing (detune rounding) |
 | `volume_rides` | fader automation riding a clip, one clip fully muted (slider at -inf), one clip with **no** automation | envelope/audibility semantics + the muted-but-"playing" class |
