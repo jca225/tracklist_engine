@@ -206,6 +206,7 @@ def parse_filename(path: Path) -> Parsed:
 @dataclass(frozen=True)
 class Recording:
     recording_id: str
+    work_id: str
     version: str
     version_artist: str
     stem: str
@@ -219,7 +220,8 @@ def load_recordings(db_path: Path) -> list[Recording]:
     with connect(db_path) as conn:
         rows = conn.execute(
             """
-            SELECT r.recording_id, r.version, r.version_artist, r.stem, r.variant,
+            SELECT r.recording_id, r.work_id, r.version, r.version_artist,
+                   r.stem, r.variant,
                    w.title AS work_title, w.artists_json, w.full_name AS work_full
             FROM recording r JOIN work w ON r.work_id = w.work_id
             """
@@ -238,6 +240,7 @@ def load_recordings(db_path: Path) -> list[Recording]:
         out.append(
             Recording(
                 recording_id=r["recording_id"],
+                work_id=r["work_id"],
                 version=r["version"] or "original",
                 version_artist=r["version_artist"] or "",
                 stem=r["stem"] or "regular",
@@ -282,10 +285,20 @@ def score(p: Parsed, r: Recording) -> float:
 
 def candidates(
     p: Parsed, recs: list[Recording], k: int
-) -> list[tuple[Recording, float]]:
+) -> tuple[list[tuple[Recording, float]], float]:
+    """Top-k scored candidates plus the best score from a *different* work.
+
+    Margin is measured against that cross-work runner-up: sibling recordings
+    of one work (original vs remix) tying at the top is version ambiguity,
+    not song ambiguity — it must not depress the margin.
+    """
     scored = [(r, score(p, r)) for r in recs]
     scored.sort(key=lambda rs: rs[1], reverse=True)
-    return scored[:k]
+    other_s = 0.0
+    if scored:
+        top_work = scored[0][0].work_id
+        other_s = next((s for r, s in scored if r.work_id != top_work), 0.0)
+    return scored[:k], other_s
 
 
 # --------------------------------------------------------------------------- #
@@ -315,8 +328,10 @@ def verify_acappella(file: Path, vocals_stem: Path) -> tuple[Optional[float], st
     except Exception as e:
         return None, f"hubert import failed: {e}"
     try:
-        ya, _ = librosa.load(str(file), sr=22050, mono=True)
-        yb, _ = librosa.load(str(vocals_stem), sr=22050, mono=True)
+        # identity verification doesn't need the full track; 120 s bounds
+        # HuBERT cost on CPU workers
+        ya, _ = librosa.load(str(file), sr=22050, mono=True, duration=120)
+        yb, _ = librosa.load(str(vocals_stem), sr=22050, mono=True, duration=120)
         ea, eb = _hubert(ya, 9).mean(axis=1), _hubert(yb, 9).mean(axis=1)
         cos = float(ea @ eb / ((np.linalg.norm(ea) * np.linalg.norm(eb)) or 1.0))
         return cos, "hubert-L9"
@@ -366,9 +381,22 @@ def main() -> None:
         help="run Stage 3 audio gate (needs --audio-root)",
     )
     ap.add_argument("--audio-root", type=Path, default=Path("/mnt/storage"))
+    ap.add_argument(
+        "--files-from",
+        type=Path,
+        help="only process files whose path (relative to --src) is listed here",
+    )
     args = ap.parse_args()
 
     files = list(iter_audio(args.src))
+    if args.files_from:
+        keep = {
+            line.strip()
+            for line in args.files_from.read_text().splitlines()
+            if line.strip()
+        }
+        files = [f for f in files if str(f.relative_to(args.src)) in keep]
+        print(f"--files-from kept {len(files)} of {len(keep)} listed", file=sys.stderr)
     print(f"found {len(files)} audio files under {args.src}", file=sys.stderr)
     parsed = [parse_filename(f) for f in files]
 
@@ -408,10 +436,9 @@ def main() -> None:
 
     rows = []
     for p in parsed:
-        cands = candidates(p, recs, args.topk)
+        cands, other_work_s = candidates(p, recs, args.topk)
         top, top_s = cands[0] if cands else (None, 0.0)
-        second_s = cands[1][1] if len(cands) > 1 else 0.0
-        margin = top_s - second_s
+        margin = top_s - other_work_s
         audio_score, audio_note = None, ""
         if args.verify and top is not None:
             # candidate reference audio / vocals stem paths (best-effort)
