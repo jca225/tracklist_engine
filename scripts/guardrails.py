@@ -8,6 +8,7 @@ Run from repo root::
 Exit 0 if clean, 1 with actionable errors on stdout.
 Used by git pre-commit, Cursor afterFileEdit hook, and GitHub Actions.
 """
+
 from __future__ import annotations
 
 import re
@@ -143,10 +144,54 @@ def _check_stale_audio_pipeline_docs(path: Path, text: str) -> list[Violation]:
     return violations
 
 
+# The .als codec's OSS-publishable core (docs/als_interpreter_plan.md §5).
+# These modules must contain generic-Ableton knowledge ONLY: no project-side
+# imports, so the seam stays clean for the eventual repo split. identity.py /
+# tags.py are the private half; __init__.py is the facade composing both.
+ALS_CORE_DIR = REPO_ROOT / "labeling" / "als"
+ALS_CORE_FILES = frozenset(
+    {
+        "cst.py",
+        "models.py",
+        "read.py",
+        "semantics.py",
+        "validate.py",
+        "write.py",
+        "roundtrip.py",
+    }
+)
+ALS_CORE_FORBIDDEN = (
+    (
+        re.compile(r"(?:from|import)\s+labeling\.als\.(?:identity|tags)\b"),
+        "OSS-core als module imports the private half (identity/tags)",
+    ),
+    (
+        re.compile(
+            r"(?:from|import)\s+(?:core|web_crawler|ingest|analysis|tokenizer|eda|personalization|workspaces)\b"
+        ),
+        "OSS-core als module imports project-side code",
+    ),
+    (
+        re.compile(r"from\s+labeling\s+import|from\s+labeling\.(?!als\b)"),
+        "OSS-core als module imports labeling outside the codec",
+    ),
+)
+
+
+def _check_als_core_boundary(path: Path, text: str) -> list[Violation]:
+    if path.parent != ALS_CORE_DIR or path.name not in ALS_CORE_FILES:
+        return []
+    violations: list[Violation] = []
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        for pat, detail in ALS_CORE_FORBIDDEN:
+            if pat.search(line):
+                violations.append(Violation(path, lineno, "als_core_boundary", detail))
+                break
+    return violations
+
+
 def _check_adapter_parents(path: Path, text: str) -> list[Violation]:
-    in_adapter_dir = any(
-        path == d or d in path.parents for d in ADAPTER_PARENTS_DIRS
-    )
+    in_adapter_dir = any(path == d or d in path.parents for d in ADAPTER_PARENTS_DIRS)
     if not in_adapter_dir:
         return []
     pat = re.compile(r"parents\[3\]")
@@ -178,6 +223,7 @@ def run_checks() -> list[Violation]:
         violations.extend(_check_stale_data_analysis(path, text))
         violations.extend(_check_variant_tag(path, text))
         violations.extend(_check_adapter_parents(path, text))
+        violations.extend(_check_als_core_boundary(path, text))
     if DOCS_DIR.is_dir():
         for path in sorted(DOCS_DIR.glob("*.md")):
             try:
