@@ -24,17 +24,28 @@ from labeling.als.roundtrip import (
 from labeling.als.validate import has_errors, validate_session
 from tests.labeling.synth_session import session_als_file, session_root
 
+# PROVENANCE MATTERS: root-level "<SET> align.als" files in ~/aligning are
+# SEEDER OUTPUT (machine predictions rendered to .als) — never GT. The human
+# hand sessions live in the Ableton "<name> Project/" folders. bb12_seeded is
+# kept deliberately: seeder output is a real dialect the codec must parse.
 GOLDEN = {
     "seed_template": (Path.home() / "aligning/_seed_template.als", None),
-    "bb12": (
+    "bb12_canonical": (
+        Path.home()
+        / "aligning/_backups/20260616_150150/big bootie 12 labeling Project/"
+        / "big bootie 12 labeling_fast.als",
+        301,
+    ),
+    "bb11_hand": (
+        Path.home()
+        / "aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/"
+        / "BB11 align Project/BB11 align.als",
+        None,  # live session — clip count changes as John labels
+    ),
+    "bb12_seeded": (
         Path.home()
         / "aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/BB12 align.als",
         799,
-    ),
-    "bb11": (
-        Path.home()
-        / "aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/BB11 align.als",
-        149,
     ),
 }
 

@@ -10,6 +10,20 @@ Do NOT confuse this with `alignment/` (the algorithmic aligner). Many *names*
 here use "align" for legacy reasons (`~/aligning/`, `pull_set_for_alignment`,
 the `set_section_alignment` table) — that's the labeling sense, not the model.
 
+## ⚠️ Session provenance — seeded vs hand-labeled (NEVER export GT from the wrong one)
+
+Root-level **`<SET> align.als`** files in `~/aligning/<set>/` are **SEEDER
+OUTPUT** — `seed_als_from_timeline` renders the aligner's own *predictions*
+into a Live session for human correction. They are machine noise until the
+human has actually worked them; exporting GT from one feeds the model its own
+predictions back (this happened with BB10/BB11 on 2026-07-02). The **human
+hand sessions** live inside Ableton **`<name> Project/`** folders (e.g.
+`BB11 align Project/BB11 align.als`, `_backups/.../big bootie 12 labeling
+Project/big bootie 12 labeling_fast.als`). Seeder tells: unfilled `[?]` clip
+names, flat 60 BPM master tempo (the 1-beat=1-second seeding convention),
+clip count ≈ predicted-span count. When in doubt, **ask the annotator** —
+coverage/density stats cannot certify provenance.
+
 ## The `.als` codec — `labeling/als/`
 
 The Ableton-`.als` ↔ structured-data layer lives in the **`labeling/als/`
