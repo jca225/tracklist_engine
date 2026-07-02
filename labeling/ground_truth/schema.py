@@ -243,7 +243,7 @@ def load(yaml_path: Path | str) -> Result[GroundTruthSet, GroundTruthError]:
     """Parse one ground-truth yaml into a typed `GroundTruthSet`."""
     path = Path(yaml_path)
     try:
-        raw = path.read_text()
+        raw = path.read_text(encoding="utf-8")
     except OSError as e:
         return Err(GroundTruthError(kind="io", detail=str(e), path=path))
     try:
