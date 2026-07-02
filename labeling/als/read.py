@@ -37,10 +37,13 @@ def build_vol_envelopes(root: etree._Element) -> dict[str, list[tuple[float, flo
         pid = env_el.find(".//PointeeId")
         if pid is None:
             continue
-        envs[pid.get("Value")] = sorted(
-            (max(float(fe.get("Time")), -1e6), float(fe.get("Value")))
-            for fe in env_el.xpath(".//FloatEvent")
-        )
+        pts: list[tuple[float, float]] = []
+        for fe in env_el.xpath(".//FloatEvent"):
+            try:
+                pts.append((max(float(fe.get("Time")), -1e6), float(fe.get("Value"))))
+            except (TypeError, ValueError):
+                continue  # malformed event — validate reports it
+        envs[pid.get("Value")] = sorted(pts)
     return envs
 
 
@@ -77,8 +80,8 @@ def parse_layer_clips(root: etree._Element) -> list[ParsedClip]:
             pf_el = clip_el.find("PitchFine")
             vol_id = volume_automation_id(track_el)
             vol_pts = tuple(vol_envs.get(vol_id, ())) if vol_id else ()
-            out.append(
-                ParsedClip(
+            try:
+                clip = ParsedClip(
                     group_name=current_group or "",
                     track_name=track_name,
                     path=path,
@@ -97,5 +100,7 @@ def parse_layer_clips(root: etree._Element) -> list[ParsedClip]:
                     warp=WarpMarkers.from_clip(clip_el),
                     vol_points=vol_pts,
                 )
-            )
+            except (TypeError, ValueError, OverflowError):
+                continue  # malformed clip numerics — validate reports clip-malformed
+            out.append(clip)
     return out

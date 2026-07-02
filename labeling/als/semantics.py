@@ -32,14 +32,17 @@ class ArrangementMapper:
     ) -> ArrangementMapper:
         spans: list[MixClipSpan] = []
         for clip in mix_track.xpath(".//AudioClip"):
-            spans.append(
-                MixClipSpan(
-                    arr_start=float(clip.find("CurrentStart").get("Value")),
-                    arr_end=float(clip.find("CurrentEnd").get("Value")),
-                    loop_start=float(clip.find(".//Loop/LoopStart").get("Value")),
-                    warp=WarpMarkers.from_clip(clip),
+            try:
+                spans.append(
+                    MixClipSpan(
+                        arr_start=float(clip.find("CurrentStart").get("Value")),
+                        arr_end=float(clip.find("CurrentEnd").get("Value")),
+                        loop_start=float(clip.find(".//Loop/LoopStart").get("Value")),
+                        warp=WarpMarkers.from_clip(clip),
+                    )
                 )
-            )
+            except (AttributeError, TypeError, ValueError):
+                continue  # malformed mix clip — validate reports it
         spans.sort(key=lambda s: s.arr_start)
         return cls(spans=tuple(spans), mix_duration_s=mix_duration_s)
 
@@ -93,11 +96,21 @@ def parse_master_tempo(root: etree._Element) -> tuple[tuple[float, float], ...]:
                 v = fe.get("Value")
                 if t is None or v is None:
                     continue
-                pts.append((max(0.0, float(t)), float(v)))
+                try:
+                    beat, bpm = max(0.0, float(t)), float(v)
+                except ValueError:
+                    continue  # malformed event — validate reports tempo-malformed
+                if math.isfinite(beat) and math.isfinite(bpm) and bpm > 0:
+                    pts.append((beat, bpm))
     if not pts:
         manual = tempo.find("Manual")
         if manual is not None and manual.get("Value"):
-            pts.append((0.0, float(manual.get("Value"))))
+            try:
+                bpm = float(manual.get("Value"))
+            except ValueError:
+                bpm = 0.0
+            if math.isfinite(bpm) and bpm > 0:
+                pts.append((0.0, bpm))
     pts.sort(key=lambda p: p[0])
     return tuple(pts)
 
@@ -160,11 +173,14 @@ class TempoArrangementMapper:
         if not clips:
             return None
         clip = clips[0]
-        anchor = float(clip.find("CurrentStart").get("Value"))
-        loop_el = clip.find(".//Loop/LoopStart")
-        # unwarped clips carry loop values in SECONDS (see MixClipSpan note);
-        # tiny float noise (~3e-15) rounds to 0.
-        content = float(loop_el.get("Value")) if loop_el is not None else 0.0
+        try:
+            anchor = float(clip.find("CurrentStart").get("Value"))
+            loop_el = clip.find(".//Loop/LoopStart")
+            # unwarped clips carry loop values in SECONDS (see MixClipSpan note);
+            # tiny float noise (~3e-15) rounds to 0.
+            content = float(loop_el.get("Value")) if loop_el is not None else 0.0
+        except (AttributeError, TypeError, ValueError):
+            return None  # malformed 1-mix clip — validate reports it
         return cls(
             tempo_pts=pts,
             anchor_beat=anchor,

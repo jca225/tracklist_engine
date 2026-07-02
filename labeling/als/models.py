@@ -7,6 +7,7 @@ Frozen dataclasses only; parsing lives in `read`, path/manifest identity in
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
 
 from lxml import etree
 
@@ -17,11 +18,17 @@ class WarpMarkers:
 
     @classmethod
     def from_clip(cls, clip: etree._Element) -> WarpMarkers:
-        pts = sorted(
-            (float(w.get("BeatTime")), float(w.get("SecTime")))
-            for w in clip.xpath(".//WarpMarker")
-        )
-        return cls(points=tuple(pts))
+        # Malformed/non-finite markers are skipped here and reported by
+        # labeling.als.validate — extraction is total, diagnostics are values.
+        pts: list[tuple[float, float]] = []
+        for w in clip.xpath(".//WarpMarker"):
+            try:
+                b, s = float(w.get("BeatTime")), float(w.get("SecTime"))
+            except (TypeError, ValueError):
+                continue
+            if isfinite(b) and isfinite(s):
+                pts.append((b, s))
+        return cls(points=tuple(sorted(pts)))
 
     def beat_to_sec(self, beat: float) -> float:
         if not self.points:
