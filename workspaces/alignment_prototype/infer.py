@@ -37,6 +37,26 @@ if str(_REPO) not in sys.path:
 import numpy as np
 
 from core.result import Err, Ok, Result
+
+
+def _manifest_by_tid(set_dir: Path, set_id: str) -> dict[str, dict]:
+    """Manifest rows keyed by track_id AND canonical recording_id.
+
+    Manifest ``track_id`` is the scrape (tlp*) namespace; predictions carry
+    canonical ``recording_id``. Bridge via labeling/fixtures/id_maps/<set>.json
+    (tlp -> recording_id, from set_track_slots) — without it, ref stem
+    resolution silently misses cross-namespace and the stem/lyrics channels
+    no-op (BB11 2026-07-02: 0/67 refs resolved on both channels).
+    """
+    rows = json.loads((set_dir / "manifest.json").read_text())["tracks"]
+    by_tid = {row["track_id"]: row for row in rows}
+    map_path = _REPO / "labeling" / "fixtures" / "id_maps" / f"{set_id}.json"
+    if map_path.exists():
+        for tlp, rec in json.loads(map_path.read_text()).items():
+            if tlp in by_tid:
+                by_tid.setdefault(rec, by_tid[tlp])
+    return by_tid
+
 from workspaces.alignment_prototype.dataset import (
     load_set,
     slot_candidates_from_targets,
@@ -439,7 +459,7 @@ def main(argv: list[str] | None = None) -> int:
             print("(lyrics placement skipped — mix_vocals.flac missing)")
         else:
             manifest = json.loads((set_dir / "manifest.json").read_text())
-            by_tid = {t["track_id"]: t for t in manifest["tracks"]}
+            by_tid = _manifest_by_tid(set_dir, args.set_id)
             mix_dur = float(manifest.get("mix_duration_s") or 0) or max(
                 p.set_end_s for p in preds
             )
@@ -517,10 +537,7 @@ def main(argv: list[str] | None = None) -> int:
         elif mixv is None or not mixv.is_file():
             print("(stem placement skipped — mix_vocals.flac missing)")
         else:
-            by_tid = {
-                t["track_id"]: t
-                for t in json.loads((set_dir / "manifest.json").read_text())["tracks"]
-            }
+            by_tid = _manifest_by_tid(set_dir, args.set_id)
             print(
                 f"stem placement: HuBERT on mix_vocals + {len(ac_idx)} acappella refs…"
             )
