@@ -1,7 +1,11 @@
 # Plan: `labeling/als/` as a robust `.als` interpreter — architecture, testing, and the open-source seam
 
-**Status:** plan (drafted 2026-07-02, after the Phase-1/2 extraction landed on
-`als-codec-extraction`). Companion to
+**Status:** §6 steps 1–5 EXECUTED 2026-07-02 on `als-codec-extraction`
+(cst/semantics split, validate.py, roundtrip.py laws, Hypothesis+fuzz,
+`als_core_boundary` guardrail). Step 6 (repo split/publish) remains gated on
+the open questions below. One deviation: read APIs kept their signatures
+(no Result retrofit — house style); validation is a separate total pass.
+Companion to
 [als_codec_subpackage_plan.md](als_codec_subpackage_plan.md) (the mechanical
 extraction, DONE) — this doc covers what comes next: interpreter-grade
 structure, a serious test regime, and an open-sourceable core.
