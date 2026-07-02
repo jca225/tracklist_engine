@@ -44,3 +44,5 @@ workspaces/section_hsmm/.cache/
 workspaces/section_hsmm/out/
 workspaces/source_detection/.cache/
 workspaces/source_detection/out/
+# Ableton analysis files auto-created when auditioning fixture audio
+tests/labeling/fixtures/als/audio/**/*.asd
