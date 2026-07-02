@@ -1,6 +1,15 @@
 # The aligner as a POMDP: an agentic harness with an explicit action space
 
-**Status:** design (2026-07-01, revised w/ agent-architecture grounding). Reframes the aligner
+**Status:** increments 1–3 BUILT 2026-07-02 (`workspaces/alignment_prototype/agentic/`:
+belief / events / actions / policy / loop + replay CLI) — the BB11 held-out gate was
+measured that day (transfer holds: 8.0s med cold, id 83%) and cleared the build.
+First replay validation on BB11 (151 spans): **auto-commit rung = 94% clean ≤15s,
+median 1.0s, covering 48% of spans; the 2 escalated spans genuinely lack GT rows**
+(active-labeling signal works). Ladder thresholds are first-guess (suggest rung
+scores better than review — needs tuning); replay underestimates cross-probe
+agreement (losing probes' proposals aren't serialized — serialize them in infer.py
+to fix); costs in replay are fictional (sunk). Increments 4–5 (LLM policy,
+escalation→labeling queue plumbing) remain unbuilt. Original design (2026-07-01): Reframes the aligner
 from a fixed feed-forward pipeline into a **partially-observed decision process**: gather
 information to resolve ambiguity, reconsider, repeat — until confident enough to commit or
 abstain. Architecture patterns adapted from Liu et al. 2026 (arXiv:2604.14228, "Dive into
