@@ -61,11 +61,10 @@ def test_event_log_replay_roundtrip(tmp_path):
 def test_dominance_plans_prune_dominated_probes():
     vocal = [a.name for a in plan_for("acappella")]
     host = [a.name for a in plan_for("regular")]
-    assert "lyrics" in vocal and "fp" not in vocal  # fp dominated on vocals
+    assert "lyrics" in vocal and vocal.index("lyrics") < vocal.index("fp")
     assert "fp" in host and "lyrics" not in host  # lyrics dominated on hosts
-    # cheapest-first ordering within the plan
-    costs = [a.cost for a in plan_for("acappella")]
-    assert costs == sorted(costs)
+    # plans are information-ordered with the most expensive probe last
+    assert vocal[-1] == "stem_hubert" and host[-1] == "chroma_refine"
 
 
 def test_bind_rejects_unknown_actions():

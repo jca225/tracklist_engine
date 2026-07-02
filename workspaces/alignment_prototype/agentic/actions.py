@@ -40,7 +40,9 @@ REGISTRY: dict[str, ActionSpec] = {
         # MERT decode: the anchored coarse placement (always available)
         ActionSpec("mert_decode", cost=0.5, precision=0.55, stems=STEMS),
         # landmark fingerprint: cached, sharp on regular content
-        ActionSpec("fp", cost=0.1, precision=0.90, stems=("regular", "instrumental")),
+        # fp fires on vocals too in practice (MERT-gated) — weaker there, kept
+        # as the cheap fallback between lyrics and HuBERT
+        ActionSpec("fp", cost=0.1, precision=0.90, stems=STEMS),
         # lyrics (Whisper + IDF diagonals): THE vocal channel; cached after first run
         ActionSpec("lyrics", cost=1.0, precision=0.90, stems=("acappella",)),
         # banded HuBERT joint placement: vocal fallback when lyrics abstains
@@ -57,7 +59,7 @@ REGISTRY: dict[str, ActionSpec] = {
 DOMINANCE: dict[str, tuple[str, ...]] = {
     "regular": ("cue_prior", "mert_decode", "fp", "chroma_refine"),
     "instrumental": ("cue_prior", "mert_decode", "fp", "chroma_refine"),
-    "acappella": ("cue_prior", "mert_decode", "lyrics", "stem_hubert"),
+    "acappella": ("cue_prior", "mert_decode", "lyrics", "fp", "stem_hubert"),
 }
 
 # Composite skills — one decision covers a proven sequence.

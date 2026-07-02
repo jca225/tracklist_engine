@@ -45,6 +45,10 @@ def _abstain(probe: str) -> Observation:
     )
 
 
+# timeline provenance vocabulary -> registry action names
+_SOURCE_ALIAS = {"mert_decode": "mert"}
+
+
 def _replay_runner(probe: str):
     """Emit the recorded observation when this probe produced the span's final
     placement (start_source provenance); otherwise abstain."""
@@ -63,9 +67,10 @@ def _replay_runner(probe: str):
                 precision=spec.precision,
                 cost=spec.cost,
             )
+        src_name = _SOURCE_ALIAS.get(probe, probe)
         proposals = data.get("probe_proposals") or {}
         if probe in proposals:  # rich artifact: every probe's raw proposal
-            won = data.get("start_source") == probe
+            won = data.get("start_source") == src_name
             conf = float(data.get("confidence") or 0.8) if won else 0.7
             return Observation(
                 probe=probe,
@@ -75,7 +80,7 @@ def _replay_runner(probe: str):
                 precision=spec.precision,
                 cost=spec.cost,
             )
-        if data.get("start_source") == probe:  # legacy artifact: winner only
+        if data.get("start_source") == src_name:  # legacy artifact: winner only
             conf = float(data.get("confidence") or 0.8)
             return Observation(
                 probe=probe,
