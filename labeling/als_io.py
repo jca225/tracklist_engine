@@ -15,7 +15,7 @@ from labeling.als.identity import (  # noqa: F401
     _normalize_path,
     _stem_folder_name,
 )
-from labeling.als.read import (  # noqa: F401
+from labeling.als.semantics import (  # noqa: F401
     _find_mix_splice_beat,
     _split_monotonic_arr_interval,
 )
