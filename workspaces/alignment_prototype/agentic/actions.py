@@ -58,7 +58,13 @@ REGISTRY: dict[str, ActionSpec] = {
         # onset-envelope cross-correlation placement: the flagship onset-alignment
         # probe. Cheap; a DJ's beatmatch preserves the onset grid.
         ActionSpec(
-            "onset_align", cost=0.3, precision=0.60, stems=STEMS, validated=False
+            # precision MEASURED on BB11 (eval_auditory): full-ref xcorr; the
+            # peak-gated short-excerpt variant is the untested improvement path
+            "onset_align",
+            cost=0.3,
+            precision=0.36,
+            stems=STEMS,
+            validated=False,
         ),
         # onset-asynchrony source-count: "is a second (overlay) onset stream here"
         ActionSpec(

@@ -91,6 +91,36 @@ P(correct | fired) on BB11+BB12 GT, per stem:
 Expected first win: `onset_align` on regular/instrumental placement (cheap,
 and the one probe that is directly a placement estimator).
 
+## Validation result — onset_align (2026-07-02, `eval_auditory.py`)
+
+**PARTIAL — real signal, not promotable as-is.** BB11, 25 regular/instrumental
+spans, `onset_strength` xcorr of each full ref against the hour mix:
+
+| formulation | <15s | <5s | median |Δ| |
+|---|---|---|---|
+| cold full-mix search | 24% | 16% | 171s |
+| banded GT±90s (refiner ceiling) | 36% | 20% | 29s |
+
+The exact hits are unambiguous — 002/007/015 at ≤0.1s, 010/011 at ≤5s — tracks
+played STRAIGHT, where the onset grid matches perfectly. The misses are
+edited/looped spans where the full-track onset envelope doesn't appear
+contiguously in the mix; correlating the whole 3–4 min ref finds spurious
+global matches. **Sharpness (peak/2nd) was flat (~1.0) everywhere and is
+useless as an abstention gate; the winners instead had the highest correlation
+PEAKS (015: 0.41, 002: 0.33) — peak magnitude is the usable confidence.**
+
+Verdict: `onset_align` stays `validated=False`, precision calibrated to its
+measured **0.36** (earned, honest). It is NOT wired into DOMINANCE. The
+improvement path — untested, a real-work decision, not an auto-proceed:
+1. correlate a short **excerpt** (the ~30–60 s the DJ actually plays), not the
+   whole ref — but picking the excerpt is itself the ref_start problem;
+2. **gate on peak magnitude** (≥~0.30), not sharpness, so the probe only speaks
+   on the straight-played tracks it nails — turning a 36%-always probe into a
+   high-precision-sometimes one (the abstention discipline the ladder wants).
+
+`eval_auditory.py` is the reusable **validation gate** — bind a runner + rerun
+it for every new probe before promotion.
+
 ## The learning harness (`learning.py`) — a probabilistic harness that learns
 
 The hand-set precisions ARE the POMDP observation model, but hand-set — and the
