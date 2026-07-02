@@ -91,6 +91,33 @@ P(correct | fired) on BB11+BB12 GT, per stem:
 Expected first win: `onset_align` on regular/instrumental placement (cheap,
 and the one probe that is directly a placement estimator).
 
+## The learning harness (`learning.py`) — a probabilistic harness that learns
+
+The hand-set precisions ARE the POMDP observation model, but hand-set — and the
+real BB11 log proved several wrong. `learning.py` makes them **learned**: each
+probe's precision is a **Beta(α,β) posterior**, seeded from the registry
+(validated probes get confident priors, `validated=False` probes wide/explorable
+ones) and updated from outcomes.
+
+- **Calibration** — posterior mean feeds the ladder's quality gate.
+- **Selection** — `rank()` orders candidate probes by **Thompson-sampled**
+  precision-per-cost: exploration is free (uncertain probes occasionally sample
+  high and get tried), exploitation from proven probes' tight posteriors. The
+  harness thus **learns the DOMINANCE table** instead of us hand-authoring it,
+  and the auditory probes **self-promote** as they accumulate correct fires.
+- **Safe at n=2** (design doc tier 3): a conjugate Bayesian bandit *calibrates*;
+  it never optimizes a learned reward, so there is nothing to hack — dodging the
+  reward wall that killed synthetic-pretrain and the fusion model.
+- **Learns from the audit trail** — `fit_from_events` replays the append-only
+  event log, labels each observation via GT distance, updates posteriors.
+
+**Real calibration (288 BB11 observations, 2026-07-02):** `cue_prior`
+0.50→**0.71** (up — the scraped cue is better than guessed), `mert_decode`
+0.55→**0.45** (down, correctly below cue_prior), `fp` 0.90→**0.70**, `lyrics`
+0.90→**0.80** (still top). The hand-set optimism on fp/lyrics is measured away;
+the ordering the harness learned matches every empirical finding. Auditory
+probes stay at weak priors until wired to runners.
+
 ## Related
 
 `docs/pomdp_agentic_aligner_design.md` (the harness these plug into),

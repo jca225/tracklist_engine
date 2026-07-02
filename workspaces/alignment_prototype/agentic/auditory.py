@@ -233,6 +233,73 @@ def modulation_ratio(
 
 
 # ---------------------------------------------------------------------------
+# Tempogram (beat-grid periodicity — onset-envelope autocorrelation)
+# ---------------------------------------------------------------------------
+
+
+def tempogram(
+    env: np.ndarray,
+    *,
+    fps: float = ENV_FPS,
+    bpm_range: tuple[float, float] = (60.0, 200.0),
+) -> tuple[float, float] | None:
+    """Estimate (tempo_bpm, strength) from the onset envelope's autocorrelation.
+
+    Beat periodicity is the lag of the dominant autocorrelation peak — the
+    formal beat-grid the DJ preserves. ``strength`` is the normalized peak in
+    [0, 1]; low strength ⇒ no clear pulse (ambient/vocal). Returns None if the
+    envelope is too short or has no pulse.
+    """
+    e = np.asarray(env, dtype=float)
+    if e.size < int(fps):  # need ~1 s
+        return None
+    e = e - e.mean()
+    ac = np.correlate(e, e, mode="full")[e.size - 1 :]
+    if ac[0] <= 0:
+        return None
+    ac = ac / ac[0]
+    lo_lag = int(fps * 60.0 / bpm_range[1])
+    hi_lag = int(fps * 60.0 / bpm_range[0])
+    hi_lag = min(hi_lag, ac.size - 1)
+    if hi_lag <= lo_lag:
+        return None
+    band = ac[lo_lag : hi_lag + 1]
+    k = int(np.argmax(band)) + lo_lag
+    bpm = 60.0 * fps / k
+    return bpm, float(ac[k])
+
+
+# ---------------------------------------------------------------------------
+# Common fate (comodulation → source count)
+# ---------------------------------------------------------------------------
+
+
+def common_fate(band_envs: np.ndarray) -> float:
+    """Mean pairwise correlation of subband amplitude envelopes ∈ [0, 1]-ish.
+
+    Common-fate grouping: partials whose amplitudes rise and fall TOGETHER fuse
+    into one source; decorrelated subbands signal multiple sources (a bed + an
+    overlay modulating on its own). ``band_envs`` is (n_bands, frames). High
+    mean coherence ⇒ one coherent source; low ⇒ segregation. Complements
+    ``onset_asynchrony`` (onset = *when* it starts; common fate = *how* it
+    evolves). Returns the mean off-diagonal Pearson correlation (0 if <2 bands).
+    """
+    x = np.asarray(band_envs, dtype=float)
+    if x.ndim != 2 or x.shape[0] < 2 or x.shape[1] < 2:
+        return 0.0
+    # z-score each band, guard zero-variance bands
+    sd = x.std(axis=1, keepdims=True)
+    live = sd[:, 0] > 0
+    if live.sum() < 2:
+        return 0.0
+    z = (x[live] - x[live].mean(axis=1, keepdims=True)) / sd[live]
+    c = (z @ z.T) / z.shape[1]
+    n = c.shape[0]
+    off = (c.sum() - np.trace(c)) / (n * (n - 1))
+    return float(off)
+
+
+# ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
 

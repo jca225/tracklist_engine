@@ -82,6 +82,22 @@ REGISTRY: dict[str, ActionSpec] = {
         ),
         # predictive-coding surprise: order-free "a new track entered here" prior
         ActionSpec("surprise", cost=0.1, precision=0.45, stems=STEMS, validated=False),
+        # tempogram: onset-autocorrelation beat-grid → tempo + pulse strength
+        ActionSpec(
+            "tempogram",
+            cost=0.2,
+            precision=0.55,
+            stems=("regular", "instrumental"),
+            validated=False,
+        ),
+        # common-fate comodulation source-count (how a source evolves)
+        ActionSpec(
+            "common_fate",
+            cost=0.3,
+            precision=0.55,
+            stems=("acappella", "instrumental"),
+            validated=False,
+        ),
         # cocktail-party belief-shaping action: subtract a committed bed, re-probe
         # the residual for the overlay (old-plus-new). Not a placement probe on its
         # own — it re-runs a stem probe on the residual signal.
