@@ -7,6 +7,7 @@ annotated_by: user
 tracks:
   - track:       "Bastille - Good Grief (Don Diablo Remix)"
     slot_label:  "001w1"
+    track_id:    g8gtgdx
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 0
@@ -33,6 +34,7 @@ tracks:
       - [128, 1]
   - track:       "Kungs vs. Cookin' On 3 Burners - This Girl (JAKKO & Marck! Bootleg)"
     slot_label:  "020w4"
+    track_id:    tlp2594106
     set_start_s: 0
     set_end_s:   2000
     ref_start_s: 94
@@ -52,6 +54,7 @@ tracks:
       - [2000, 1]
   - track:       "The Fray - Over My Head (Cable Car)"
     slot_label:  "001w2"
+    track_id:    26b4gz6f
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 40
@@ -61,6 +64,7 @@ tracks:
     tempo_ratio: 1.04545
   - track:       "Bastille - Good Grief (Don Diablo Remix)"
     slot_label:  "001w1"
+    track_id:    g8gtgdx
     set_start_s: 48
     set_end_s:   182
     ref_start_s: 34
@@ -68,6 +72,7 @@ tracks:
     tempo_ratio: 0.970149
   - track:       "Carly Rae Jepsen - Call Me Maybe (Acappella)"
     slot_label:  "001w3"
+    track_id:    4gy6y1p
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 85
@@ -77,6 +82,7 @@ tracks:
     tempo_ratio: 0.9
   - track:       "Montell Jordan - This Is How We Do It (Acappella)"
     slot_label:  "025w1"
+    track_id:    26295qwf
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 167
@@ -103,6 +109,7 @@ tracks:
       - [2886, 1]
   - track:       "Antoine Delvig & Paul Vinx - Blondies"
     slot_label:  "001w6"
+    track_id:    ntm7wqx
     set_start_s: 182
     set_end_s:   220
     ref_start_s: 130
@@ -110,6 +117,7 @@ tracks:
     tempo_ratio: 0.947368
   - track:       "JAY-Z - Encore"
     slot_label:  "001w7"
+    track_id:    j14lrq5
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 189
@@ -119,6 +127,7 @@ tracks:
     tempo_ratio: 1.03704
   - track:       "The Chainsmokers - Paris (Acappella)"
     slot_label:  "002w1"
+    track_id:    1wvuyhjf
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 221
@@ -140,6 +149,7 @@ tracks:
       - [296, 1]
   - track:       "Jonas Aden & Brooks - Take Me Away"
     slot_label:  "002"
+    track_id:    2pzm1v6p
     set_start_s: 232
     set_end_s:   300
     ref_start_s: 82
@@ -147,6 +157,7 @@ tracks:
     tempo_ratio: 1.08824
   - track:       "Audien - Crazy Love (MOTi Remix)"
     slot_label:  "003"
+    track_id:    1wv1fsrx
     set_start_s: 300
     set_end_s:   384
     ref_start_s: 30
@@ -154,6 +165,7 @@ tracks:
     tempo_ratio: 2.16667
   - track:       "Misterwives - Reflections (Acappella)"
     slot_label:  "003w1"
+    track_id:    10ufdgcf
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 300
@@ -163,6 +175,7 @@ tracks:
     tempo_ratio: 1.06452
   - track:       "Neiked - Sexual"
     slot_label:  "003w2"
+    track_id:    2unrq2zp
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 338
@@ -184,6 +197,7 @@ tracks:
       - [383, 1]
   - track:       "Dzeko & Torres - L'amour Toujours (Tiësto Edit)"
     slot_label:  "004"
+    track_id:    270vfcpx
     set_start_s: 384
     set_end_s:   464
     ref_start_s: 44
@@ -191,6 +205,7 @@ tracks:
     tempo_ratio: 0.975
   - track:       "Good Charlotte - Girls And Boys"
     slot_label:  "004w1"
+    track_id:    37h72dsx
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 391
@@ -200,6 +215,7 @@ tracks:
     tempo_ratio: 1.07143
   - track:       "DJ Snake - Let Me Love You (Acappella)"
     slot_label:  "004w2"
+    track_id:    1jrxl0yx
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 419
@@ -209,6 +225,7 @@ tracks:
     tempo_ratio: 1
   - track:       "Avicii - The Nights"
     slot_label:  "015"
+    track_id:    1vtps115
     set_start_s: 436
     set_end_s:   1522
     ref_start_s: 80
@@ -228,6 +245,7 @@ tracks:
       - [1522, 1]
   - track:       "Charli xcx - Break The Rules"
     slot_label:  "004w3"
+    track_id:    1cz53gnp
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 450
@@ -237,6 +255,7 @@ tracks:
     tempo_ratio: 0.916667
   - track:       "Backstreet Boys - Everybody (Oski & Apashe & Lennon Bootleg)"
     slot_label:  "005"
+    track_id:    1zl2j2tx
     set_start_s: 464
     set_end_s:   548
     ref_start_s: 0
@@ -244,6 +263,7 @@ tracks:
     tempo_ratio: 1.28571
   - track:       "Dropgun - Ninja"
     slot_label:  "035w3"
+    track_id:    13n64sf5
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 475
@@ -253,6 +273,7 @@ tracks:
     tempo_ratio: 0.833333
   - track:       "Backstreet Boys - Everybody (Oski & Apashe & Lennon Bootleg)"
     slot_label:  "005"
+    track_id:    1zl2j2tx
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 486
@@ -262,6 +283,7 @@ tracks:
     tempo_ratio: 0.888889
   - track:       "Ludacris - Pimpin' All Over The World"
     slot_label:  "005w1"
+    track_id:    txwtmt6x
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 506
@@ -271,6 +293,7 @@ tracks:
     tempo_ratio: 3.94595
   - track:       "Thomas Hayes - Neon (Ryos Remix)"
     slot_label:  "006"
+    track_id:    20jcmut5
     set_start_s: 548
     set_end_s:   640
     ref_start_s: 98
@@ -278,6 +301,7 @@ tracks:
     tempo_ratio: 0.978261
   - track:       "3 Doors Down - Here Without You (Acappella)"
     slot_label:  "006w1"
+    track_id:    1f122v4x
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 551
@@ -287,6 +311,7 @@ tracks:
     tempo_ratio: 0.869565
   - track:       "Kanye West - Good Life"
     slot_label:  "006w3"
+    track_id:    dgb3mk5
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 623
@@ -296,6 +321,7 @@ tracks:
     tempo_ratio: 1.33333
   - track:       "Jay Hardway - Bootcamp"
     slot_label:  "035"
+    track_id:    2mztl2xp
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 641
@@ -322,6 +348,7 @@ tracks:
       - [3581, 1]
   - track:       "Avicii - Wake Me Up (Acappella)"
     slot_label:  "007w1"
+    track_id:    2h9jzrfx
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 658
@@ -343,6 +370,7 @@ tracks:
       - [1612, 1]
   - track:       "Marshmello - Alone (Acappella)"
     slot_label:  "007w2"
+    track_id:    1s69nfdx
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 670
@@ -364,6 +392,7 @@ tracks:
       - [748, 1]
   - track:       "Sebastian Ingrosso & Tommy Trash - Reload (Acappella)"
     slot_label:  "007w3"
+    track_id:    1yk0vv5x
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 696
@@ -373,6 +402,7 @@ tracks:
     tempo_ratio: 1.07407
   - track:       "Katy Perry - Dark Horse (Acappella)"
     slot_label:  "008w1"
+    track_id:    2uk8x4jf
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 759
@@ -382,6 +412,7 @@ tracks:
     tempo_ratio: 0.964286
   - track:       "Whethan - Savage"
     slot_label:  "008w2"
+    track_id:    x601dgf
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 789
@@ -403,6 +434,7 @@ tracks:
       - [832, 1]
   - track:       "Zedd & Alessia Cara - Stay (Acappella)"
     slot_label:  "009w1"
+    track_id:    zzuhuxp
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 836
@@ -412,6 +444,7 @@ tracks:
     tempo_ratio: 1.15217
   - track:       "Galantis - No Money"
     slot_label:  "009"
+    track_id:    1nfwj135
     set_start_s: 840
     set_end_s:   918
     ref_start_s: 0
@@ -419,6 +452,7 @@ tracks:
     tempo_ratio: 0.974359
   - track:       "Tiësto - Red Lights (Acappella)"
     slot_label:  "009w2"
+    track_id:    sdf13qf
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 899
@@ -437,6 +471,7 @@ tracks:
     tempo_ratio: 1.78571
   - track:       "Gazzo - Never Touch The Ground"
     slot_label:  "010"
+    track_id:    1gscm4q5
     set_start_s: 922
     set_end_s:   958
     ref_start_s: 76
@@ -444,6 +479,7 @@ tracks:
     tempo_ratio: 0.944444
   - track:       "Nero - Promises (Acappella)"
     slot_label:  "010w2"
+    track_id:    7w2vqqp
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 967
@@ -453,6 +489,7 @@ tracks:
     tempo_ratio: 0.909091
   - track:       "Calvin Harris - Feel So Close (Instrumental)"
     slot_label:  "011"
+    track_id:    5u7w225
     claimed_stem: instrumental
     ref_source:  demucs
     set_start_s: 980
@@ -462,6 +499,7 @@ tracks:
     tempo_ratio: 0.0138889
   - track:       "Calvin Harris - Feel So Close (Big Z Remix)"
     slot_label:  "011w2"
+    track_id:    2m4452pp
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 983
@@ -483,6 +521,7 @@ tracks:
       - [1144, 1]
   - track:       "Semisonic - Closing Time"
     slot_label:  "011w1"
+    track_id:    1xzwwcg5
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1030
@@ -492,6 +531,7 @@ tracks:
     tempo_ratio: 1.2
   - track:       "Bingo Players - Cry (A-Trak & DiscoTech Remix)"
     slot_label:  "011w4"
+    track_id:    1htpqzr5
     set_start_s: 1052
     set_end_s:   1094
     ref_start_s: 80
@@ -499,6 +539,7 @@ tracks:
     tempo_ratio: 0.952381
   - track:       "Bingo Players - Cry (A-Trak & DiscoTech Remix)"
     slot_label:  "011w4"
+    track_id:    1htpqzr5
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1053
@@ -508,6 +549,7 @@ tracks:
     tempo_ratio: 0.971429
   - track:       "My Chemical Romance - Welcome To The Black Parade"
     slot_label:  "011w6"
+    track_id:    1t3z8kbf
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1098
@@ -517,6 +559,7 @@ tracks:
     tempo_ratio: 0.857143
   - track:       "Calvin Harris - Feel So Close (Instrumental)"
     slot_label:  "011"
+    track_id:    5u7w225
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1148
@@ -526,6 +569,7 @@ tracks:
     tempo_ratio: 0.916667
   - track:       "Calvin Harris - My Way (Acappella)"
     slot_label:  "011w8"
+    track_id:    1gwls24x
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1161
@@ -535,6 +579,7 @@ tracks:
     tempo_ratio: 0.916667
   - track:       "Sigala - Sweet Lovin'"
     slot_label:  "012"
+    track_id:    yzqsmbf
     set_start_s: 1186
     set_end_s:   1282
     ref_start_s: 18
@@ -542,6 +587,7 @@ tracks:
     tempo_ratio: 0.583333
   - track:       "Vanessa Carlton - A Thousand Miles"
     slot_label:  "012w1"
+    track_id:    20m6km2x
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1204
@@ -551,6 +597,7 @@ tracks:
     tempo_ratio: 0.857143
   - track:       "2Pac - California Love (Acappella)"
     slot_label:  "012w2"
+    track_id:    w5z6jwx
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1230
@@ -560,6 +607,7 @@ tracks:
     tempo_ratio: 1.27778
   - track:       "Calvin Harris - Sweet Nothing (Acappella)"
     slot_label:  "012w3"
+    track_id:    2qqzlrdp
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1254
@@ -569,6 +617,7 @@ tracks:
     tempo_ratio: 7.35714
   - track:       "Quintino & Hardwell vs. DJ Kool - Let Me Clear My Scorpion (Henry Fong Mashup)"
     slot_label:  "013"
+    track_id:    x4jt0y5
     set_start_s: 1282
     set_end_s:   1354
     ref_start_s: 28
@@ -576,6 +625,7 @@ tracks:
     tempo_ratio: 1.13889
   - track:       "Quintino & Hardwell vs"
     slot_label:  "013"
+    track_id:    x4jt0y5
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1293
@@ -585,6 +635,7 @@ tracks:
     tempo_ratio: 0.954545
   - track:       "Audien - Crazy Love (MOTi Remix)"
     slot_label:  "003"
+    track_id:    1wv1fsrx
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1316
@@ -594,6 +645,7 @@ tracks:
     tempo_ratio: 0.666667
   - track:       "Melanie Martinez - Pity Party"
     slot_label:  "030w2"
+    track_id:    1mjr3m1x
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1343
@@ -620,6 +672,7 @@ tracks:
       - [2788, 1]
   - track:       "Madison Mars - Milky Way"
     slot_label:  "014"
+    track_id:    12rbn8r5
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1369
@@ -629,6 +682,7 @@ tracks:
     tempo_ratio: 0.966667
   - track:       "Madison Mars - Milky Way"
     slot_label:  "014"
+    track_id:    12rbn8r5
     set_start_s: 1370
     set_end_s:   1446
     ref_start_s: 2
@@ -645,6 +699,7 @@ tracks:
     tempo_ratio: 0.25
   - track:       "Taylor Swift - New Romantics"
     slot_label:  "015w1"
+    track_id:    tlp2594082
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1445
@@ -654,6 +709,7 @@ tracks:
     tempo_ratio: 5.82857
   - track:       "Whitney Houston - I Wanna Dance with Somebody (Acappella)"
     slot_label:  "015w2"
+    track_id:    34bj6m5
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1480
@@ -663,6 +719,7 @@ tracks:
     tempo_ratio: 0.916667
   - track:       "Deniz Koyu - Follow You"
     slot_label:  "016"
+    track_id:    37dudbp
     set_start_s: 1522
     set_end_s:   1628
     ref_start_s: 60
@@ -670,6 +727,7 @@ tracks:
     tempo_ratio: 0.981132
   - track:       "Deniz Koyu - Follow You"
     slot_label:  "016"
+    track_id:    37dudbp
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1535
@@ -679,6 +737,7 @@ tracks:
     tempo_ratio: 0.933333
   - track:       "Bastille - Pompeii (Acappella)"
     slot_label:  "016w1"
+    track_id:    2hb8u3xf
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1550
@@ -688,6 +747,7 @@ tracks:
     tempo_ratio: 0.965517
   - track:       "Kelly Clarkson - Behind These Hazel Eyes"
     slot_label:  "016w2"
+    track_id:    10hrsxsf
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1579
@@ -697,6 +757,7 @@ tracks:
     tempo_ratio: 9.46154
   - track:       "Linkin Park - Numb (Acappella)"
     slot_label:  "017w1"
+    track_id:    1rzckcmx
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1639
@@ -706,6 +767,7 @@ tracks:
     tempo_ratio: 1.25
   - track:       "Avicii - Waiting For Love (Acappella)"
     slot_label:  "017w2"
+    track_id:    1d1b498f
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1660
@@ -715,6 +777,7 @@ tracks:
     tempo_ratio: 1.13043
   - track:       "Slippy - Divided (VIP)"
     slot_label:  "017w3"
+    track_id:    272d6sjx
     set_start_s: 1676
     set_end_s:   1708
     ref_start_s: 56
@@ -722,6 +785,7 @@ tracks:
     tempo_ratio: 0.9375
   - track:       "Eminem - Lose Yourself (Acappella)"
     slot_label:  "017w4"
+    track_id:    2qrys89f
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1686
@@ -731,6 +795,7 @@ tracks:
     tempo_ratio: 0.947368
   - track:       "Porter Robinson - Sad Machine"
     slot_label:  "018w1"
+    track_id:    1grynb8x
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1713
@@ -740,6 +805,7 @@ tracks:
     tempo_ratio: 1
   - track:       "Arston - Beautiful Asian"
     slot_label:  "018"
+    track_id:    2hh6qfrx
     set_start_s: 1716
     set_end_s:   1776
     ref_start_s: 26
@@ -747,6 +813,7 @@ tracks:
     tempo_ratio: 0.966667
   - track:       "Imagine Dragons - Demons (Acappella)"
     slot_label:  "018w2"
+    track_id:    2tll51np
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1745
@@ -756,6 +823,7 @@ tracks:
     tempo_ratio: 1.23077
   - track:       "AlunaGeorge - You Know You Like It (Acappella)"
     slot_label:  "018w3"
+    track_id:    21d380d5
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1761
@@ -765,6 +833,7 @@ tracks:
     tempo_ratio: 1
   - track:       "DJ Snake & AlunaGeorge - You Know You Like It (Tchami Remix)"
     slot_label:  "018w4"
+    track_id:    h6zhxyp
     set_start_s: 1776
     set_end_s:   1810
     ref_start_s: 126
@@ -772,6 +841,7 @@ tracks:
     tempo_ratio: 0.941176
   - track:       "DJ Snake & AlunaGeorge - You Know You Like It (Tchami Remix)"
     slot_label:  "018w4"
+    track_id:    h6zhxyp
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1789
@@ -781,6 +851,7 @@ tracks:
     tempo_ratio: 0.923077
   - track:       "Nico & Vinz - Am I Wrong (Acappella)"
     slot_label:  "019w1"
+    track_id:    rh8dzzf
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1806
@@ -790,6 +861,7 @@ tracks:
     tempo_ratio: 1.02174
   - track:       "Murtagh & Aiobahn - Follow Me"
     slot_label:  "019"
+    track_id:    1b7ph9jx
     set_start_s: 1824
     set_end_s:   1916
     ref_start_s: 40
@@ -797,6 +869,7 @@ tracks:
     tempo_ratio: 1.97826
   - track:       "Calvin Harris - I Need Your Love (Xristo Remix)"
     slot_label:  "020w3"
+    track_id:    tlp2594105
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1884
@@ -806,6 +879,7 @@ tracks:
     tempo_ratio: 6.22222
   - track:       "X Ambassadors - Unsteady"
     slot_label:  "020w1"
+    track_id:    26465gy5
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1920
@@ -815,6 +889,7 @@ tracks:
     tempo_ratio: 0.909091
   - track:       "Britney Spears - Hold It Against Me"
     slot_label:  "020w2"
+    track_id:    15j5xh2x
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 1933
@@ -824,6 +899,7 @@ tracks:
     tempo_ratio: 5.24324
   - track:       "Sebastian Ingrosso & Tommy Trash - Reload"
     slot_label:  "021"
+    track_id:    7c22s6x
     set_start_s: 2000
     set_end_s:   2098
     ref_start_s: 8
@@ -831,6 +907,7 @@ tracks:
     tempo_ratio: 1.93878
   - track:       "Alessia Cara - Scars To Your Beautiful (Acappella)"
     slot_label:  "021w1"
+    track_id:    273hkzrx
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 2005
@@ -840,6 +917,7 @@ tracks:
     tempo_ratio: 1.23256
   - track:       "Oliver Heldens & Shaun Frank - Shades Of Grey (Acappella)"
     slot_label:  "021w2"
+    track_id:    1c2x2c6f
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 2050
@@ -849,6 +927,7 @@ tracks:
     tempo_ratio: 0.928571
   - track:       "Gazzo - Feel The Love"
     slot_label:  "022"
+    track_id:    tlp2594111
     set_start_s: 2098
     set_end_s:   2178
     ref_start_s: 30
@@ -856,6 +935,7 @@ tracks:
     tempo_ratio: 0.95
   - track:       "Panic! At The Disco - I Write Sins Not Tragedies"
     slot_label:  "023w2"
+    track_id:    2p27vuq5
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 2117
@@ -877,6 +957,7 @@ tracks:
       - [2237, 1]
   - track:       "Two Friends - Out Of Love"
     slot_label:  "023"
+    track_id:    2814q10p
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 2139
@@ -898,6 +979,7 @@ tracks:
       - [2184, 1]
   - track:       "Jason Mraz - I'm Yours"
     slot_label:  "023w1"
+    track_id:    2pbphpjf
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 2191
@@ -907,6 +989,7 @@ tracks:
     tempo_ratio: 1
   - track:       "JAY-Z - 99 Problems (Acappella)"
     slot_label:  "024w1"
+    track_id:    d787thx
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 2290
@@ -916,6 +999,7 @@ tracks:
     tempo_ratio: 1.07692
   - track:       "Bali Bandits - Kaboom"
     slot_label:  "025"
+    track_id:    1d2j51t5
     set_start_s: 2310
     set_end_s:   2394
     ref_start_s: 54
@@ -923,6 +1007,7 @@ tracks:
     tempo_ratio: 0.97619
   - track:       "DJ Snake & Yellow Claw - Ocho Cinco (Henry Fong Remix)"
     slot_label:  "026"
+    track_id:    22g3r615
     set_start_s: 2398
     set_end_s:   2478
     ref_start_s: 26
@@ -930,6 +1015,7 @@ tracks:
     tempo_ratio: 1.175
   - track:       "Jon Bellion - All Time Low"
     slot_label:  "026w1"
+    track_id:    9n99s8p
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 2402
@@ -939,6 +1025,7 @@ tracks:
     tempo_ratio: 4.6
   - track:       "DJ Snake & Yellow Claw - Ocho Cinco (Henry Fong Remix)"
     slot_label:  "026"
+    track_id:    22g3r615
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 2446
@@ -948,6 +1035,7 @@ tracks:
     tempo_ratio: 0.923077
   - track:       "Sigala - Sweet Lovin'"
     slot_label:  "012"
+    track_id:    yzqsmbf
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 2490
@@ -969,6 +1057,7 @@ tracks:
       - [2549, 1]
   - track:       "The Scrantones - The Office Theme Song"
     slot_label:  "001"
+    track_id:    tlp2594024
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 2522
@@ -978,6 +1067,7 @@ tracks:
     tempo_ratio: 0.888889
   - track:       "Fall Out Boy - Sugar, We're Goin' Down"
     slot_label:  "028w1"
+    track_id:    1futm3mp
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 2559
@@ -987,6 +1077,7 @@ tracks:
     tempo_ratio: 2.71739
   - track:       "The Chainsmokers - Paris (Pegboard Nerds Remix)"
     slot_label:  "028"
+    track_id:    1uzxl36x
     set_start_s: 2560
     set_end_s:   2642
     ref_start_s: 24
@@ -994,6 +1085,7 @@ tracks:
     tempo_ratio: 0.682927
   - track:       "Murtagh & Aiobahn - Follow Me"
     slot_label:  "019"
+    track_id:    1b7ph9jx
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 2618
@@ -1003,6 +1095,7 @@ tracks:
     tempo_ratio: 0.941176
   - track:       "Kanye West - All Of The Lights (Acappella)"
     slot_label:  "029w1"
+    track_id:    y0tvbwf
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 2641
@@ -1012,6 +1105,7 @@ tracks:
     tempo_ratio: 0.966667
   - track:       "Gazzo - Nothing To Lose"
     slot_label:  "029"
+    track_id:    tlp2594130
     set_start_s: 2642
     set_end_s:   2732
     ref_start_s: 18
@@ -1019,6 +1113,7 @@ tracks:
     tempo_ratio: 2.28889
   - track:       "Two Friends - Pacific Coast Highway (Acappella)"
     slot_label:  "029w2"
+    track_id:    2uq9800f
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 2671
@@ -1028,6 +1123,7 @@ tracks:
     tempo_ratio: 1.08333
   - track:       "Two Friends - Pacific Coast Highway (Acappella)"
     slot_label:  "029w2"
+    track_id:    2uq9800f
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 2711
@@ -1037,6 +1133,7 @@ tracks:
     tempo_ratio: 1
   - track:       "DubVision - Sweet Harmony"
     slot_label:  "030"
+    track_id:    h52br35
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 2733
@@ -1046,6 +1143,7 @@ tracks:
     tempo_ratio: 0.8
   - track:       "The Cure - Just Like Heaven"
     slot_label:  "030w1"
+    track_id:    1879dbcx
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 2740
@@ -1055,6 +1153,7 @@ tracks:
     tempo_ratio: 0.809524
   - track:       "Don Diablo - Back In Time"
     slot_label:  "030w3"
+    track_id:    1q6swtyx
     set_start_s: 2784
     set_end_s:   2824
     ref_start_s: 124
@@ -1062,6 +1161,7 @@ tracks:
     tempo_ratio: 0.95
   - track:       "Fountains Of Wayne - Stacy's Mom"
     slot_label:  "031w1"
+    track_id:    jzr25jf
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 2821
@@ -1071,6 +1171,7 @@ tracks:
     tempo_ratio: 3.14286
   - track:       "Jack Ü - Take Ü There"
     slot_label:  "031"
+    track_id:    qkk40nx
     set_start_s: 2824
     set_end_s:   2878
     ref_start_s: 108
@@ -1078,6 +1179,7 @@ tracks:
     tempo_ratio: 1.07407
   - track:       "Justin Caruso - Talk About Me"
     slot_label:  "032"
+    track_id:    1r8rnl5x
     set_start_s: 2892
     set_end_s:   2944
     ref_start_s: 2
@@ -1085,6 +1187,7 @@ tracks:
     tempo_ratio: 0.961538
   - track:       "Ed Sheeran - Shape Of You (Acappella)"
     slot_label:  "032w1"
+    track_id:    22gjb1nf
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 2899
@@ -1094,6 +1197,7 @@ tracks:
     tempo_ratio: 1.08
   - track:       "The Chainsmokers - Roses"
     slot_label:  "032w2"
+    track_id:    1vv1fbwx
     set_start_s: 2944
     set_end_s:   2992
     ref_start_s: 78
@@ -1101,6 +1205,7 @@ tracks:
     tempo_ratio: 0.958333
   - track:       "Hailee Steinfeld & Grey - Starving (Acappella)"
     slot_label:  "033w1"
+    track_id:    2l9bw08x
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 2951
@@ -1110,6 +1215,7 @@ tracks:
     tempo_ratio: 0.941176
   - track:       "Mumford & Sons - The Cave"
     slot_label:  "034w1"
+    track_id:    28tckm0x
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 3006
@@ -1131,6 +1237,7 @@ tracks:
       - [3038, 1]
   - track:       "Martin Garrix & Dua Lipa - Scared To Be Lonely"
     slot_label:  "034"
+    track_id:    g99m0t5
     set_start_s: 3022
     set_end_s:   3070
     ref_start_s: 44
@@ -1138,6 +1245,7 @@ tracks:
     tempo_ratio: 2.125
   - track:       "Adele - Set Fire To The Rain (Acappella)"
     slot_label:  "034w2"
+    track_id:    36sxy3x
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 3040
@@ -1147,6 +1255,7 @@ tracks:
     tempo_ratio: 1
   - track:       "Justin Bieber - Love Yourself (Acappella)"
     slot_label:  "034w3"
+    track_id:    tfdwxp5
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 3053
@@ -1156,6 +1265,7 @@ tracks:
     tempo_ratio: 0.916667
   - track:       "Twenty One Pilots - Heathens (Acappella)"
     slot_label:  "035w1"
+    track_id:    2q04x5fx
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 3070
@@ -1165,6 +1275,7 @@ tracks:
     tempo_ratio: 4.7931
   - track:       "Jay Hardway - Bootcamp"
     slot_label:  "035"
+    track_id:    2mztl2xp
     set_start_s: 3074
     set_end_s:   3132
     ref_start_s: 140
@@ -1172,6 +1283,7 @@ tracks:
     tempo_ratio: 1.2069
   - track:       "The White Stripes - Seven Nation Army (Acappella)"
     slot_label:  "035w2"
+    track_id:    1u0xwz85
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 3104
@@ -1181,6 +1293,7 @@ tracks:
     tempo_ratio: 1
   - track:       "Dropgun - Ninja"
     slot_label:  "035w3"
+    track_id:    13n64sf5
     set_start_s: 3132
     set_end_s:   3164
     ref_start_s: 88
@@ -1188,6 +1301,7 @@ tracks:
     tempo_ratio: 0.9375
   - track:       "Dzeko & Torres - L'amour Toujours (Tiësto Edit)"
     slot_label:  "004"
+    track_id:    270vfcpx
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 3170
@@ -1197,6 +1311,7 @@ tracks:
     tempo_ratio: 0.933333
   - track:       "Kiiara - Gold"
     slot_label:  "036w2"
+    track_id:    f9x17rx
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 3200
@@ -1218,6 +1333,7 @@ tracks:
       - [3233, 1]
   - track:       "Cheat Codes & Kris Kross Amsterdam - SEX (Acappella)"
     slot_label:  "037w1"
+    track_id:    199lcb8p
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 3241
@@ -1227,6 +1343,7 @@ tracks:
     tempo_ratio: 0.95122
   - track:       "Tove Lo - Cool Girl (Two Friends Remix)"
     slot_label:  "037"
+    track_id:    2l8vbt4p
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 3305
@@ -1236,6 +1353,7 @@ tracks:
     tempo_ratio: 1
   - track:       "Martin Garrix & Mesto - WIEE"
     slot_label:  "038"
+    track_id:    df8k0u5
     set_start_s: 3324
     set_end_s:   3368
     ref_start_s: 18
@@ -1243,6 +1361,7 @@ tracks:
     tempo_ratio: 0.954545
   - track:       "Kygo & Selena Gomez - It Ain't Me (Acappella)"
     slot_label:  "038w1"
+    track_id:    k38prdx
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 3327
@@ -1252,6 +1371,7 @@ tracks:
     tempo_ratio: 4.36667
   - track:       "Maroon 5 - Cold (Acappella)"
     slot_label:  "038w2"
+    track_id:    1zptckrx
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 3357
@@ -1261,6 +1381,7 @@ tracks:
     tempo_ratio: 0.923077
   - track:       "Clarx & Uplink - Titans"
     slot_label:  "038w3"
+    track_id:    17fp2h85
     set_start_s: 3368
     set_end_s:   3406
     ref_start_s: 140
@@ -1268,6 +1389,7 @@ tracks:
     tempo_ratio: 0.947368
   - track:       "Alan Walker - Faded (Instrumental Version)"
     slot_label:  "039"
+    track_id:    1lnqmw75
     claimed_stem: instrumental
     ref_source:  demucs
     set_start_s: 3406
@@ -1277,6 +1399,7 @@ tracks:
     tempo_ratio: 1.16854
   - track:       "Coldplay - The Scientist (Acappella)"
     slot_label:  "039w1"
+    track_id:    198ts0x5
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 3412
@@ -1286,6 +1409,7 @@ tracks:
     tempo_ratio: 1.09524
   - track:       "Flume - Say It (Acappella)"
     slot_label:  "039w3"
+    track_id:    1lnh2x95
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 3458
@@ -1295,6 +1419,7 @@ tracks:
     tempo_ratio: 11.6364
   - track:       "Afroman - Because I Got High (Acappella)"
     slot_label:  "039w4"
+    track_id:    2fn4gfk5
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 3480
@@ -1304,6 +1429,7 @@ tracks:
     tempo_ratio: 7.44444
   - track:       "Don Diablo & Khrebto - Got The Love (Vanze Bootleg)"
     slot_label:  "011w7"
+    track_id:    1knfs8vf
     claimed_stem: acappella
     ref_source:  demucs
     set_start_s: 3523
