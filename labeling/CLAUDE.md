@@ -21,11 +21,13 @@ CLI: `python -m labeling.als.validate <als>`) / `write` (in-place mutation) /
 `roundtrip` (executable laws) — plus the **private half**: `identity`
 (manifest/slot/stem) and `tags` (annotator renames). The old
 `labeling/als_io.py` is a deprecated re-export shim — import from
-`labeling.als`. The core seven must not import project-side code
-(`als_core_boundary` guardrail — they're the OSS-publishable seam).
-Tests: goldens pin real sessions (skip off-Mac), Hypothesis properties +
-mutation fuzz keep extraction total; extraction skips malformed nodes,
-`validate` reports them. Manifest matching is tag-insensitive (annotator
+`labeling.als`. Internal package (decided 2026-07-02: not open-sourced), but
+the layering is enforced: the core seven must not import project-side code
+(`als_core_boundary` guardrail). Tests: goldens pin real sessions (skip
+off-Mac), committed real-Live fixtures auto-discovered from
+[../tests/labeling/fixtures/als/](../tests/labeling/fixtures/als/) (authoring
+matrix in its README), Hypothesis properties + mutation fuzz keep extraction
+total; extraction skips malformed nodes, `validate` reports them. Manifest matching is tag-insensitive (annotator
 `[NNNbpm KK]` renames are stripped on both sides — see
 `match_manifest_for_path`).
 

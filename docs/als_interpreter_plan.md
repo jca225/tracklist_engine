@@ -2,9 +2,17 @@
 
 **Status:** §6 steps 1–5 EXECUTED 2026-07-02 on `als-codec-extraction`
 (cst/semantics split, validate.py, roundtrip.py laws, Hypothesis+fuzz,
-`als_core_boundary` guardrail). Step 6 (repo split/publish) remains gated on
-the open questions below. One deviation: read APIs kept their signatures
+`als_core_boundary` guardrail). One deviation: read APIs kept their signatures
 (no Result retrofit — house style); validation is a separate total pass.
+
+**Decisions (John, 2026-07-02):** the package stays **internal** — step 6
+(repo split / PyPI) is CANCELLED; §5's seam survives as enforced layering
+hygiene, not a publish boundary, and the license/naming/dawtool open questions
+below are moot. Package name stays **`labeling.als`** — format-named packages
+are the Python idiom (`json`/`csv`/`tomllib`), and the interpreter shape lives
+in the submodule names (`als.semantics`, `als.validate`, `als.roundtrip`).
+Real-Live test fixtures: committed, auto-discovered matrix in
+[../tests/labeling/fixtures/als/README.md](../tests/labeling/fixtures/als/README.md).
 Companion to
 [als_codec_subpackage_plan.md](als_codec_subpackage_plan.md) (the mechanical
 extraction, DONE) — this doc covers what comes next: interpreter-grade

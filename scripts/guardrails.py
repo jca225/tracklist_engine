@@ -144,10 +144,10 @@ def _check_stale_audio_pipeline_docs(path: Path, text: str) -> list[Violation]:
     return violations
 
 
-# The .als codec's OSS-publishable core (docs/als_interpreter_plan.md §5).
-# These modules must contain generic-Ableton knowledge ONLY: no project-side
-# imports, so the seam stays clean for the eventual repo split. identity.py /
-# tags.py are the private half; __init__.py is the facade composing both.
+# The .als codec's core (docs/als_interpreter_plan.md §5). Internal package,
+# but the layering is enforced: core modules carry generic-Ableton knowledge
+# ONLY — no project-side imports. identity.py / tags.py are the project-facing
+# half; __init__.py is the facade composing both.
 ALS_CORE_DIR = REPO_ROOT / "labeling" / "als"
 ALS_CORE_FILES = frozenset(
     {
@@ -163,17 +163,17 @@ ALS_CORE_FILES = frozenset(
 ALS_CORE_FORBIDDEN = (
     (
         re.compile(r"(?:from|import)\s+labeling\.als\.(?:identity|tags)\b"),
-        "OSS-core als module imports the private half (identity/tags)",
+        "codec-core als module imports the private half (identity/tags)",
     ),
     (
         re.compile(
             r"(?:from|import)\s+(?:core|web_crawler|ingest|analysis|tokenizer|eda|personalization|workspaces)\b"
         ),
-        "OSS-core als module imports project-side code",
+        "codec-core als module imports project-side code",
     ),
     (
         re.compile(r"from\s+labeling\s+import|from\s+labeling\.(?!als\b)"),
-        "OSS-core als module imports labeling outside the codec",
+        "codec-core als module imports labeling outside the codec",
     ),
 )
 
