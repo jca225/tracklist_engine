@@ -9,7 +9,54 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scripts.match_stem_library import decode_escaped, parse_filename
+from scripts.match_stem_library import (
+    Recording,
+    candidates,
+    decode_escaped,
+    parse_filename,
+)
+
+
+def _rec(rid: str, work: str, title: str, version: str = "original") -> Recording:
+    return Recording(
+        recording_id=rid,
+        work_id=work,
+        version=version,
+        version_artist="",
+        stem="regular",
+        variant="regular",
+        artist="Technotronic",
+        title=title,
+    )
+
+
+class TestCrossWorkMargin:
+    def test_sibling_recordings_do_not_depress_margin(self) -> None:
+        # original + remix of the same work tie at the top; the margin must be
+        # measured against the best *different* work, not the sibling
+        recs = [
+            _rec("r1", "w1", "Pump Up The Jam"),
+            _rec("r2", "w1", "Pump Up The Jam", version="remix"),
+            _rec("r3", "w2", "Get Up"),
+        ]
+        p = parse_filename(Path("Technotronic_20-_20Pump_20Up_20The_20Jam.wav"))
+        cands, other_s = candidates(p, recs, k=3)
+        top_s = cands[0][1]
+        assert cands[0][0].work_id == "w1"
+        assert top_s - other_s > 0.2  # decisive vs w2, despite the w1 sibling tie
+
+    def test_other_work_found_beyond_topk(self) -> None:
+        # k=1 truncates the display list, but the cross-work runner-up must
+        # still be found in the full scored list
+        recs = [
+            _rec("r1", "w1", "Pump Up The Jam"),
+            _rec("r2", "w1", "Pump Up The Jam", version="remix"),
+            _rec("r3", "w2", "Pump Up The Jams"),
+        ]
+        p = parse_filename(Path("Technotronic_20-_20Pump_20Up_20The_20Jam.wav"))
+        cands, other_s = candidates(p, recs, k=1)
+        assert len(cands) == 1
+        assert other_s > 0.8  # w2's near-identical title contests the match
 
 
 class TestDecodeEscaped:
