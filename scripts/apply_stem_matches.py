@@ -22,6 +22,16 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--set-id", default=None)
     ap.add_argument("--reason", default="source:discord|identity:reviewed")
+    ap.add_argument(
+        "--pi-files",
+        action="store_true",
+        help="row paths live on pi — pass them via ingest_stem_url --pi-file",
+    )
+    ap.add_argument(
+        "--path-map",
+        default=None,
+        help="OLD=NEW prefix rewrite applied to each row path (e.g. a mirror root)",
+    )
     args = ap.parse_args()
 
     applied = 0
@@ -29,8 +39,16 @@ def main() -> int:
         for row in csv.DictReader(f):
             if row.get("decision", "").lower() != args.accept.lower():
                 continue
-            path = row.get("file") or row.get("path")
-            recording_id = row.get("recording_id") or row.get("track_id")
+            path = row.get("path") or row.get("file")
+            recording_id = (
+                row.get("cand_recording_id")
+                or row.get("recording_id")
+                or row.get("track_id")
+            )
+            if path and args.path_map and "=" in args.path_map:
+                old_pfx, new_pfx = args.path_map.split("=", 1)
+                if path.startswith(old_pfx):
+                    path = new_pfx + path[len(old_pfx):]
             stem = (row.get("stem") or "acappella").lower()
             if not path or not recording_id:
                 continue
@@ -38,7 +56,7 @@ def main() -> int:
             cmd = [
                 str(PY),
                 str(REPO / "scripts" / "ingest_stem_url.py"),
-                "--file",
+                "--pi-file" if args.pi_files else "--file",
                 path,
                 "--track-id",
                 recording_id,

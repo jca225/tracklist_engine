@@ -38,6 +38,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     src.add_argument(
         "--file", type=Path, help="Local audio file (scp to pi, then ingest)"
     )
+    src.add_argument(
+        "--pi-file",
+        help="Audio file already on pi (absolute path) — no scp, ingested in place",
+    )
 
     p.add_argument(
         "--track-audio-id",
@@ -478,7 +482,9 @@ def main(argv: list[str] | None = None) -> int:
     _preflight(args)
 
     remote_file: str | None = None
-    if args.file:
+    if args.pi_file:
+        remote_file = args.pi_file
+    elif args.file:
         if not args.file.is_file():
             print(f"file not found: {args.file}", file=sys.stderr)
             return 2
