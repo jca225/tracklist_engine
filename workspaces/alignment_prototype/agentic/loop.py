@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from dataclasses import replace as _replace
+
 from workspaces.alignment_prototype.agentic.actions import Runner, bind, plan_for
 from workspaces.alignment_prototype.agentic.belief import SpanBelief
 from workspaces.alignment_prototype.agentic.events import EventLog
@@ -58,9 +60,20 @@ def resolve(
     *,
     ladder: Ladder | None = None,
     budget: float = float("inf"),
+    model=None,  # PrecisionModel | None — learned selection + calibrated precision
+    rng=None,  # numpy.random.Generator, required when model is given (reproducible)
 ) -> Resolution:
+    """Heuristic loop; when ``model`` is supplied, action *order* comes from the
+    model's Thompson sampling and each observation's precision is overwritten
+    with the model's calibrated posterior mean. Without a model, behavior is the
+    unchanged static-plan deterministic default.
+    """
     ladder = ladder or Ladder()
     runners = bind(runners)
+    if model is not None and rng is None:
+        import numpy as _np
+
+        rng = _np.random.default_rng(0)
     beliefs = {
         s.slot_label: SpanBelief(s.slot_label, s.recording_id, s.claimed_stem)
         for s in spans
@@ -83,18 +96,29 @@ def resolve(
                 open_keys.remove(key)
                 continue
             plan = plans[key]
-            nxt = next(
-                (a for a in plan if a.name in runners and a.name not in b.probes_run()),
-                None,
-            )
-            if nxt is None:  # plan exhausted — final mode decides the queue
+            available = [
+                a.name
+                for a in plan
+                if a.name in runners and a.name not in b.probes_run()
+            ]
+            if not available:  # plan exhausted — final mode decides the queue
                 open_keys.remove(key)
                 continue
+            if model is not None:
+                # learned selection: Thompson-rank the available actions by
+                # sampled precision/cost, pick the top (explores + exploits)
+                nxt_name = model.rank(tuple(available), rng)[0]
+            else:
+                nxt_name = available[0]  # static cheapest-informative-first order
+            nxt = next(a for a in plan if a.name == nxt_name)
             if spent + nxt.cost > budget:
                 log.append(key, "note", {"msg": f"budget stop before {nxt.name}"})
                 open_keys.remove(key)
                 continue
             obs = runners[nxt.name](ctx_by_key[key].data)
+            if model is not None and not obs.abstained:
+                # ladder should weigh the CALIBRATED precision, not the runner's
+                obs = _replace(obs, precision=model.precision(obs.probe))
             beliefs[key] = log.observe(b, obs)
             spent += nxt.cost
             n_actions += 1
