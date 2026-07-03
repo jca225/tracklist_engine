@@ -58,7 +58,16 @@ on the single ~1 h sequence. M0/M1 are prequential by construction (online count
 - `surprisal` = −log p(xₜ | past) — the prequential NLL.
 - `entropy` = predictive entropy H(X | past) before the observation.
 - M1 only: `mir` (Bayesian surprise, Dirichlet KL posterior‖prior), `pred_info`
-  (the paper's *exact* predictive information I(x|z)), `pir_proxy` (Δ-entropy).
+  (the paper's *exact* per-observation predictive information I(x|z), eq. A11),
+  `expected_pi` (Ī(z), the pre-event attention signal), `pir_exact` (the model
+  PIR Ḣ(a²)−Ḣ(a), slow-varying), `uncertainty_delta` (Δ-entropy — the legacy
+  `pir_proxy`, not a paper measure).
+
+  > Historical note (2026-07-02): before this date `pred_info` had two bugs —
+  > it used the *context* column instead of the observed symbol's column
+  > (so it never depended on the observation), and it squared raw Dirichlet
+  > counts instead of the normalized transition matrix. Results produced
+  > before the fix understate the pred_info channel.
 - M2 only: `fwd_kl` — KL between the one-step forecast after vs. before observing
   xₜ. A **proxy** for predictive information, not the exact quantity.
 

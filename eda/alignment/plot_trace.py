@@ -1,4 +1,5 @@
 """Save information-dynamics trace plots (optional matplotlib)."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -21,15 +22,17 @@ def save_trace_plot(
     t_min = artifact.bar_start_s / 60.0
     mir = trace.series("model_information_rate")
     surp = trace.series("surprisingness")
+    pinfo = trace.series("predictive_information")
     pir = trace.series("predictive_information_rate")
     unc = trace.series("predictive_uncertainty")
 
-    fig, axes = plt.subplots(4, 1, figsize=(14, 10), sharex=True)
+    fig, axes = plt.subplots(5, 1, figsize=(14, 12), sharex=True)
     for ax, y, title in (
         (axes[0], mir, "Model information rate (Bayesian surprise)"),
         (axes[1], surp, "Surprisingness −log P(token|context)"),
-        (axes[2], pir, "Predictive information rate"),
-        (axes[3], unc, "Predictive uncertainty H(X|context)"),
+        (axes[2], pinfo, "Predictive information I(x|z) (eq. A11)"),
+        (axes[3], pir, "Predictive information rate Ḣ(a²)−Ḣ(a)"),
+        (axes[4], unc, "Predictive uncertainty H(X|context)"),
     ):
         ax.plot(t_min, y, linewidth=0.6, color="#2563eb")
         ax.set_ylabel(title, fontsize=8)

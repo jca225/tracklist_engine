@@ -1,4 +1,5 @@
 """Summarize information-dynamics traces — PIR 'interestingness' vs GT."""
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
@@ -15,6 +16,7 @@ class PeakMoment:
     time_s: float
     model_information_rate: float
     surprisingness: float
+    predictive_information: float
     predictive_information_rate: float
     predictive_uncertainty: float
 
@@ -53,6 +55,7 @@ def top_peaks(
                 time_s=_bar_time(artifact, i),
                 model_information_rate=r.model_information_rate,
                 surprisingness=r.surprisingness,
+                predictive_information=r.predictive_information,
                 predictive_information_rate=r.predictive_information_rate,
                 predictive_uncertainty=r.predictive_uncertainty,
             )
@@ -64,10 +67,17 @@ def _rank_percentile(values: np.ndarray, indices: tuple[int, ...]) -> dict[str, 
     if values.size == 0 or not indices:
         return {"mean_percentile": float("nan"), "median_percentile": float("nan")}
     ranks = np.argsort(np.argsort(values))
-    pct = [100.0 * ranks[i] / max(len(values) - 1, 1) for i in indices if 0 <= i < len(values)]
+    pct = [
+        100.0 * ranks[i] / max(len(values) - 1, 1)
+        for i in indices
+        if 0 <= i < len(values)
+    ]
     if not pct:
         return {"mean_percentile": float("nan"), "median_percentile": float("nan")}
-    return {"mean_percentile": float(np.mean(pct)), "median_percentile": float(np.median(pct))}
+    return {
+        "mean_percentile": float(np.mean(pct)),
+        "median_percentile": float(np.median(pct)),
+    }
 
 
 def information_summary(
@@ -75,16 +85,17 @@ def information_summary(
     trace: MarkovTrace,
     gt_boundary_bars: tuple[int, ...] | None = None,
 ) -> dict:
-    """PIR / MIR stats; whether GT boundaries sit at high-information moments."""
+    """PIR / MIR / PI stats; whether GT boundaries sit at high-information moments."""
     mir = trace.series("model_information_rate")
     surp = trace.series("surprisingness")
+    pinfo = trace.series("predictive_information")
     pir = trace.series("predictive_information_rate")
     unc = trace.series("predictive_uncertainty")
 
-    # Paper: inverted-U — intermediate PIR ≈ most "interesting". Measure spread.
-    pir_abs = np.abs(pir)
-    pir_mid = float(np.median(pir_abs))
-    in_mid_band = int(np.sum((pir_abs >= 0.25 * pir_mid) & (pir_abs <= 2.5 * pir_mid)))
+    # Paper: inverted-U — intermediate PIR ≈ most "interesting". PIR is now the
+    # exact Ḣ(a²)−Ḣ(a) model property (nonnegative, slow-varying); measure spread.
+    pir_mid = float(np.median(pir))
+    in_mid_band = int(np.sum((pir >= 0.25 * pir_mid) & (pir <= 2.5 * pir_mid)))
 
     summary: dict = {
         "trace_stats": {
@@ -92,14 +103,20 @@ def information_summary(
             "mir_p90": float(np.percentile(mir, 90)),
             "surprisingness_mean": float(np.mean(surp)),
             "surprisingness_p90": float(np.percentile(surp, 90)),
+            "pred_info_mean": float(np.mean(pinfo)),
+            "pred_info_p90": float(np.percentile(pinfo, 90)),
             "pir_mean": float(np.mean(pir)),
             "pir_std": float(np.std(pir)),
-            "pir_abs_median": pir_mid,
+            "pir_median": pir_mid,
             "fraction_bars_mid_pir_band": in_mid_band / max(len(pir), 1),
             "uncertainty_mean": float(np.mean(unc)),
         },
-        "top_mir_moments": [asdict(p) for p in top_peaks(artifact, trace, signal="mir", n=12)],
-        "top_pir_moments": [asdict(p) for p in top_peaks(artifact, trace, signal="pir", n=12)],
+        "top_mir_moments": [
+            asdict(p) for p in top_peaks(artifact, trace, signal="mir", n=12)
+        ],
+        "top_pred_info_moments": [
+            asdict(p) for p in top_peaks(artifact, trace, signal="pred_info", n=12)
+        ],
         "top_surprisingness_moments": [
             asdict(p) for p in top_peaks(artifact, trace, signal="surprisingness", n=12)
         ],
@@ -109,7 +126,8 @@ def information_summary(
         gt_set = tuple(sorted(set(gt_boundary_bars)))
         summary["gt_at_mir"] = _rank_percentile(mir, gt_set)
         summary["gt_at_surprisingness"] = _rank_percentile(surp, gt_set)
-        summary["gt_at_pir_abs"] = _rank_percentile(pir_abs, gt_set)
+        summary["gt_at_pred_info"] = _rank_percentile(pinfo, gt_set)
+        summary["gt_at_pir"] = _rank_percentile(pir, gt_set)
         # Bars far from any GT boundary (≥16 bars) as control
         far: list[int] = []
         for i in range(len(mir)):

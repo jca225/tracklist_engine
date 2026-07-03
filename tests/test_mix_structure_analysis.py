@@ -1,4 +1,5 @@
 """Tests for mix structure analysis (synthetic — no audio)."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -6,7 +7,12 @@ from pathlib import Path
 import numpy as np
 
 from eda.alignment.adaptive_markov import AdaptiveMarkovChain
-from eda.alignment.boundaries import pick_local_peaks, pick_peaks, score_boundaries, seconds_to_bar_indices
+from eda.alignment.boundaries import (
+    pick_local_peaks,
+    pick_peaks,
+    score_boundaries,
+    seconds_to_bar_indices,
+)
 from eda.alignment.mix_structure_probe import _synthetic_artifact, run_probe
 from eda.alignment.tokenize import fit_vq_kmeans
 from labeling.ground_truth.schema import GroundTruthSet, GroundTruthTrack, load
@@ -20,6 +26,70 @@ def test_markov_spikes_at_regime_change():
     mir = trace.series("model_information_rate")
     assert mir[4] > mir[2]
     assert mir[4] > mir[6]
+
+
+def test_predictive_information_matches_eq_a11_bruteforce():
+    # I(i|j) = sum_k a_ki * log(a_ki / [a^2]_kj) on the NORMALIZED transition
+    # matrix — regression for the two 2026-07 bugs (context column used as
+    # numerator; raw counts squared instead of a).
+    rng = np.random.default_rng(0)
+    chain = AdaptiveMarkovChain(5, alpha=0.3, beta=0.0)
+    chain.theta = rng.uniform(0.2, 4.0, size=(5, 5))
+    a = chain.theta / chain.theta.sum(axis=0, keepdims=True)
+    a2 = a @ a
+    for j in range(5):
+        got = chain._predictive_information_all(j, a)
+        for i in range(5):
+            want = sum(a[k, i] * np.log(a[k, i] / a2[k, j]) for k in range(5))
+            assert abs(got[i] - max(want, 0.0)) < 1e-9, (i, j)
+
+
+def test_predictive_information_depends_on_observed_symbol():
+    # Symbol 0's successors are near-deterministic, symbol 1's near-uniform →
+    # observing them from the same context must yield different I(x|z).
+    chain = AdaptiveMarkovChain(3, alpha=0.01, beta=0.0)
+    chain.theta = np.array(
+        [
+            [0.01, 5.0, 5.0],
+            [15.0, 5.0, 5.0],
+            [0.01, 5.0, 5.0],
+        ]
+    )
+    a = chain.theta / chain.theta.sum(axis=0, keepdims=True)
+    pi_all = chain._predictive_information_all(2, a)
+    assert abs(pi_all[0] - pi_all[1]) > 1e-3
+
+
+def test_pir_exact_properties():
+    # Deterministic 2-cycle and uniform chain both have PIR 0; a noisy-sticky
+    # chain of intermediate entropy has PIR > 0 (the paper's inverted-U).
+    chain = AdaptiveMarkovChain(2, alpha=0.5, beta=0.0)
+
+    det = np.array([[1e-9, 1.0], [1.0, 1e-9]])
+    uni = np.full((2, 2), 0.5)
+    mid = np.array([[0.9, 0.1], [0.1, 0.9]])
+
+    pi_uni = np.array([0.5, 0.5])
+    assert chain._entropy_rate(det, pi_uni) < 1e-6
+    assert abs(chain._entropy_rate(uni, pi_uni) - np.log(2)) < 1e-9
+
+    assert chain._predictive_information_rate(det) < 1e-6
+    assert chain._predictive_information_rate(uni) < 1e-9
+    assert chain._predictive_information_rate(mid) > 0.01
+
+
+def test_readout_exposes_exact_measures_causally():
+    rng = np.random.default_rng(3)
+    symbols = rng.integers(0, 4, size=60).tolist()
+    trace = AdaptiveMarkovChain(4).run(symbols)
+    pinfo = trace.series("pred_info")
+    epi = trace.series("expected_pi")
+    pir = trace.series("pir")
+    # frame 0 has no context — all zero; afterwards nonnegative
+    assert pinfo[0] == 0.0
+    assert np.all(pinfo >= 0.0) and np.all(epi >= 0.0) and np.all(pir >= 0.0)
+    # pred_info must actually vary with observations (the old bug froze it per context)
+    assert np.std(pinfo[1:]) > 0.0
 
 
 def test_vq_labels_cover_all_clusters():
