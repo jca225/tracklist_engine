@@ -146,6 +146,15 @@ def main(argv: list[str] | None = None) -> int:
             "chroma_refine",
         )
     }
+    # surprise is live even in replay: its novelty curve comes from the cached
+    # mix-MERT artifact (order-free, no GT or chain output involved)
+    from workspaces.alignment_prototype.agentic.novelty import surprise_runner_for_set
+
+    surprise = surprise_runner_for_set(args.set_id)
+    if surprise is not None:
+        runners["surprise"] = surprise
+    else:
+        print(f"[skip] surprise: no {args.set_id}_mix_mert.npz artifact")
 
     log_path = OUT_DIR / "agentic" / f"{args.set_id}_events.jsonl"
     if log_path.exists():

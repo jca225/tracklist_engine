@@ -86,8 +86,17 @@ REGISTRY: dict[str, ActionSpec] = {
         ActionSpec(
             "modulation", cost=0.3, precision=0.55, stems=STEMS, validated=False
         ),
-        # predictive-coding surprise: order-free "a new track entered here" prior
-        ActionSpec("surprise", cost=0.1, precision=0.45, stems=STEMS, validated=False),
+        # predictive-coding surprise: Foote novelty on mix MERT (novelty.py),
+        # snapped to the cue anchor. Precision MEASURED vs hand GT (novelty eval
+        # 2026-07-06): BB11 0.61 (n=138), BB12 0.88 (n=33); regular pooled ~0.73,
+        # acappella 0.55 (full-mix novelty misses layered vocal-ins — per-stem
+        # novelty is the untested improvement path), instrumental n too small.
+        ActionSpec(
+            "surprise",
+            cost=0.1,
+            precision=0.60,
+            stems=("regular", "instrumental"),
+        ),
         # tempogram: onset-autocorrelation beat-grid → tempo + pulse strength
         ActionSpec(
             "tempogram",
@@ -120,8 +129,10 @@ REGISTRY: dict[str, ActionSpec] = {
 # Measured dominance order per stem (design doc table): run left-to-right,
 # commit early when the ladder's gate clears. Pruned probes simply absent.
 DOMINANCE: dict[str, tuple[str, ...]] = {
-    "regular": ("cue_prior", "mert_decode", "fp", "chroma_refine"),
-    "instrumental": ("cue_prior", "mert_decode", "fp", "chroma_refine"),
+    "regular": ("cue_prior", "surprise", "mert_decode", "fp", "chroma_refine"),
+    "instrumental": ("cue_prior", "surprise", "mert_decode", "fp", "chroma_refine"),
+    # acappella: full-mix novelty is blind to layered vocal-ins (bed dominates);
+    # surprise joins this lane only when per-stem novelty is built + measured.
     "acappella": ("cue_prior", "mert_decode", "lyrics", "fp", "stem_hubert"),
 }
 
