@@ -182,22 +182,18 @@ the timeline JSON dict only (minimal blast radius).
   per-set store map {set_id -> (mert, audio_ctx, fp_ctx)}; batches routed by
   tag. Gated anyway on a third COMPLETE GT set to hold out (BB12+BB11 exist;
   BB10/Murph not started). Don't bolt a concat hack.
-- **Seeder master-tempo emission (partially resolved 2026-07-06).** John's
-  2026-07-02 bug (Jun-16 seeds carried WRONG master-tempo BPM automation
-  placements — edits ripple; all were trashed). Done: **provenance is stamped**
-  (output is `<SET> SEEDED.als` — the seeder hard-refuses `* align.als` even
-  via `--out` — and the first arrangement locator reads `SEEDED <date> —
-  machine predictions, NOT GT`), and the correct-placement primitive exists:
-  `labeling.als.tempo_sec_to_beat` (inverse of `tempo_beat_to_sec`,
-  property-tested) — a tempo change at mix-second T must be written at beat
-  `tempo_sec_to_beat(pts, T)`, accumulated through the curve, NOT at `T` or
-  `T·bpm/60` (the Jun-16 mistake). Still open: actually *emitting* seeds in
-  the varying-BPM master-tempo convention (per-song tempo automation + all
-  clip positions through the same seconds→beats map). That is a full second
-  placement mode for the seeder; it needs John's convention decision (is
-  correcting a flat-60 seed acceptable, given export handles both
-  conventions?) and a Live open-test on real hardware before trust. Default
-  seeding stays flat-60 + BPM locators, which round-trips and opens cleanly.
+- **Seeding-for-labeling is DEAD as a use case (John, 2026-07-06).** John
+  hand-labels every set in his own convention (clean session, varying master
+  tempo) — do NOT pitch seeded sessions as labeling acceleration or ask him
+  to choose seeding options; the Jun-16 seeds were trashed as more hindrance
+  than help. The seeder's remaining role is **prediction rendering for the
+  review loop only** (step 3 of "Human review loop" above). What's fixed
+  (2026-07-06, d01b7ea): provenance is stamped — output is `<SET> SEEDED.als`
+  (hard-refuses `* align.als` even via `--out`) with locator #1 = `SEEDED
+  <date> — machine predictions, NOT GT` — and the correct tempo-placement
+  primitive exists (`labeling.als.tempo_sec_to_beat`, property-tested inverse
+  of `tempo_beat_to_sec`) for any future code that writes tempo automation.
+  Master-tempo *emission* in the seeder: not planned — no consumer.
 
 - **Segment traj-acc is still low (26%)** — bounded by set_start placement error
   (segments decode off the placed mix window) + repeat ambiguity. Levers: tighter
