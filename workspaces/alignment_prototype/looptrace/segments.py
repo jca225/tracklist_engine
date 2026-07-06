@@ -202,6 +202,51 @@ def cover_dp(
     return segs, evidence
 
 
+def mel_emission(
+    mix_mel: np.ndarray,
+    mix_hz: float,
+    ref_mel: np.ndarray,
+    ref_hz: float,
+    diags: list[Diagonal],
+    slope: float,
+    grid: np.ndarray,
+    cfg: SegmentConfig = SEG_V1,
+) -> np.ndarray:
+    """(n_diags, T) hybrid content-verification term, share space.
+
+    Whitened-mel cosine between the mix window at grid time t and the
+    reference at each diagonal's mapped position — the legacy matched
+    filter's evidence injected at looptrace's exact offsets. Per-time
+    CONTRAST (cross-candidate mean subtracted, zero-sum) and CLIPPED to
+    ±mel_cap so it tips landmark ties but cannot overturn a strong
+    landmark margin (lever-3's unbounded variant flipped a correct linear
+    span, BB12 051). Weight/cap fixture-tuned."""
+    n = len(diags)
+    out = np.zeros((n, grid.size), dtype=np.float64)
+    half_m = max(1, int(cfg.mel_window_s / 2 * mix_hz))
+    half_r = max(1, int(cfg.mel_window_s / 2 * ref_hz))
+    for ti, t in enumerate(grid):
+        m0 = int(t * mix_hz)
+        mwin = mix_mel[:, max(0, m0 - half_m) : m0 + half_m]
+        if mwin.shape[1] < 2:
+            continue
+        sims = np.full(n, np.nan)
+        for i, d in enumerate(diags):
+            r0 = int((slope * t + d.intercept_s) * ref_hz)
+            rwin = ref_mel[:, max(0, r0 - half_r) : r0 + half_r]
+            k = min(mwin.shape[1], rwin.shape[1])
+            if k < 2:
+                continue
+            sims[i] = float((mwin[:, :k] * rwin[:, :k]).sum(axis=0).mean())
+        ok = np.isfinite(sims)
+        if ok.sum() < 2:
+            continue
+        contrast = sims - float(sims[ok].mean())
+        contrast[~ok] = 0.0
+        out[:, ti] = np.clip(cfg.mel_weight * contrast, -cfg.mel_cap, cfg.mel_cap)
+    return out
+
+
 def path_inlier_evidence(
     points: np.ndarray,
     segs: list[tuple[float, float, float]],

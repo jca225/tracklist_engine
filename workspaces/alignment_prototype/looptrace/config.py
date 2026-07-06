@@ -117,6 +117,10 @@ class SegmentConfig:
     # the top-k by histogram peakiness compete on DP path evidence
     slope_fine: tuple[float, ...] = (0.94, 0.97, 1.0, 1.03, 1.06)
     slope_top_k: int = 3
+    # hybrid mel-consistency emission (content verification per diagonal)
+    mel_window_s: float = 2.0
+    mel_weight: float = 0.5  # contrast -> share-space scale (fixture-tuned)
+    mel_cap: float = 0.12  # tips ties, cannot overturn strong landmark margins
     seg_cost_s: float = 3.0  # MDL charge per segment when comparing slopes
     evidence_tol_s: float = 0.3  # tight tol for cross-slope path evidence
 

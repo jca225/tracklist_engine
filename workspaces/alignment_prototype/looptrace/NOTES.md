@@ -318,6 +318,28 @@ strict grouping (inert). Follow-up design recorded in RESULTS.md: a
 deliberate mel-consistency emission for ALL candidates (hybrid landmark +
 matched-filter DP).
 
+## Hybrid emission + pipeline wiring (2026-07-06, third pass)
+
+**Hybrid mel emission (option 1): flat overall, default OFF.** Built as
+the lever-3 follow-up: bounded (±0.12 cap) per-candidate mel contrast in
+the DP. Fixtures pass with it ON; real mixes: BB11 oddratio 68→95 and
+ALL +3, but small erosion elsewhere (BB12 −2 ALL, BB11 loop n=1 flip) —
+combined 43.7 vs 43.4, flat. `run.py --hybrid` to enable. Refinement if
+revisited: inverse-landmark-density weighting (fill deserts, don't argue
+with dense landmark evidence).
+
+**Pipeline wiring (option 2): DONE, real-placement gains, placement now
+binds.** `joint_ref_decode --decoder looptrace [--audit ...] [--out ...]`
+routes acappella spans through the landmark decoder; legacy for other
+stems; `--out` avoids clobbering the in-place timeline. End-to-end
+(fiber-aware): acappella 10→13 (BB12) / 12→13 (BB11), ≥80%-covered
+2→7 / 4→7, headline +1 both sets, no regressions. The oracle-vs-real gap
+(43–44% vs 13%) makes the next dependency explicit: **acappella set_start
+placement** is the binding constraint end-to-end — decoder work past this
+point pays off only after placement improves, or by letting looptrace
+self-place (decode a widened mix window around the prior, which its
+Hough geometry supports naturally).
+
 ### Plan deltas vs the brief (repo-specific adjustments)
 
 - `looptrace/` lives under `workspaces/alignment_prototype/`, not top-level (repo

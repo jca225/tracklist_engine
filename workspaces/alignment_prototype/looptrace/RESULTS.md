@@ -110,3 +110,32 @@ future work, needs its own calibration to avoid the 051-style flip.
 
 Combined (38 spans): ALL 43 vs 40 baseline; **multiseg 28 vs 20** — the
 target class improved ~+45% relative on the honest cross-set average.
+
+## Hybrid mel-consistency emission (2026-07-06): flat overall, default OFF
+
+Bounded (±0.12 share cap) per-candidate mel-verification contrast in the
+DP (`segments.mel_emission`, `run.py --hybrid`). Real-mix A/B vs lever-2:
+BB11 oddratio 68→95 (the lever-3 mechanism, now bounded and principled)
+and BB11 ALL 44→47, but small erosion nearly everywhere else (BB12 ALL
+43→41, BB11 multiseg 21→17, BB11 loop 24→0 n=1). Combined ALL 43.7 vs
+43.4 — flat. Default OFF per the no-regression rule. Next refinement if
+revisited: scale the mel weight by inverse landmark-evidence density
+(mel should fill landmark deserts, not argue where landmarks are dense).
+
+## End-to-end (REAL placement) — looptrace wired into the pipeline
+
+`joint_ref_decode --decoder looptrace` routes ACAPPELLA spans through the
+landmark decoder (others keep legacy); same timelines/placement both arms;
+scored with `score_timeline_vs_gt --fibers` (fiber-aware, within 2 s):
+
+| | BB12 legacy | BB12 looptrace | BB11 legacy | BB11 looptrace |
+|---|---|---|---|---|
+| acappella traj-acc | 10% | **13%** | 12% | **13%** |
+| acappella ≥80% covered | 2% | **7%** | 4% | **7%** |
+| HEADLINE multiseg+loop | 24% | 25% | 22% | 23% |
+
+Consistent gains, no regressions — but the oracle-placement gap (43–44%
+ALL with GT set_start vs ~13% real) says **placement error is now the
+binding constraint for end-to-end acappella**, not the ref-trace decoder.
+The decoder improvements land fully only when acappella set_start
+improves (or when the decoder is given wider mix windows to self-place).

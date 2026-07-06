@@ -89,6 +89,26 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--hop-s", type=float, default=2.0, help="window hop")
     p.add_argument("--hubert-layer", type=int, default=9)
     p.add_argument("--workers", type=int, default=8)
+    p.add_argument(
+        "--decoder",
+        choices=["legacy", "looptrace"],
+        default="legacy",
+        help="looptrace = landmark Hough + segment-cover DP for ACAPPELLA "
+        "spans (regular/instrumental keep the legacy matched-filter path); "
+        "see workspaces/alignment_prototype/looptrace/",
+    )
+    p.add_argument(
+        "--audit",
+        type=Path,
+        default=None,
+        help="looptrace Phase-1 audit JSON (enables the loop structural test)",
+    )
+    p.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="write the updated timeline here instead of rewriting in place",
+    )
     args = p.parse_args(argv)
 
     timeline_path = OUT_DIR / f"{args.set_id}_predicted_timeline.json"
@@ -126,10 +146,64 @@ def main(argv: list[str] | None = None) -> int:
             f, f"{args.set_id}_{stem}", feat, args.hubert_layer
         )
 
+    # looptrace branch: acappella spans decode via the landmark Hough +
+    # segment-cover DP (validated vs the frozen oracle-placement baseline:
+    # multiseg 35/21 vs 27/12); other stems keep the legacy path below.
+    lt_res: dict[int, list] = {}
+    audit = json.loads(args.audit.read_text()) if args.audit else None
+    if args.decoder == "looptrace":
+        from workspaces.alignment_prototype.looptrace import (
+            landmarks as lt_landmarks,
+        )
+        from workspaces.alignment_prototype.looptrace import selfsim as lt_selfsim
+        from workspaces.alignment_prototype.looptrace.run import decode_span
+
+        mix_vocals = set_dir / "mix_vocals.flac"
+        for idx, s in enumerate(spans):
+            if (s.get("claimed_stem") or "regular") != "acappella":
+                continue
+            t = by_tid.get(s["recording_id"])
+            ref_path = _ref_audio_for(s, t) if t else None
+            if ref_path is None or not mix_vocals.is_file():
+                continue
+            s0, s1 = float(s["set_start_s"]), float(s["set_end_s"])
+            if s1 - s0 < 1.0:
+                continue
+            y = lt_selfsim.load_audio(str(mix_vocals), offset_s=s0, duration_s=s1 - s0)
+            ref_h = lt_landmarks.ref_points_cached(str(ref_path))
+            song_lags = song_pairs = None
+            if audit is not None:
+                ta = audit["tracks"].get(s["recording_id"]) or audit["tracks"].get(
+                    s.get("track_id", "")
+                )
+                song_lags = [q["lag_s"] for q in ta["pairs"]] if ta else []
+                song_pairs = ta["pairs"] if ta else []
+            if mix_series is not None and ref_series is not None:
+                shim = SimpleNamespace(recording_id=s["recording_id"], set_start_s=s0)
+                slopes = set(_stretch_band(shim, mix_series, ref_series))
+            else:
+                slopes = set(_FALLBACK_STRETCHES)
+            for f in (0.94, 0.97, 1.0, 1.03, 1.06):
+                for o in (0.5, 1.0, 2.0):
+                    slopes.add(round(f * o, 4))
+            segs, _meta = decode_span(
+                y,
+                ref_h,
+                sorted(slopes),
+                song_lags_s=song_lags,
+                song_pairs=song_pairs,
+                ref_path=str(ref_path),
+            )
+            if segs:
+                lt_res[idx] = segs
+        print(f"looptrace decoded {len(lt_res)} acappella spans", file=sys.stderr)
+
     wlen, hop = int(args.window_s * FPS), int(args.hop_s * FPS)
     lam_back = args.lam if args.lam_back is None else args.lam_back
     jobs, skipped = [], 0
     for idx, s in enumerate(spans):
+        if idx in lt_res:
+            continue
         t = by_tid.get(s["recording_id"])
         if t is None:
             skipped += 1
@@ -185,8 +259,8 @@ def main(argv: list[str] | None = None) -> int:
 
     n_multi, updated = 0, 0
     for idx, s in enumerate(spans):
-        r = res.get(idx)
-        if not r or not r["segs"]:
+        raw = lt_res.get(idx) or (res.get(idx) or {}).get("segs")
+        if not raw:
             continue
         s0 = s["set_start_s"]
         segs = [
@@ -195,10 +269,13 @@ def main(argv: list[str] | None = None) -> int:
                 "ref_start_s": round(rs, 2),
                 "ref_end_s": round(re, 2),
             }
-            for (ms, rs, re) in r["segs"]
+            for (ms, rs, re) in raw
         ]
         s["ref_segments"] = segs
-        s["ref_path_conf"] = r["score"]
+        if idx in lt_res:
+            s["ref_decoder"] = "looptrace"
+        else:
+            s["ref_path_conf"] = res[idx]["score"]
         s.setdefault("ref_start_detect", s["ref_start_s"])
         s["ref_start_s"] = segs[0]["ref_start_s"]
         s["ref_end_s"] = segs[-1]["ref_end_s"]
@@ -208,14 +285,18 @@ def main(argv: list[str] | None = None) -> int:
 
     timeline["ref_decode"] = (
         "path_decode jump-Viterbi, feature-routed (joint_ref_decode)"
+        if args.decoder == "legacy"
+        else "looptrace landmark Hough+DP (acappella) + path_decode (others)"
     )
-    timeline_path.write_text(json.dumps(timeline, indent=2))
+    dest = args.out or timeline_path
+    dest.write_text(json.dumps(timeline, indent=2))
     confs = [r["score"] for r in res.values() if r["segs"]]
     print(
-        f"\nupdated {updated} spans; multi-segment (loops/edits): {n_multi}; "
+        f"\nupdated {updated} spans ({len(lt_res)} looptrace); "
+        f"multi-segment (loops/edits): {n_multi}; "
         f"path conf median={np.median(confs) if confs else 0:.2f}"
     )
-    print(f"rewrote {timeline_path}")
+    print(f"wrote {dest}")
     return 0
 
 

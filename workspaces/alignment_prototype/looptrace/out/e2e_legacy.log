@@ -1,0 +1,49 @@
+=== BB12 legacy e2e ===
+=== end-to-end pipeline vs GT (1fsnxchk, 152 predicted spans) ===
+identity: 128/152 (84%)  [13 spans had no same-slot GT row]
+set placement |pred-gt|: median=6.3s  <5s: 47%  <15s: 68%  p90=51.0s  (n=139)
+ref offset |pred-gt| (straight clips, n=49; 90 loop/segment spans excluded): median=26.3s  <2s: 27%  <5s: 29%  p90=102.8s
+  regular       n= 34 median=21.0s  <2s: 32%  <5s: 35%
+  acappella     n= 14 median=55.1s  <2s: 7%  <5s: 7%
+  instrumental  n=  1 median=0.2s  <2s: 100%  <5s: 100%
+
+ref trajectory (fiber-aware, ref(mix_t) within 2s; n=139 matched):
+  class linear    n= 49 traj-acc=16%  >=80%covered: 6%
+  class multiseg  n= 65 traj-acc=25%  >=80%covered: 8%
+  class loop      n=  9 traj-acc=16%  >=80%covered: 11%
+  class oddratio  n= 16 traj-acc=14%  >=80%covered: 6%
+  stem  regular   n= 96 traj-acc=24%  >=80%covered: 9%
+  stem  acappella n= 41 traj-acc=10%  >=80%covered: 2%
+  stem  instrumental n=  2 traj-acc=23%  >=80%covered: 0%
+  HEADLINE multiseg+loop n= 74 traj-acc=24%  >=80%covered: 8%
+
+worst placement:
+
+worst ref offset:
+
+identity misses (24):
+
+=== BB11 legacy e2e ===
+(id map: 0 GT ids normalized via 2nvzlh2k.json)
+=== end-to-end pipeline vs GT (2nvzlh2k, 151 predicted spans) ===
+identity: 124/150 (83%)  [7 spans had no same-slot GT row]
+set placement |pred-gt|: median=8.0s  <5s: 44%  <15s: 63%  p90=53.6s  (n=144)
+ref offset |pred-gt| (straight clips, n=53; 91 loop/segment spans excluded): median=2.6s  <2s: 47%  <5s: 53%  p90=141.3s
+  regular       n= 30 median=2.3s  <2s: 47%  <5s: 57%
+  acappella     n= 23 median=13.7s  <2s: 48%  <5s: 48%
+
+ref trajectory (fiber-aware, ref(mix_t) within 2s; n=144 matched):
+  class linear    n= 53 traj-acc=23%  >=80%covered: 8%
+  class multiseg  n= 55 traj-acc=23%  >=80%covered: 7%
+  class loop      n=  6 traj-acc=6%  >=80%covered: 0%
+  class oddratio  n= 30 traj-acc=7%  >=80%covered: 3%
+  stem  regular   n= 75 traj-acc=26%  >=80%covered: 8%
+  stem  acappella n= 67 traj-acc=12%  >=80%covered: 4%
+  stem  instrumental n=  2 traj-acc=5%  >=80%covered: 0%
+  HEADLINE multiseg+loop n= 61 traj-acc=22%  >=80%covered: 7%
+
+worst placement:
+
+worst ref offset:
+
+identity misses (26):

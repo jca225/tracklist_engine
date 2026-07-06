@@ -51,8 +51,9 @@ def decode_span(
     song_lags_s: list[float] | None = None,
     song_pairs: list[dict] | None = None,
     ref_path: str | None = None,
+    ref_mel: tuple | None = None,  # (mel, hz) of the reference, for hybrid
     discrim: bool = False,
-    residual: bool = True,
+    hybrid: bool = False,
     lm_cfg=LM_V1,
     seg_cfg=SEG_V1,
     loop_cfg=LOOP_V2,
@@ -82,37 +83,23 @@ def decode_span(
     )
     dur_dec = len(y_dec) / selfsim.SR
     grid = np.arange(0.0, max(dur_dec, seg_cfg.grid_step_s), seg_cfg.grid_step_s)
-    res_ctx = None
-    if residual and song_pairs and ref_path:
-        from workspaces.alignment_prototype.looptrace import residual as res
-        from workspaces.alignment_prototype.looptrace.discrim import (
-            discriminability_mask,
-        )
+    hyb = None
+    if hybrid:
+        if ref_mel is None and ref_path is not None:
+            from workspaces.alignment_prototype.looptrace.residual import mel_cached
 
-        mix_mel, mix_hz = selfsim.mel_features(y_dec)
-        ref_mel, ref_hz = res.mel_cached(ref_path)
-        mask, mask_hz = discriminability_mask(ref_path, song_pairs)
-        res_ctx = (res, mix_mel, mix_hz, ref_mel, ref_hz, mask, mask_hz)
+            ref_mel = mel_cached(ref_path)
+        if ref_mel is not None:
+            mix_mel, mix_hz = selfsim.mel_features(y_dec)
+            hyb = (mix_mel, mix_hz, ref_mel[0], ref_mel[1])
     best_slope, segs, best_ev, best_adj = ranked[0], [], 0.0, -1.0
     for s in ranked[: seg_cfg.slope_top_k]:
         diags = segments.hough_diagonals(pts, s, seg_cfg)
         bonus = None
-        if res_ctx is not None and diags:
-            res, mix_mel, mix_hz, ref_mel, ref_hz, mask, mask_hz = res_ctx
-            groups = res.rival_groups(diags, song_pairs)
-            if groups:
-                bonus = res.residual_bonus(
-                    mix_mel,
-                    mix_hz,
-                    ref_mel,
-                    ref_hz,
-                    mask,
-                    mask_hz,
-                    diags,
-                    groups,
-                    s,
-                    grid,
-                )
+        if hyb is not None and len(diags) >= 2:
+            bonus = segments.mel_emission(
+                hyb[0], hyb[1], hyb[2], hyb[3], diags, s, grid, seg_cfg
+            )
         sg, _dp_ev = segments.cover_dp(
             pts, s, dur_dec, seg_cfg, weights=weights, diagonals=diags, bonus=bonus
         )
@@ -187,9 +174,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--dump", type=Path, default=None)
     p.add_argument("--slot", default=None, help="single slot_label (debug)")
     p.add_argument(
-        "--no-residual",
+        "--hybrid",
         action="store_true",
-        help="disable the residual rival-tiebreak DP term (A/B)",
+        help="enable the hybrid mel-consistency DP emission (measured flat "
+        "overall: big oddratio wins, small erosion elsewhere — see NOTES.md)",
     )
     p.add_argument(
         "--discrim",
@@ -249,7 +237,7 @@ def main(argv: list[str] | None = None) -> int:
             song_pairs=song_pairs,
             ref_path=str(rp),
             discrim=args.discrim,
-            residual=not args.no_residual,
+            hybrid=args.hybrid,
         )
         acc, _n, _f = trajectory_acc(segs, row)
         accs.append((_span_class(row), acc))

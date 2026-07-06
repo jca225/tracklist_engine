@@ -22,6 +22,13 @@ def song_hashes(song):
     return landmarks.audio_points(song)
 
 
+@pytest.fixture(scope="module")
+def song_mel(song):
+    from workspaces.alignment_prototype.looptrace import selfsim
+
+    return selfsim.mel_features(song)
+
+
 SLOPES = [1.0 / 1.08, 1.0, 1.0 / 0.93, 0.93, 1.08]
 
 
@@ -60,17 +67,18 @@ def _per_second_acc(span, segs, tol=0.25) -> float:
     return ok / max(1, len(ts))
 
 
-def _decode(span, song_hashes):
+def _decode(span, song_hashes, song_mel=None):
     segs, _meta = decode_span(
         span.y,
         song_hashes,
         SLOPES,
         song_lags_s=list(span.song_lags_s),
+        ref_mel=song_mel,
     )
     return segs
 
 
-def test_per_second_accuracy_battery(song, song_hashes):
+def test_per_second_accuracy_battery(song, song_hashes, song_mel):
     accs = []
     per_case = []
     for kind in ("straight", "jump", "loop2", "loop4", "replay"):
@@ -79,7 +87,7 @@ def test_per_second_accuracy_battery(song, song_hashes):
                 span = fixtures.make_mix_span(
                     song, kind, seed=seed, stretch_factor=factor, stretch_mode=mode
                 )
-                a = _per_second_acc(span, _decode(span, song_hashes))
+                a = _per_second_acc(span, _decode(span, song_hashes, song_mel))
                 accs.append(a)
                 per_case.append((kind, mode, seed, round(a, 2)))
     mean = float(np.mean(accs))
