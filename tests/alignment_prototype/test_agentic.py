@@ -63,8 +63,14 @@ def test_dominance_plans_prune_dominated_probes():
     host = [a.name for a in plan_for("regular")]
     assert "lyrics" in vocal and vocal.index("lyrics") < vocal.index("fp")
     assert "fp" in host and "lyrics" not in host  # lyrics dominated on hosts
-    # plans are information-ordered with the most expensive probe last
-    assert vocal[-1] == "stem_hubert" and host[-1] == "chroma_refine"
+    # surprise is the tie-breaker tail: it fires only on spans the rest of the
+    # plan failed to resolve (a weak vote diluting an already-confident belief
+    # costs auto coverage — measured), and mert_decode must precede it (it
+    # supplies the w-row band center)
+    assert vocal[-1] == "surprise" and host[-1] == "surprise"
+    assert vocal.index("mert_decode") < vocal.index("surprise")
+    # before the tail, plans are information-ordered, most expensive probe last
+    assert vocal[-2] == "stem_hubert" and host[-2] == "chroma_refine"
 
 
 def test_bind_rejects_unknown_actions():

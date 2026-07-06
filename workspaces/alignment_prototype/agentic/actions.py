@@ -86,17 +86,14 @@ REGISTRY: dict[str, ActionSpec] = {
         ActionSpec(
             "modulation", cost=0.3, precision=0.55, stems=STEMS, validated=False
         ),
-        # predictive-coding surprise: Foote novelty on mix MERT (novelty.py),
-        # snapped to the cue anchor. Precision MEASURED vs hand GT (novelty eval
-        # 2026-07-06): BB11 0.61 (n=138), BB12 0.88 (n=33); regular pooled ~0.73,
-        # acappella 0.55 (full-mix novelty misses layered vocal-ins — per-stem
-        # novelty is the untested improvement path), instrumental n too small.
-        ActionSpec(
-            "surprise",
-            cost=0.1,
-            precision=0.60,
-            stems=("regular", "instrumental"),
-        ),
+        # predictive-coding surprise: Foote novelty on mix MERT, stem-routed
+        # (acappella reads mix_vocals novelty), snapped to cue else mert band
+        # center (novelty.py). Precision MEASURED vs BB11+BB12 hand GT
+        # (2026-07-06) per (stem, center): reg/instr@cue 0.73, acap@cue 0.58,
+        # reg/instr@mert 0.48, acap@mert 0.37; the runner stamps each
+        # observation with its own population's precision — this registry
+        # value is only the prior/bandit seed.
+        ActionSpec("surprise", cost=0.1, precision=0.60, stems=STEMS),
         # tempogram: onset-autocorrelation beat-grid → tempo + pulse strength
         ActionSpec(
             "tempogram",
@@ -128,12 +125,22 @@ REGISTRY: dict[str, ActionSpec] = {
 
 # Measured dominance order per stem (design doc table): run left-to-right,
 # commit early when the ladder's gate clears. Pruned probes simply absent.
+# surprise sits LAST in every lane: spans that clear the ladder never reach it
+# (a ~0.6-precision vote diluting an already-confident belief costs auto
+# coverage — measured), so it fires only on unresolved spans, where it sharpens
+# the review queue. Live-mode ordering also needs mert's proposal to exist
+# first (the w-row band center; scraped cue is fake 0.0 there).
 DOMINANCE: dict[str, tuple[str, ...]] = {
-    "regular": ("cue_prior", "surprise", "mert_decode", "fp", "chroma_refine"),
-    "instrumental": ("cue_prior", "surprise", "mert_decode", "fp", "chroma_refine"),
-    # acappella: full-mix novelty is blind to layered vocal-ins (bed dominates);
-    # surprise joins this lane only when per-stem novelty is built + measured.
-    "acappella": ("cue_prior", "mert_decode", "lyrics", "fp", "stem_hubert"),
+    "regular": ("cue_prior", "mert_decode", "fp", "chroma_refine", "surprise"),
+    "instrumental": ("cue_prior", "mert_decode", "fp", "chroma_refine", "surprise"),
+    "acappella": (
+        "cue_prior",
+        "mert_decode",
+        "lyrics",
+        "fp",
+        "stem_hubert",
+        "surprise",
+    ),
 }
 
 # Composite skills — one decision covers a proven sequence.

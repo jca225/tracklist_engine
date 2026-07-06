@@ -35,6 +35,20 @@ ANALYSIS_DIR = _REPO / "data" / "analysis"
 KERNEL_BARS = 6  # D2's best setting (L=6: recall@4s 64%, L=9: 53%)
 BAND_S = 45.0  # matches the infer coarse band
 
+# P(<=15s | fired) MEASURED vs BB11+BB12 hand GT (eval main, 2026-07-06),
+# split by (stem, band-center provenance). Cue-centered fires are independent
+# votes; mert-centered (w-rows) degrade to refinements of mert's coarse band
+# and inherit its wrong-band failures. Acappella runs ~0.15 below regular on
+# both centers (vocal novelty is sharper but the vocal stem is noisier). Each
+# observation is stamped with its own population's precision so fusion weighs
+# it honestly; the registry precision is only the prior/bandit seed.
+_MEASURED_PRECISION = {
+    ("cue", False): 0.70,  # regular/instrumental @cue: 0.73 pooled, n=107
+    ("cue", True): 0.55,  # acappella @cue: 0.58, n=64 (BB11)
+    ("mert", False): 0.45,  # regular/instrumental @mert: 0.48, n=65
+    ("mert", True): 0.35,  # acappella @mert: 0.37, n=41 (BB12)
+}
+
 
 def foote_novelty(mert: np.ndarray, *, kernel_bars: int = KERNEL_BARS) -> np.ndarray:
     """Checkerboard novelty on the centered self-similarity of bar embeddings.
@@ -79,41 +93,84 @@ def _abstain(detail: str) -> Observation:
     )
 
 
-def surprise_runner(curve: tuple[tuple[float, float], ...], *, band_s: float = BAND_S):
-    """Runner: snap the span's cue anchor to the nearest novelty peak in band.
+def _band_center(data: dict) -> tuple[float, str] | None:
+    """The prior the novelty peak snaps to: the scraped cue when real, else the
+    coarse MERT decode proposal.
 
-    The cue anchor is the band center because it is the only placement prior
-    independent of the other probes — using the timeline's own set_start would
-    let the winner vote for itself and inflate the measured precision.
+    The cue is fully independent of every probe; the MERT fallback exists for
+    w-rows (their scraped cue is a fake 0.0 — on BB12 that is ALL acappellas),
+    where surprise degrades to a refinement vote on mert_decode's band rather
+    than an independent one. The center provenance travels in the detail string
+    and the eval reports the two populations separately.
+    """
+    cue = data.get("cue_anchor_s")
+    slot = str(data.get("slot_label") or "")
+    if cue is not None and not (float(cue) == 0.0 and "w" in slot):
+        return float(cue), "cue"
+    mert = (data.get("probe_proposals") or {}).get("mert_decode")
+    if mert is not None:
+        return float(mert), "mert"
+    return None
+
+
+def surprise_runner(
+    curve: tuple[tuple[float, float], ...],
+    *,
+    vocals_curve: tuple[tuple[float, float], ...] | None = None,
+    band_s: float = BAND_S,
+):
+    """Runner: snap the span's band center to the nearest novelty peak.
+
+    Axis routing: acappella spans read the ``mix_vocals``-stem novelty when
+    available — a vocal-in is invisible in full-mix novelty (the bed dominates)
+    but is exactly a regime change in the vocal stem. Everything else reads the
+    full-mix curve.
     """
     spec = REGISTRY["surprise"]
-    candidates = surprise_prior(curve, precision=spec.precision)
+    candidates = {"full": surprise_prior(curve, precision=spec.precision)}
+    if vocals_curve is not None:
+        candidates["vocals"] = surprise_prior(vocals_curve, precision=spec.precision)
 
     def _run(data: dict) -> Observation:
-        cue = data.get("cue_anchor_s")
-        slot = str(data.get("slot_label") or "")
-        if cue is None or (float(cue) == 0.0 and "w" in slot):
-            return _abstain("no independent band center (w-row / missing cue)")
-        cue = float(cue)
-        in_band = [o for o in candidates if abs(o.set_start_s - cue) <= band_s]
+        center = _band_center(data)
+        if center is None:
+            return _abstain("no band center (w-row cue and no mert proposal)")
+        center_s, center_src = center
+        stem = data.get("claimed_stem") or "regular"
+        source = (
+            "vocals" if (stem == "acappella" and "vocals" in candidates) else "full"
+        )
+        in_band = [
+            o for o in candidates[source] if abs(o.set_start_s - center_s) <= band_s
+        ]
         if not in_band:
-            return _abstain(f"no novelty peak within ±{band_s:.0f}s of cue")
-        nearest = min(in_band, key=lambda o: abs(o.set_start_s - cue))
+            return _abstain(
+                f"no {source} novelty peak within ±{band_s:.0f}s of {center_src}"
+            )
+        nearest = min(in_band, key=lambda o: abs(o.set_start_s - center_s))
         return replace(
             nearest,
             cost=spec.cost,
-            detail=f"{nearest.detail} snap Δcue={nearest.set_start_s - cue:+.1f}s",
+            precision=_MEASURED_PRECISION.get(
+                (center_src, stem == "acappella"), spec.precision
+            ),
+            detail=(
+                f"{nearest.detail} {source} snap "
+                f"Δ{center_src}={nearest.set_start_s - center_s:+.1f}s"
+            ),
         )
 
     return _run
 
 
 def surprise_runner_for_set(set_id: str, *, band_s: float = BAND_S):
-    """Build the runner from the set's cached MERT artifact; None if absent."""
+    """Build the runner from the set's cached MERT artifacts; None if absent."""
     path = ANALYSIS_DIR / f"{set_id}_mix_mert.npz"
     if not path.is_file():
         return None
-    return surprise_runner(novelty_curve(path), band_s=band_s)
+    vocals_path = ANALYSIS_DIR / f"{set_id}_mix_vocals_mert.npz"
+    vocals = novelty_curve(vocals_path) if vocals_path.is_file() else None
+    return surprise_runner(novelty_curve(path), vocals_curve=vocals, band_s=band_s)
 
 
 # ---------------------------------------------------------------------------
@@ -156,13 +213,17 @@ def main(argv: list[str] | None = None) -> int:
         ):
             gt_by_rec.setdefault(id_map.get(tid, tid), []).append(r)
 
-    stats: dict[str, dict] = {}
+    # keyed by (stem, band-center provenance): cue-centered fires are the
+    # independent measurement; mert-centered are refinement-on-mert's-band
+    stats: dict[tuple[str, str], dict] = {}
     for s in spans:
         rows = gt_by_rec.get(str(s["recording_id"]))
         if not rows:
             continue
         stem = s.get("claimed_stem") or "regular"
-        st = stats.setdefault(stem, {"n": 0, "fired": 0, "c15": 0, "c5": 0, "errs": []})
+        center = _band_center(s)
+        key = (stem, center[1] if center else "—")
+        st = stats.setdefault(key, {"n": 0, "fired": 0, "c15": 0, "c5": 0, "errs": []})
         st["n"] += 1
         obs = run(s)
         if obs.abstained:
@@ -175,13 +236,13 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"surprise (Foote novelty, band ±{args.band_s:.0f}s) vs {args.gt.name}:")
     tot_fired = tot_c15 = 0
-    for stem, st in sorted(stats.items()):
+    for (stem, center), st in sorted(stats.items()):
         e = sorted(st["errs"])
         med = f"{e[len(e) // 2]:.1f}s" if e else "—"
         p15 = f"{st['c15'] / st['fired']:.0%}" if st["fired"] else "—"
         p5 = f"{st['c5'] / st['fired']:.0%}" if st["fired"] else "—"
         print(
-            f"  {stem:12} slots={st['n']:3}  fired={st['fired']:3}  "
+            f"  {stem:12} @{center:4} slots={st['n']:3}  fired={st['fired']:3}  "
             f"P(<=15s|fired)={p15:4}  <=5s={p5:4}  median={med}"
         )
         tot_fired += st["fired"]
