@@ -8,10 +8,13 @@ so the loop never spends a call we've already proven won't help (design doc
 schema, the runner is the implementation (replay adapters today, live probe
 calls later) — new probes plug in without touching the loop.
 
-Costs/precisions are the 2026-07-02 measured values (BB11/BB12 chains):
-fp ≈ free when cached and ~90% clean where sharp; lyrics ~90% clean with
-cached transcripts (first transcription is the expensive part); HuBERT
-minutes-scale; cue prior is free but blind on w-rows (cue=0.0 by scraping).
+Costs/precisions are measured on the BB11/BB12 chains: fp ≈ free when cached
+but only ~53% clean overall (recalibrated 2026-07-06 by recording_id join —
+see the fp spec below; the old 0.90 was optimistic and set-unstable); lyrics
+~76% clean (also recalibrated 2026-07-06, was 0.90) with cached transcripts
+(first transcription is the expensive part); HuBERT minutes-scale; cue prior
+measures ~0.76 but is pinned to a 0.50 trust-floor (see its spec — `precision`
+doubles as the auto-commit gate).
 """
 
 from __future__ import annotations
@@ -36,16 +39,34 @@ class ActionSpec:
 REGISTRY: dict[str, ActionSpec] = {
     s.name: s
     for s in (
-        # cue prior: free, weak, and structurally blind on w-rows
+        # cue prior: free, and structurally blind on w-rows (cue=0.0 there).
+        # Its measured precision is actually ~0.76 (BB11 74% / BB12 88%), but it
+        # is deliberately kept LOW here: `precision` doubles as the auto-commit
+        # gate, and at 0.76 the free scraped cue clears 0.75 SOLO and rubber-
+        # stamps nearly every span (measured 2026-07-06: BB11 auto 27→149 spans,
+        # cleanliness 100%→74%, loop stops running real probes). 0.50 is a trust
+        # FLOOR that keeps cue out of solo auto-commit — do not "correct" it up
+        # without separating fusion-weight from the auto-commit gate.
         ActionSpec("cue_prior", cost=0.0, precision=0.50, stems=STEMS),
         # MERT decode: the anchored coarse placement (always available)
         ActionSpec("mert_decode", cost=0.5, precision=0.55, stems=STEMS),
-        # landmark fingerprint: cached, sharp on regular content
+        # landmark fingerprint: cached, sharp on regular content.
         # fp fires on vocals too in practice (MERT-gated) — weaker there, kept
-        # as the cheap fallback between lyrics and HuBERT
-        ActionSpec("fp", cost=0.1, precision=0.90, stems=STEMS),
-        # lyrics (Whisper + IDF diagonals): THE vocal channel; cached after first run
-        ActionSpec("lyrics", cost=1.0, precision=0.90, stems=("acappella",)),
+        # as the cheap fallback between lyrics and HuBERT.
+        # precision MEASURED 2026-07-06 across BB11+BB12 (recording_id join,
+        # n=230): 121/230 = 0.53, NOT the 0.90 prior — and set-UNSTABLE
+        # (BB11 45%, BB12 62%). At 0.53 fp can no longer clear the 0.75
+        # auto-commit bar alone (correct — 53% is not commit-grade); it now
+        # commits only when a high-precision probe agrees in its cluster.
+        ActionSpec("fp", cost=0.1, precision=0.53, stems=STEMS),
+        # lyrics (Whisper + IDF diagonals): THE vocal channel; cached after first
+        # run. precision MEASURED 2026-07-06 (BB11+BB12, recording_id join,
+        # n=96): 73/96 = 0.76 (stable: BB11 77% / BB12 75%), down from the 0.90
+        # prior. Still clears the 0.75 solo auto-commit bar (verified auto-
+        # neutral: rung unchanged at 100% clean), but the margin is now thin.
+        ActionSpec(
+            "lyrics", cost=1.0, precision=0.76, stems=("acappella",)
+        ),  # EXPERIMENT
         # banded HuBERT joint placement: vocal fallback when lyrics abstains
         ActionSpec("stem_hubert", cost=3.0, precision=0.75, stems=("acappella",)),
         # chroma matched-filter refine (instrumental/regular ref offsets)
