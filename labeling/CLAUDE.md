@@ -12,15 +12,20 @@ the `set_section_alignment` table) — that's the labeling sense, not the model.
 
 ## ⚠️ Session provenance — seeded vs hand-labeled (NEVER export GT from the wrong one)
 
-Root-level **`<SET> align.als`** files in `~/aligning/<set>/` are **SEEDER
-OUTPUT** — `seed_als_from_timeline` renders the aligner's own *predictions*
-into a Live session for human correction. They are machine noise until the
-human has actually worked them; exporting GT from one feeds the model its own
-predictions back (this happened with BB10/BB11 on 2026-07-02). The **human
-hand sessions** live inside Ableton **`<name> Project/`** folders (e.g.
-`BB11 align Project/BB11 align.als`, `_backups/.../big bootie 12 labeling
-Project/big bootie 12 labeling_fast.als`). Seeder tells: unfilled `[?]` clip
-names, flat 60 BPM master tempo (the 1-beat=1-second seeding convention),
+Seeded sessions are **SEEDER OUTPUT** — `seed_als_from_timeline` renders the
+aligner's own *predictions* into a Live session for human correction. They are
+machine noise until the human has actually worked them; exporting GT from one
+feeds the model its own predictions back (this happened with BB10/BB11 on
+2026-07-02). Since 2026-07-06 the seeder stamps provenance: output is
+**`<SET> SEEDED.als`** (it hard-refuses to write any `* align.als` name) and
+the first arrangement locator reads `SEEDED <date> — machine predictions,
+NOT GT`. **Pre-stamp seeds floating around may still carry the old
+`<SET> align.als` name** — treat any root-level `<SET> align.als` in
+`~/aligning/<set>/` as seeder output. The **human hand sessions** live inside
+Ableton **`<name> Project/`** folders (e.g. `BB11 align Project/BB11
+align.als`, `_backups/.../big bootie 12 labeling Project/big bootie 12
+labeling_fast.als`). Other seeder tells: the SEEDED locator, unfilled `[?]`
+clip names, flat 60 BPM master tempo (the 1-beat=1-second seeding convention),
 clip count ≈ predicted-span count. When in doubt, **ask the annotator** —
 coverage/density stats cannot certify provenance.
 

@@ -50,6 +50,7 @@ from labeling.als.semantics import (
     select_arrangement_mapper,
     split_clip_at_mix_span_edges,
     tempo_beat_to_sec,
+    tempo_sec_to_beat,
     tempo_ratio,
 )
 from labeling.als.tags import strip_user_tags
@@ -85,6 +86,7 @@ __all__ = [
     "select_arrangement_mapper",
     "split_clip_at_mix_span_edges",
     "tempo_beat_to_sec",
+    "tempo_sec_to_beat",
     "tempo_ratio",
     # identity
     "build_manifest_index",

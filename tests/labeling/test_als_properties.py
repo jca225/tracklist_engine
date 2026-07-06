@@ -17,6 +17,7 @@ from labeling.als.semantics import (
     envelope_value,
     split_clip_at_mix_span_edges,
     tempo_beat_to_sec,
+    tempo_sec_to_beat,
 )
 
 _finite = dict(allow_nan=False, allow_infinity=False)
@@ -96,6 +97,35 @@ def test_tempo_integral_matches_quadrature(pts, beat):
     exact = tempo_beat_to_sec(pts, beat)
     approx = _numeric_sec(pts, beat)
     assert abs(exact - approx) <= max(5e-3, 5e-3 * abs(exact))
+
+
+@settings(deadline=None, max_examples=80)
+@given(tempo_curve(), st.floats(0.0, 800.0, **_finite))
+def test_tempo_sec_to_beat_right_inverts(pts, beat):
+    # beat→sec is non-injective across zero-width steps, so assert the
+    # right-inverse law sec(inverse(sec)) == sec rather than beat recovery
+    sec = tempo_beat_to_sec(pts, beat)
+    back = tempo_sec_to_beat(pts, sec)
+    assert abs(tempo_beat_to_sec(pts, back) - sec) <= max(1e-6, 1e-6 * abs(sec))
+
+
+@settings(deadline=None, max_examples=60)
+@given(
+    tempo_curve(), st.floats(0.0, 2000.0, **_finite), st.floats(0.0, 100.0, **_finite)
+)
+def test_tempo_sec_to_beat_monotonic(pts, sec, delta):
+    assert tempo_sec_to_beat(pts, sec + delta) >= tempo_sec_to_beat(pts, sec) - 1e-9
+
+
+def test_tempo_sec_to_beat_song_boundary_placement():
+    # The seeder scenario that was botched Jun-16: 120 BPM for the first 30
+    # mix-seconds, then a step to 90. The tempo step must be WRITTEN at beat
+    # 30·120/60 = 60 (not at beat 30), and a song starting 40 s later lands at
+    # beat 60 + 40·90/60 = 120.
+    pts = ((0.0, 120.0), (60.0, 120.0), (60.0, 90.0))
+    assert abs(tempo_sec_to_beat(pts, 30.0) - 60.0) < 1e-9
+    assert abs(tempo_sec_to_beat(pts, 70.0) - 120.0) < 1e-9
+    assert abs(tempo_beat_to_sec(pts, 120.0) - 70.0) < 1e-9
 
 
 @settings(deadline=None)

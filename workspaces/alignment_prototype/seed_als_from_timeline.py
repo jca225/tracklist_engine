@@ -337,7 +337,14 @@ def add_tempo_and_markers(
     if not bed:
         return 0, 0
 
-    markers: list[tuple[float, str]] = []
+    # Provenance stamp FIRST (labeling/CLAUDE.md "Session provenance"): a
+    # seeded session must announce itself inside Live, not only by filename —
+    # sessions get saved-as and the name tell evaporates.
+    from datetime import date
+
+    markers: list[tuple[float, str]] = [
+        (0.0, f"SEEDED {date.today().isoformat()} — machine predictions, NOT GT")
+    ]
     for s in bed:
         bpm = _track_bpm(by_tid.get(s.get("recording_id")))
         name = str(s.get("name") or s.get("slot_label") or "")
@@ -514,8 +521,17 @@ def main(argv: list[str] | None = None) -> int:
 
     # Default: write the seed straight into the set's aligning folder (alongside
     # mix/tracks/stems/manifest), the same dir export_als_to_gt --set-dir reads.
+    # PROVENANCE: the output is named `<SET> SEEDED.als`, never `<SET> align.als`
+    # — that name impersonated hand GT twice (labeling/CLAUDE.md "Session
+    # provenance", burned 2026-07-02). Refuse it even when asked explicitly.
     display = _SET_DISPLAY.get(args.set_id, args.set_id)
-    out_path = args.out or (set_dir / f"{display} align.als")
+    out_path = args.out or (set_dir / f"{display} SEEDED.als")
+    if out_path.name.endswith(" align.als"):
+        sys.exit(
+            f"refusing to write {out_path.name!r}: '<SET> align.als' is the "
+            "hand-GT name (seeded sessions impersonating it burned us twice); "
+            "use the default '<SET> SEEDED.als' or another --out name"
+        )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     # Safety: never silently clobber an existing .als at the default seed location —
     # it may hold un-exported hand-corrections. Back it up unless --force.
