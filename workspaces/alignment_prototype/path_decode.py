@@ -398,6 +398,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--fiber-k", type=int, default=6, help="sections per ref")
     p.add_argument("--workers", type=int, default=8)
+    p.add_argument(
+        "--dump",
+        type=Path,
+        default=None,
+        help="write per-span predicted segment lists as JSON (for external "
+        "scorers, e.g. looptrace.eval clone-aware accuracy)",
+    )
     args = p.parse_args(argv)
     if not args.eval:
         p.error("only --eval is wired")
@@ -543,6 +550,36 @@ def main(argv: list[str] | None = None) -> int:
                 facc,
             )
         )
+
+    if args.dump:
+        payload = []
+        for (i, *_), (t, row, _ref_npy, ref_audio) in zip(jobs, meta):
+            payload.append(
+                {
+                    "slot_label": t.slot_label,
+                    "track_id": row.get("track_id"),
+                    "set_start_s": t.set_start_s,
+                    "set_end_s": t.set_end_s,
+                    "claimed_stem": t.claimed_stem or "regular",
+                    "span_class": _span_class(row),
+                    "ref_audio": ref_audio,
+                    "segs": [list(s) for s in res[i]["segs"]],
+                    "score": res[i]["score"],
+                }
+            )
+        args.dump.parent.mkdir(parents=True, exist_ok=True)
+        args.dump.write_text(
+            json.dumps(
+                {
+                    "gt": str(args.gt),
+                    "feature": args.feature,
+                    "lam": args.lam,
+                    "spans": payload,
+                },
+                indent=1,
+            )
+        )
+        print(f"dumped {len(payload)} span predictions -> {args.dump}")
 
     def rep(name, sel):
         if not sel:

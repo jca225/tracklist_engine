@@ -193,7 +193,11 @@ the timeline JSON dict only (minimal blast radius).
   <date> — machine predictions, NOT GT` — and the correct tempo-placement
   primitive exists (`labeling.als.tempo_sec_to_beat`, property-tested inverse
   of `tempo_beat_to_sec`) for any future code that writes tempo automation.
-  Master-tempo *emission* in the seeder: not planned — no consumer.
+  Master-tempo *emission*: deferred, but it HAS an eventual consumer — the
+  aligner's **product-grade `.als` output** (the north-star deliverable is an
+  Ableton session in the hand convention: varying master tempo, unwarped
+  mix). Build it when aligner quality warrants shipping sessions to humans,
+  not for labeling. `tempo_sec_to_beat` is its core primitive.
 
 - **Segment traj-acc is still low (26%)** — bounded by set_start placement error
   (segments decode off the placed mix window) + repeat ambiguity. Levers: tighter

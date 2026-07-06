@@ -135,6 +135,40 @@ Loop class is n=1 per set — never read anything into it alone.
 5. HuBERT features for localization — too self-similar within a track.
 6. Seeding decode with GT start (soft ref_start prior, 2026-07-06) — flat.
 
+## Phase 1 — ill-posedness audit (2026-07-06)
+
+**Built:** `selfsim.py` (whitened-mel lag-diagonal repeat detection +
+sample-accurate waveform verification with sub-sample refinement),
+`audit.py` (CLONE/DISTINCT classification, clone equivalence lag-maps,
+GT-second decomposition), `eval.py` (per-second accuracy at ±0.25/1/2 s under
+strict / clone-aware / repeat-aware equivalence), `rules.clone_tiebreak`,
+`config.py` (audit-v3 / eval-v1), 7 fixture tests. Additive `--dump` flag on
+`path_decode` to export per-span predictions. Full write-up: `AUDIT.md`;
+numbers table: `RESULTS.md`.
+
+**Numbers:** clone-unwinnable ≈ **0%** of GT seconds on multiseg (both
+sets); distinct-take repeats 51–55%, unique 45–49%. Baseline re-scored:
+clone-aware ≡ strict (the decoder never lands on clone-mates); repeat-aware
+lifts multiseg 27→45% (BB12), 12→34% (BB11).
+
+**Surprises:**
+1. The reusable machinery both failed and taught us why: HuBERT fibers
+   under-detect (audit-v1); per-frame silence gating fragments sparse vocals
+   at every breath (audit-v2 — median voiced run 1.6 s); raw mel cosine
+   saturates on stable spectral envelopes; fractional-sample clones read as
+   DISTINCT without sub-sample xcorr refinement. All four are encoded as
+   fixture tests now.
+2. **The ill-posedness bound does not bind.** Almost nothing is clone-tied;
+   the brief's ~35–47% "ceiling" was decoder-limited. The honest ceiling is
+   ~100%; multiseg failure ≈ half wrong-instance (addressable with
+   instance-sensitive/long-range evidence) + half wrong-content (exactly
+   Phase 3's target).
+
+**Go/no-go → GO to Phase 2/3.** Phase 4's discriminative-frame weighting is
+*expected* to be needed (51–55% of GT seconds are distinct-take repeats and
+per-frame phonetics can't split them), but Phases 2+3 come first per the
+leverage ordering.
+
 ### Plan deltas vs the brief (repo-specific adjustments)
 
 - `looptrace/` lives under `workspaces/alignment_prototype/`, not top-level (repo
