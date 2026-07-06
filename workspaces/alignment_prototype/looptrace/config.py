@@ -113,9 +113,12 @@ class SegmentConfig:
     null_level: float = 0.35  # NULL emission (pre-normalization units)
     lam: float = 1.0  # state-switch penalty, on the normalized-share scale
     min_segment_s: float = 2.0
-    # slope search: octave-folded fine grid around the beat-grid center,
-    # best total Hough support wins (slope estimated once per span)
+    # slope search: octave-folded fine grid around the beat-grid center;
+    # the top-k by histogram peakiness compete on DP path evidence
     slope_fine: tuple[float, ...] = (0.94, 0.97, 1.0, 1.03, 1.06)
+    slope_top_k: int = 3
+    seg_cost_s: float = 3.0  # MDL charge per segment when comparing slopes
+    evidence_tol_s: float = 0.3  # tight tol for cross-slope path evidence
 
 
 @dataclass(frozen=True)
@@ -128,6 +131,20 @@ class DiscrimConfig:
     # support clearly beats the incumbent (ties keep the DP's choice, then
     # the deterministic clone tie-break applies)
     switch_margin: float = 0.25
+
+
+@dataclass(frozen=True)
+class ResidualConfig:
+    """Phase 5 (redesigned) — residual tiebreak inside the DP."""
+
+    version: str = "res-v1"
+    lag_tol_s: float = 0.75  # rival if intercept diff matches an audit lag
+    max_group: int = 4  # bigger "rival" groups are degenerate chaining — skip
+    window_s: float = 2.0  # mel comparison window around each grid time
+    covered_below: float = 0.999  # mask==1.0 means audit-UNcovered: no vote
+    min_covered_weight: float = 2.0  # need enough discriminative mass
+    weight: float = 0.3  # share-space bonus scale (fixture-tuned)
+    tie_ratio_max: float = 1.5  # act only when landmark votes are tied
 
 
 @dataclass(frozen=True)
@@ -145,4 +162,5 @@ LOOP_V2 = LoopConfig()
 LM_V1 = LandmarkConfig()
 SEG_V1 = SegmentConfig()
 DISCRIM_V1 = DiscrimConfig()
+RES_V1 = ResidualConfig()
 EVAL_V1 = EvalConfig()

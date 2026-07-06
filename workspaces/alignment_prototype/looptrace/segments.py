@@ -85,6 +85,35 @@ def _support(
     return out
 
 
+def _noise_floor(
+    points: np.ndarray,
+    diags: list[Diagonal],
+    slope: float,
+    grid: np.ndarray,
+    cfg: SegmentConfig,
+    weights: np.ndarray | None,
+    n_probe: int = 8,
+) -> np.ndarray:
+    """Per-time background support: median over random intercepts at least
+    min_separation away from every candidate (deterministic probe set)."""
+    b = points[:, 1] - slope * points[:, 0]
+    lo, hi = float(b.min()), float(b.max())
+    if hi - lo < 4 * cfg.min_separation_s:
+        return np.zeros_like(grid)
+    rng = np.random.default_rng(0)
+    probes: list[np.ndarray] = []
+    tries = 0
+    while len(probes) < n_probe and tries < n_probe * 8:
+        tries += 1
+        b0 = float(rng.uniform(lo, hi))
+        if any(abs(b0 - d.intercept_s) < cfg.min_separation_s for d in diags):
+            continue
+        probes.append(_support(points, Diagonal(b0, 0), slope, grid, cfg, weights))
+    if not probes:
+        return np.zeros_like(grid)
+    return np.median(np.stack(probes, axis=0), axis=0)
+
+
 def cover_dp(
     points: np.ndarray,
     slope: float,
@@ -93,30 +122,46 @@ def cover_dp(
     *,
     weights: np.ndarray | None = None,
     diagonals: list[Diagonal] | None = None,
-) -> list[tuple[float, float, float]]:
-    """Segment list [(mix_start_s, song_start_s, song_end_s)] tiling the span.
+    bonus: np.ndarray | None = None,
+) -> tuple[list[tuple[float, float, float]], float]:
+    """(segment list [(mix_start_s, song_start_s, song_end_s)], evidence).
 
     weights: optional per-point multiplier (loop-collapse evidence weight).
     States = candidate diagonals + NULL; emission = per-time support (NULL
     emits `null_level`); switching states costs `lam` (uniform — no
     directional prior). Runs of one diagonal become segments; NULL runs are
-    gaps (the scorer's piecewise interpolation bridges them)."""
+    gaps (the scorer's piecewise interpolation bridges them).
+
+    `evidence` = the ABSOLUTE floor-subtracted support summed along the
+    decoded path (non-NULL steps): how much above-background collinear
+    evidence this decode explains. Unlike the share-normalized DP score it
+    is comparable ACROSS slopes — used to pick the slope by decode quality
+    (histogram peakiness alone was measured to lose to noise peaks on 4
+    weak-evidence spans)."""
     diags = diagonals if diagonals is not None else hough_diagonals(points, slope, cfg)
     if not diags:
-        return []
+        return [], 0.0
     grid = np.arange(0.0, max(span_dur_s, cfg.grid_step_s), cfg.grid_step_s)
     emis = np.stack(
         [_support(points, d, slope, grid, cfg, weights) for d in diags], axis=0
     )
     # hash-collision noise gives EVERY diagonal a large shared background
-    # (measured ~90 vs the true diagonal's ~160): subtract the per-time
-    # cross-candidate median, then normalize columns so emissions are
-    # scale-free shares and `lam` means the same on every span. In landmark
-    # deserts all shares ~0 and the constant NULL row wins.
-    if emis.shape[0] > 1:
-        emis = np.maximum(emis - np.median(emis, axis=0, keepdims=True), 0.0)
+    # (measured ~90 vs the true diagonal's ~160): subtract a per-time NOISE
+    # floor, then normalize columns so emissions are scale-free shares and
+    # `lam` means the same on every span. The floor is the median support
+    # of RANDOM non-candidate intercepts — NOT the cross-candidate median,
+    # which self-annihilates when all candidates are true (a jump span at
+    # the correct slope has exactly 2 candidates, both real; their median
+    # is their own average). In landmark deserts all shares ~0 and the
+    # constant NULL row wins.
+    floor = _noise_floor(points, diags, slope, grid, cfg, weights)
+    emis = np.maximum(emis - floor[None, :], 0.0)
+    raw = np.vstack([emis, np.zeros((1, grid.size))])  # absolute units + NULL
     emis = np.vstack([emis, np.full((1, grid.size), cfg.null_level)])  # NULL row
     emis = emis / (emis.sum(axis=0, keepdims=True) + 1e-9)
+    if bonus is not None:  # zero-sum rival tiebreak, share space (residual.py)
+        emis[:-1] += bonus
+        emis = np.maximum(emis, 0.0)
     n_states, t_steps = emis.shape
     lam = cfg.lam
     score = emis[:, 0].copy()
@@ -133,6 +178,7 @@ def cover_dp(
     path[-1] = int(score.argmax())
     for t in range(t_steps - 1, 0, -1):
         path[t - 1] = back[path[t], t]
+    evidence = float(raw[path, np.arange(t_steps)].sum())
     # runs of one diagonal -> segments
     segs: list[tuple[float, float, float]] = []
     null_state = n_states - 1
@@ -153,7 +199,40 @@ def cover_dp(
                 )
             )
         i = j
-    return segs
+    return segs, evidence
+
+
+def path_inlier_evidence(
+    points: np.ndarray,
+    segs: list[tuple[float, float, float]],
+    slope: float,
+    span_dur_s: float,
+    cfg: SegmentConfig = SEG_V1,
+    *,
+    weights: np.ndarray | None = None,
+) -> float:
+    """Weighted count of points within `evidence_tol_s` of the decoded
+    piecewise map — the cross-slope comparison currency.
+
+    The DP-internal support (0.6 s tol + 1.5 s kernel) is too forgiving to
+    compare slopes: a wrong slope's diagonal still captures ~16 s of the
+    true diagonal's points (|dslope|*L inside tolerance) and can out-total
+    the truth. At +-0.3 s a 7.5% slope error sheds inliers within ~4 s."""
+    if not segs or len(points) == 0:
+        return 0.0
+    w = weights if weights is not None else np.ones(len(points))
+    total = 0.0
+    for i, (m0, s0, _s1) in enumerate(segs):
+        m1 = segs[i + 1][0] if i + 1 < len(segs) else span_dur_s
+        b0 = s0 - slope * m0
+        b = points[:, 1] - slope * points[:, 0]
+        sel = (
+            (np.abs(b - b0) <= cfg.evidence_tol_s)
+            & (points[:, 0] >= m0)
+            & (points[:, 0] <= m1)
+        )
+        total += float(w[sel].sum())
+    return total
 
 
 def total_support(

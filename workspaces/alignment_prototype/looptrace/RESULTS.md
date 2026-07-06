@@ -53,3 +53,60 @@ BB11 ALL 60 vs baseline 47; oddratio 93) but lands on the wrong repeat
 instance (strict↔repeat gap) — the Phase-4 lever. Baseline HuBERT still
 wins BB12 linear/oddratio. Slope picks correct on 14/21 BB12 spans;
 4 weak-evidence spans still pick wrong slopes by small peakiness margins.
+
+## Lever 2 — DP-path-evidence slope selection (2026-07-06)
+
+Top-3 slopes by peakiness compete on tight-tolerance (±0.3 s) path-inlier
+evidence with an MDL charge per segment. Strict traj-acc(<2s), oracle
+placement (previous looptrace / frozen baseline in parens):
+
+| set | ALL | linear | multiseg | loop | oddratio |
+|---|---|---|---|---|---|
+| BB12 | **43** (36 / 44) | 50 (44 / 62) | **35** (26 / 27) | 94 (94 / 81) | 32 (26 / 32) |
+| BB11 | **44** (38 / 35) | 60 (60 / 43) | 21 (22 / 12) | 24 (24 / 0) | **68** (43 / 75) |
+
+Both sets now beat the baseline on multiseg (35 vs 27; 21 vs 12). BB12
+ALL is within 1 pp of baseline; BB11 ALL +9 pp. Two evidence-measure bugs
+found on fixtures along the way: cross-candidate median floor
+self-annihilates when all candidates are true (jump spans) → random-probe
+noise floor; loose-tolerance evidence favors wrong slopes (a 0.6 s tol +
+1.5 s kernel lets a 7.5% slope error keep ~16 s of true points) →
+±0.3 s path-inlier currency.
+
+## Lever 1 — looptrace|legacy router: NULL (2026-07-06)
+
+LOSO-thresholded routing on `evidence_rate` (`router.py`). After lever 2
+the complementarity mostly evaporated: oracle-per-span 48/50 vs
+looptrace-only 43/44, and the signal does not transfer across sets
+(BB12's best theta applied to BB11 routes good looptrace spans away:
+34% vs looptrace-only 44%). Routed never beats the better single decoder.
+Verdict: not wired; looptrace-only is the best single decoder overall.
+
+## Lever 3 — residual tiebreak in the DP: inert as specified (2026-07-06)
+
+Built (`residual.py`): zero-sum mel-similarity bonus between repeat-image
+rival diagonals, discriminability-weighted, audit-covered frames only,
+vote-tie gated. Finding: legitimate small rival groups DON'T occur on
+real spans — the Hough candidate set is dense (~24 diagonals) and the
+audit-lag matching chains transitively into one degenerate group. With
+degenerate groups allowed, the term acts as a GLOBAL mel-verification
+prior: BB11 ALL 44→50, oddratio 68→93 (!), BB12 oddratio 32→52, but it
+also flips a correct BB12 linear span (051, 100→0) — net +2 spans, one
+material regression. With sound grouping (≤4 rivals, tol 0.75 s) it never
+fires. Default = strict/inert (no-regression rule). The REAL discovery:
+a mel-consistency emission for ALL candidate diagonals (hybrid landmark +
+matched-filter evidence in one DP) is the mechanism behind those gains —
+future work, needs its own calibration to avoid the 051-style flip.
+
+## Final standing (best config: lever 2, oracle placement, strict <2 s)
+
+| | BB12 lt | BB12 baseline | BB11 lt | BB11 baseline |
+|---|---|---|---|---|
+| ALL | 43 | 44 | **44** | 35 |
+| linear | 50 | 62 | **60** | 43 |
+| multiseg | **35** | 27 | **21** | 12 |
+| loop (n=1) | **94** | 81 | **24** | 0 |
+| oddratio | 32 | 32 | 68 | 75 |
+
+Combined (38 spans): ALL 43 vs 40 baseline; **multiseg 28 vs 20** — the
+target class improved ~+45% relative on the honest cross-set average.

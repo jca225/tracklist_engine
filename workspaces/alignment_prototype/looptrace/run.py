@@ -52,6 +52,7 @@ def decode_span(
     song_pairs: list[dict] | None = None,
     ref_path: str | None = None,
     discrim: bool = False,
+    residual: bool = True,
     lm_cfg=LM_V1,
     seg_cfg=SEG_V1,
     loop_cfg=LOOP_V2,
@@ -69,13 +70,58 @@ def decode_span(
         weights = np.array(
             [cs.weight_at_collapsed(float(t)) for t in pts[:, 0]], dtype=np.float64
         )
-    best_slope, best_sup = None, -1.0
-    for s in slope_candidates:
-        sup = segments.total_support(pts, s, seg_cfg)
-        if sup > best_sup:
-            best_slope, best_sup = s, sup
+    # rank slopes by histogram peakiness, then let the top few COMPETE on
+    # decode quality — peakiness alone lost to noise peaks on weak-evidence
+    # spans. Raw path evidence is biased toward WRONG slopes (the true
+    # matches fragment across many short diagonals which the DP chains), so
+    # each segment pays an MDL-style charge of `seg_cost_s` seconds of the
+    # decode's own average evidence: fragmented covers stop winning.
+    ranked = sorted(
+        slope_candidates,
+        key=lambda s: -segments.total_support(pts, s, seg_cfg),
+    )
     dur_dec = len(y_dec) / selfsim.SR
-    segs = segments.cover_dp(pts, best_slope, dur_dec, seg_cfg, weights=weights)
+    grid = np.arange(0.0, max(dur_dec, seg_cfg.grid_step_s), seg_cfg.grid_step_s)
+    res_ctx = None
+    if residual and song_pairs and ref_path:
+        from workspaces.alignment_prototype.looptrace import residual as res
+        from workspaces.alignment_prototype.looptrace.discrim import (
+            discriminability_mask,
+        )
+
+        mix_mel, mix_hz = selfsim.mel_features(y_dec)
+        ref_mel, ref_hz = res.mel_cached(ref_path)
+        mask, mask_hz = discriminability_mask(ref_path, song_pairs)
+        res_ctx = (res, mix_mel, mix_hz, ref_mel, ref_hz, mask, mask_hz)
+    best_slope, segs, best_ev, best_adj = ranked[0], [], 0.0, -1.0
+    for s in ranked[: seg_cfg.slope_top_k]:
+        diags = segments.hough_diagonals(pts, s, seg_cfg)
+        bonus = None
+        if res_ctx is not None and diags:
+            res, mix_mel, mix_hz, ref_mel, ref_hz, mask, mask_hz = res_ctx
+            groups = res.rival_groups(diags, song_pairs)
+            if groups:
+                bonus = res.residual_bonus(
+                    mix_mel,
+                    mix_hz,
+                    ref_mel,
+                    ref_hz,
+                    mask,
+                    mask_hz,
+                    diags,
+                    groups,
+                    s,
+                    grid,
+                )
+        sg, _dp_ev = segments.cover_dp(
+            pts, s, dur_dec, seg_cfg, weights=weights, diagonals=diags, bonus=bonus
+        )
+        ev = segments.path_inlier_evidence(
+            pts, sg, s, dur_dec, seg_cfg, weights=weights
+        )
+        adj = ev * max(0.0, 1.0 - len(sg) * seg_cfg.seg_cost_s / max(dur_dec, 1e-6))
+        if adj > best_adj:
+            best_slope, segs, best_ev, best_adj = s, sg, ev, adj
     if discrim and segs and song_pairs and ref_path:
         from workspaces.alignment_prototype.looptrace.discrim import (
             reselect_instances,
@@ -87,7 +133,10 @@ def decode_span(
     meta = {
         "n_points": int(len(pts)),
         "slope": best_slope,
-        "support": best_sup,
+        "evidence": round(best_ev, 1),
+        # router signal: above-background evidence per decoded second —
+        # high = the landmark cloud clearly explains this span
+        "evidence_rate": round(best_ev / max(dur_dec, 1e-6), 2),
         "loops": [
             {
                 "source_start_s": lo.source_start_s,
@@ -137,6 +186,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--audit", type=Path, default=None)
     p.add_argument("--dump", type=Path, default=None)
     p.add_argument("--slot", default=None, help="single slot_label (debug)")
+    p.add_argument(
+        "--no-residual",
+        action="store_true",
+        help="disable the residual rival-tiebreak DP term (A/B)",
+    )
     p.add_argument(
         "--discrim",
         action="store_true",
@@ -195,6 +249,7 @@ def main(argv: list[str] | None = None) -> int:
             song_pairs=song_pairs,
             ref_path=str(rp),
             discrim=args.discrim,
+            residual=not args.no_residual,
         )
         acc, _n, _f = trajectory_acc(segs, row)
         accs.append((_span_class(row), acc))

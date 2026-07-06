@@ -294,6 +294,30 @@ Next-session levers, in expected-value order:
 3. Phase-5 waveform-residual tiebreak as a DP term (not post-hoc),
    restricted to audit-covered discriminative frames.
 
+## Post-phase levers (2026-07-06, second pass)
+
+**Lever 2 — DP-evidence slope selection: WIN.** Top-3 peakiness slopes
+compete on ±0.3 s path-inlier evidence with an MDL per-segment charge.
+Two fixture-caught bugs in the evidence measure on the way (cross-
+candidate median floor self-annihilates on all-true candidate sets →
+random-probe noise floor; loose tolerance favors wrong slopes → tight
+currency). Result: BB12 multiseg 26→35 (baseline 27), BB12 ALL 36→43;
+BB11 ALL 38→44, oddratio 43→68. Both sets now beat baseline on multiseg.
+
+**Lever 1 — router: NULL.** After lever 2 the decoders' complementarity
+mostly evaporated (oracle-per-span 48/50 vs looptrace-only 43/44) and
+`evidence_rate` does not transfer LOSO (BB12's theta hurts BB11 34 vs 44).
+`router.py` kept for the record; not wired.
+
+**Lever 3 — residual tiebreak in the DP: inert as specified, mechanism
+discovered.** Sound rival groups (2–4 images at audit lags) never occur —
+Hough candidates are dense and lag-matching chains degenerately. Allowed
+to act degenerately it becomes a global mel-verification prior with big
+oddratio wins (BB11 68→93) but flips one correct linear span. Default =
+strict grouping (inert). Follow-up design recorded in RESULTS.md: a
+deliberate mel-consistency emission for ALL candidates (hybrid landmark +
+matched-filter DP).
+
 ### Plan deltas vs the brief (repo-specific adjustments)
 
 - `looptrace/` lives under `workspaces/alignment_prototype/`, not top-level (repo
