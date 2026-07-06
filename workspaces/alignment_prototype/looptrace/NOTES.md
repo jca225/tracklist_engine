@@ -265,6 +265,35 @@ The ≥70%-of-addressable sanity target is NOT met (addressable ≈ 100%).
 seconds are distinct-take repeats and per-frame phonetics can't split
 them; the repeat-aware headroom is +14–50 pp depending on class).
 
+## Phase 4 — discriminative frame weighting (2026-07-06): NEGATIVE, default OFF
+
+**Built:** `discrim.py` — per-frame discriminability mask over the ref
+(whitened-mel distance between aligned repeat images, ±1-frame alignment
+slack for non-integer lags; cached) + post-decode instance re-selection
+(discriminability-weighted landmark support per repeat image, 25% switch
+margin, incumbent wins ties). 3 unit tests (mask ≈0 on clones / 1 on
+unique; switch-when-supported; hold-on-tie). Wired as `run.py --discrim`.
+
+**Gate: FAIL — regresses on both sets** (BB12 ALL 36→28, linear 44→23;
+BB11 ALL 38→35, multiseg 22→17). Diagnosis: on noise-dominated real
+clouds the weighted-support comparison is unreliable — image regions
+OUTSIDE the audit's repeat coverage carry full mask weight, so a wrong
+image can win on weighted noise; the mask only discounts frames the audit
+explicitly covered. Per the gate rule (no regression elsewhere) the
+default is OFF; machinery retained behind the flag. NOT tuned further —
+that would be tuning on the answer keys.
+
+**Phase 5 not entered.** Its precondition holds (instance ties remain),
+but the measured Phase-4 failure changes the right design: the arbiter
+needs *calibrated* evidence (waveform residual at discriminative frames,
+Phase 5's tool) INSIDE the DP rather than post-hoc support re-counting.
+Next-session levers, in expected-value order:
+1. per-span looptrace|legacy ROUTER (the decoders are complementary;
+   route by Hough peakiness margin) — cheapest real win,
+2. DP-path-score-based slope pick for the 4 weak-evidence spans,
+3. Phase-5 waveform-residual tiebreak as a DP term (not post-hoc),
+   restricted to audit-covered discriminative frames.
+
 ### Plan deltas vs the brief (repo-specific adjustments)
 
 - `looptrace/` lives under `workspaces/alignment_prototype/`, not top-level (repo

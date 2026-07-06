@@ -49,6 +49,9 @@ def decode_span(
     slope_candidates: list[float],
     *,
     song_lags_s: list[float] | None = None,
+    song_pairs: list[dict] | None = None,
+    ref_path: str | None = None,
+    discrim: bool = False,
     lm_cfg=LM_V1,
     seg_cfg=SEG_V1,
     loop_cfg=LOOP_V2,
@@ -73,6 +76,12 @@ def decode_span(
             best_slope, best_sup = s, sup
     dur_dec = len(y_dec) / selfsim.SR
     segs = segments.cover_dp(pts, best_slope, dur_dec, seg_cfg, weights=weights)
+    if discrim and segs and song_pairs and ref_path:
+        from workspaces.alignment_prototype.looptrace.discrim import (
+            reselect_instances,
+        )
+
+        segs = reselect_instances(segs, pts, best_slope, song_pairs, ref_path, dur_dec)
     if cs is not None:
         segs = loops.expand_segments(segs, cs)
     meta = {
@@ -128,6 +137,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--audit", type=Path, default=None)
     p.add_argument("--dump", type=Path, default=None)
     p.add_argument("--slot", default=None, help="single slot_label (debug)")
+    p.add_argument(
+        "--discrim",
+        action="store_true",
+        help="enable Phase-4 discriminability instance re-selection "
+        "(DEFAULT OFF: measured to REGRESS on both sets — see NOTES.md)",
+    )
     args = p.parse_args(argv)
 
     stems = {s.strip() for s in args.stems.split(",") if s.strip()}
@@ -166,12 +181,21 @@ def main(argv: list[str] | None = None) -> int:
             continue
         y = selfsim.load_audio(str(mix_path), offset_s=s0, duration_s=s1 - s0)
         ref_h = landmarks.ref_points_cached(str(rp))
-        song_lags = None
+        song_lags, song_pairs = None, None
         if audit is not None:
             ta = audit["tracks"].get(row.get("track_id"))
             song_lags = [q["lag_s"] for q in ta["pairs"]] if ta else []
+            song_pairs = ta["pairs"] if ta else []
         slopes = _slope_band(row, mix_series, ref_series, t)
-        segs, meta = decode_span(y, ref_h, list(slopes), song_lags_s=song_lags)
+        segs, meta = decode_span(
+            y,
+            ref_h,
+            list(slopes),
+            song_lags_s=song_lags,
+            song_pairs=song_pairs,
+            ref_path=str(rp),
+            discrim=args.discrim,
+        )
         acc, _n, _f = trajectory_acc(segs, row)
         accs.append((_span_class(row), acc))
         print(

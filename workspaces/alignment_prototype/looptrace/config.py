@@ -119,6 +119,18 @@ class SegmentConfig:
 
 
 @dataclass(frozen=True)
+class DiscrimConfig:
+    """Phase 4 — discriminability mask + post-decode instance re-selection."""
+
+    version: str = "discrim-v1"
+    inlier_tol_s: float = 0.6  # match SegmentConfig.inlier_tol_s
+    # switch instances only when the challenger's discriminability-weighted
+    # support clearly beats the incumbent (ties keep the DP's choice, then
+    # the deterministic clone tie-break applies)
+    switch_margin: float = 0.25
+
+
+@dataclass(frozen=True)
 class EvalConfig:
     """Per-second segment accuracy (brief §9) on top of the frozen legacy
     trajectory_acc (tol=2.0 s, step=1.0 s)."""
@@ -132,4 +144,5 @@ AUDIT_V3 = AuditConfig()
 LOOP_V2 = LoopConfig()
 LM_V1 = LandmarkConfig()
 SEG_V1 = SegmentConfig()
+DISCRIM_V1 = DiscrimConfig()
 EVAL_V1 = EvalConfig()
