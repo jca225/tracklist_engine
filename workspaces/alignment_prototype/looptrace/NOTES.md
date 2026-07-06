@@ -340,6 +340,23 @@ point pays off only after placement improves, or by letting looptrace
 self-place (decode a widened mix window around the prior, which its
 Hough geometry supports naturally).
 
+## Self-placement (2026-07-06, fourth pass)
+
+**Mechanics validated, gating signal missing.** `run.py --pad-s/--jitter-s`
++ `joint_ref_decode` adaptive retry. Controlled: 15 s placement error
+collapses the tight decode to 6%; a ±45 s pad recovers it to 23% and makes
+the decode placement-invariant — but costs well-placed spans 43→24, so
+always-pad is wrong. The adaptive gate (retry when tight evidence_rate <
+floor) failed to transfer: fixtures separate placed/misplaced at ~20, but
+real separated vocals sit far lower — 29/33 spans "retried" and e2e
+acappella went 13→12. Retry disabled (`retry_evidence_rate=0`); this is
+the second time evidence_rate failed as a real-data quality signal (router
+was the first) — a calibrated confidence is genuinely the missing piece,
+which is the known C1 learned-arbiter work, gated on a third GT set.
+Candidate cheap signal to try first: fraction of the padded decode's
+path evidence lying OUTSIDE the tight window (directly measures "the
+content wasn't where placement said").
+
 ### Plan deltas vs the brief (repo-specific adjustments)
 
 - `looptrace/` lives under `workspaces/alignment_prototype/`, not top-level (repo

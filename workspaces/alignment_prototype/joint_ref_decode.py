@@ -159,6 +159,7 @@ def main(argv: list[str] | None = None) -> int:
         from workspaces.alignment_prototype.looptrace.run import decode_span
 
         mix_vocals = set_dir / "mix_vocals.flac"
+        n_retry = 0
         for idx, s in enumerate(spans):
             if (s.get("claimed_stem") or "regular") != "acappella":
                 continue
@@ -186,7 +187,7 @@ def main(argv: list[str] | None = None) -> int:
             for f in (0.94, 0.97, 1.0, 1.03, 1.06):
                 for o in (0.5, 1.0, 2.0):
                     slopes.add(round(f * o, 4))
-            segs, _meta = decode_span(
+            segs, meta = decode_span(
                 y,
                 ref_h,
                 sorted(slopes),
@@ -194,9 +195,37 @@ def main(argv: list[str] | None = None) -> int:
                 song_pairs=song_pairs,
                 ref_path=str(ref_path),
             )
+            # adaptive self-placement: weak tight-window evidence means the
+            # placement likely missed the content — re-decode a widened
+            # window and let the Hough diagonal's extent place the span
+            # (measured: recovers 6%->23% under 15 s error; always-padding
+            # would cost well-placed spans 43%->24%, hence the gate).
+            from workspaces.alignment_prototype.looptrace.config import SEG_V1
+
+            if meta["evidence_rate"] < SEG_V1.retry_evidence_rate:
+                pad = SEG_V1.retry_pad_s
+                off = max(0.0, s0 - pad)
+                y2 = lt_selfsim.load_audio(
+                    str(mix_vocals), offset_s=off, duration_s=(s1 + pad) - off
+                )
+                segs2, meta2 = decode_span(
+                    y2,
+                    ref_h,
+                    sorted(slopes),
+                    song_lags_s=song_lags,
+                    song_pairs=song_pairs,
+                    ref_path=str(ref_path),
+                )
+                if segs2:
+                    segs = [(round(m - (s0 - off), 3), r0, r1) for m, r0, r1 in segs2]
+                    n_retry += 1
             if segs:
                 lt_res[idx] = segs
-        print(f"looptrace decoded {len(lt_res)} acappella spans", file=sys.stderr)
+        print(
+            f"looptrace decoded {len(lt_res)} acappella spans "
+            f"({n_retry} self-placement retries)",
+            file=sys.stderr,
+        )
 
     wlen, hop = int(args.window_s * FPS), int(args.hop_s * FPS)
     lam_back = args.lam if args.lam_back is None else args.lam_back

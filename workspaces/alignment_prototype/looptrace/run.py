@@ -174,6 +174,21 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--dump", type=Path, default=None)
     p.add_argument("--slot", default=None, help="single slot_label (debug)")
     p.add_argument(
+        "--jitter-s",
+        type=float,
+        default=0.0,
+        help="simulate placement error: shift each span's window center by "
+        "±this (alternating sign per span, deterministic)",
+    )
+    p.add_argument(
+        "--pad-s",
+        type=float,
+        default=0.0,
+        help="SELF-PLACEMENT: widen the decoded mix window by this much on "
+        "each side of the placement prior — the Hough diagonal's extent "
+        "finds where the song actually plays; NULL absorbs the rest",
+    )
+    p.add_argument(
         "--hybrid",
         action="store_true",
         help="enable the hybrid mel-consistency DP emission (measured flat "
@@ -221,7 +236,11 @@ def main(argv: list[str] | None = None) -> int:
         t = tgt_by_key.get((str(row.get("slot_label")), round(s0, 2)))
         if t is None:
             continue
-        y = selfsim.load_audio(str(mix_path), offset_s=s0, duration_s=s1 - s0)
+        jit = args.jitter_s * (1 if len(payload) % 2 == 0 else -1)
+        off = max(0.0, s0 + jit - args.pad_s)
+        y = selfsim.load_audio(
+            str(mix_path), offset_s=off, duration_s=(s1 + jit + args.pad_s) - off
+        )
         ref_h = landmarks.ref_points_cached(str(rp))
         song_lags, song_pairs = None, None
         if audit is not None:
@@ -239,6 +258,8 @@ def main(argv: list[str] | None = None) -> int:
             discrim=args.discrim,
             hybrid=args.hybrid,
         )
+        if off < s0:  # widened window -> re-express relative to the span
+            segs = [(round(m - (s0 - off), 3), r0, r1) for m, r0, r1 in segs]
         acc, _n, _f = trajectory_acc(segs, row)
         accs.append((_span_class(row), acc))
         print(

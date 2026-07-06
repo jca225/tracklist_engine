@@ -1,0 +1,9 @@
+=== BB12 jitter15 pad0 ===
+  ALL       n= 21  traj-acc(<2s) mean   6%
+  multiseg  n=  7  traj-acc(<2s) mean  12%
+=== BB12 jitter15 pad45 ===
+  ALL       n= 21  traj-acc(<2s) mean  23%
+  multiseg  n=  7  traj-acc(<2s) mean  23%
+=== BB12 pad45 only ===
+  ALL       n= 21  traj-acc(<2s) mean  24%
+  multiseg  n=  7  traj-acc(<2s) mean  24%

@@ -137,5 +137,27 @@ scored with `score_timeline_vs_gt --fibers` (fiber-aware, within 2 s):
 Consistent gains, no regressions — but the oracle-placement gap (43–44%
 ALL with GT set_start vs ~13% real) says **placement error is now the
 binding constraint for end-to-end acappella**, not the ref-trace decoder.
-The decoder improvements land fully only when acappella set_start
-improves (or when the decoder is given wider mix windows to self-place).
+
+## Self-placement (widened-window decode): mechanics work, gating doesn't
+
+Controlled experiment (BB12, oracle ± simulated error, `run.py
+--jitter-s/--pad-s`):
+
+| config | ALL |
+|---|---|
+| 15 s placement error, tight window | 6% |
+| 15 s placement error, ±45 s pad | **23%** |
+| perfect placement, ±45 s pad | 24% (vs 43% tight) |
+
+Padding makes the decode placement-INVARIANT (23≈24) — the Hough
+diagonal's extent self-places — but costs ~19 pp on well-placed spans
+(wider window = more noise + neighboring same-song content). Always-pad
+is the wrong operating point; an adaptive retry (pad only when tight
+evidence is weak) is right in principle but the fixture-calibrated
+evidence floor did NOT transfer to real separated vocals (29/33 BB12
+spans mislabeled as misplaced → e2e acappella 13→12). Retry DISABLED by
+default (`retry_evidence_rate=0`); pad machinery kept
+(`joint_ref_decode` + `run.py --pad-s`). Missing piece: a
+placement-quality signal that transfers — e.g. fraction of padded-decode
+evidence lying outside the tight window, or the C1 learned arbiter
+(gated on a third GT set).
