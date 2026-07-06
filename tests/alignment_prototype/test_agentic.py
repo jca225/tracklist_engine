@@ -45,6 +45,35 @@ def test_belief_all_abstain_is_zero():
     assert b.best() is None
 
 
+def test_combine_rewards_independent_agreement():
+    # three independent mediocre probes agreeing should clear a higher bar than
+    # any one of them — that's the whole point of the combine gate.
+    b = _belief(
+        _obs("cue_prior", 100.0, prec=0.50),
+        _obs("mert_decode", 101.0, prec=0.55),
+        _obs("fp", 102.0, prec=0.53),
+    )
+    base = b.quality()  # max-precision gate
+    comb = b.quality(combine=True)  # noisy-OR over independent groups
+    assert abs(base - 0.55) < 1e-9  # share 1.0 × best precision
+    assert abs(comb - (1 - 0.50 * 0.45 * 0.47)) < 1e-9  # ≈ 0.894
+    assert comb > base
+
+
+def test_combine_single_probe_is_unchanged():
+    b = _belief(_obs("fp", 100.0, prec=0.53))
+    assert abs(b.quality(combine=True) - b.quality()) < 1e-9  # noisy-OR of one = itself
+
+
+def test_combine_does_not_double_count_correlated_probes():
+    # surprise snaps to mert's centre — same independence group, so agreeing they
+    # combine to the STRONGER of the two, not a noisy-OR product.
+    b = _belief(
+        _obs("mert_decode", 100.0, prec=0.55), _obs("surprise", 100.5, prec=0.60)
+    )
+    assert abs(b.quality(combine=True) - 0.60) < 1e-9  # not 1-(.45)(.40)=0.82
+
+
 def test_event_log_replay_roundtrip(tmp_path):
     path = tmp_path / "events.jsonl"
     log = EventLog(path)

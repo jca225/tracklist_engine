@@ -34,9 +34,10 @@ class Ladder:
     auto: float = 0.75
     review: float = 0.40
     suggest: float = 0.10
+    combine: bool = False  # reward independent-probe agreement in quality()
 
     def mode(self, belief: SpanBelief) -> Mode:
-        q = belief.quality()
+        q = belief.quality(combine=self.combine)
         if q >= self.auto:
             return Mode.AUTO_COMMIT
         if q >= self.review:

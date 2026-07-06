@@ -42,6 +42,44 @@ class Cluster:
     probes: tuple[str, ...]
 
 
+# Probes sharing an evidence source do NOT corroborate each other — only the
+# strongest per group counts toward combined trust. Keeps a derivative probe
+# agreeing with its parent (e.g. `surprise` snaps to `mert_decode`'s band
+# centre) from being double-counted as independent agreement, and groups the
+# two audio-content matched-filters (fp, chroma) that can fail together.
+INDEPENDENCE_GROUP: dict[str, str] = {
+    "cue_prior": "cue",  # scraped tracklist metadata
+    "mert_decode": "mert",  # MERT audio decode
+    "surprise": "mert",  # snaps to mert's centre — not independent of it
+    "lyrics": "lyrics",  # Whisper vocal text
+    "stem_hubert": "hubert",  # HuBERT vocal embedding
+    "fp": "content",  # landmark fingerprint (audio content)
+    "chroma_refine": "content",  # chroma matched-filter (audio content)
+}
+
+
+def _combine_trust(members: tuple[Observation, ...]) -> float:
+    """Noisy-OR of per-group max precision: independent agreeing probes
+    corroborate, correlated ones don't double-count. One probe → its own
+    precision (1 - (1-p) = p), so single-probe beliefs are unchanged.
+
+    Interpretation: the members all agree on this cluster's location, so trust
+    = P(at least one INDEPENDENT group is correct) = 1 - Π(1 - p_group). Uses
+    marginal precision (not the agreement-boosted posterior), so it errs
+    conservative — it can only under-credit agreement, never invent it.
+    """
+    if not members:
+        return 0.0
+    by_group: dict[str, float] = {}
+    for o in members:
+        g = INDEPENDENCE_GROUP.get(o.probe, o.probe)
+        by_group[g] = max(by_group.get(g, 0.0), o.precision)
+    prod = 1.0
+    for p in by_group.values():
+        prod *= 1.0 - p
+    return 1.0 - prod
+
+
 @dataclass(frozen=True)
 class SpanBelief:
     slot_label: str
@@ -82,22 +120,34 @@ class SpanBelief:
         cs = self.clusters()
         return cs[0] if cs else None
 
-    def quality(self) -> float:
+    def quality(self, *, combine: bool = False) -> float:
         """Belief quality in [0, 1] — drives the permission ladder.
 
-        share-of-mass × best member precision: high only when the dominant
-        cluster both wins the vote AND contains a trustworthy probe. All-abstain
-        or empty → 0.0 (the escalate signal).
+        share-of-mass × cluster trust. All-abstain or empty → 0.0 (escalate).
+
+        Trust is the max member precision by default: high only when the
+        dominant cluster wins the vote AND contains a trustworthy probe. This
+        deliberately ignores corroboration — three mediocre probes agreeing
+        score no higher than the best of them, so a span with no single
+        ≥auto-bar probe can never auto-commit even when several agree.
+
+        With ``combine=True`` trust is instead ``_combine_trust`` — a noisy-OR
+        over INDEPENDENT agreeing probes (correlated ones grouped, only the
+        strongest per group counts). A single probe is unchanged (noisy-OR of
+        one = itself), so existing single-probe commits are preserved; the only
+        new behaviour is that independent agreement can clear a higher bar than
+        any lone member. Keeps the escalate/abstain semantics identical.
         """
         top = self.best()
         if top is None:
             return 0.0
-        best_precision = max(
-            o.precision
-            for o in self.observations
-            if not o.abstained and o.probe in top.probes
+        members = tuple(
+            o for o in self.observations if not o.abstained and o.probe in top.probes
         )
-        return top.share * best_precision
+        trust = (
+            _combine_trust(members) if combine else max(o.precision for o in members)
+        )
+        return top.share * trust
 
     def probes_run(self) -> frozenset[str]:
         return frozenset(o.probe for o in self.observations)
