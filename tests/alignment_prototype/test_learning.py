@@ -6,6 +6,7 @@ import numpy as np
 
 from workspaces.alignment_prototype.agentic.auditory import (
     common_fate,
+    comodulation_residual,
     tempogram,
     ENV_FPS,
 )
@@ -25,9 +26,11 @@ def test_beta_update_moves_mean_toward_evidence():
 
 
 def test_seeded_model_reflects_registry_and_validated_confidence():
+    from workspaces.alignment_prototype.agentic.actions import REGISTRY
+
     m = PrecisionModel.seeded()
-    # validated fp (0.90) seeds near its registry value with high confidence
-    assert abs(m.precision("fp") - 0.90) < 0.02
+    # a validated probe seeds near its (current) registry value, high confidence
+    assert abs(m.precision("fp") - REGISTRY["fp"].precision) < 0.02
     assert m.confidence("fp") == 20.0
     # unvalidated onset_align seeds weak (explorable)
     assert m.confidence("onset_align") == 4.0
@@ -104,6 +107,40 @@ def test_tempogram_finds_beat():
     assert abs(bpm - 120.0) < 6.0 and strength > 0.5
 
 
+def test_resolve_with_model_uses_calibrated_precision():
+    from workspaces.alignment_prototype.agentic.actions import REGISTRY
+    from workspaces.alignment_prototype.agentic.events import EventLog
+    from workspaces.alignment_prototype.agentic.loop import SpanCtx, resolve
+
+    from workspaces.alignment_prototype.agentic.belief import Observation
+
+    m = PrecisionModel.seeded()
+    for _ in range(200):  # drive fp's learned precision far below its 0.90 prior
+        m.observe("fp", correct=False)
+    learned_fp = m.precision("fp")
+    assert learned_fp < 0.4
+
+    def _abstain(name, prec):
+        return lambda d: Observation(name, None, 0.0, prec)
+
+    spans = [SpanCtx("001", "r1", "regular", {"slot": "001"})]
+    runners = {
+        "cue_prior": _abstain("cue_prior", 0.5),
+        "mert_decode": _abstain("mert_decode", 0.55),
+        "fp": lambda d: Observation("fp", 100.0, 0.9, REGISTRY["fp"].precision),
+        "chroma_refine": _abstain("chroma_refine", 0.7),
+    }
+    log = EventLog()
+    res = resolve(spans, runners, log, model=m, rng=np.random.default_rng(0))
+    # fp fired; its recorded precision must be the LEARNED value, not 0.90
+    fp_ev = [
+        e for e in log.events if e.kind == "observe" and e.payload["probe"] == "fp"
+    ]
+    assert fp_ev and abs(fp_ev[0].payload["precision"] - learned_fp) < 1e-9
+    # with fp calibrated low, this span should NOT auto-commit on fp alone
+    assert "001" not in res.committed
+
+
 def test_common_fate_high_when_coherent_low_when_independent():
     rng = np.random.default_rng(3)
     shared = rng.standard_normal(300)
@@ -111,3 +148,30 @@ def test_common_fate_high_when_coherent_low_when_independent():
     independent = rng.standard_normal((4, 300))
     assert common_fate(coherent) > 0.8
     assert abs(common_fate(independent)) < 0.3
+
+
+def test_comodulation_residual_pops_an_independent_overlay():
+    # comodulation masking release: a bed carrier shared across bands is
+    # suppressed; an overlay entering mid-signal (independent modulation in a
+    # subset of bands) survives as a residual spike.
+    rng = np.random.default_rng(5)
+    n = 400
+    bed = np.abs(rng.standard_normal(n))  # the shared across-band modulator
+    bands = np.stack([bed + 0.03 * rng.standard_normal(n) for _ in range(6)])
+    overlay = np.abs(rng.standard_normal(n))
+    bands[0, n // 2 :] += overlay[n // 2 :]  # overlay in 2/6 bands, 2nd half only
+    bands[1, n // 2 :] += overlay[n // 2 :]
+    s = comodulation_residual(bands)
+    assert s.shape == (n,)
+    assert s[: n // 2].mean() < 0.25  # coherent bed half: residual ~0
+    assert s[n // 2 :].mean() > 3 * s[: n // 2].mean()  # overlay half pops
+
+
+def test_comodulation_residual_flat_when_all_coherent():
+    rng = np.random.default_rng(6)
+    bed = np.abs(rng.standard_normal(300))
+    bands = np.stack([bed + 0.02 * rng.standard_normal(300) for _ in range(5)])
+    s = comodulation_residual(bands)
+    # no independent overlay anywhere ⇒ no sustained pop (peak-normed, so the
+    # curve exists but carries no salient structure): low mean
+    assert s.mean() < 0.5
