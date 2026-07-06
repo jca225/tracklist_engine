@@ -122,17 +122,17 @@ class SegmentConfig:
     mel_weight: float = 0.5  # contrast -> share-space scale (fixture-tuned)
     mel_cap: float = 0.12  # tips ties, cannot overturn strong landmark margins
     seg_cost_s: float = 3.0  # MDL charge per segment when comparing slopes
-    # adaptive self-placement retry (production path): a tight-window decode
-    # with evidence_rate below the floor triggers a widened re-decode.
-    # DISABLED (0.0): the fixture-calibrated floor (20) did NOT transfer —
-    # real separated vocals sit at far lower evidence rates, so 29/33 BB12
-    # spans "retried" and paid the always-pad cost (e2e acappella 13->12).
-    # Pad mechanics are validated (jitter-15s: 6%->23%); what's missing is
-    # a placement-quality signal that transfers — e.g. fraction of the
-    # padded decode's evidence lying OUTSIDE the tight window, or the C1
-    # learned arbiter (gated on a 3rd GT set).
-    retry_evidence_rate: float = 0.0
-    retry_pad_s: float = 45.0
+    # self-placement gate (production path): decode the PADDED window,
+    # measure ev_out_frac = fraction of path-inlier EVIDENCE outside the
+    # believed span window; >= gate keeps the padded (self-placed) decode,
+    # below it a tight decode is used. Ratio-within-one-decode, so it
+    # transfers where absolute evidence_rate twice did not (router, retry
+    # v1). Validated on real BB12 via controlled jitter: placed 43%->43%
+    # (no cost), 15s-misplaced 6%->17%; robust across gate 0.7-0.85.
+    # (Historic: retry v1 gated on evidence_rate<20 mislabeled 29/33 spans
+    # and cost 13->12 e2e — fixture floors don't transfer.)
+    gate_out_frac: float = 0.8
+    gate_pad_s: float = 45.0
     evidence_tol_s: float = 0.3  # tight tol for cross-slope path evidence
 
 

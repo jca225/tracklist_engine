@@ -150,14 +150,31 @@ Controlled experiment (BB12, oracle ± simulated error, `run.py
 | perfect placement, ±45 s pad | 24% (vs 43% tight) |
 
 Padding makes the decode placement-INVARIANT (23≈24) — the Hough
-diagonal's extent self-places — but costs ~19 pp on well-placed spans
-(wider window = more noise + neighboring same-song content). Always-pad
-is the wrong operating point; an adaptive retry (pad only when tight
-evidence is weak) is right in principle but the fixture-calibrated
-evidence floor did NOT transfer to real separated vocals (29/33 BB12
-spans mislabeled as misplaced → e2e acappella 13→12). Retry DISABLED by
-default (`retry_evidence_rate=0`); pad machinery kept
-(`joint_ref_decode` + `run.py --pad-s`). Missing piece: a
-placement-quality signal that transfers — e.g. fraction of padded-decode
-evidence lying outside the tight window, or the C1 learned arbiter
-(gated on a third GT set).
+diagonal's extent self-places — but costs ~19 pp on well-placed spans.
+Two gating signals tried:
+
+1. `evidence_rate` floor (fixture-calibrated at 20): did NOT transfer —
+   real separated vocals sit far lower; 29/33 BB12 spans mislabeled →
+   e2e 13→12. Dead (2nd evidence_rate failure after the router).
+2. **`ev_out_frac`** — fraction of the padded decode's path-inlier
+   EVIDENCE outside the believed span window. A ratio within one decode,
+   so it survives the fixtures→real density shift (segment-TIME fraction
+   does not: real padded windows tile fully with weak segments, measured
+   identical placed vs jittered). Controlled real-data test (jitter as
+   the manipulated variable, no accuracy tuning): placed median 0.53 vs
+   15s-misplaced 0.82; gate simulation at θ=0.8: placed 43%→43% (zero
+   cost), misplaced 6%→17%; robust across θ 0.7–0.85.
+
+**SHIPPED as the production default** (`gate_out_frac=0.8`,
+`gate_pad_s=45` in SegmentConfig; joint_ref_decode decodes padded first,
+keeps it when ev_out_frac ≥ gate, else decodes tight). End-to-end:
+
+| acappella traj-acc (fiber-aware) | legacy | lt ungated | **lt + gate** |
+|---|---|---|---|
+| BB12 (n=41) | 10% | 13% | 12% (9/33 gated) |
+| BB11 (n=67) | 12% | 13% | **16%** (25/55 gated) |
+| combined (n=108) | 11.2% | 13.0% | **14.5%** |
+
+The gate fires where placement is worse (BB11) and wins there (+33% vs
+legacy); BB12's −1 pp is ~0.4 spans (noise). Combined e2e acappella is
+now **+30% relative over legacy**.

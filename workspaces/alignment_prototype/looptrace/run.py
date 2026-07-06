@@ -52,6 +52,7 @@ def decode_span(
     song_pairs: list[dict] | None = None,
     ref_path: str | None = None,
     ref_mel: tuple | None = None,  # (mel, hz) of the reference, for hybrid
+    belief_window: tuple[float, float] | None = None,  # local coords (lo, hi)
     discrim: bool = False,
     hybrid: bool = False,
     lm_cfg=LM_V1,
@@ -109,6 +110,25 @@ def decode_span(
         adj = ev * max(0.0, 1.0 - len(sg) * seg_cfg.seg_cost_s / max(dur_dec, 1e-6))
         if adj > best_adj:
             best_slope, segs, best_ev, best_adj = s, sg, ev, adj
+    if belief_window is not None and segs:
+        # placement-quality signal: fraction of the decoded path's INLIER
+        # EVIDENCE lying outside the believed span window. Evidence-weighted
+        # (segment-TIME fraction measured uninformative: real padded windows
+        # tile fully with weak-match segments, NULL rarely wins).
+        lo, hi = belief_window
+        if cs is not None:
+            lo, hi = cs.to_collapsed(lo), cs.to_collapsed(hi)
+        m_in = (pts[:, 0] >= lo) & (pts[:, 0] <= hi)
+        w_all = weights if weights is not None else np.ones(len(pts))
+        ev_in = segments.path_inlier_evidence(
+            pts[m_in], segs, best_slope, dur_dec, seg_cfg, weights=w_all[m_in]
+        )
+        ev_tot = segments.path_inlier_evidence(
+            pts, segs, best_slope, dur_dec, seg_cfg, weights=w_all
+        )
+        ev_out_frac = 1.0 - (ev_in / ev_tot) if ev_tot > 0 else 1.0
+    else:
+        ev_out_frac = None
     if discrim and segs and song_pairs and ref_path:
         from workspaces.alignment_prototype.looptrace.discrim import (
             reselect_instances,
@@ -124,6 +144,7 @@ def decode_span(
         # router signal: above-background evidence per decoded second —
         # high = the landmark cloud clearly explains this span
         "evidence_rate": round(best_ev / max(dur_dec, 1e-6), 2),
+        "ev_out_frac": None if ev_out_frac is None else round(ev_out_frac, 3),
         "loops": [
             {
                 "source_start_s": lo.source_start_s,
@@ -135,6 +156,23 @@ def decode_span(
         ],
     }
     return segs, meta
+
+
+def outside_frac(
+    segs: list[tuple[float, float, float]], dur_s: float, lo: float, hi: float
+) -> float:
+    """Fraction of decoded-segment TIME lying outside the believed span
+    window [lo, hi] (local coords). Placement-quality signal: a ratio
+    within one decode, so it should survive the absolute point-density
+    shift between fixtures and real separated vocals that broke
+    evidence_rate twice (router, adaptive retry)."""
+    tot = out = 0.0
+    for i, (m0, _s0, _s1) in enumerate(segs):
+        m1 = segs[i + 1][0] if i + 1 < len(segs) else dur_s
+        m1 = max(m1, m0)
+        tot += m1 - m0
+        out += max(0.0, min(m1, lo) - m0) + max(0.0, m1 - max(m0, hi))
+    return out / tot if tot > 0 else 0.0
 
 
 def _slope_band(row: dict, mix_series, ref_series, t) -> list[float]:
@@ -255,9 +293,17 @@ def main(argv: list[str] | None = None) -> int:
             song_lags_s=song_lags,
             song_pairs=song_pairs,
             ref_path=str(rp),
+            belief_window=((s0 + jit) - off, (s1 + jit) - off)
+            if args.pad_s > 0
+            else None,
             discrim=args.discrim,
             hybrid=args.hybrid,
         )
+        if args.pad_s > 0:
+            dur_loc = (s1 + jit + args.pad_s) - off
+            meta["out_frac"] = round(
+                outside_frac(segs, dur_loc, (s0 + jit) - off, (s1 + jit) - off), 3
+            )
         if off < s0:  # widened window -> re-express relative to the span
             segs = [(round(m - (s0 - off), 3), r0, r1) for m, r0, r1 in segs]
         acc, _n, _f = trajectory_acc(segs, row)

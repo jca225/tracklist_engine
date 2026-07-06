@@ -187,38 +187,40 @@ def main(argv: list[str] | None = None) -> int:
             for f in (0.94, 0.97, 1.0, 1.03, 1.06):
                 for o in (0.5, 1.0, 2.0):
                     slopes.add(round(f * o, 4))
-            segs, meta = decode_span(
-                y,
+            # self-placement gate: decode the PADDED window first; if the
+            # decoded evidence concentrates OUTSIDE the believed span
+            # window (ev_out_frac >= gate), placement was wrong — keep the
+            # self-placed padded decode; otherwise decode tight (validated:
+            # placed spans keep tight quality 43%, 15s-misplaced 6%->17%).
+            from workspaces.alignment_prototype.looptrace.config import SEG_V1
+
+            pad = SEG_V1.gate_pad_s
+            off = max(0.0, s0 - pad)
+            y_pad = lt_selfsim.load_audio(
+                str(mix_vocals), offset_s=off, duration_s=(s1 + pad) - off
+            )
+            segs_p, meta_p = decode_span(
+                y_pad,
                 ref_h,
                 sorted(slopes),
                 song_lags_s=song_lags,
                 song_pairs=song_pairs,
                 ref_path=str(ref_path),
+                belief_window=(s0 - off, s1 - off),
             )
-            # adaptive self-placement: weak tight-window evidence means the
-            # placement likely missed the content — re-decode a widened
-            # window and let the Hough diagonal's extent place the span
-            # (measured: recovers 6%->23% under 15 s error; always-padding
-            # would cost well-placed spans 43%->24%, hence the gate).
-            from workspaces.alignment_prototype.looptrace.config import SEG_V1
-
-            if meta["evidence_rate"] < SEG_V1.retry_evidence_rate:
-                pad = SEG_V1.retry_pad_s
-                off = max(0.0, s0 - pad)
-                y2 = lt_selfsim.load_audio(
-                    str(mix_vocals), offset_s=off, duration_s=(s1 + pad) - off
-                )
-                segs2, meta2 = decode_span(
-                    y2,
+            of = meta_p.get("ev_out_frac")
+            if segs_p and of is not None and of >= SEG_V1.gate_out_frac:
+                segs = [(round(m - (s0 - off), 3), r0, r1) for m, r0, r1 in segs_p]
+                n_retry += 1
+            else:
+                segs, _meta = decode_span(
+                    y,
                     ref_h,
                     sorted(slopes),
                     song_lags_s=song_lags,
                     song_pairs=song_pairs,
                     ref_path=str(ref_path),
                 )
-                if segs2:
-                    segs = [(round(m - (s0 - off), 3), r0, r1) for m, r0, r1 in segs2]
-                    n_retry += 1
             if segs:
                 lt_res[idx] = segs
         print(

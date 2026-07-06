@@ -357,6 +357,20 @@ Candidate cheap signal to try first: fraction of the padded decode's
 path evidence lying OUTSIDE the tight window (directly measures "the
 content wasn't where placement said").
 
+**UPDATE (same day, fifth pass): the out-of-window evidence fraction
+WORKS.** `ev_out_frac` (fraction of the padded decode's path-inlier
+evidence outside the believed window) is a ratio within one decode and
+transfers where absolute rates didn't. Controlled real-data validation
+(jitter as the manipulated variable, no accuracy tuning): placed median
+0.53 vs 15s-misplaced 0.82; gate θ=0.8 keeps placed spans at tight
+quality (43%→43%) while rescuing misplaced ones (6%→17%),
+plateau-robust θ 0.7–0.85. SHIPPED as the joint_ref_decode default:
+e2e acappella combined 11.2% (legacy) → 13.0% (lt) → **14.5%
+(lt + self-placement gate)**; BB11 12→16. NOTE the segment-TIME variant
+of the same signal is uninformative (real padded windows tile fully with
+weak segments — placed vs jittered measured IDENTICAL); the evidence
+weighting is essential.
+
 ### Plan deltas vs the brief (repo-specific adjustments)
 
 - `looptrace/` lives under `workspaces/alignment_prototype/`, not top-level (repo
