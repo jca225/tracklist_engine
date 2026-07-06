@@ -146,8 +146,10 @@ def test_expand_segments_replicates_loop(song):
     cs = loops.collapse(span.y, det)
     seg_c = (cs.to_collapsed(lo.source_start_s), 100.0, 100.0 + lo.period_s)
     out = loops.expand_segments([seg_c], cs)
-    assert len(out) == lo.n_iter
-    starts = [m for m, _, _ in out]
-    assert starts[0] == pytest.approx(lo.source_start_s, abs=0.02)
-    assert starts[1] == pytest.approx(lo.source_start_s + lo.period_s, abs=0.02)
-    assert all(s0 == 100.0 for _, s0, _ in out)  # same source — hard constraint
+    # the source piece is replicated over all iterations (same song start —
+    # the hard constraint); a trailing extension piece past the loop is
+    # allowed (next-start convention extends the last segment to span end)
+    reps = [(m, s0) for m, s0, _ in out if s0 == 100.0]
+    assert len(reps) == lo.n_iter
+    assert reps[0][0] == pytest.approx(lo.source_start_s, abs=0.02)
+    assert reps[1][0] == pytest.approx(lo.source_start_s + lo.period_s, abs=0.02)

@@ -83,6 +83,42 @@ class LoopConfig:
 
 
 @dataclass(frozen=True)
+class LandmarkConfig:
+    """Phase 3 — pitch/tempo-tolerant landmark hashing + point matching."""
+
+    version: str = "lm-v1"
+    fan: int = 8
+    dt_max_frames: int = 80  # ~1.9 s at 43 fps
+    min_hz: float = 80.0
+    # key quantization: coarse absolute pitch (repitch moves peaks +-8%),
+    # finer pitch-INVARIANT interval, log-dt for tempo tolerance
+    f1_bins_per_oct: int = 4
+    ratio_bins_per_oct: int = 12
+    dt_bins_per_oct: int = 6
+    pair_cap: int = 64  # skip keys whose mix x ref pairing explodes (1024 measured: ~300 noise pts/bin buries weak keylock diagonals)
+
+
+@dataclass(frozen=True)
+class SegmentConfig:
+    """Phase 3 — intercept Hough + segment-cover DP."""
+
+    version: str = "seg-v1"
+    hough_bin_s: float = 0.5
+    min_votes: float = 4.0
+    min_separation_s: float = 1.5
+    max_candidates: int = 24
+    inlier_tol_s: float = 0.6
+    support_sigma_s: float = 1.5
+    grid_step_s: float = 0.5
+    null_level: float = 0.35  # NULL emission (pre-normalization units)
+    lam: float = 1.0  # state-switch penalty, on the normalized-share scale
+    min_segment_s: float = 2.0
+    # slope search: octave-folded fine grid around the beat-grid center,
+    # best total Hough support wins (slope estimated once per span)
+    slope_fine: tuple[float, ...] = (0.94, 0.97, 1.0, 1.03, 1.06)
+
+
+@dataclass(frozen=True)
 class EvalConfig:
     """Per-second segment accuracy (brief §9) on top of the frozen legacy
     trajectory_acc (tol=2.0 s, step=1.0 s)."""
@@ -94,4 +130,6 @@ class EvalConfig:
 
 AUDIT_V3 = AuditConfig()
 LOOP_V2 = LoopConfig()
+LM_V1 = LandmarkConfig()
+SEG_V1 = SegmentConfig()
 EVAL_V1 = EvalConfig()

@@ -1,0 +1,40 @@
+=== BB12 ===
+mert_store: 18 non-finite value(s) clamped in ref 17hz4g3x
+mert_store: 1 non-finite value(s) clamped in ref 1mdpuq6f
+mert_store: 1 non-finite value(s) clamped in ref 1u1nm3lp
+mert_store: 4 non-finite value(s) clamped in ref dkg1c995
+mert_store: 6 non-finite value(s) clamped in ref xgbll1f
+  012 multiseg n_pts=46268 slope=0.957 segs=4 loops=0 traj<2s= 47%
+  014 oddratio n_pts=26789 slope=1.000 segs=2 loops=0 traj<2s=  0%
+  019 oddratio n_pts=32676 slope=0.536 segs=3 loops=0 traj<2s=  0%
+  029 linear   n_pts=42248 slope=1.081 segs=1 loops=0 traj<2s=  0%
+  032 multiseg n_pts=53771 slope=0.658 segs=12 loops=1 traj<2s=  7%
+  039 multiseg n_pts=53664 slope=0.651 segs=9 loops=0 traj<2s= 78%
+  040 oddratio n_pts=29376 slope=1.213 segs=1 loops=0 traj<2s=100%
+  047 linear   n_pts=33354 slope=1.095 segs=1 loops=0 traj<2s=  0%
+  051 linear   n_pts=37656 slope=1.053 segs=2 loops=0 traj<2s= 69%
+  053 multiseg n_pts=52126 slope=0.619 segs=6 loops=0 traj<2s=  0%
+  058 oddratio n_pts=27644 slope=1.367 segs=1 loops=0 traj<2s=  0%
+  062 oddratio n_pts=36376 slope=0.387 segs=2 loops=0 traj<2s=  0%
+  069 multiseg n_pts=45380 slope=1.267 segs=9 loops=1 traj<2s= 27%
+  071 multiseg n_pts=47617 slope=0.593 segs=9 loops=1 traj<2s=  0%
+  073 linear   n_pts=40900 slope=0.632 segs=4 loops=0 traj<2s=  0%
+  003 linear   n_pts=58172 slope=0.531 segs=5 loops=0 traj<2s=  0%
+  082 linear   n_pts=37578 slope=1.011 segs=2 loops=0 traj<2s= 82%
+  127 linear   n_pts=43659 slope=0.985 segs=1 loops=0 traj<2s=100%
+  128 linear   n_pts=38334 slope=1.092 segs=2 loops=0 traj<2s= 79%
+  134 loop     n_pts=34382 slope=1.129 segs=3 loops=1 traj<2s= 94%
+  144 multiseg n_pts=43938 slope=0.526 segs=4 loops=0 traj<2s=  0%
+dumped 21 spans -> /Users/johnnycabrahams/Desktop/tracklist_engine/workspaces/alignment_prototype/looptrace/out/lt_pred_1fsnxchk.json
+
+=== looptrace.run — 1fsnxchk trajectory accuracy (frozen metric) ===
+  ALL       n= 21  traj-acc(<2s) mean  33%
+  linear    n=  8  traj-acc(<2s) mean  41%
+  multiseg  n=  7  traj-acc(<2s) mean  23%
+  loop      n=  1  traj-acc(<2s) mean  94%
+  oddratio  n=  5  traj-acc(<2s) mean  20%
+
+=== BB11 ===
+  003w1 linear   n_pts=49010 slope=1.114 segs=1 loops=0 traj<2s=100%
+  003w2 loop     n_pts=29366 slope=1.168 segs=7 loops=1 traj<2s= 24%
+  005w1 linear   n_pts=61335 slope=0.708 segs=6 loops=0 traj<2s= 92%

@@ -145,7 +145,9 @@ def make_mix_span(
     is a documented detector limitation; see tests' xfail.) For non-loop
     kinds the stretch is applied to the assembled span; either order gives
     the same GT geometry. GT slope (song per mix second) = 1/factor."""
-    rng = np.random.default_rng(seed + hash(kind) % 1000)
+    import zlib
+
+    rng = np.random.default_rng(seed + zlib.crc32(kind.encode()) % 1000)
     dur = len(song) / SR
 
     def cut(t0: float, ln: float) -> np.ndarray:

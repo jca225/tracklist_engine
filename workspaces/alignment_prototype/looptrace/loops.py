@@ -107,6 +107,16 @@ class CollapsedSpan:
     def collapsed_duration_s(self) -> float:
         return float(sum(o1 - o0 for o0, o1 in self.keep))
 
+    def weight_at_collapsed(self, t_collapsed: float) -> float:
+        """Evidence multiplier at a collapsed time (n_iter on a loop's
+        canonical iteration, else 1)."""
+        acc = 0.0
+        for (o0, o1), w in zip(self.keep, self.weight):
+            if t_collapsed <= acc + (o1 - o0):
+                return float(w)
+            acc += o1 - o0
+        return 1.0
+
 
 def detect_loops(
     y: np.ndarray,
@@ -241,24 +251,29 @@ def collapse(y: np.ndarray, loops: list[Loop]) -> CollapsedSpan:
             merged[-1][1] = max(merged[-1][1], d1)
         else:
             merged.append([d0, d1])
-    keep: list[tuple[float, float]] = []
-    weight: list[float] = []
+    raw_keep: list[tuple[float, float]] = []
     t = 0.0
     for d0, d1 in merged:
         if d0 > t + 1e-6:
-            keep.append((t, d0))
-            weight.append(1.0)
+            raw_keep.append((t, d0))
         t = d1
     if t < dur - 1e-6:
-        keep.append((t, dur))
-        weight.append(1.0)
-    # weight = 1 + number of images folding onto each keep interval's midpoint
+        raw_keep.append((t, dur))
+    # split keep intervals at loop-source boundaries so the n_iter evidence
+    # weight applies to exactly the source sub-interval
+    marks = sorted({b for lo in loops for b in (lo.source_start_s, lo.source_end_s)})
+    keep: list[tuple[float, float]] = []
+    for o0, o1 in raw_keep:
+        cuts = [o0] + [m for m in marks if o0 < m < o1] + [o1]
+        for c0, c1 in zip(cuts, cuts[1:]):
+            if c1 - c0 > 1e-6:
+                keep.append((c0, c1))
     weight = [
         1.0
         + sum(
             (lo.n_iter - 1)
             for lo in loops
-            if lo.source_start_s <= (o0 + o1) / 2 <= lo.source_end_s
+            if lo.source_start_s - 1e-6 <= (o0 + o1) / 2 <= lo.source_end_s + 1e-6
         )
         for (o0, o1) in keep
     ]
@@ -274,20 +289,51 @@ def expand_segments(
     segments: list[tuple[float, float, float]], cs: CollapsedSpan
 ) -> list[tuple[float, float, float]]:
     """Map decoded segments (mix_start_collapsed, song_start, song_end) back
-    to original span time, replicating any segment inside a loop's source
-    region over all its images — every iteration maps to the SAME source
-    region (the hard constraint)."""
+    to original span time.
+
+    A decoded segment may CROSS keep-interval boundaries (a straight
+    diagonal in collapsed time legitimately spans pre-loop + source + post
+    material): split it at those boundaries, shift each piece to original
+    time, and replicate any piece inside a loop's source region over all
+    its images — every iteration maps to the SAME source region (the
+    hard constraint). Segment ends follow the next-start convention, so
+    ends are reconstructed before splitting and re-implied after (pieces
+    and replicas emit contiguously)."""
+    if not cs.loops:
+        return sorted((round(m, 3), s0, s1) for m, s0, s1 in segments)
+    # collapsed-time boundaries of the keep intervals AND of every loop's
+    # source region — a decoded segment must be cut at source boundaries or
+    # a piece merely CONTAINING the source is never replicated
+    bounds_set: set[float] = {0.0}
+    acc = 0.0
+    for o0, o1 in cs.keep:
+        acc += o1 - o0
+        bounds_set.add(acc)
+    for lo in cs.loops:
+        bounds_set.add(cs.to_collapsed(lo.source_start_s))
+        bounds_set.add(cs.to_collapsed(lo.source_end_s - 1e-9) + 1e-9)
+    bounds = sorted(bounds_set)
+    segs = sorted(segments)
     out: list[tuple[float, float, float]] = []
-    for mix_c, s0, s1 in segments:
-        mix_o = cs.to_original(mix_c)
-        out.append((round(mix_o, 3), s0, s1))
-        for lo in cs.loops:
-            if lo.source_start_s - 1e-6 <= mix_o < lo.source_end_s:
-                for k in range(1, lo.n_iter):
-                    img = mix_o + k * lo.period_s
-                    if img < cs.duration_s:
-                        out.append((round(img, 3), s0, s1))
-                break
+    for i, (mc0, s0, s1) in enumerate(segs):
+        mc1 = segs[i + 1][0] if i + 1 < len(segs) else cs.collapsed_duration_s
+        mc1 = max(mc1, mc0 + 1e-6)
+        slope = (s1 - s0) / (mc1 - mc0)
+        cuts = [mc0] + [b for b in bounds if mc0 < b < mc1] + [mc1]
+        for c0, c1 in zip(cuts, cuts[1:]):
+            if c1 - c0 < 1e-6:
+                continue
+            p0 = s0 + (c0 - mc0) * slope
+            p1 = s0 + (c1 - mc0) * slope
+            mo = cs.to_original((c0 + c1) / 2) - (c1 - c0) / 2
+            out.append((round(mo, 3), round(p0, 3), round(p1, 3)))
+            for lo in cs.loops:
+                if lo.source_start_s - 1e-6 <= mo < lo.source_end_s:
+                    for k in range(1, lo.n_iter):
+                        img = mo + k * lo.period_s
+                        if img < cs.duration_s - 1e-6:
+                            out.append((round(img, 3), round(p0, 3), round(p1, 3)))
+                    break
     return sorted(out)
 
 
