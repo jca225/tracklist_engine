@@ -1,0 +1,143 @@
+{
+ "set_id": "2nvzlh2k",
+ "spans": [
+  {
+   "slot_label": "003w1",
+   "is_loop_gt": false,
+   "gt_loops": [],
+   "detected": []
+  },
+  {
+   "slot_label": "003w2",
+   "is_loop_gt": true,
+   "gt_loops": [
+    {
+     "start_s": 30.0,
+     "period_s": 7.738,
+     "n_iter": 2
+    }
+   ],
+   "detected": [
+    {
+     "start_s": 0.46,
+     "period_s": 30.476,
+     "n_iter": 2,
+     "residual_db": -7.25,
+     "mel_sim": 0.9157
+    }
+   ]
+  },
+  {
+   "slot_label": "005w1",
+   "is_loop_gt": false,
+   "gt_loops": [],
+   "detected": []
+  },
+  {
+   "slot_label": "011w5",
+   "is_loop_gt": false,
+   "gt_loops": [],
+   "detected": []
+  },
+  {
+   "slot_label": "011w6",
+   "is_loop_gt": false,
+   "gt_loops": [],
+   "detected": []
+  },
+  {
+   "slot_label": "020w1",
+   "is_loop_gt": false,
+   "gt_loops": [],
+   "detected": []
+  },
+  {
+   "slot_label": "022w1",
+   "is_loop_gt": false,
+   "gt_loops": [],
+   "detected": []
+  },
+  {
+   "slot_label": "029w1",
+   "is_loop_gt": false,
+   "gt_loops": [],
+   "detected": []
+  },
+  {
+   "slot_label": "029w2",
+   "is_loop_gt": false,
+   "gt_loops": [],
+   "detected": []
+  },
+  {
+   "slot_label": "029w2",
+   "is_loop_gt": false,
+   "gt_loops": [],
+   "detected": []
+  },
+  {
+   "slot_label": "029w2",
+   "is_loop_gt": false,
+   "gt_loops": [],
+   "detected": []
+  },
+  {
+   "slot_label": "034w1",
+   "is_loop_gt": false,
+   "gt_loops": [],
+   "detected": []
+  },
+  {
+   "slot_label": "036w2",
+   "is_loop_gt": false,
+   "gt_loops": [],
+   "detected": []
+  },
+  {
+   "slot_label": "038w1",
+   "is_loop_gt": false,
+   "gt_loops": [],
+   "detected": []
+  },
+  {
+   "slot_label": "039w2",
+   "is_loop_gt": false,
+   "gt_loops": [
+    {
+     "start_s": 0.0,
+     "period_s": 109.39,
+     "n_iter": 2
+    }
+   ],
+   "detected": [
+    {
+     "start_s": 24.06,
+     "period_s": 65.404,
+     "n_iter": 2,
+     "residual_db": -3.96,
+     "mel_sim": 0.9198
+    }
+   ]
+  },
+  {
+   "slot_label": "039w3",
+   "is_loop_gt": false,
+   "gt_loops": [],
+   "detected": [
+    {
+     "start_s": 0.93,
+     "period_s": 65.404,
+     "n_iter": 2,
+     "residual_db": -3.97,
+     "mel_sim": 0.9089
+    }
+   ]
+  },
+  {
+   "slot_label": "039w7",
+   "is_loop_gt": false,
+   "gt_loops": [],
+   "detected": []
+  }
+ ]
+}

@@ -169,6 +169,52 @@ lifts multiseg 27→45% (BB12), 12→34% (BB11).
 per-frame phonetics can't split them), but Phases 2+3 come first per the
 leverage ordering.
 
+## Phase 2 — loop-collapse preprocessing (2026-07-06)
+
+**Built:** `fixtures.py` (synthetic pseudo-vocal song + fake mix spans:
+straight / 2×/4× loops / section replays / jumps / natural distinct-take
+repeats, × none/repitch/key-locked ±8%, × clean/−6 dB per-iteration bleed),
+`loops.py` (`detect_loops` → `Loop(source, period, n_iter)`, image-based
+`collapse`/`CollapsedSpan` time maps, `expand_segments` with the same-source
+constraint, CLI gate runner), `LoopConfig` loop-v2, 6 loop tests (13 total).
+
+**Fixture gate: 100% precision / 100% recall** on the battery (≥95%
+required), incl. −6 dB bleed. One strict xfail documents the known gap:
+tile-then-key-locked-vocoder (live-hardware order) defeats waveform
+cloneness AND spectral-magnitude+drift verification (measured
+indistinguishable from distinct takes) — irrelevant for the Ableton-produced
+GT corpora (duplicated warped clips = copies AFTER the stretch).
+
+**Design deviation from the brief (measured, justified):** "DJ loop =
+bit-near-identical" fails on real mix_vocals — Roformer separation under
+different beds degrades a CONFIRMED real loop's iterations to −6.7 dB, into
+the distinct-take band. The discriminator is instead **structural**: a mix
+self-repeat at a lag whose song-time image is absent from the song's
+Phase-1 repeat map must be a DJ edit; matches of song structure are
+rejected (played straight). The residual floor (−3 dB) only rejects noise.
+Also: GT "loops" are section-scale (periods 15–109 s, incl. non-contiguous
+replays), not just 1–8-bar button loops — Loop generalizes to
+source-region + images; max_lag 120 s.
+
+**Real-mix gate (answer-key spot-check):**
+- BB12: 3/3 GT-loop spans detected, periods exact (41.17 / 14.95 / 15.24 s
+  vs GT 41.17 / 15.02 / 15.3); 1 extra on slot 071 = natural chorus repeat
+  straddling a DJ jump (the structural test assumes straight play between
+  occurrences — measured blind spot, small 2.5 s source).
+- BB11: 2/2 GT-loop spans hit at span level; period-level disagreements
+  from three understood causes: song-side repeat-map coverage gaps
+  (Seasons of Love cov 21% → its internal repeat reads as a DJ edit),
+  overlapping w-layer spans sharing mix audio (twin 65.4 s detections in
+  039w2/039w3), and a 109 s replay's internal structure outranking the
+  outer period.
+
+**Go decision → Phase 3**, with one carry-over: detected loops enter the
+segment-cover DP as STRONG SOFT constraints (bonus for same-intercept
+tiling across iterations) arbitrated against landmark evidence — not
+inviolable hard constraints; real-mix precision doesn't justify hard.
+Collapse/expand machinery stays available for the unambiguous short-lag
+button-loop case.
+
 ### Plan deltas vs the brief (repo-specific adjustments)
 
 - `looptrace/` lives under `workspaces/alignment_prototype/`, not top-level (repo

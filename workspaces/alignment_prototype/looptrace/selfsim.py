@@ -38,12 +38,16 @@ class RepeatPair:
     diag_sim: float  # mel diagonal similarity (content-sameness evidence)
 
 
-def load_audio(path: str) -> np.ndarray:
+def load_audio(
+    path: str, offset_s: float = 0.0, duration_s: float | None = None
+) -> np.ndarray:
     import librosa
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        y, _ = librosa.load(path, sr=SR, mono=True)
+        y, _ = librosa.load(
+            path, sr=SR, mono=True, offset=offset_s, duration=duration_s
+        )
     return y
 
 
@@ -166,9 +170,14 @@ def verify_pair(
     gain-invariant (residual after optimal gain = 1 - r^2)."""
     from scipy.signal import fftconvolve
 
-    sa = y[int(p.a0 * SR) : int(p.a1 * SR)].astype(np.float64)
+    # clip so the lagged image fits inside y (regions near the end of a
+    # span otherwise silently correlate against a truncated buffer -> r=0)
+    a1 = min(p.a1, len(y) / SR - p.lag_s - pad_s)
+    if a1 - p.a0 < 0.5:
+        return 0.0, p.lag_s
+    sa = y[int(p.a0 * SR) : int(a1 * SR)].astype(np.float64)
     b0 = max(0.0, p.a0 + p.lag_s - pad_s)
-    sb = y[int(b0 * SR) : int((p.a1 + p.lag_s + pad_s) * SR)].astype(np.float64)
+    sb = y[int(b0 * SR) : int((a1 + p.lag_s + pad_s) * SR)].astype(np.float64)
     n = sa.size
     if n < 8 or sb.size < n:
         return 0.0, p.lag_s
@@ -221,3 +230,61 @@ def _subsample_refine(
 def residual_db(r: float) -> float:
     """Aligned-and-gain-fitted residual energy, in dB: 10*log10(1 - r^2)."""
     return float(10.0 * np.log10(max(1.0 - r * r, 1e-12)))
+
+
+def verify_pair_spectral(
+    y: np.ndarray,
+    a0: float,
+    a1: float,
+    lag_s: float,
+    *,
+    win_s: float = 0.5,
+    hop_s: float = 0.25,
+    search_ms: float = 30.0,
+) -> tuple[float, float, float]:
+    """Phase-blind verification for KEY-LOCKED copies: (r_mag_median,
+    drift_std_ms, r_wave_median) over sub-windows of [a0,a1] vs [a0+lag,..].
+
+    A key-locked (phase-vocoder) copy is re-synthesized with different phase
+    accumulation, so waveform xcorr collapses (~0.3) — but its STFT
+    MAGNITUDE stays near-identical and its per-window timing drift is ~0.
+    A distinct human take has micro-timing jitter (tens of ms) and lower
+    magnitude correlation. Per-window best lag is searched within
+    ±search_ms around lag_s; drift = std of those lags."""
+    n_lag = int(lag_s * SR)
+    w = int(win_s * SR)
+    hop = int(hop_s * SR)
+    pad = int(search_ms / 1000.0 * SR)
+    i0, i1 = int(a0 * SR), int(a1 * SR)
+    r_mags: list[float] = []
+    r_waves: list[float] = []
+    dlags: list[float] = []
+    for s in range(i0, i1 - w, hop):
+        a = y[s : s + w].astype(np.float64)
+        b = y[s + n_lag - pad : s + n_lag + w + pad].astype(np.float64)
+        if b.size < w + 2 * pad or np.linalg.norm(a) < 1e-9:
+            continue
+        from scipy.signal import fftconvolve
+
+        a0c = a - a.mean()
+        num = fftconvolve(b, a0c[::-1], mode="valid")
+        e = np.concatenate([[0.0], np.cumsum(b * b)])
+        den = np.sqrt(np.maximum(e[w:] - e[:-w], 1e-12)) * (np.linalg.norm(a0c) + 1e-12)
+        rw = np.abs(num / np.maximum(den, 1e-12))
+        k = int(np.argmax(rw))
+        r_waves.append(float(rw[k]))
+        dlags.append((k - pad) / SR * 1000.0)
+        bb = b[k : k + w]
+        ma = np.log1p(np.abs(np.fft.rfft(a * np.hanning(w))))
+        mb = np.log1p(np.abs(np.fft.rfft(bb * np.hanning(w))))
+        ma -= ma.mean()
+        mb -= mb.mean()
+        denom = np.linalg.norm(ma) * np.linalg.norm(mb) + 1e-12
+        r_mags.append(float(np.dot(ma, mb) / denom))
+    if not r_mags:
+        return 0.0, 1e9, 0.0
+    return (
+        float(np.median(r_mags)),
+        float(np.std(dlags)),
+        float(np.median(r_waves)),
+    )

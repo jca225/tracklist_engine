@@ -43,6 +43,46 @@ class AuditConfig:
 
 
 @dataclass(frozen=True)
+class LoopConfig:
+    """Phase 2 — DJ loop/replay detection inside a mix span.
+
+    loop-v1 (dead): clone floor (-12 dB) as the discriminator, max_lag 16 s.
+    Real-mix measurement killed both: Roformer separation under different
+    beds degrades a TRUE loop's iterations to -6.7 dB (inside the
+    distinct-take band), and the GT repeats are section-scale (periods
+    15-41 s) including non-contiguous replays. loop-v2: the discriminator
+    is the STRUCTURAL song-lag test (a mix self-repeat at a lag the song's
+    Phase-1 repeat map doesn't contain must be a DJ edit); the residual
+    floor only rejects noise proposals."""
+
+    version: str = "loop-v2"
+    min_lag_s: float = 1.2  # 1 bar @ ~128 bpm after stretch slack
+    max_lag_s: float = 120.0  # replays are section-scale (BB11 GT has a 109 s one); precision comes from verify + the structural test, not the lag cap
+    min_repeat_s: float = 1.2
+    diag_thresh: float = 0.45  # propose generously (verify + structure dispose)
+    smooth_s: float = 0.75
+    silence_ratio: float = 0.35
+    gap_close_s: float = 1.0
+    min_voiced_frac: float = 0.4
+    verify_pad_s: float = 0.5
+    fragment_gap_s: float = 2.5  # merge same-lag proposals across bleed gaps
+    min_residual_db: float = -3.0  # noise rejection only (r >= ~0.65)
+    core_trim_frac: float = 0.15  # trim frayed mel-run edges before verify
+    min_iters: int = 2
+    period_multiple_tol: float = 0.12
+    # structural song-lag exclusion (needs the Phase-1 audit repeat map)
+    song_lag_tol_s: float = 1.0
+    song_lag_tol_frac: float = 0.04
+    # KNOWN LIMITATION (fixture-measured): loops tiled BEFORE a key-locked
+    # master-tempo stretch (live-hardware order) defeat waveform cloneness
+    # (r~0.3) and spectral-magnitude + timing-drift verification cannot
+    # separate them from natural distinct-take repeats (distributions
+    # overlap; vocoder hop quantization injects ~15 ms fake drift). The GT
+    # corpora are Ableton-produced (duplicated warped clips = copies AFTER
+    # the stretch), so waveform verification + the structural test suffice.
+
+
+@dataclass(frozen=True)
 class EvalConfig:
     """Per-second segment accuracy (brief §9) on top of the frozen legacy
     trajectory_acc (tol=2.0 s, step=1.0 s)."""
@@ -53,4 +93,5 @@ class EvalConfig:
 
 
 AUDIT_V3 = AuditConfig()
+LOOP_V2 = LoopConfig()
 EVAL_V1 = EvalConfig()
