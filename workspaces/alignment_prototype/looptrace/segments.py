@@ -161,6 +161,19 @@ def total_support(
     slope: float,
     cfg: SegmentConfig = SEG_V1,
 ) -> float:
-    """Slope-quality score: total votes over all candidate diagonals — used
-    to pick/refine the slope once per span (brief §6.3)."""
-    return float(sum(d.votes for d in hough_diagonals(points, slope, cfg)))
+    """Slope-quality score: PEAKINESS of the intercept histogram (top bins
+    above the background), used to pick the slope once per span.
+
+    Not the candidate-vote sum: hash-collision noise fills bins at every
+    slope, and summing many noise-heavy bins let octave-folded wrong slopes
+    outscore the true one on real mixes (measured: slope 0.53/0.39 picks).
+    The true slope CONCENTRATES matches into few bins; noise stays flat."""
+    if len(points) == 0:
+        return 0.0
+    b = points[:, 1] - slope * points[:, 0]
+    idx = np.floor((b - float(b.min())) / cfg.hough_bin_s).astype(np.int64)
+    counts = np.bincount(idx).astype(np.float64)
+    nz = counts[counts > 0]
+    bg = float(np.median(nz)) if nz.size else 0.0
+    top = np.sort(counts)[-3:]
+    return float(np.maximum(top - bg, 0.0).sum())

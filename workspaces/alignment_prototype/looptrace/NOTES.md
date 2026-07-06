@@ -215,6 +215,56 @@ inviolable hard constraints; real-mix precision doesn't justify hard.
 Collapse/expand machinery stays available for the unambiguous short-lag
 button-loop case.
 
+## Phase 3 — decoder (2026-07-06, in progress)
+
+**Built:** `landmarks.py` (pitch/tempo-tolerant keys: coarse log-f1 +
+pitch-invariant log-ratio + log-dt; raw point cloud; ref cache),
+`segments.py` (inlier-median-refined intercept Hough; cover DP over
+diagonal states + NULL with per-time median floor-subtraction + column
+normalization; no monotonicity / backward penalty), `run.py` (collapse →
+hash → match → slope-by-support → DP → expand). Fixture battery ≥90%
+per-second (±0.25 s) across straight/jump/loop2/loop4/replay ×
+none/repitch/keylock.
+
+**§9 change log (post-real-mix changes, everything rerun):**
+1. `pair_cap` 1024→64 (fixture-tuned): huge-key noise (~300 pts/bin)
+   buried weak keylock diagonals on fixtures.
+2. Slope objective changed from candidate-vote SUM to histogram PEAKINESS
+   (top-3 bins above median background) after the first real-mix run
+   picked octave-folded wrong slopes (0.53/0.39/1.37) on 12 of 38 spans —
+   noise fills bins at every slope, so summing many bins is degenerate;
+   fixtures re-validated ≥90% after the change.
+3. Slope candidates = beat-grid band ∪ canonical near-1 band — the grid's
+   bar ratio is wrong on some refs (slot 073: true-slope peakiness 856 vs
+   the grid band's best 292). Fixtures unaffected.
+
+**Phase 3 gate (real mixes, honest verdict): PARTIAL.** Full table in
+RESULTS.md. Beats the frozen baseline decisively on BB11 (ALL 38 vs 35;
+multiseg 22 vs 12 = +83% relative — a "clear margin" on the target class;
+loop 24 vs 0; linear 60 vs 43) and on BB12 loops (94 vs 81), ties BB12
+multiseg (26 vs 27), loses BB12 linear/oddratio (44 vs 62 / 26 vs 32).
+The ≥70%-of-addressable sanity target is NOT met (addressable ≈ 100%).
+
+**Surprises / diagnosis:**
+- The decoders are complementary: looptrace finds the right CONTENT far
+  more often on BB11 (repeat-aware ALL 60 vs 47; oddratio 93!) but lands
+  on the wrong repeat INSTANCE — the strict↔repeat-aware gap is now the
+  dominant recoverable error, exactly Phase 4's target (discriminative
+  frame weighting + the clone tie-break as vote priors).
+- Slope selection is the other lever: 14/21 BB12 slopes correct; 4
+  weak-evidence spans lose to noise peaks by small margins. Next idea:
+  decode the top-2 slopes fully and pick by DP path score, not histogram
+  peakiness (the DP sees collinearity the histogram can't).
+- Landmark evidence on Roformer-separated vocals is noise-dominated
+  (30–70k points/span, true diagonals ~hundreds of inliers) — the mel/
+  HuBERT matched filter and the landmark cloud fail on DIFFERENT spans,
+  so a per-span router (peakiness margin → looptrace | legacy) would
+  already beat both overall; wire after Phase 4.
+
+**Go/no-go: GO to Phase 4** (the audit predicted this: 51–55% of GT
+seconds are distinct-take repeats and per-frame phonetics can't split
+them; the repeat-aware headroom is +14–50 pp depending on class).
+
 ### Plan deltas vs the brief (repo-specific adjustments)
 
 - `looptrace/` lives under `workspaces/alignment_prototype/`, not top-level (repo

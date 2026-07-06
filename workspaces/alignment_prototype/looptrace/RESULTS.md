@@ -28,3 +28,28 @@ multiseg 31%; BB11 ALL 35%, multiseg 12%.
 
 Phase-1 ceilings (AUDIT.md): clone-unwinnable ≈ 0% of GT seconds ⇒ the
 honest ceiling is ~100%, not the feared 35–47%.
+
+## Phase 3 — looptrace decoder (landmark Hough + cover DP, 2026-07-06)
+
+`looptrace.run`, oracle placement, same population/metric as the baseline.
+Strict / repeat-aware at ±0.25/±1.0/±2.0 s (baseline in parentheses at ±2):
+
+| set | class | strict | repeat-aware | vs baseline strict@2 |
+|---|---|---|---|---|
+| BB12 | ALL | 26/34/**36** | 35/47/50 | 36 (44) − |
+| BB12 | linear | 38/44/44 | 48/54/54 | 44 (62) − |
+| BB12 | multiseg | 16/24/**26** | 23/34/36 | 26 (27) ≈ |
+| BB12 | loop n=1 | 25/84/94 | 25/84/94 | 94 (81) + |
+| BB12 | oddratio | 21/22/26 | 33/46/55 | 26 (32) − |
+| BB11 | ALL | 21/38/**38** | 32/57/**60** | 38 (35) + |
+| BB11 | linear | 39/60/60 | 39/60/65 | 60 (43) + |
+| BB11 | multiseg | 15/21/**22** | 19/36/38 | 22 (12) **+83% rel** |
+| BB11 | loop n=1 | 17/20/24 | 33/37/52 | 24 (0) + |
+| BB11 | oddratio | 8/43/43 | 46/93/**93** | 43 (75) − |
+
+Read: complementary decoders. looptrace wins BB11 across ALL/linear/
+multiseg/loop and finds the right CONTENT far more often (repeat-aware
+BB11 ALL 60 vs baseline 47; oddratio 93) but lands on the wrong repeat
+instance (strict↔repeat gap) — the Phase-4 lever. Baseline HuBERT still
+wins BB12 linear/oddratio. Slope picks correct on 14/21 BB12 spans;
+4 weak-evidence spans still pick wrong slopes by small peakiness margins.

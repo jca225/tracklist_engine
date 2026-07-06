@@ -1,0 +1,749 @@
+{
+ "gt": "labeling/fixtures/bb11_ground_truth.yaml",
+ "decoder": "looptrace",
+ "spans": [
+  {
+   "slot_label": "003w1",
+   "track_id": "10ufdgcf",
+   "set_start_s": 299.494,
+   "set_end_s": 337.143,
+   "claimed_stem": "acappella",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/stems/003w1__Misterwives - Reflections (Acappella)/vocals.flac",
+   "segs": [
+    [
+     0.0,
+     17.424,
+     60.054
+    ]
+   ],
+   "meta": {
+    "n_points": 49010,
+    "slope": 1.1368,
+    "support": 1609.0,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "003w2",
+   "track_id": "2unrq2zp",
+   "set_start_s": 337.738,
+   "set_end_s": 383.333,
+   "claimed_stem": "acappella",
+   "span_class": "loop",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/stems/003w2__Neiked - Sexual/vocals.flac",
+   "segs": [
+    [
+     0.0,
+     44.498,
+     45.04
+    ],
+    [
+     0.464,
+     45.04,
+     61.427
+    ],
+    [
+     14.489,
+     61.427,
+     64.361
+    ],
+    [
+     17.0,
+     84.306,
+     91.9
+    ],
+    [
+     23.5,
+     45.278,
+     53.896
+    ],
+    [
+     30.94,
+     45.04,
+     61.427
+    ],
+    [
+     44.965,
+     53.896,
+     54.626
+    ]
+   ],
+   "meta": {
+    "n_points": 29366,
+    "slope": 1.1684,
+    "support": 1020.0,
+    "loops": [
+     {
+      "source_start_s": 0.464,
+      "source_end_s": 14.489,
+      "period_s": 30.4761,
+      "n_iter": 2
+     }
+    ]
+   }
+  },
+  {
+   "slot_label": "005w1",
+   "track_id": "txwtmt6x",
+   "set_start_s": 507.984,
+   "set_end_s": 546.299,
+   "claimed_stem": "acappella",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/tracks/005w1__Ludacris - Pimpin' All Over The World (Acappella).m4a",
+   "segs": [
+    [
+     0.0,
+     45.098,
+     85.378
+    ]
+   ],
+   "meta": {
+    "n_points": 61335,
+    "slope": 1.06,
+    "support": 527.0,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "011w5",
+   "track_id": "9hp84x",
+   "set_start_s": 1078.17,
+   "set_end_s": 1093.22,
+   "claimed_stem": "acappella",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/tracks/011w5__Daft Punk - Around The World (Acappella) (Acappella).m4a",
+   "segs": [
+    [
+     0.0,
+     8.719,
+     24.2
+    ]
+   ],
+   "meta": {
+    "n_points": 18161,
+    "slope": 1.0321,
+    "support": 977.0,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "011w6",
+   "track_id": "1t3z8kbf",
+   "set_start_s": 1086.55,
+   "set_end_s": 1128.5,
+   "claimed_stem": "acappella",
+   "span_class": "oddratio",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/stems/011w6__My Chemical Romance - Welcome To The Black Parade/vocals.flac",
+   "segs": [
+    [
+     0.0,
+     210.923,
+     215.153
+    ],
+    [
+     4.5,
+     202.184,
+     207.824
+    ],
+    [
+     10.5,
+     9.811,
+     22.971
+    ],
+    [
+     24.5,
+     21.51,
+     37.49
+    ]
+   ],
+   "meta": {
+    "n_points": 48706,
+    "slope": 0.94,
+    "support": 238.0,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "020w1",
+   "track_id": "26465gy5",
+   "set_start_s": 1918.99,
+   "set_end_s": 1933.46,
+   "claimed_stem": "acappella",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/tracks/020w1__X Ambassadors - Unsteady (Acappella).m4a",
+   "segs": [
+    [
+     0.0,
+     75.984,
+     85.64
+    ],
+    [
+     9.0,
+     28.262,
+     33.627
+    ]
+   ],
+   "meta": {
+    "n_points": 18833,
+    "slope": 1.0729,
+    "support": 926.0,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "022w1",
+   "track_id": "2814q10p",
+   "set_start_s": 2083.87,
+   "set_end_s": 2221.03,
+   "claimed_stem": "acappella",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/stems/023__Two Friends - Out Of Love/vocals.flac",
+   "segs": [
+    [
+     0.0,
+     47.563,
+     64.711
+    ],
+    [
+     11.5,
+     14.121,
+     61.836
+    ],
+    [
+     43.5,
+     56.382,
+     63.092
+    ],
+    [
+     48.0,
+     37.112,
+     65.443
+    ],
+    [
+     67.0,
+     199.461,
+     212.881
+    ],
+    [
+     76.0,
+     125.429,
+     139.594
+    ],
+    [
+     93.0,
+     157.679,
+     169.608
+    ],
+    [
+     108.5,
+     187.306,
+     196.999
+    ],
+    [
+     115.0,
+     185.519,
+     198.938
+    ],
+    [
+     124.0,
+     176.415,
+     195.8
+    ]
+   ],
+   "meta": {
+    "n_points": 71454,
+    "slope": 1.4911,
+    "support": 444.0,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "029w1",
+   "track_id": "y0tvbwf",
+   "set_start_s": 2639.16,
+   "set_end_s": 2668.23,
+   "claimed_stem": "acappella",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/tracks/029w1__Kanye West - All Of The Lights (Acappella) (Acappella).m4a",
+   "segs": [
+    [
+     0.0,
+     13.126,
+     41.79
+    ]
+   ],
+   "meta": {
+    "n_points": 50412,
+    "slope": 0.9884,
+    "support": 923.0,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "029w2",
+   "track_id": "2uq9800f",
+   "set_start_s": 2666.94,
+   "set_end_s": 2680.88,
+   "claimed_stem": "acappella",
+   "span_class": "oddratio",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/tracks/029w2__Two Friends - Pacific Coast Highway (Acappella) (Acappella).m4a",
+   "segs": [
+    [
+     0.0,
+     15.367,
+     31.567
+    ]
+   ],
+   "meta": {
+    "n_points": 29261,
+    "slope": 1.2,
+    "support": 440.0,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "029w2",
+   "track_id": "2uq9800f",
+   "set_start_s": 2680.88,
+   "set_end_s": 2698.23,
+   "claimed_stem": "acappella",
+   "span_class": "oddratio",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/tracks/029w2__Two Friends - Pacific Coast Highway (Acappella) (Acappella).m4a",
+   "segs": [
+    [
+     0.0,
+     95.88,
+     115.648
+    ]
+   ],
+   "meta": {
+    "n_points": 33816,
+    "slope": 1.1628,
+    "support": 528.0,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "029w2",
+   "track_id": "2uq9800f",
+   "set_start_s": 2708.3,
+   "set_end_s": 2725.65,
+   "claimed_stem": "acappella",
+   "span_class": "oddratio",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/tracks/029w2__Two Friends - Pacific Coast Highway (Acappella) (Acappella).m4a",
+   "segs": [
+    [
+     0.0,
+     95.901,
+     115.669
+    ]
+   ],
+   "meta": {
+    "n_points": 31271,
+    "slope": 1.1628,
+    "support": 588.0,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "034w1",
+   "track_id": "28tckm0x",
+   "set_start_s": 2990.56,
+   "set_end_s": 3036.64,
+   "claimed_stem": "acappella",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/stems/034w1__Mumford & Sons - The Cave/vocals.flac",
+   "segs": [
+    [
+     7.0,
+     9.722,
+     27.734
+    ],
+    [
+     25.5,
+     41.263,
+     61.222
+    ]
+   ],
+   "meta": {
+    "n_points": 45869,
+    "slope": 0.9736,
+    "support": 2193.0,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "036w2",
+   "track_id": "f9x17rx",
+   "set_start_s": 3197.04,
+   "set_end_s": 3231.9,
+   "claimed_stem": "acappella",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/stems/036w2__Kiiara - Gold/vocals.flac",
+   "segs": [
+    [
+     0.0,
+     56.432,
+     57.055
+    ],
+    [
+     0.65,
+     57.055,
+     64.973
+    ],
+    [
+     8.916,
+     64.973,
+     66.041
+    ],
+    [
+     10.031,
+     66.041,
+     67.109
+    ],
+    [
+     11.146,
+     67.109,
+     79.375
+    ],
+    [
+     23.952,
+     57.055,
+     64.973
+    ],
+    [
+     32.218,
+     64.973,
+     66.041
+    ],
+    [
+     33.333,
+     66.041,
+     67.109
+    ],
+    [
+     34.448,
+     79.375,
+     79.77
+    ]
+   ],
+   "meta": {
+    "n_points": 36919,
+    "slope": 0.9724,
+    "support": 925.5,
+    "loops": [
+     {
+      "source_start_s": 0.65,
+      "source_end_s": 11.146,
+      "period_s": 23.3021,
+      "n_iter": 2
+     },
+     {
+      "source_start_s": 8.916,
+      "source_end_s": 10.031,
+      "period_s": 20.3952,
+      "n_iter": 2
+     }
+    ]
+   }
+  },
+  {
+   "slot_label": "038w1",
+   "track_id": "k38prdx",
+   "set_start_s": 3323.89,
+   "set_end_s": 3354.6,
+   "claimed_stem": "acappella",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/tracks/038w1__Kygo & Selena Gomez - It Ain't Me (Acappella) (Acappella).m4a",
+   "segs": [
+    [
+     4.0,
+     91.935,
+     95.711
+    ],
+    [
+     7.5,
+     2.179,
+     9.731
+    ],
+    [
+     14.5,
+     30.171,
+     38.263
+    ],
+    [
+     22.0,
+     39.753,
+     48.923
+    ]
+   ],
+   "meta": {
+    "n_points": 42201,
+    "slope": 1.0789,
+    "support": 301.5,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "039w2",
+   "track_id": "tlp2594168",
+   "set_start_s": 3430.0,
+   "set_end_s": 3561.39,
+   "claimed_stem": "acappella",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/stems/039w2__Rent - Seasons Of Love/vocals.flac",
+   "segs": [
+    [
+     0.0,
+     20.898,
+     39.398
+    ],
+    [
+     18.5,
+     33.918,
+     39.474
+    ],
+    [
+     24.056,
+     39.474,
+     42.918
+    ],
+    [
+     27.5,
+     77.818,
+     82.547
+    ],
+    [
+     32.229,
+     82.547,
+     88.818
+    ],
+    [
+     38.5,
+     77.904,
+     83.904
+    ],
+    [
+     44.5,
+     92.844,
+     97.344
+    ],
+    [
+     49.0,
+     73.404,
+     80.404
+    ],
+    [
+     56.0,
+     64.406,
+     71.906
+    ],
+    [
+     63.5,
+     78.918,
+     82.918
+    ],
+    [
+     67.5,
+     130.844,
+     136.844
+    ],
+    [
+     73.5,
+     129.901,
+     133.401
+    ],
+    [
+     77.0,
+     104.864,
+     117.324
+    ],
+    [
+     89.46,
+     39.474,
+     42.918
+    ],
+    [
+     92.904,
+     77.818,
+     82.547
+    ],
+    [
+     97.633,
+     117.324,
+     119.364
+    ],
+    [
+     99.673,
+     126.4,
+     133.4
+    ],
+    [
+     106.673,
+     124.808,
+     131.808
+    ],
+    [
+     113.673,
+     129.904,
+     133.404
+    ],
+    [
+     117.173,
+     172.344,
+     176.344
+    ],
+    [
+     121.173,
+     145.833,
+     150.333
+    ],
+    [
+     125.673,
+     170.883,
+     176.383
+    ]
+   ],
+   "meta": {
+    "n_points": 70539,
+    "slope": 1.0,
+    "support": 554.0,
+    "loops": [
+     {
+      "source_start_s": 24.056,
+      "source_end_s": 32.229,
+      "period_s": 65.4041,
+      "n_iter": 2
+     }
+    ]
+   }
+  },
+  {
+   "slot_label": "039w3",
+   "track_id": "1lnh2x95",
+   "set_start_s": 3453.12,
+   "set_end_s": 3538.71,
+   "claimed_stem": "acappella",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/tracks/039w3__Flume - Say It (Acappella) (Acappella).m4a",
+   "segs": [
+    [
+     0.0,
+     29.657,
+     31.626
+    ],
+    [
+     0.929,
+     31.626,
+     48.953
+    ],
+    [
+     9.102,
+     48.953,
+     51.917
+    ],
+    [
+     10.5,
+     62.895,
+     72.435
+    ],
+    [
+     15.0,
+     66.968,
+     81.808
+    ],
+    [
+     22.0,
+     37.35,
+     45.83
+    ],
+    [
+     26.0,
+     33.331,
+     43.931
+    ],
+    [
+     31.0,
+     109.828,
+     123.608
+    ],
+    [
+     37.5,
+     74.602,
+     91.562
+    ],
+    [
+     45.5,
+     135.114,
+     143.594
+    ],
+    [
+     49.5,
+     165.026,
+     181.986
+    ],
+    [
+     57.5,
+     157.068,
+     172.968
+    ],
+    [
+     65.0,
+     132.902,
+     135.728
+    ],
+    [
+     66.333,
+     31.626,
+     48.953
+    ],
+    [
+     74.506,
+     135.728,
+     151.982
+    ],
+    [
+     82.173,
+     147.59,
+     153.95
+    ]
+   ],
+   "meta": {
+    "n_points": 66454,
+    "slope": 2.12,
+    "support": 256.0,
+    "loops": [
+     {
+      "source_start_s": 0.929,
+      "source_end_s": 9.102,
+      "period_s": 65.4041,
+      "n_iter": 2
+     }
+    ]
+   }
+  },
+  {
+   "slot_label": "039w7",
+   "track_id": "14ml2byx",
+   "set_start_s": 3538.0,
+   "set_end_s": 3562.83,
+   "claimed_stem": "acappella",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/stems/039w7__Louis The Child & Icona Pop - Weekend/vocals.flac",
+   "segs": [
+    [
+     0.0,
+     144.177,
+     170.147
+    ]
+   ],
+   "meta": {
+    "n_points": 37644,
+    "slope": 1.06,
+    "support": 557.0,
+    "loops": []
+   }
+  }
+ ]
+}

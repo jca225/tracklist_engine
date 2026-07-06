@@ -93,11 +93,18 @@ def decode_span(
 
 
 def _slope_band(row: dict, mix_series, ref_series, t) -> list[float]:
-    """Beat-grid slope band (same construction as the legacy decoder's
-    _stretch_band, octave-folded), crossed with the fine grid."""
+    """Slope candidates: the beat-grid band (legacy _stretch_band,
+    octave-folded) UNIONED with a canonical near-1 band. The grid's bar
+    ratio is wrong on some refs (measured: true-slope peakiness 856 vs the
+    grid band's best 292 on BB12 slot 073) — the union keeps the true slope
+    in the candidate set without trusting either source alone."""
     from workspaces.alignment_prototype.path_decode import _stretch_band
 
-    return sorted(_stretch_band(t, mix_series, ref_series))
+    band = set(_stretch_band(t, mix_series, ref_series))
+    for f in (0.94, 0.97, 1.0, 1.03, 1.06):
+        for o in (0.5, 1.0, 2.0):
+            band.add(round(f * o, 4))
+    return sorted(band)
 
 
 def main(argv: list[str] | None = None) -> int:

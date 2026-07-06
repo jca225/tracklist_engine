@@ -38,3 +38,25 @@ dumped 21 spans -> /Users/johnnycabrahams/Desktop/tracklist_engine/workspaces/al
   003w1 linear   n_pts=49010 slope=1.114 segs=1 loops=0 traj<2s=100%
   003w2 loop     n_pts=29366 slope=1.168 segs=7 loops=1 traj<2s= 24%
   005w1 linear   n_pts=61335 slope=0.708 segs=6 loops=0 traj<2s= 92%
+  011w5 linear   n_pts=18161 slope=1.053 segs=1 loops=0 traj<2s=  0%
+  011w6 oddratio n_pts=48706 slope=0.670 segs=5 loops=0 traj<2s= 21%
+  020w1 linear   n_pts=18833 slope=1.094 segs=2 loops=0 traj<2s=  0%
+  022w1 multiseg n_pts=71454 slope=0.792 segs=16 loops=0 traj<2s=  4%
+  029w1 linear   n_pts=50412 slope=0.988 segs=1 loops=0 traj<2s=100%
+  029w2 oddratio n_pts=29261 slope=1.200 segs=1 loops=0 traj<2s=100%
+  029w2 oddratio n_pts=33816 slope=1.163 segs=1 loops=0 traj<2s=  0%
+  029w2 oddratio n_pts=31271 slope=1.163 segs=1 loops=0 traj<2s=  0%
+  034w1 multiseg n_pts=45869 slope=0.974 segs=2 loops=0 traj<2s=100%
+  036w2 multiseg n_pts=36919 slope=0.972 segs=9 loops=2 traj<2s= 31%
+  038w1 multiseg n_pts=42201 slope=1.079 segs=4 loops=0 traj<2s=  0%
+  039w2 multiseg n_pts=70539 slope=0.528 segs=20 loops=1 traj<2s=  0%
+  039w3 multiseg n_pts=66454 slope=0.438 segs=14 loops=1 traj<2s=  0%
+  039w7 multiseg n_pts=37644 slope=1.052 segs=1 loops=0 traj<2s=  0%
+dumped 17 spans -> /Users/johnnycabrahams/Desktop/tracklist_engine/workspaces/alignment_prototype/looptrace/out/lt_pred_2nvzlh2k.json
+
+=== looptrace.run — 2nvzlh2k trajectory accuracy (frozen metric) ===
+  ALL       n= 17  traj-acc(<2s) mean  34%
+  linear    n=  5  traj-acc(<2s) mean  58%
+  multiseg  n=  7  traj-acc(<2s) mean  19%
+  loop      n=  1  traj-acc(<2s) mean  24%
+  oddratio  n=  4  traj-acc(<2s) mean  30%
