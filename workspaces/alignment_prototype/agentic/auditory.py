@@ -319,6 +319,17 @@ def comodulation_residual(band_envs: np.ndarray) -> np.ndarray:
     "second source entered here" placement candidate, complementing the
     boundary-surprise prior. ``band_envs`` is (n_bands, frames), nonnegative
     amplitude envelopes.
+
+    VALIDATION (2026-07-06, BB11+BB12): NULL on the full mix. Run blind on
+    16-band mel subbands of the whole mix, the curve's median percentile at true
+    overlay-entry times is 46–49% (≈50 = no signal) — it does NOT localize where
+    overlays enter. Likely cause: DJ mastering + sidechain make all bands pump
+    together (everything is comodulated) and tracks overlap, so there is rarely
+    the clean bed+one-overlay structure the mechanism needs. The synthetic test
+    passes (mechanism is correct); real full-mix audio lacks the structure.
+    Stays validated=False, unwired. Untried inputs that MIGHT recover it: the
+    cocktail_party residual (mix − committed bed) rather than the raw mix, or
+    separated-stem subbands. Do not promote on the full-mix formulation.
     """
     x = np.asarray(band_envs, dtype=float)
     if x.ndim != 2 or x.shape[0] < 2 or x.shape[1] < 2:
