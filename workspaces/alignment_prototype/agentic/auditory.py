@@ -320,16 +320,19 @@ def comodulation_residual(band_envs: np.ndarray) -> np.ndarray:
     boundary-surprise prior. ``band_envs`` is (n_bands, frames), nonnegative
     amplitude envelopes.
 
-    VALIDATION (2026-07-06, BB11+BB12): NULL on the full mix. Run blind on
-    16-band mel subbands of the whole mix, the curve's median percentile at true
-    overlay-entry times is 46–49% (≈50 = no signal) — it does NOT localize where
-    overlays enter. Likely cause: DJ mastering + sidechain make all bands pump
-    together (everything is comodulated) and tracks overlap, so there is rarely
-    the clean bed+one-overlay structure the mechanism needs. The synthetic test
-    passes (mechanism is correct); real full-mix audio lacks the structure.
-    Stays validated=False, unwired. Untried inputs that MIGHT recover it: the
-    cocktail_party residual (mix − committed bed) rather than the raw mix, or
-    separated-stem subbands. Do not promote on the full-mix formulation.
+    VALIDATION (2026-07-06, BB11+BB12): NULL on BOTH the full mix AND the
+    bed-removed residual. Curve percentile at true overlay-entry times is 39–49%
+    (≈50 = no signal): (1) blind on 16-band mel subbands of the whole mix, and
+    (2) on the mix_vocals stem (ideal-separation limit of the cocktail_party
+    subtraction), where a plain vocal-onset envelope is ALSO null (±5s window-max
+    lift ~0 vs random). Root cause is the DOMAIN, not the probe: BB mixes are
+    wall-to-wall vocal-layered, so "a new overlay entered" is never a
+    silence→sound pop — it's one source joining an already-dense residual. The
+    CMR overlay-pop premise (quiet bed + distinct overlay entrance) does not hold
+    for mashup mixes. Synthetic test passes (mechanism correct); the audio lacks
+    the structure. DEAD END for overlay localization — stays validated=False,
+    unwired. Acappella placement lever remains HuBERT/lyrics identity + fibers,
+    not energy/novelty overlay detection.
     """
     x = np.asarray(band_envs, dtype=float)
     if x.ndim != 2 or x.shape[0] < 2 or x.shape[1] < 2:
