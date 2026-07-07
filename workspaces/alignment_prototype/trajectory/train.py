@@ -1,7 +1,18 @@
-"""Train the trajectory decoder on one GT set, eval held-out on another.
+"""Train the trajectory decoder; two split protocols.
 
+    # set-level holdout (honest cross-set generalization):
     venvs/audio/bin/python -m workspaces.alignment_prototype.trajectory.train \
-        --train-set 1fsnxchk --eval-set 2nvzlh2k [--epochs 40] [--recon-weight 0.5]
+        --split set --train-set 1fsnxchk --eval-set 2nvzlh2k
+
+    # slot-level pooled split (each mashup is an example; more train signal):
+    venvs/audio/bin/python -m workspaces.alignment_prototype.trajectory.train \
+        --split slot --val-frac 0.2 --seed 0
+
+`--split slot` pools every GT set and holds out by BASE slot (002 groups with
+002w1 ...): layered spans of one slot overlap in time, so splitting them
+apart would leak the answer. Set-level holdout remains the honest
+generalization number; the slot split trades a little leakage (same mix,
+same DJ) for ~4x the training examples.
 
 Eval decodes greedily (per-frame argmax -> collapse to segments) and scores
 with the pipeline's own `path_decode.trajectory_acc` (strict, no fibers —
@@ -41,6 +52,51 @@ from workspaces.alignment_prototype.trajectory.targets import (  # noqa: E402
 )
 
 CKPT_DIR = Path(__file__).resolve().parents[1] / ".cache" / "trajectory"
+
+
+class SpanSubset:
+    """Index view over a TrajectorySpanDataset (keeps .specs/.bin_s contract)."""
+
+    def __init__(self, base: TrajectorySpanDataset, indices: list[int]) -> None:
+        self.base = base
+        self.indices = list(indices)
+        self.bin_s = base.bin_s
+        self.specs = [base.specs[i] for i in self.indices]
+
+    def __len__(self) -> int:
+        return len(self.indices)
+
+    def __getitem__(self, k: int) -> dict:
+        return self.base[self.indices[k]]
+
+
+def base_slot(slot_label: str, label: str) -> str:
+    """'154w1' -> '154'; empty slot labels fall back to the track label."""
+    s = slot_label.partition("w")[0]
+    return s if s else label
+
+
+def slot_split(
+    ds: TrajectorySpanDataset, val_frac: float, seed: int
+) -> tuple[SpanSubset, SpanSubset]:
+    groups: dict[tuple[str, str], list[int]] = defaultdict(list)
+    for i, spec in enumerate(ds.specs):
+        key = (
+            spec.set_id,
+            base_slot(
+                str(spec.row.get("slot_label") or ""), str(spec.row.get("track"))
+            ),
+        )
+        groups[key].append(i)
+    keys = sorted(groups)
+    rng = np.random.default_rng(seed)
+    rng.shuffle(keys)
+    n_val = int(round(val_frac * len(ds)))
+    val_idx: list[int] = []
+    train_idx: list[int] = []
+    for k in keys:
+        (val_idx if len(val_idx) < n_val else train_idx).extend(groups[k])
+    return SpanSubset(ds, sorted(train_idx)), SpanSubset(ds, sorted(val_idx))
 
 
 def pick_device(name: str) -> torch.device:
@@ -116,8 +172,11 @@ def evaluate(
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--split", choices=("set", "slot"), default="set")
     ap.add_argument("--train-set", default="1fsnxchk")
     ap.add_argument("--eval-set", default="2nvzlh2k")
+    ap.add_argument("--val-frac", type=float, default=0.2)
+    ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--epochs", type=int, default=40)
     ap.add_argument("--batch", type=int, default=4)
     ap.add_argument("--lr", type=float, default=3e-3)
@@ -131,20 +190,50 @@ def main(argv: list[str] | None = None) -> int:
     device = pick_device(args.device)
     print(f"device: {device}")
 
-    train_ds = TrajectorySpanDataset(
-        [(args.train_set, GT_FIXTURES[args.train_set])], bin_s=args.bin_s
-    )
-    eval_ds = TrajectorySpanDataset(
-        [(args.eval_set, GT_FIXTURES[args.eval_set])], bin_s=args.bin_s
-    )
-    print(f"train {args.train_set}: {len(train_ds)} spans; skipped:")
-    print(train_ds.report_skipped())
-    print(f"eval  {args.eval_set}: {len(eval_ds)} spans; skipped:")
-    print(eval_ds.report_skipped())
+    if args.split == "slot":
+        pooled = TrajectorySpanDataset(
+            [(sid, GT_FIXTURES[sid]) for sid in sorted(GT_FIXTURES)], bin_s=args.bin_s
+        )
+        print(f"pooled: {len(pooled)} spans; skipped:")
+        print(pooled.report_skipped())
+        train_ds, eval_ds = slot_split(pooled, args.val_frac, args.seed)
+        print(
+            f"slot split (seed {args.seed}): train {len(train_ds)} spans, "
+            f"eval {len(eval_ds)} spans"
+        )
+        eval_tag = f"heldout-slots seed{args.seed}"
+        ckpt_tag = f"slotsplit_seed{args.seed}"
+    else:
+        train_ds = TrajectorySpanDataset(
+            [(args.train_set, GT_FIXTURES[args.train_set])], bin_s=args.bin_s
+        )
+        eval_ds = TrajectorySpanDataset(
+            [(args.eval_set, GT_FIXTURES[args.eval_set])], bin_s=args.bin_s
+        )
+        print(f"train {args.train_set}: {len(train_ds)} spans; skipped:")
+        print(train_ds.report_skipped())
+        print(f"eval  {args.eval_set}: {len(eval_ds)} spans; skipped:")
+        print(eval_ds.report_skipped())
+        eval_tag = args.eval_set
+        ckpt_tag = args.train_set
 
     if args.smoke:
-        train_ds.specs = train_ds.specs[:8]
-        eval_ds.specs = eval_ds.specs[:8]
+        train_ds = SpanSubset(
+            train_ds.base if isinstance(train_ds, SpanSubset) else train_ds,
+            (
+                train_ds.indices
+                if isinstance(train_ds, SpanSubset)
+                else list(range(len(train_ds)))
+            )[:8],
+        )
+        eval_ds = SpanSubset(
+            eval_ds.base if isinstance(eval_ds, SpanSubset) else eval_ds,
+            (
+                eval_ds.indices
+                if isinstance(eval_ds, SpanSubset)
+                else list(range(len(eval_ds)))
+            )[:8],
+        )
         args.epochs = 2
 
     loader = DataLoader(
@@ -161,7 +250,7 @@ def main(argv: list[str] | None = None) -> int:
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
 
     print("\n== no-model control (raw match-sim argmax) ==")
-    evaluate(None, eval_ds, device, f"control {args.eval_set}")
+    evaluate(None, eval_ds, device, f"control {eval_tag}")
 
     for epoch in range(1, args.epochs + 1):
         model.train()
@@ -199,11 +288,11 @@ def main(argv: list[str] | None = None) -> int:
             f"  recon {rc_sum / n_batches:.4f}"
         )
         if epoch % args.eval_every == 0 or epoch == args.epochs:
-            evaluate(model, eval_ds, device, f"eval {args.eval_set} ep{epoch}")
-            evaluate(model, train_ds, device, f"train {args.train_set} ep{epoch}")
+            evaluate(model, eval_ds, device, f"eval {eval_tag} ep{epoch}")
+            evaluate(model, train_ds, device, f"train ep{epoch}")
 
     CKPT_DIR.mkdir(parents=True, exist_ok=True)
-    ckpt = CKPT_DIR / f"decoder_{args.train_set}.pt"
+    ckpt = CKPT_DIR / f"decoder_{ckpt_tag}.pt"
     torch.save({"model": model.state_dict(), "args": vars(args)}, ckpt)
     print(f"\ncheckpoint: {ckpt}")
     return 0
