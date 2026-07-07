@@ -27,7 +27,14 @@ _REPO = Path(__file__).resolve().parents[2]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from workspaces.alignment_prototype.path_decode import FPS, _span_class, trajectory_acc
+from workspaces.alignment_prototype.path_decode import (
+    FPS,
+    _gt_pieces,
+    _pieces,
+    _ref_at,
+    _span_class,
+    trajectory_acc,
+)
 from workspaces.alignment_prototype.refine_ref_offsets import (
     _STEM_FILE,
     find_aligning_dir,
@@ -40,6 +47,37 @@ def norm_slot(s: str) -> str:
     """'006w2' -> '6w2', '013' -> '13' — GT zero-pads, set_track_slots doesn't."""
     m = re.match(r"^0*(\d+)(w\d+)?$", str(s).strip())
     return f"{m.group(1)}{m.group(2) or ''}" if m else str(s).strip()
+
+
+
+def _decompose_span(pred_segs, row) -> tuple[int, int, int]:
+    """(n_seconds, n_outside_decode, n_inside_correct) — mirrors
+    trajectory_acc's sampling exactly (same helpers, same inputs) and adds
+    the coverage split: a sampled GT second is OUTSIDE when it falls before
+    the first decoded segment or after the last segment's own extent (the
+    piecewise interpolation extrapolates there; those seconds measure
+    window/extent misses, not decode quality)."""
+    s0, s1 = float(row["set_start_s"]), float(row["set_end_s"])
+    if s1 <= s0 or not pred_segs:
+        n = max(0, int(np.ceil(s1 - s0)))
+        return n, n, 0
+    gt = _gt_pieces(row)
+    slope = float(row.get("tempo_ratio") or 1.0)
+    pred = _pieces([(s0 + ms, rs, re) for (ms, rs, re) in pred_segs], s0, s1, slope)
+    first = pred[0][0]
+    lm0, lm1, lrs, lsl = pred[-1]
+    last_end = lm0 + max(lm1 - lm0, 0.0)
+    n_out = n_ok = n_tot = 0
+    for t in np.arange(s0, s1, 1.0):
+        n_tot += 1
+        pr = _ref_at(pred, float(t))
+        gr = _ref_at(gt, float(t))
+        if t < first or t > last_end:
+            n_out += 1
+        elif abs(pr - gr) < 2.0:
+            n_ok += 1
+    return n_tot, n_out, n_ok
+
 
 
 def _pred_segs_from_span(
@@ -106,6 +144,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--hubert-layer", type=int, default=9)
     p.add_argument(
+        "--decompose",
+        action="store_true",
+        help="per-second gap attribution INSIDE the scoring loop: "
+        "outside-decode-window vs in-window accuracy (+GT-side match audit)",
+    )
+    p.add_argument(
         "--timeline",
         type=Path,
         default=None,
@@ -169,6 +213,7 @@ def main(argv: list[str] | None = None) -> int:
         return fiber_cache[ref_audio]
 
     id_ok, id_bad, no_gt = 0, [], 0
+    decomp: list[tuple] = []
     place_errs, ref_rows, traj = [], [], []
     loops_hit = 0
     for s in timeline["spans"]:
@@ -218,6 +263,11 @@ def main(argv: list[str] | None = None) -> int:
             _pred_segs_from_span(s, anchor_s=float(g["set_start_s"])), g, fiber=fib
         )
         traj.append((_span_class(g), s.get("claimed_stem") or "regular", strict, facc))
+        if args.decompose:
+            nt, no, nk = _decompose_span(
+                _pred_segs_from_span(s, anchor_s=float(g["set_start_s"])), g
+            )
+            decomp.append((s.get("claimed_stem") or "regular", nt, no, nk, strict))
         if g.get("is_loop") or g.get("ref_segments"):
             loops_hit += 1
             continue
@@ -294,6 +344,32 @@ def main(argv: list[str] | None = None) -> int:
         nonlin = [r for r in traj if r[0] in ("multiseg", "loop")]
         if nonlin:
             print(f"  HEADLINE multiseg+loop {_ta(nonlin)}")
+    if args.decompose and decomp:
+        print("\ngap decomposition (per sampled GT second):")
+        for stem in ("acappella", "regular"):
+            rows_ = [d for d in decomp if d[0] == stem]
+            if not rows_:
+                continue
+            nt = sum(d[1] for d in rows_)
+            no = sum(d[2] for d in rows_)
+            nk = sum(d[3] for d in rows_)
+            n_in = nt - no
+            # faithfulness cross-check: per-span mean of in+out accuracy vs metric
+            per_span = float(np.mean([(d[3] / d[1]) if d[1] else 0.0 for d in rows_]))
+            metric = float(np.mean([d[4] for d in rows_]))
+            print(
+                f"  {stem:10} seconds={nt}  outside-decode {100 * no / nt:.0f}%  "
+                f"in-window acc {100 * nk / max(1, n_in):.0f}%  "
+                f"(xcheck strict-per-span {100 * per_span:.0f}% vs metric {100 * metric:.0f}%)"
+            )
+        # GT-side: acappella rows never matched by any timeline span
+        matched_tids = {s2["recording_id"] for s2 in timeline["spans"]}
+        gt_aca = [r for r in gt_rows if r.get("claimed_stem") == "acappella" and r.get("track_id")]
+        unmatched = [r for r in gt_aca if str(r["track_id"]) not in matched_tids]
+        print(
+            f"  GT acappella rows: {len(gt_aca)}; recording matched by SOME timeline span: "
+            f"{len(gt_aca) - len(unmatched)}; NEVER matched (invisible to metric): {len(unmatched)}"
+        )
 
     print("\nworst placement:")
     for err, slot, pred, gt_v, name in sorted(place_errs, reverse=True)[:8]:

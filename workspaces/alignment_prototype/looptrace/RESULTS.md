@@ -199,3 +199,31 @@ legacy**; the oracle(43-44)↔e2e gap is roughly HALVED by the fix. The
 remaining gap decomposes into decode-window coverage vs in-coverage
 accuracy — must be instrumented inside the scorer loop (ad-hoc joins
 measured unfaithful twice).
+
+## In-scorer gap decomposition (2026-07-07, --decompose)
+
+Instrumented inside the scoring loop (same pairing/segments/helpers;
+cross-check matches the metric within 1-2 pp). Looptrace timelines:
+
+| | BB12 acappella | BB11 acappella |
+|---|---|---|
+| GT seconds | 3046 | 2651 |
+| outside decoded extent | 25% | 11% |
+| accuracy INSIDE the decode | 8% | 14% |
+| accuracy in extrapolated zone | ~46% | ~30% |
+| GT recordings never matched | 9/100 | 0/92 |
+
+Two findings:
+1. **The remaining oracle↔e2e gap is IN-WINDOW decode error, not
+   coverage**: the extrapolated zones (piecewise extension of the first/
+   last diagonal) score BETTER than the decoded interiors — the straight
+   continuation is often right while the segment-switching middle is
+   where losses live. Window/extent fixes won't recover much.
+2. BB12 has 9 acappella GT recordings never matched by ANY timeline span
+   (identity/inventory losses, invisible to the trajectory average);
+   BB11 has none.
+
+Consequence: with the scoreboard fixed and coverage exonerated, the
+residual is decoder quality under real windows/populations — the lane
+already gated on the 3rd GT set (learned arbiter, instance evidence).
+One cheap follow-up: the 9 never-matched BB12 recordings.
