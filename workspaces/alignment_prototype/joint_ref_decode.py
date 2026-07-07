@@ -104,6 +104,12 @@ def main(argv: list[str] | None = None) -> int:
         help="looptrace Phase-1 audit JSON (enables the loop structural test)",
     )
     p.add_argument(
+        "--timeline",
+        type=Path,
+        default=None,
+        help="input timeline JSON (default: out/<set-id>_predicted_timeline.json)",
+    )
+    p.add_argument(
         "--out",
         type=Path,
         default=None,
@@ -111,7 +117,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
 
-    timeline_path = OUT_DIR / f"{args.set_id}_predicted_timeline.json"
+    timeline_path = args.timeline or (OUT_DIR / f"{args.set_id}_predicted_timeline.json")
     timeline = json.loads(timeline_path.read_text())
     spans = timeline["spans"]
 

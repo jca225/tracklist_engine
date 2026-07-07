@@ -395,6 +395,28 @@ instance-level evidence (Phase-5 waveform residual on audit-covered
 frames, properly calibrated) or the learned arbiter, both gated on the
 third GT set. The lane is closed until Murph lands.
 
+## Lyrics-placement wiring (2026-07-06, seventh pass): NO GAIN on BB12 — and it corrected the narrative
+
+Built `lyrics_placement_refine.py` (timeline-consuming variant of the
+lyrics channel: identity from the timeline, acoustic set_start as the
+position prior, leash 120 s). BB12: 35/41 acappella spans placed, but e2e
+trajectory 10% vs 12–13% acoustic — no gain, slight harm. Root cause of
+the null: **the acoustic placement was already good** — matched by
+recording, BB12 acappella set_start is 4.2 s median / 73% <15 s; lyrics
+re-placement measures 5.0 s median. The lyrics channel's 18x win was over
+the OLD (pre-fp/stem-placement) pipeline.
+
+**This falsifies the session's "placement is the binding e2e constraint"
+narrative as stated.** The oracle(43%)↔e2e(~10%) gap survives on the same
+clean population (9% vs 43%), and an ad-hoc coverage probe suggests
+span-window/GT correspondence issues (many zero-overlap matches, raw-yaml
+set_end_s semantics, w-layer matching) — but the ad-hoc joins themselves
+are unreliable there. OPEN: decompose the oracle↔e2e gap using
+score_timeline_vs_gt's own matching internals (identity match, span
+extents, per-span pairing) before believing any single-cause story.
+BB11 lyrics test pending its stem transcription (warm-up started,
+~3 h MPS; cache at .cache/lyrics).
+
 ### Plan deltas vs the brief (repo-specific adjustments)
 
 - `looptrace/` lives under `workspaces/alignment_prototype/`, not top-level (repo
