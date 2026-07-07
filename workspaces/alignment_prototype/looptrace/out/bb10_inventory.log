@@ -1,0 +1,291 @@
+venvs/audio/bin/python labeling/pull_set_for_alignment.py w1mgcjt --check
+Inventory check: w1mgcjt
+  satisfied: 69  fallback(warn): 0  blocking: 76
+  001    [solo       ] missing           no track_audio rows for recording
+           -> replace_version: missing reference audio
+  001w1  [payload    ] wrong_stem       taid=21151 (regular/regular)  payload slot using full regular track; prefer acapella or vocal stem
+           -> acquire_acappella: payload slot using full regular track; prefer acapella or vocal stem
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  001w2  [payload    ] wrong_stem       taid=21152 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  001w3  [payload    ] wrong_stem       taid=21014 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  001w4  [payload    ] wrong_stem       taid=21153 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  001w5  [constituent] satisfied        taid=21151 (regular/regular)  
+  002    [solo       ] missing           no track_audio rows for recording
+           -> acquire_instrumental: missing instrumental asset
+  002w1  [payload    ] wrong_stem       taid=21154 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  002w2  [constituent] missing           no track_audio rows for recording
+           -> replace_version: missing reference audio
+  002w3  [constituent] satisfied        taid=7971 (regular/regular)  
+  002w4  [payload    ] wrong_stem       taid=9355 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  002w5  [constituent] satisfied        taid=21875 (regular/regular)  
+  002w6  [constituent] missing           no track_audio rows for recording
+           -> replace_version: missing reference audio
+  002w7  [constituent] satisfied        taid=23066 (regular/regular)  
+  002w8  [payload    ] wrong_stem       taid=21155 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  003    [solo       ] satisfied        taid=842 (regular/regular)  
+  003w1  [payload    ] wrong_stem       taid=21156 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  003w2  [constituent] missing           no track_audio rows for recording
+           -> replace_version: missing reference audio
+  004    [solo       ] missing           no track_audio rows for recording
+           -> replace_version: missing reference audio
+  004w1  [payload    ] wrong_stem       taid=21157 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  004w2  [payload    ] wrong_stem       taid=21158 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  005    [solo       ] satisfied        taid=21655 (regular/regular)  
+  005w1  [payload    ] wrong_stem       taid=21159 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  005w2  [constituent] satisfied        taid=21656 (regular/regular)  
+  005w3  [constituent] satisfied        taid=21839 (regular/regular)  
+  005w4  [constituent] satisfied        taid=21840 (regular/regular)  
+  006    [solo       ] satisfied        taid=2139 (regular/regular)  
+  006w1  [payload    ] wrong_stem       taid=21160 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  006w2  [constituent] satisfied        taid=21841 (regular/regular)  
+  006w3  [constituent] satisfied        taid=2208 (regular/regular)  
+  007    [solo       ] satisfied        taid=21842 (regular/regular)  
+  007w1  [payload    ] wrong_stem       taid=21843 (regular/regular)  payload slot using full regular track; prefer acapella or vocal stem
+           -> acquire_acappella: payload slot using full regular track; prefer acapella or vocal stem
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  007w2  [payload    ] wrong_stem       taid=2176 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  007w3  [constituent] satisfied        taid=21844 (regular/regular)  
+  008    [solo       ] satisfied        taid=21845 (regular/regular)  
+  008w1  [payload    ] wrong_stem       taid=21161 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  008w2  [payload    ] wrong_stem       taid=21162 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  008w3  [payload    ] wrong_stem       taid=21163 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  009    [solo       ] satisfied        taid=21664 (regular/regular)  
+  009w1  [payload    ] wrong_stem       taid=20917 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  010    [solo       ] satisfied        taid=21164 (regular/regular)  
+  010w1  [payload    ] wrong_stem       taid=21846 (regular/regular)  payload slot using full regular track; prefer acapella or vocal stem
+           -> acquire_acappella: payload slot using full regular track; prefer acapella or vocal stem
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  010w2  [constituent] satisfied        taid=21164 (regular/regular)  
+  011    [solo       ] satisfied        taid=21847 (regular/regular)  
+  011w1  [payload    ] wrong_stem       taid=21848 (regular/regular)  payload slot using full regular track; prefer acapella or vocal stem
+           -> acquire_acappella: payload slot using full regular track; prefer acapella or vocal stem
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  011w2  [constituent] satisfied        taid=2134 (regular/regular)  
+  011w3  [constituent] satisfied        taid=21849 (regular/regular)  
+  012    [solo       ] satisfied        taid=21165 (regular/regular)  
+  012w1  [payload    ] wrong_stem       taid=21166 (regular/regular)  payload slot using full regular track; prefer acapella or vocal stem
+           -> acquire_acappella: payload slot using full regular track; prefer acapella or vocal stem
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  013    [solo       ] satisfied        taid=21167 (regular/regular)  
+  013w1  [payload    ] wrong_stem       taid=21168 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  013w2  [payload    ] wrong_stem       taid=21169 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  013w3  [constituent] satisfied        taid=21850 (regular/regular)  
+  013w4  [payload    ] wrong_stem       taid=21170 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  014    [solo       ] satisfied        taid=23058 (regular/regular)  
+  014w1  [payload    ] wrong_stem       taid=21851 (regular/regular)  payload slot using full regular track; prefer acapella or vocal stem
+           -> acquire_acappella: payload slot using full regular track; prefer acapella or vocal stem
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  014w2  [payload    ] satisfied        taid=23197 (acappella/regular)  
+  014w3  [constituent] missing           no track_audio rows for recording
+           -> replace_version: missing reference audio
+  015    [solo       ] satisfied        taid=21852 (regular/regular)  
+  015w1  [payload    ] wrong_stem       taid=21173 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  015w2  [constituent] satisfied        taid=21853 (regular/regular)  
+  016    [solo       ] satisfied        taid=21854 (regular/regular)  
+  016w1  [payload    ] wrong_stem       taid=21174 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  017    [solo       ] satisfied        taid=21855 (regular/regular)  
+  017w1  [payload    ] wrong_stem       taid=21856 (regular/regular)  payload slot using full regular track; prefer acapella or vocal stem
+           -> acquire_acappella: payload slot using full regular track; prefer acapella or vocal stem
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  017w2  [constituent] satisfied        taid=21857 (regular/regular)  
+  018    [solo       ] satisfied        taid=21858 (regular/regular)  
+  018w1  [payload    ] wrong_stem       taid=21175 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  018w2  [payload    ] wrong_stem       taid=21176 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  019    [solo       ] satisfied        taid=887 (regular/regular)  
+  019w1  [payload    ] wrong_stem       taid=21727 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  019w2  [payload    ] wrong_stem       taid=21177 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  020    [solo       ] satisfied        taid=21859 (regular/regular)  
+  020w1  [payload    ] wrong_stem       taid=21860 (regular/regular)  payload slot using full regular track; prefer acapella or vocal stem
+           -> acquire_acappella: payload slot using full regular track; prefer acapella or vocal stem
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  020w2  [constituent] satisfied        taid=21861 (regular/regular)  
+  021    [solo       ] satisfied        taid=21862 (regular/regular)  
+  021w1  [payload    ] wrong_stem       taid=21863 (regular/regular)  payload slot using full regular track; prefer acapella or vocal stem
+           -> acquire_acappella: payload slot using full regular track; prefer acapella or vocal stem
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  021w2  [payload    ] wrong_stem       taid=21178 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  021w3  [constituent] satisfied        taid=23059 (regular/regular)  
+  022    [solo       ] satisfied        taid=21683 (regular/regular)  
+  022w1  [payload    ] wrong_stem       taid=21180 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  022w2  [payload    ] wrong_stem       taid=21181 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  022w3  [constituent] satisfied        taid=21864 (regular/regular)  
+  023    [solo       ] satisfied        taid=23060 (regular/regular)  
+  023w1  [payload    ] wrong_stem       taid=21865 (regular/regular)  payload slot using full regular track; prefer acapella or vocal stem
+           -> acquire_acappella: payload slot using full regular track; prefer acapella or vocal stem
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  023w2  [payload    ] wrong_stem       taid=21183 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  024    [solo       ] missing           no track_audio rows for recording
+           -> replace_version: missing reference audio
+  024w1  [payload    ] missing           no track_audio rows for recording
+           -> acquire_acappella: missing acappella asset
+  025    [solo       ] satisfied        taid=21686 (regular/regular)  
+  025w1  [payload    ] wrong_stem       taid=21866 (regular/regular)  payload slot using full regular track; prefer acapella or vocal stem
+           -> acquire_acappella: payload slot using full regular track; prefer acapella or vocal stem
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  025w2  [payload    ] wrong_stem       taid=21744 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  025w3  [constituent] satisfied        taid=21184 (regular/regular)  
+  026    [solo       ] missing           no track_audio rows for recording
+           -> replace_version: missing reference audio
+  026w1  [payload    ] wrong_stem       taid=21867 (regular/regular)  payload slot using full regular track; prefer acapella or vocal stem
+           -> acquire_acappella: payload slot using full regular track; prefer acapella or vocal stem
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  026w2  [payload    ] wrong_stem       taid=21039 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  027    [solo       ] satisfied        taid=21690 (regular/regular)  
+  027w1  [payload    ] wrong_stem       taid=21185 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  027w2  [payload    ] wrong_stem       taid=21186 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  028    [solo       ] satisfied        taid=2085 (regular/regular)  
+  028w1  [payload    ] wrong_stem       taid=3844 (regular/regular)  payload slot using full regular track; prefer acapella or vocal stem
+           -> acquire_acappella: payload slot using full regular track; prefer acapella or vocal stem
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  028w2  [payload    ] wrong_stem       taid=21187 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  029    [solo       ] satisfied        taid=21868 (regular/regular)  
+  029w1  [payload    ] wrong_stem       taid=21869 (regular/regular)  payload slot using full regular track; prefer acapella or vocal stem
+           -> acquire_acappella: payload slot using full regular track; prefer acapella or vocal stem
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  029w2  [constituent] satisfied        taid=2174 (regular/regular)  
+  030    [solo       ] satisfied        taid=23061 (regular/regular)  
+  030w1  [payload    ] wrong_stem       taid=21189 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  031    [solo       ] satisfied        taid=21654 (regular/regular)  
+  031w1  [payload    ] wrong_stem       taid=21190 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  031w2  [constituent] satisfied        taid=2202 (regular/regular)  
+  032    [solo       ] satisfied        taid=21870 (regular/regular)  
+  032w1  [payload    ] wrong_stem       taid=21191 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  032w2  [constituent] satisfied        taid=21871 (regular/regular)  
+  032w3  [constituent] satisfied        taid=21872 (regular/regular)  
+  033    [solo       ] satisfied        taid=23062 (regular/regular)  
+  033w1  [payload    ] satisfied        taid=23074 (acappella/regular)  
+  033w2  [payload    ] wrong_stem       taid=21193 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  034    [solo       ] satisfied        taid=2203 (regular/regular)  
+  034w1  [payload    ] wrong_stem       taid=21194 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  034w2  [payload    ] wrong_stem       taid=21195 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  034w3  [constituent] satisfied        taid=3874 (regular/regular)  
+  034w4  [payload    ] wrong_stem       taid=21196 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  035    [solo       ] satisfied        taid=21197 (regular/regular)  
+  035w1  [payload    ] wrong_stem       taid=21198 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  035w2  [payload    ] wrong_stem       taid=21199 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  036    [solo       ] satisfied        taid=23063 (regular/regular)  
+  036w1  [payload    ] wrong_stem       taid=21873 (regular/regular)  payload slot using full regular track; prefer acapella or vocal stem
+           -> acquire_acappella: payload slot using full regular track; prefer acapella or vocal stem
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  036w2  [constituent] satisfied        taid=21874 (regular/regular)  
+  036w3  [payload    ] wrong_stem       taid=21201 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  036w4  [constituent] satisfied        taid=23143 (regular/regular)  
+  036w5  [payload    ] wrong_stem       taid=21203 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  037    [solo       ] satisfied        taid=21204 (regular/regular)  
+  037w1  [payload    ] wrong_stem       taid=21205 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  037w2  [payload    ] wrong_stem       taid=21206 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  037w3  [constituent] satisfied        taid=21875 (regular/regular)  
+  038    [solo       ] satisfied        taid=941 (regular/regular)  
+  038w1  [payload    ] wrong_stem       taid=21207 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  039    [solo       ] satisfied        taid=23064 (regular/regular)  
+  039w1  [payload    ] wrong_stem       taid=21876 (regular/regular)  payload slot using full regular track; prefer acapella or vocal stem
+           -> acquire_acappella: payload slot using full regular track; prefer acapella or vocal stem
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  040    [solo       ] satisfied        taid=944 (regular/regular)  
+  040w1  [payload    ] wrong_stem       taid=3857 (regular/regular)  payload slot using full regular track; prefer acapella or vocal stem
+           -> acquire_acappella: payload slot using full regular track; prefer acapella or vocal stem
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  040w2  [constituent] satisfied        taid=21877 (regular/regular)  
+  040w3  [constituent] satisfied        taid=21166 (regular/regular)  
+  040w4  [payload    ] satisfied        taid=20848 (acappella/regular)  
+  040w5  [payload    ] wrong_stem       taid=21209 (regular/regular)  payload slot needs acappella; only regular full track
+           -> acquire_acappella: payload slot needs acappella; only regular full track
+           -> use_demucs_vocals: interim: use Demucs vocals off bed or regular reference
+  040w6  [constituent] satisfied        taid=21878 (regular/regular)  
+make: *** [check-inventory] Error 1

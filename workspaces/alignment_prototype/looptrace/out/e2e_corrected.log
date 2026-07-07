@@ -1,0 +1,12 @@
+=== 1fsnxchk legacy (corrected scorer) ===
+  stem  acappella n= 41 traj-acc=15%  >=80%covered: 7%
+  HEADLINE multiseg+loop n= 74 traj-acc=31%  >=80%covered: 16%
+=== 1fsnxchk looptrace (corrected scorer) ===
+  stem  acappella n= 41 traj-acc=23%  >=80%covered: 17%
+  HEADLINE multiseg+loop n= 74 traj-acc=32%  >=80%covered: 18%
+=== 2nvzlh2k legacy (corrected scorer) ===
+  stem  acappella n= 67 traj-acc=13%  >=80%covered: 6%
+  HEADLINE multiseg+loop n= 61 traj-acc=25%  >=80%covered: 11%
+=== 2nvzlh2k looptrace (corrected scorer) ===
+  stem  acappella n= 67 traj-acc=21%  >=80%covered: 15%
+  HEADLINE multiseg+loop n= 61 traj-acc=29%  >=80%covered: 13%

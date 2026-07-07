@@ -42,13 +42,21 @@ def norm_slot(s: str) -> str:
     return f"{m.group(1)}{m.group(2) or ''}" if m else str(s).strip()
 
 
-def _pred_segs_from_span(s: dict) -> list[tuple[float, float, float]]:
+def _pred_segs_from_span(
+    s: dict, anchor_s: float | None = None
+) -> list[tuple[float, float, float]]:
     """Predicted ref_segments -> decode_path convention: [(mix_start_REL, ref_start,
     ref_end)] (mix-start span-relative, ref absolute). Absorbs both segment schemas
     (joint_ref_decode legacy {mix_start_s ABS, dur_s} and the GT/decode_path
     {mix_start_s ABS, ref_end_s}); falls back to a one-segment straight line when the
-    span carries only a scalar ref_start_s (measures the headroom lost without segments)."""
-    s0 = float(s["set_start_s"])
+    span carries only a scalar ref_start_s (measures the headroom lost without segments).
+
+    anchor_s: the reference start the caller will re-add (trajectory_acc adds the GT
+    row's set_start). Timeline ref_segments carry ABSOLUTE mix positions, so anchoring
+    at the SPAN's own start and re-adding the GT start TRANSLATES the segments by the
+    placement error — double-counting it (measured: BB12 acappella 6%% vs 18%% on
+    identical predictions). Pass the matched GT row's set_start for absolute scoring."""
+    s0 = float(s["set_start_s"]) if anchor_s is None else float(anchor_s)
     stretch = float(s.get("ref_stretch") or 1.0)
     segs = s.get("ref_segments")
     if segs:
@@ -206,7 +214,9 @@ def main(argv: list[str] | None = None) -> int:
         # excluded for loops/segments. strict = fraction of mix-time within 2s of
         # GT ref; fiber-aware credits a content-identical repeat.
         fib = fibers_for(_resolve_ref_audio(s, by_tid.get(s["recording_id"])))
-        strict, _npred, facc = trajectory_acc(_pred_segs_from_span(s), g, fiber=fib)
+        strict, _npred, facc = trajectory_acc(
+            _pred_segs_from_span(s, anchor_s=float(g["set_start_s"])), g, fiber=fib
+        )
         traj.append((_span_class(g), s.get("claimed_stem") or "regular", strict, facc))
         if g.get("is_loop") or g.get("ref_segments"):
             loops_hit += 1

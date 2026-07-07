@@ -178,3 +178,24 @@ keeps it when ev_out_frac ≥ gate, else decodes tight). End-to-end:
 The gate fires where placement is worse (BB11) and wins there (+33% vs
 legacy); BB12's −1 pp is ~0.4 spans (noise). Combined e2e acappella is
 now **+30% relative over legacy**.
+
+## SCOREBOARD CORRECTION (2026-07-07): e2e re-anchoring bug fixed
+
+`score_timeline_vs_gt` converted predicted segments relative to the
+TIMELINE span's start and trajectory_acc re-added the GT row's start —
+translating ABSOLUTE segments by the placement error and double-counting
+it (both decoders write absolute mix positions). Fixed by anchoring at
+the matched GT row's start. ALL previous e2e tables are superseded:
+
+| acappella traj-acc (fiber-aware) | legacy | looptrace+gate |
+|---|---|---|
+| BB12 (n=41) | 15% (was 10) | **23%** (was 12) |
+| BB11 (n=67) | 13% (was 12) | **21%** (was 16) |
+| combined (n=108) | 13.8% | **21.8%** |
+
+HEADLINE multiseg+loop: BB12 31→32, BB11 25→29 (legacy→looptrace).
+Corrected margins: looptrace e2e acappella is **+58% relative over
+legacy**; the oracle(43-44)↔e2e gap is roughly HALVED by the fix. The
+remaining gap decomposes into decode-window coverage vs in-coverage
+accuracy — must be instrumented inside the scorer loop (ad-hoc joins
+measured unfaithful twice).
