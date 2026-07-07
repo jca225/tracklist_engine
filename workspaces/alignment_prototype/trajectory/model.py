@@ -28,12 +28,24 @@ import torch.nn as nn
 def diag_mean(sim: torch.Tensor, w: int) -> torch.Tensor:
     """Mean of sim[..., t+k, r+k] over k < w — accumulation along the
     alignment diagonal (a straight clip is a line in (mix, ref) time)."""
+    return slope_mean(sim, w, 1.0)
+
+
+def slope_mean(sim: torch.Tensor, w: int, slope: float) -> torch.Tensor:
+    """Mean of sim[..., t+k, r+round(k*slope)] over k < w — accumulation
+    along a tempo-stretched alignment line. A clip played at tempo_ratio s
+    is a line of slope s in (mix, ref) time; slope-1 pooling (the v2
+    regression) averages OFF that line for stretched spans and turns
+    context into noise. Half/double-time clips are slopes 0.5 / 2.0."""
     tm, tr = sim.shape[-2], sim.shape[-1]
     acc = torch.zeros_like(sim)
     cnt = torch.zeros(tm, tr, device=sim.device, dtype=sim.dtype)
-    for k in range(min(w, tm, tr)):
-        acc[..., : tm - k, : tr - k] += sim[..., k:, k:]
-        cnt[: tm - k, : tr - k] += 1
+    for k in range(min(w, tm)):
+        dr = int(round(k * slope))
+        if dr >= tr:
+            break
+        acc[..., : tm - k, : tr - dr] += sim[..., k:, dr:]
+        cnt[: tm - k, : tr - dr] += 1
     return acc / cnt.clamp(min=1)
 
 
@@ -44,13 +56,19 @@ class TrajectoryDecoder(nn.Module):
         n_feat_kinds: int = 2,
         diag_windows: tuple[int, ...] = (),  # (8, 24) = the v2 regression
         deep: bool = False,  # third dilated conv (part of the v2 regression)
+        stretch_slopes: tuple[float, ...] = (),  # e.g. (0.5, 0.95, 1.0, 1.05, 2.0)
+        stretch_window: int = 12,  # 6 s at bin_s=0.5
     ) -> None:
         super().__init__()
         self.diag_windows = tuple(diag_windows)
+        self.stretch_slopes = tuple(stretch_slopes)
+        self.stretch_window = stretch_window
         self.kind_affine = nn.Embedding(n_feat_kinds, 2)  # scale, bias
         nn.init.constant_(self.kind_affine.weight[:, 0], 1.0)
         nn.init.constant_(self.kind_affine.weight[:, 1], 0.0)
-        c_in = 2 * (1 + len(self.diag_windows))
+        # stretch channels accumulate the MATCH channel only (mel is the
+        # recon space, not the localizer)
+        c_in = 2 * (1 + len(self.diag_windows)) + len(self.stretch_slopes)
         layers: list[nn.Module] = [
             nn.Conv2d(c_in, hidden, kernel_size=5, padding=2),
             nn.ReLU(),
@@ -83,6 +101,9 @@ class TrajectoryDecoder(nn.Module):
         bias = aff[:, 1].view(-1, 1, 1, 1)
         base = torch.cat([sim[:, :1] * scale + bias, sim[:, 1:]], dim=1)
         chans = [base] + [diag_mean(base, w) for w in self.diag_windows]
+        chans += [
+            slope_mean(base[:, :1], self.stretch_window, s) for s in self.stretch_slopes
+        ]
         x = torch.cat(chans, dim=1)  # (B, c_in, Tm, Tr)
         grid = self.conv(x).squeeze(1)  # (B, Tm, Tr)
 
