@@ -48,11 +48,39 @@ from workspaces.alignment_prototype.refine_ref_offsets import (  # noqa: E402
 OUT_DIR = Path(__file__).resolve().parent / "out"
 
 
+def vocal_stem_for(track: dict, set_dir: Path) -> Path | None:
+    """Vocal stem path with a DISK fallback: the manifest's `stems` field is
+    only populated for tracks whose stems pi-storage considers canonical
+    (BB11: 69/147 tracks) — but the aligning folder holds stem dirs for
+    nearly every slot, named by the slot prefix. Resolve by exact basename,
+    then by slot prefix (unique per slot)."""
+    import glob as _glob
+
+    vp = (track.get("stems") or {}).get("vocals")
+    if vp and Path(vp).is_file():
+        return Path(vp)
+    lp = track.get("local_path")
+    if not lp:
+        return None
+    base = Path(lp).stem
+    hits = _glob.glob(str(set_dir / "stems" / (_glob.escape(base) + "*") / "vocals.flac"))
+    if not hits:
+        slot = base.split("__")[0]
+        hits = _glob.glob(str(set_dir / "stems" / (slot + "__*") / "vocals.flac"))
+    return Path(sorted(hits)[0]) if hits else None
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--set-id", required=True)
     p.add_argument("--timeline", type=Path, default=None)
     p.add_argument("--out", type=Path, default=None)
+    p.add_argument(
+        "--transcribe",
+        action="store_true",
+        help="warm missing vocal-stem transcripts for this timeline's "
+        "acappella spans (Whisper, ~2-3 min/stem on MPS) instead of refining",
+    )
     p.add_argument(
         "--leash-s",
         type=float,
@@ -92,9 +120,16 @@ def main(argv: list[str] | None = None) -> int:
     n_nostem = n_notrans = n_nocands = 0
     for idx, s in aca:
         track = by_tid.get(s["recording_id"])
-        vpath = (track.get("stems") or {}).get("vocals") if track else None
-        if not vpath or not Path(vpath).is_file():
+        vpath = vocal_stem_for(track, set_dir) if track else None
+        if not vpath:
             n_nostem += 1
+            continue
+        if args.transcribe:
+            from workspaces.alignment_prototype.lyrics_align import transcribe_words
+
+            if not load_cached(vpath):
+                print(f"transcribing {vpath.name} ({vpath.parent.name}) …")
+                transcribe_words(vpath)
             continue
         cw = load_cached(vpath)
         if not cw:
@@ -107,6 +142,9 @@ def main(argv: list[str] | None = None) -> int:
         dec_in.append((cands, float(s["set_start_s"])))
         meta.append(idx)
 
+    if args.transcribe:
+        print("transcription warm-up done")
+        return 0
     chosen = monotonic_decode(dec_in) if dec_in else []
     n_upd = n_abstain = n_leash = 0
     for (ss, rs), idx in zip(chosen, meta):
