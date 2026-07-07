@@ -47,6 +47,9 @@ from workspaces.alignment_prototype.trajectory.recon_loss import (  # noqa: E402
     reconstruction_loss,
     trajectory_ce,
 )
+from workspaces.alignment_prototype.trajectory.decode import (  # noqa: E402
+    viterbi_segments,
+)
 from workspaces.alignment_prototype.trajectory.targets import (  # noqa: E402
     frames_to_segments,
 )
@@ -124,9 +127,11 @@ def evaluate(
     ds: TrajectorySpanDataset,
     device: torch.device,
     tag: str,
+    lam: float | None = None,
 ) -> dict[str, float]:
     """Mean strict trajectory_acc per span_class and stem. model=None = the
-    raw-similarity control (argmax of match channel, no NULL)."""
+    raw-similarity control (argmax of match channel, no NULL). lam=None =
+    greedy argmax decode; otherwise offset-state Viterbi with that jump cost."""
     if model is not None:
         model.eval()
     by_class: dict[str, list[float]] = defaultdict(list)
@@ -144,7 +149,10 @@ def evaluate(
         else:
             rv = torch.ones(1, tr, dtype=torch.bool, device=device)
             logits = model(sim, x["feat_kind"][None].to(device), rv)[0]
-        segs = decode_segments(logits, tr, ds.bin_s)
+        if lam is None:
+            segs = decode_segments(logits, tr, ds.bin_s)
+        else:
+            segs = viterbi_segments(logits, ds.bin_s, lam=lam)
         acc, _, _ = trajectory_acc(segs, ds.specs[i].row)
         alls.append(acc)
         by_class[x["meta"]["span_class"]].append(acc)
@@ -185,6 +193,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--device", default="auto")
     ap.add_argument("--eval-every", type=int, default=10)
     ap.add_argument("--smoke", action="store_true", help="2 epochs, first 8 spans")
+    ap.add_argument(
+        "--eval-only",
+        metavar="CKPT",
+        default=None,
+        help="skip training; load this checkpoint and run the decode A/B",
+    )
+    ap.add_argument(
+        "--lam-sweep",
+        default="1,2,4,8,16",
+        help="Viterbi jump costs swept on the TRAIN split (best applied to eval)",
+    )
     args = ap.parse_args(argv)
 
     device = pick_device(args.device)
@@ -247,6 +266,27 @@ def main(argv: list[str] | None = None) -> int:
     model = TrajectoryDecoder().to(device)
     n_params = sum(p.numel() for p in model.parameters())
     print(f"model params: {n_params}")
+
+    if args.eval_only:
+        state = torch.load(args.eval_only, map_location=device)
+        model.load_state_dict(state["model"])
+        print(f"loaded {args.eval_only}\n\n== decode A/B on checkpoint ==")
+        evaluate(model, eval_ds, device, f"argmax eval {eval_tag}")
+        best_lam, best_acc = None, -1.0
+        for lam in [float(v) for v in args.lam_sweep.split(",")]:
+            r = evaluate(model, train_ds, device, f"viterbi lam={lam:g} TRAIN", lam=lam)
+            if r["all"] > best_acc:
+                best_lam, best_acc = lam, r["all"]
+        print(f"\nbest lam on train: {best_lam:g} (train ALL {best_acc:.3f})")
+        evaluate(
+            model,
+            eval_ds,
+            device,
+            f"viterbi lam={best_lam:g} eval {eval_tag}",
+            lam=best_lam,
+        )
+        return 0
+
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
 
     print("\n== no-model control (raw match-sim argmax) ==")
