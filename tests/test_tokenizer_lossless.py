@@ -2,11 +2,13 @@
 vocal/remixer qualifiers, is_instrumental is captured), and the download-side
 search-query projection reproduces the old collapsed query.
 """
+
 from __future__ import annotations
 
 import pytest
 
 from tokenizer.track_tokenizer import parse_track_row
+from tokenizer.identity_axes import normalize_stem, scrape_claimed_stem
 from ingest.search_query import to_search_query
 
 
@@ -18,12 +20,13 @@ def _row(meta_name: str, *, track_value: str | None = None) -> str:
         '  <div itemtype="http://schema.org/MusicRecording">'
         f'    <meta itemprop="name" content="{meta_name}"/>'
         f'    <span class="trackValue">{tv}</span>'
-        '  </div>'
-        '</div>'
+        "  </div>"
+        "</div>"
     )
 
 
 # ---- parse stays lossless ---------------------------------------------------
+
 
 def test_full_name_keeps_instrumental_and_remixer_qualifiers() -> None:
     name = "Martin Garrix & Troye Sivan - There For You (Madison Mars Remix) (Instrumental)"
@@ -43,6 +46,27 @@ def test_acappella_is_stem_not_version_tag() -> None:
     assert tr.is_instrumental is False
 
 
+def test_acappella_marker_only_in_row_text() -> None:
+    """Real-scrape shape: the schema.org <meta name> is the CLEAN title and the
+    "(Acappella)" marker lives only in the visible row text (BB12 mashup w-layers
+    like "Rascal Flatts - Life Is A Highway (Acappella)"). full_name therefore
+    drops the parenthetical, so the stem MUST come from the row text.
+
+    Regression guard for the materialize bug where the slot's claimed_stem was
+    re-derived from full_name alone (scrape_claimed_stem(tr.full_name)) instead
+    of reusing tr.claimed_stem — silently mislabeling these as 'regular' and
+    hiding the acappella recordings from the aligner.
+    """
+    clean = "Rascal Flatts - Life Is A Highway"
+    tr = parse_track_row(_row(clean, track_value=f"{clean} (Acappella)"))
+    assert tr.full_name == clean  # meta name is clean; parenthetical not in it
+    assert tr.claimed_stem == "acappella"  # recovered from the row text
+    # The trap: re-deriving from full_name alone loses the marker. materialize
+    # must consume tr.claimed_stem, which this asserts is the correct value.
+    assert scrape_claimed_stem(tr.full_name) == "regular"
+    assert normalize_stem(tr.claimed_stem) == "acappella"
+
+
 def test_instrumental_claimed_stem() -> None:
     name = "Martin Garrix & Troye Sivan - There For You (Madison Mars Remix) (Instrumental)"
     tr = parse_track_row(_row(name, track_value=name))
@@ -60,6 +84,7 @@ def test_plain_track_has_no_instrumental_flag() -> None:
 
 # ---- download projection reproduces the old collapsed query -----------------
 
+
 def test_search_query_strips_instrumental_keeps_remixer() -> None:
     q = to_search_query(
         "Martin Garrix & Troye Sivan - There For You (Madison Mars Remix) (Instrumental)",
@@ -70,8 +95,10 @@ def test_search_query_strips_instrumental_keeps_remixer() -> None:
 
 
 def test_search_query_strips_acappella() -> None:
-    assert to_search_query("Some Artist - A Song (Acappella)", "Some Artist", "A Song") \
+    assert (
+        to_search_query("Some Artist - A Song (Acappella)", "Some Artist", "A Song")
         == "Some Artist - A Song"
+    )
 
 
 def test_search_query_falls_back_on_id_placeholder() -> None:
@@ -80,9 +107,14 @@ def test_search_query_falls_back_on_id_placeholder() -> None:
 
 
 def test_search_query_falls_back_without_full_name() -> None:
-    assert to_search_query(None, "Daft Punk", "One More Time") == "Daft Punk - One More Time"
+    assert (
+        to_search_query(None, "Daft Punk", "One More Time")
+        == "Daft Punk - One More Time"
+    )
 
 
 def test_search_query_plain_full_name_unchanged() -> None:
-    assert to_search_query("Daft Punk - Around the World", "Daft Punk", "Around the World") \
+    assert (
+        to_search_query("Daft Punk - Around the World", "Daft Punk", "Around the World")
         == "Daft Punk - Around the World"
+    )
