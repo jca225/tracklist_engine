@@ -417,6 +417,22 @@ extents, per-span pairing) before believing any single-cause story.
 BB11 lyrics test pending its stem transcription (warm-up started,
 ~3 h MPS; cache at .cache/lyrics).
 
+## Lyrics wiring, BB11 arm (2026-07-07): NULL confirmed cross-set — thread CLOSED
+
+Full transcript coverage achieved via a Vast 3090 (42 stems, ~$0.05,
+box destroyed; transcripts imported under Mac cache keys). With 63/71
+BB11 acappella spans lyrics-placed (0 leash rejections), e2e trajectory
+is 15% vs 16% gated-acoustic — same null as BB12. Conclusion: for the
+looptrace stack, set_start REPLACEMENT is redundant on both sets — the
+landmark decode's intercepts are absolute (window offset only crops
+content) and the self-placement gate already catches gross misplacement.
+The lyrics channel remains valuable where it was validated (placement
+for the OLD pipeline / as an agentic probe / identity evidence), but it
+is not an e2e lever here. The oracle(43-44)↔e2e(~13-16) gap therefore
+lives in span/GT correspondence (extents, identity, w-layer matching) —
+the queued decomposition with score_timeline_vs_gt's own matching is THE
+next analytic step before any further decoder or placement work.
+
 ### Plan deltas vs the brief (repo-specific adjustments)
 
 - `looptrace/` lives under `workspaces/alignment_prototype/`, not top-level (repo
