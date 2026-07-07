@@ -243,6 +243,162 @@ def compute_fibers(
     return labels, g_hz
 
 
+def _lyric_labels(
+    audio_path: str,
+    n_frames: int,
+    label_hz: float,
+    *,
+    win_s: float = 6.0,
+    min_lag_s: float = 8.0,
+    min_shared_bigrams: int = 3,
+) -> np.ndarray:
+    """Per-frame lyric fiber labels on a (n_frames, label_hz) grid, INDEPENDENT
+    of HuBERT.
+
+    Transcribes the ref vocal stem (cached via lyrics_align), tiles the timeline
+    into non-overlapping `win_s` windows, and groups windows that share
+    >= `min_shared_bigrams` DISTINCT word-bigrams (average-linkage). Bigrams (not
+    unigrams) + the >=3-distinct rule are the same anti-common-word guard
+    `lyrics_align.candidate_diagonals` uses for placement — raw unigram Jaccard
+    over-merged (~50% false vs the audit repeat map). A group is a real repeat
+    only with >=2 members separated by >= `min_lag_s` (guards same-instance
+    adjacency). Catches distinct takes HuBERT misses (same words, different
+    performance). Constants reused from lyrics_align, NOT tuned on GT."""
+    labels = -np.ones(n_frames, dtype=int)
+    try:
+        from workspaces.alignment_prototype.lyrics_align import (
+            _bigram_times,
+            _norm,
+            transcribe_words,
+        )
+
+        seq = _norm(transcribe_words(audio_path))
+    except Exception:
+        return labels
+    if len(seq) < 6:
+        return labels
+    flat = [(bg, t) for bg, ts in _bigram_times(seq).items() for t in ts]
+    if len(flat) < 2 * min_shared_bigrams:
+        return labels
+    dur = n_frames / label_hz
+    half = win_s / 2.0
+    centers = np.arange(half, max(half + 1e-3, dur), win_s)  # non-overlap tiles
+    wins = [(float(c), {bg for (bg, t) in flat if abs(t - c) <= half}) for c in centers]
+    wins = [(c, b) for (c, b) in wins if len(b) >= min_shared_bigrams]  # voiced only
+    if len(wins) < 2:
+        return labels
+    m = len(wins)
+    sim = np.zeros((m, m), dtype=np.float32)
+    for i in range(m):
+        sim[i, i] = float(len(wins[i][1]))
+        for j in range(i + 1, m):
+            sim[i, j] = sim[j, i] = float(len(wins[i][1] & wins[j][1]))
+    # merge when the mean count of SHARED distinct bigrams reaches the threshold.
+    grp = _avg_linkage(sim, float(min_shared_bigrams) - 0.5)
+    from collections import defaultdict
+
+    members: dict[int, list[int]] = defaultdict(list)
+    for wi, gid in enumerate(grp):
+        members[gid].append(wi)
+    next_id = 0
+    for idxs in members.values():
+        cs = [wins[i][0] for i in idxs]
+        if len(idxs) < 2 or (max(cs) - min(cs)) < min_lag_s:
+            continue  # lone window or all one instance -> not a repeat
+        for i in idxs:
+            c = wins[i][0]
+            a = int(round((c - half) * label_hz))
+            b = int(round((c + half) * label_hz))
+            labels[max(0, a) : min(n_frames, b)] = next_id
+        next_id += 1
+    return labels
+
+
+def compute_fibers_multi(
+    feat: np.ndarray,
+    fps: float,
+    *,
+    ds_hz: float = 8.0,
+    min_repeat_s: float = 6.0,
+    repeat_thresh: float = 0.5,
+    verify_thresh: float = 0.5,
+    audio_path: str | None = None,
+    silence_ratio: float = 0.35,
+    **_ignore,
+) -> tuple[np.ndarray, float]:
+    """(labels, label_hz) — HuBERT fibers UNIONED with a lyric fiber axis
+    ("words win"). Same contract as `compute_fibers`, so it drops into
+    trajectory_acc / score_timeline_vs_gt unchanged.
+
+    HuBERT under-detects distinct takes (two performances drift apart
+    phonetically). The lyric axis (`_lyric_labels`) detects those independently;
+    the union (a) MERGES HuBERT groups a shared lyric spans and (b) ADDS
+    lyric-only fibers where HuBERT saw nothing. A frame joins a class iff it
+    shares a HuBERT fiber OR a lyric fiber (connected components over the two
+    labelings). Needs the ref vocal stem at `audio_path`; without it, falls back
+    to HuBERT-only.
+
+    VERDICT (2026-07-07, fiber_ab.py A/B on BB11+BB12): EXPERIMENTAL, do NOT wire
+    to production. The lyric axis lifts fiber-aware traj-acc toward the audit
+    ceiling (BB12 multiseg 27->45, BB11 12->29) but ~45% of its new credits are
+    NOT audit-confirmed repeats even restricted to genuine instance swaps
+    (|pred-gt|>8s). Cause is fundamental, not a threshold: lyrics recur across
+    musically-different sections (a hook line in both verse and chorus), so
+    lyric-only equivalence conflates section-repeat with phrase-recurrence
+    (e.g. "In The Name Of Love" chorus words at ref 18s and 32s). unigram->bigram
+    tightening raised recall, not precision. The trustworthy repeat source is the
+    audit map (looptrace/audit.py); the real lever is decode-time instance
+    selection (context+position), not a more generous fiber."""
+    hlabels, hz = compute_fibers(
+        feat,
+        fps,
+        ds_hz=ds_hz,
+        min_repeat_s=min_repeat_s,
+        repeat_thresh=repeat_thresh,
+        verify_thresh=verify_thresh,
+        audio_path=audio_path,
+        silence_ratio=silence_ratio,
+    )
+    if audio_path is None:
+        return hlabels, hz
+    llabels = _lyric_labels(audio_path, hlabels.size, hz)
+    if not bool((llabels >= 0).any()):
+        return hlabels, hz  # no lyric repeats found -> identical to HuBERT
+
+    t = hlabels.size
+    parent = list(range(t))
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a: int, b: int) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[max(ra, rb)] = min(ra, rb)
+
+    for arr in (hlabels, llabels):
+        for v in np.unique(arr[arr >= 0]):
+            idx = np.flatnonzero(arr == v)
+            root = int(idx[0])
+            for k in idx[1:]:
+                union(root, int(k))
+
+    active = (hlabels >= 0) | (llabels >= 0)
+    combined = -np.ones(t, dtype=int)
+    remap: dict[int, int] = {}
+    nid = 0
+    for i in np.flatnonzero(active):
+        r = find(int(i))
+        if r not in remap:
+            remap[r] = nid
+            nid += 1
+        combined[i] = remap[r]
+    return combined, hz
+
+
 def compute_fibers_soft(
     feat: np.ndarray,
     fps: float,
