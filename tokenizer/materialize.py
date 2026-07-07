@@ -37,7 +37,7 @@ from tokenizer.tokenizer import classify_row
 from core.slot_inventory import derive_layer_role
 from tokenizer.identity_axes import (
     derive_claimed_variant,
-    scrape_claimed_stem,
+    normalize_stem,
     scrape_claimed_version,
 )
 from tokenizer.track_tokenizer import parse_track_row as parse_track_main
@@ -315,7 +315,13 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
                             "synthetic" if tr.track_key.startswith("tlp") else "scraped"
                         )
 
-                        claimed_stem = scrape_claimed_stem(tr.full_name)
+                        # Reuse the stem already parsed from the full row text
+                        # (parse_track_row → derive_claimed_stem(full_name, row_text)).
+                        # Re-deriving from full_name alone drops the row-only
+                        # "(Acappella)"/"(Instrumental)" marker (full_name strips
+                        # those parentheticals), silently mislabeling e.g. mashup
+                        # w-layers as claimed_stem='regular'.
+                        claimed_stem = normalize_stem(tr.claimed_stem)
                         layer_role = derive_layer_role(
                             label or "",
                             is_concurrent=tr.is_concurrent,
