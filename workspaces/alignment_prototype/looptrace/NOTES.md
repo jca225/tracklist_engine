@@ -451,6 +451,30 @@ The 9 BB12 acappella GT recordings never matched by any timeline span
 BB11 has zero such losses. No looptrace action; filed for the
 tokenizer/ingest side.
 
+## Upstream follow-ups batch (2026-07-07): status
+
+1. **BB10 pipeline backfill — RUNNING.** 116/131 canonical rows lacked
+   stems+features. Mac analysis loop (`mac_analyze_loop.py --set-ids
+   w1mgcjt --separator roformer --only-reference`) grinding at ~20-25
+   min/track on MPS (~2 days; idempotent; Vast alternative declined —
+   needs interactive Tailscale auth + pi credentials on rented hardware
+   for a non-deadline). `neuraloperator` was missing from venvs/audio
+   (vendored BS-Roformer imports `neuralop` at module level) — installed.
+   Fingerprint backfill running on pi (/tmp/fp_backfill.log).
+2. **claimed_stem bug — CLOSED, fix already landed.** All 4 slots are
+   "(Acappella)" in the scrape; the materializer bug (re-deriving from
+   stripped full_name) was fixed TODAY by the parallel agent (888caca).
+   Remaining: `make deploy` + `python -m tokenizer.materialize` on pi
+   refreshes the stale slots — batch with next deploy.
+3. **candidate_vocal_gate on BB10 payload slots — QUEUED** behind the
+   stems backfill (needs fresh canonical stems for candidates).
+4. **5 online-candidate acappella registrations — PREPPED, deferred.**
+   Source audio located under BB12 candidates/vocals/ dirs; exact
+   per-span file should be extracted from the canonical BB12 .als clip
+   refs (labeling/als machinery), then registered via the correction
+   ledger (library-additive, is_reference=0). Canonical writes — batch
+   with the deploy.
+
 ### Plan deltas vs the brief (repo-specific adjustments)
 
 - `looptrace/` lives under `workspaces/alignment_prototype/`, not top-level (repo
