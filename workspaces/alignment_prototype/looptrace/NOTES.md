@@ -433,6 +433,24 @@ lives in span/GT correspondence (extents, identity, w-layer matching) —
 the queued decomposition with score_timeline_vs_gt's own matching is THE
 next analytic step before any further decoder or placement work.
 
+## Invisible-identity-losses thread (2026-07-07): CLOSED — causes named, all upstream
+
+The 9 BB12 acappella GT recordings never matched by any timeline span
+(--decompose finding) split into two upstream classes:
+1. **5 inventory gaps**: online-candidate acappellas hand-added during
+   labeling; tlp-namespace ids with no id-map entries and no manifest
+   rows — the aligner cannot predict a recording absent from its
+   candidate pool. Territory: ingest / stem-library matcher /
+   acappella-selection gate.
+2. **4 claimed_stem gaps**: slots EXIST on pi (028w2, 031w2, 029w1,
+   039w1) but with claimed_stem='regular' despite acappella titles —
+   tokenizer claimed_stem parsing — and infer's identity decode assigned
+   those slots to other recordings. Territory: tokenizer +
+   identity/inventory, NOT the ref-trace decoder.
+
+BB11 has zero such losses. No looptrace action; filed for the
+tokenizer/ingest side.
+
 ### Plan deltas vs the brief (repo-specific adjustments)
 
 - `looptrace/` lives under `workspaces/alignment_prototype/`, not top-level (repo
