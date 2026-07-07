@@ -371,6 +371,30 @@ of the same signal is uninformative (real padded windows tile fully with
 weak segments — placed vs jittered measured IDENTICAL); the evidence
 weighting is essential.
 
+## BB12-linear gap forensics (2026-07-06, sixth pass): two negatives that close the lane
+
+Per-span diagnosis of the 4 zero-scoring oracle linear spans:
+- **047**: true slope 1.050 falls between the 3% grid points → true diagonal
+  smeared below a noise rival. Local slope REFINEMENT by peakiness was
+  built and REGRESSED (BB12 multiseg 35→24: the noise-prone objective gets
+  27 chances/span to sharpen a wrong diagonal before path evidence sees
+  it) → reverted (`slope_refine_fracs=(0.0,)`); untested alternative:
+  refine by full path evidence (~27 decodes/span).
+- **029/073**: the true diagonal has healthy landmark support (247/179
+  inliers) but is OUTVOTED (405/800). Mel content verification was tested
+  as the arbiter and prefers the WRONG diagonal on 94–97% of steps — both
+  evidence channels agree on the "wrong" answer, i.e. these are genuinely
+  instance-ambiguous (or the GT picks one of two equally-valid images).
+  No content-evidence fix exists; this is the discriminative-frames /
+  tie-break-prior territory that Phases 4–5 already measured as hard.
+- **003**: 2× octave-fold slope error, still open.
+
+Conclusion: the BB12-linear gap vs legacy (50 vs 62 at oracle) is mostly
+NOT reachable by better geometry or content verification — it needs
+instance-level evidence (Phase-5 waveform residual on audit-covered
+frames, properly calibrated) or the learned arbiter, both gated on the
+third GT set. The lane is closed until Murph lands.
+
 ### Plan deltas vs the brief (repo-specific adjustments)
 
 - `looptrace/` lives under `workspaces/alignment_prototype/`, not top-level (repo

@@ -93,8 +93,19 @@ def decode_span(
         if ref_mel is not None:
             mix_mel, mix_hz = selfsim.mel_features(y_dec)
             hyb = (mix_mel, mix_hz, ref_mel[0], ref_mel[1])
-    best_slope, segs, best_ev, best_adj = ranked[0], [], 0.0, -1.0
+    # local slope refinement: the coarse grid is ~3% steps, but a 2% slope
+    # error over a 30 s span drifts the intercept ~0.6 s — enough to smear
+    # the true diagonal's votes below noise rivals (BB12 slot 047, true
+    # slope 1.050 between grid points 1.03/1.06). Refine each coarse
+    # candidate by peakiness on a fine local grid before the DP compares.
+    refined = []
     for s in ranked[: seg_cfg.slope_top_k]:
+        local = [s * (1.0 + f) for f in seg_cfg.slope_refine_fracs]
+        refined.append(
+            max(local, key=lambda q: segments.total_support(pts, q, seg_cfg))
+        )
+    best_slope, segs, best_ev, best_adj = refined[0] if refined else 1.0, [], 0.0, -1.0
+    for s in refined:
         diags = segments.hough_diagonals(pts, s, seg_cfg)
         bonus = None
         if hyb is not None and len(diags) >= 2:

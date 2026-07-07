@@ -117,6 +117,13 @@ class SegmentConfig:
     # the top-k by histogram peakiness compete on DP path evidence
     slope_fine: tuple[float, ...] = (0.94, 0.97, 1.0, 1.03, 1.06)
     slope_top_k: int = 3
+    # local slope refinement around each coarse candidate. DISABLED
+    # ((0.0,)): refining by PEAKINESS regressed multiseg (BB12 35->24) —
+    # the noise-prone objective gets 27 chances/span to sharpen a wrong
+    # diagonal before the path-evidence comparison sees it. It was meant
+    # to fix slot 047 (true slope 1.050 between the 3% grid points).
+    # Untested alternative: refine by full path evidence (~27 decodes/span).
+    slope_refine_fracs: tuple[float, ...] = (0.0,)
     # hybrid mel-consistency emission (content verification per diagonal)
     mel_window_s: float = 2.0
     mel_weight: float = 0.5  # contrast -> share-space scale (fixture-tuned)
