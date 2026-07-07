@@ -128,6 +128,7 @@ def evaluate(
     device: torch.device,
     tag: str,
     lam: float | None = None,
+    back_ratio: float = 3.0,
 ) -> dict[str, float]:
     """Mean strict trajectory_acc per span_class and stem. model=None = the
     raw-similarity control (argmax of match channel, no NULL). lam=None =
@@ -152,7 +153,7 @@ def evaluate(
         if lam is None:
             segs = decode_segments(logits, tr, ds.bin_s)
         else:
-            segs = viterbi_segments(logits, ds.bin_s, lam=lam)
+            segs = viterbi_segments(logits, ds.bin_s, lam=lam, back_ratio=back_ratio)
         acc, _, _ = trajectory_acc(segs, ds.specs[i].row)
         alls.append(acc)
         by_class[x["meta"]["span_class"]].append(acc)
@@ -194,6 +195,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--eval-every", type=int, default=10)
     ap.add_argument("--smoke", action="store_true", help="2 epochs, first 8 spans")
     ap.add_argument(
+        "--synthetic-root",
+        default=None,
+        metavar="DIR",
+        help="Fold synthetic-mix windows (generate_v2 output) into the TRAIN "
+        "loader only; eval stays on real held-out GT.",
+    )
+    ap.add_argument(
         "--eval-only",
         metavar="CKPT",
         default=None,
@@ -201,8 +209,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument(
         "--lam-sweep",
-        default="1,2,4,8,16",
+        default="8,16,32",
         help="Viterbi jump costs swept on the TRAIN split (best applied to eval)",
+    )
+    ap.add_argument(
+        "--back-sweep",
+        default="1,2,3",
+        help="backward-jump cost ratios swept with lam (loops ARE backward jumps)",
     )
     args = ap.parse_args(argv)
 
@@ -255,8 +268,28 @@ def main(argv: list[str] | None = None) -> int:
         )
         args.epochs = 2
 
+    # Synthetic mashups augment the gradient path only — never train_ds itself,
+    # so the lam-sweep and train-eval below still report on real GT.
+    loader_ds = train_ds
+    if args.synthetic_root:
+        from torch.utils.data import ConcatDataset
+
+        from workspaces.alignment_prototype.trajectory.synthetic_adapter import (
+            build_synthetic_sets,
+        )
+
+        syn_sets, syn_dirs = build_synthetic_sets(args.synthetic_root)
+        synth_ds = TrajectorySpanDataset(
+            syn_sets, bin_s=args.bin_s, aligning_dirs=syn_dirs
+        )
+        print(
+            f"synthetic: +{len(synth_ds)} train spans from {len(syn_sets)} windows; "
+            f"skipped:\n{synth_ds.report_skipped()}"
+        )
+        loader_ds = ConcatDataset([train_ds, synth_ds])
+
     loader = DataLoader(
-        train_ds,
+        loader_ds,
         batch_size=args.batch,
         shuffle=True,
         collate_fn=collate_spans,
@@ -272,18 +305,28 @@ def main(argv: list[str] | None = None) -> int:
         model.load_state_dict(state["model"])
         print(f"loaded {args.eval_only}\n\n== decode A/B on checkpoint ==")
         evaluate(model, eval_ds, device, f"argmax eval {eval_tag}")
-        best_lam, best_acc = None, -1.0
+        best, best_acc = None, -1.0
         for lam in [float(v) for v in args.lam_sweep.split(",")]:
-            r = evaluate(model, train_ds, device, f"viterbi lam={lam:g} TRAIN", lam=lam)
-            if r["all"] > best_acc:
-                best_lam, best_acc = lam, r["all"]
-        print(f"\nbest lam on train: {best_lam:g} (train ALL {best_acc:.3f})")
+            for br in [float(v) for v in args.back_sweep.split(",")]:
+                r = evaluate(
+                    model,
+                    train_ds,
+                    device,
+                    f"viterbi lam={lam:g} back={br:g} TRAIN",
+                    lam=lam,
+                    back_ratio=br,
+                )
+                if r["all"] > best_acc:
+                    best, best_acc = (lam, br), r["all"]
+        lam, br = best
+        print(f"\nbest on train: lam={lam:g} back={br:g} (train ALL {best_acc:.3f})")
         evaluate(
             model,
             eval_ds,
             device,
-            f"viterbi lam={best_lam:g} eval {eval_tag}",
-            lam=best_lam,
+            f"viterbi lam={lam:g} back={br:g} eval {eval_tag}",
+            lam=lam,
+            back_ratio=br,
         )
         return 0
 
