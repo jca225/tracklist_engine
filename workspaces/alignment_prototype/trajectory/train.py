@@ -121,6 +121,22 @@ def decode_segments(
     return frames_to_segments(arg.clip(max=tr - 1), null_mask, bin_s)
 
 
+_FIBER_CACHE: dict[str, tuple] = {}
+
+
+def _fibers_for(ref_audio: str) -> tuple:
+    """HuBERT self-repeat classes for one ref (same recipe as the full
+    scorer, score_timeline_vs_gt --fibers). Cached per file; the HuBERT
+    forward itself persists in .feat_cache."""
+    if ref_audio not in _FIBER_CACHE:
+        from workspaces.alignment_prototype.path_decode import FPS, _ensure_feat
+        from workspaces.alignment_prototype.ref_fibers import compute_fibers
+
+        hf = np.load(_ensure_feat(ref_audio, ref_audio, "hubert", 9))
+        _FIBER_CACHE[ref_audio] = compute_fibers(hf, FPS, audio_path=ref_audio)
+    return _FIBER_CACHE[ref_audio]
+
+
 @torch.no_grad()
 def evaluate(
     model: TrajectoryDecoder | None,
@@ -129,15 +145,20 @@ def evaluate(
     tag: str,
     lam: float | None = None,
     back_ratio: float = 3.0,
+    fibers: bool = False,
 ) -> dict[str, float]:
     """Mean strict trajectory_acc per span_class and stem. model=None = the
     raw-similarity control (argmax of match channel, no NULL). lam=None =
-    greedy argmax decode; otherwise offset-state Viterbi with that jump cost."""
+    greedy argmax decode; otherwise offset-state Viterbi with that jump cost.
+    fibers=True additionally reports repeat-equivalent accuracy (the
+    hand-decoder bar is fiber-aware; strict-vs-strict understates us)."""
     if model is not None:
         model.eval()
     by_class: dict[str, list[float]] = defaultdict(list)
     by_stem: dict[str, list[float]] = defaultdict(list)
     alls: list[float] = []
+    fib_alls: list[float] = []
+    fib_by_class: dict[str, list[float]] = defaultdict(list)
     for i in range(len(ds)):
         x = ds[i]
         if bool(x["abstain"]):
@@ -154,10 +175,14 @@ def evaluate(
             segs = decode_segments(logits, tr, ds.bin_s)
         else:
             segs = viterbi_segments(logits, ds.bin_s, lam=lam, back_ratio=back_ratio)
-        acc, _, _ = trajectory_acc(segs, ds.specs[i].row)
+        fiber = _fibers_for(str(ds.specs[i].audio.ref_path)) if fibers else None
+        acc, _, fib_acc = trajectory_acc(segs, ds.specs[i].row, fiber=fiber)
         alls.append(acc)
         by_class[x["meta"]["span_class"]].append(acc)
         by_stem[x["meta"]["claimed_stem"]].append(acc)
+        if fibers:
+            fib_alls.append(fib_acc)
+            fib_by_class[x["meta"]["span_class"]].append(fib_acc)
 
     def _m(v: list[float]) -> float:
         return float(np.mean(v)) if v else float("nan")
@@ -166,6 +191,14 @@ def evaluate(
     print(
         f"  [{tag}] traj-acc ALL {_m(alls):.3f} | HEADLINE multiseg+loop {headline:.3f}"
     )
+    if fibers:
+        fib_headline = _m(
+            fib_by_class.get("multiseg", []) + fib_by_class.get("loop", [])
+        )
+        print(
+            f"    FIBER-AWARE: ALL {_m(fib_alls):.3f} | "
+            f"HEADLINE multiseg+loop {fib_headline:.3f}"
+        )
     print(
         "    class: "
         + "  ".join(
@@ -216,6 +249,18 @@ def main(argv: list[str] | None = None) -> int:
         "--back-sweep",
         default="1,2,3",
         help="backward-jump cost ratios swept with lam (loops ARE backward jumps)",
+    )
+    ap.add_argument(
+        "--slopes",
+        default="",
+        help="stretch-indexed accumulation channels, e.g. '0.5,0.95,1.0,1.05,2.0' "
+        "(must match between training and --eval-only)",
+    )
+    ap.add_argument(
+        "--fibers",
+        action="store_true",
+        help="fiber-aware scoring on the FINAL eval-set evaluations (sweep stays "
+        "strict); one HuBERT pass per ref on first use",
     )
     args = ap.parse_args(argv)
 
@@ -296,7 +341,8 @@ def main(argv: list[str] | None = None) -> int:
         num_workers=0,  # features are cached in-process; workers would re-pool
     )
 
-    model = TrajectoryDecoder().to(device)
+    slopes = tuple(float(v) for v in args.slopes.split(",") if v.strip())
+    model = TrajectoryDecoder(stretch_slopes=slopes).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     print(f"model params: {n_params}")
 
@@ -304,7 +350,7 @@ def main(argv: list[str] | None = None) -> int:
         state = torch.load(args.eval_only, map_location=device)
         model.load_state_dict(state["model"])
         print(f"loaded {args.eval_only}\n\n== decode A/B on checkpoint ==")
-        evaluate(model, eval_ds, device, f"argmax eval {eval_tag}")
+        evaluate(model, eval_ds, device, f"argmax eval {eval_tag}", fibers=args.fibers)
         best, best_acc = None, -1.0
         for lam in [float(v) for v in args.lam_sweep.split(",")]:
             for br in [float(v) for v in args.back_sweep.split(",")]:
@@ -327,6 +373,7 @@ def main(argv: list[str] | None = None) -> int:
             f"viterbi lam={lam:g} back={br:g} eval {eval_tag}",
             lam=lam,
             back_ratio=br,
+            fibers=args.fibers,
         )
         return 0
 
