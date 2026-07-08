@@ -121,6 +121,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--gt", type=Path, required=True)
     p.add_argument("--timeline", type=Path, default=None)
     p.add_argument("--sweep", action="store_true", help="grid-sweep ladder thresholds")
+    p.add_argument(
+        "--live",
+        action="store_true",
+        help="call the real DSP/ML probes on demand (live_runners) instead of "
+        "re-emitting the serialized chain observations (replay). fp/lyrics/hubert "
+        "recompute from the pulled aligning audio; cue/mert read the anchored "
+        "priors on the span. Writes a distinct <set>_events_live.jsonl log.",
+    )
     args = p.parse_args(argv)
 
     tl_path = args.timeline or OUT_DIR / f"{args.set_id}_predicted_timeline.json"
@@ -134,18 +142,35 @@ def main(argv: list[str] | None = None) -> int:
         )
         for s in timeline["spans"]
     ]
-    # replay has no mert values for overridden spans — mert runner abstains there
-    runners = {
-        name: _replay_runner(name)
-        for name in (
-            "cue_prior",
-            "mert_decode",
-            "fp",
-            "lyrics",
-            "stem_hubert",
-            "chroma_refine",
+    if args.live:
+        from workspaces.alignment_prototype.agentic.live_runners import (
+            LiveContext,
+            build_live_runners,
         )
-    }
+
+        ctx = LiveContext.from_set(args.set_id, timeline["spans"])
+        if ctx is None:
+            sys.exit(f"live: could not build LiveContext for {args.set_id} (no MERT)")
+        runners = build_live_runners(ctx)
+        print(
+            f"[live] runners loaded: {sorted(runners)} (channels: {sorted(ctx.loaded)})"
+        )
+        for name in ("cue_prior", "mert_decode", "fp", "lyrics", "stem_hubert"):
+            if name not in runners:
+                print(f"[live] {name}: SKIPPED (channel not loaded — abstains)")
+    else:
+        # replay has no mert values for overridden spans — mert runner abstains there
+        runners = {
+            name: _replay_runner(name)
+            for name in (
+                "cue_prior",
+                "mert_decode",
+                "fp",
+                "lyrics",
+                "stem_hubert",
+                "chroma_refine",
+            )
+        }
     # surprise is live even in replay: its novelty curve comes from the cached
     # mix-MERT artifact (order-free, no GT or chain output involved)
     from workspaces.alignment_prototype.agentic.novelty import surprise_runner_for_set
@@ -156,9 +181,17 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(f"[skip] surprise: no {args.set_id}_mix_mert.npz artifact")
 
-    log_path = OUT_DIR / "agentic" / f"{args.set_id}_events.jsonl"
+    # a live run's log is not regenerable — keep it off the replay log path
+    log_name = (
+        f"{args.set_id}_events_live.jsonl"
+        if args.live
+        else f"{args.set_id}_events.jsonl"
+    )
+    log_path = OUT_DIR / "agentic" / log_name
     if log_path.exists():
-        log_path.unlink()  # replay is regenerable; the log of a LIVE run never is
+        # each run is a full recompute; start its own log fresh. The distinct
+        # *_live.jsonl name keeps a live run from ever clobbering the replay log.
+        log_path.unlink()
     res: Resolution = resolve(spans, runners, EventLog(log_path), ladder=Ladder())
     print(res.summary())
 

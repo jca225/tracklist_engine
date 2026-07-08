@@ -191,6 +191,53 @@ def masking_gate(
 
 
 # ---------------------------------------------------------------------------
+# Fiber-instance ambiguity gate (B3 — repeat-class abstain)
+# ---------------------------------------------------------------------------
+# A decoded ref placement that lands inside a self-repeat class (chorus played
+# 2-3x) is content-undecidable: every instance has identical audio, so which one
+# played rests on the monotonic/continuity prior, NOT the signal. The repo's
+# standing stance (path_decode --lam-back help; the --fibers metric) is to abstain
+# on the *instance* while still trusting the *content* identity. This gate is the
+# belief-layer expression of that: keep the observation but lower its precision so
+# the ladder routes an ambiguous-instance placement to review rather than
+# auto-committing a coin-flip. Complements masking_gate (same shape).
+
+
+def fiber_gate(
+    obs: Observation,
+    labels,  # np.ndarray fiber labels for the ref, or None to no-op
+    label_hz: float,
+    *,
+    mu=None,  # optional soft membership (compute_fibers_soft) — low mu also distrusts
+    floor: float = 0.6,
+    min_membership: float = 0.15,
+) -> Observation:
+    """Down-weight ``obs`` when its ref placement is instance-ambiguous.
+
+    Uses ``ref_fibers.fiber_ambiguity`` on ``obs.ref_start_s``: if the placement
+    falls in a fiber with >= 2 instances (``ambiguous``), or its soft membership
+    is near zero, scale the precision by ``floor`` (≤1). Observations that
+    abstained, carry no ref placement, or land outside any repeat class pass
+    through unchanged — so single-instance content still auto-commits."""
+    if obs.abstained or obs.ref_start_s is None or labels is None:
+        return obs
+    from workspaces.alignment_prototype.ref_fibers import fiber_ambiguity
+
+    amb = fiber_ambiguity(labels, label_hz, obs.ref_start_s, mu=mu)
+    low_membership = mu is not None and amb["membership"] < min_membership
+    if not amb["ambiguous"] and not low_membership:
+        return obs
+    tag = (
+        f" [fiber×{amb['n_instances']} amb]"
+        if amb["ambiguous"]
+        else f" [fiber μ={amb['membership']:.2f}]"
+    )
+    return replace(
+        obs, precision=obs.precision * floor, detail=(obs.detail + tag).strip()
+    )
+
+
+# ---------------------------------------------------------------------------
 # Predictive-coding surprise prior (info-dynamics → ordering-free placement)
 # ---------------------------------------------------------------------------
 # The brain predicts the next sound and spikes on surprise; a boundary/novelty
