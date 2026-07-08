@@ -360,3 +360,40 @@ mashup sets also score 0/6 (2cxndfmk, zwf3n2t), so the split is a trend, not a l
 **Implication for the aligner.** Boundary-from-surprise is a usable signal for
 mashup/Big-Bootie-style sets (the GT domain) but weak for smooth festival sets —
 the aligner should not rely on it as a universal boundary cue.
+
+---
+
+## Warp structure is low-rank: two channel-locked axes (BB11 + BB12, n=316 spans)
+
+Reproduce: [`warp_analysis/`](warp_analysis/) — `extract_warp_table.py`,
+`decompose_bpm.py`, `build_prior.py`. Feeds synthetic-mashup generation
+(`workspaces/alignment_prototype/synthetic_mix/`) via the emitted
+[`warp_analysis/warp_prior.json`](warp_analysis/warp_prior.json).
+
+Warp splits into two orthogonal axes, each pinned to a stem channel — **same
+direction in both sets** (no BB11↔BB12 inversion; only magnitude differs):
+
+1. **Tempo-stretch → the acappella channel, and it is DERIVED from the BPM gap.**
+   Beds (instrumental/regular) play near-native — 93% within ±5% of `tempo_ratio`
+   1.0, robust σ≈0.012. Acappellas carry essentially all the stretch (31% within
+   ±5%). That stretch is not a free choice: `tempo_ratio = mix_BPM /
+   acap_native_BPM` (with `mix_BPM = bed_BPM × bed_tempo_ratio`) holds for **70% of
+   acappellas within ±5%, 75% allowing a half/double-time octave fold** — vs 31%
+   for a "predict no warp" baseline, at 6× lower median error. The residual tail is
+   Essentia BPM octave-detection error, not DJ behaviour.
+2. **Cut/rearrange → the instrumental channel.** Beds are chopped into segments and
+   jump-arranged (65% multiseg, median 3 segments) even at `tempo_ratio≈1` —
+   warp-marker-heavy but tempo-flat. Orthogonal to axis 1.
+
+Pitch shift is near-discrete: `{0: 77%, ±1: 22%, ±2: <1%}`.
+
+**Implication for synthetic generation.** Do not sample `tempo_ratio` freely —
+sample a per-window bed BPM and *derive*: beds at `N(1, 0.012)`, overlays at
+`mix_BPM/payload_BPM` (+ ~10% octave fold), instrumentals chopped per the
+`cut_up` distribution. The derive-formula already exists at
+`synthetic_mix/scenario_v2.py:198` but is dead (`master_bpm=None`); activating it
+is the highest-leverage realism fix.
+
+**Caveats.** n=316 over 2 sets — marginals robust, tail less so. `octave_fold_prob`
+≈0.10 is entangled with Essentia BPM octave errors, so approximate. Re-fit when
+BB10 / Murph GT lands.
