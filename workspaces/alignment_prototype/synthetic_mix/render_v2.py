@@ -36,6 +36,17 @@ def _render_bed_slice(
     ref_i1 = int(sl.ref_end_s * sr)
     seg = y[ref_i0:ref_i1]
     target_len = int((sl.mix_end_s - sl.mix_start_s) * sr)
+    # Warp: the slice consumes (ref_end-ref_start) ref-seconds over
+    # (mix_end-mix_start) mix-seconds, so stretch by their ratio. rate=1 (the
+    # unwarped/legacy case) is a no-op and the pad/trim below just fixes
+    # rounding.
+    ref_len = ref_i1 - ref_i0
+    if ref_len > 0 and target_len > 0 and seg.size > 0:
+        rate = ref_len / target_len
+        if abs(rate - 1.0) > 0.01:
+            import librosa
+
+            seg = librosa.effects.time_stretch(seg, rate=rate)
     if len(seg) > target_len:
         seg = seg[:target_len]
     elif len(seg) < target_len:
@@ -64,9 +75,9 @@ def _render_instrumental_block(
                     (rel - block.mix_start_s) / crossfade_s, 0.0, 1.0
                 ).astype(np.float32)
             if block.mix_end_s < len(mix_instr) / SR - 0.01:
-                gain *= np.clip(
-                    (block.mix_end_s - rel) / crossfade_s, 0.0, 1.0
-                ).astype(np.float32)
+                gain *= np.clip((block.mix_end_s - rel) / crossfade_s, 0.0, 1.0).astype(
+                    np.float32
+                )
         _add_with_gain(mix_instr, seg, start, gain)
         _add_with_gain(mix_full, seg, start, gain)
 
@@ -74,16 +85,19 @@ def _render_instrumental_block(
 def _stretch_pitch_vocal(
     seg: np.ndarray,
     *,
-    host_bpm: float,
-    payload_bpm: float,
+    target_len: int,
     pitch_semi: int,
 ) -> np.ndarray:
+    """Geometric warp: stretch the sliced ref [ref_start,ref_end] to exactly fill
+    its mix span (rate = ref_len/target_len == the span's tempo_ratio). Renders
+    match the label for ANY tempo_ratio convention — no BPM math here."""
     import librosa
 
     out = seg
-    rate = payload_bpm / host_bpm if host_bpm > 0 else 1.0
-    if abs(rate - 1.0) > 0.005:
-        out = librosa.effects.time_stretch(out, rate=rate)
+    if seg.size > 0 and target_len > 0:
+        rate = len(seg) / target_len
+        if abs(rate - 1.0) > 0.005:
+            out = librosa.effects.time_stretch(out, rate=rate)
     if pitch_semi:
         out = librosa.effects.pitch_shift(out, sr=SR, n_steps=pitch_semi)
     return out
@@ -98,13 +112,10 @@ def _render_acap_linear(
     ref_i0 = int(span.ref_start_s * SR)
     ref_i1 = int(min(span.ref_end_s, len(y) / SR - 0.01) * SR)
     seg = y[ref_i0:ref_i1]
-    seg = _stretch_pitch_vocal(
-        seg,
-        host_bpm=span.host_bpm,
-        payload_bpm=span.payload.bpm,
-        pitch_semi=span.pitch_shift_semi,
-    )
     target_len = int((span.mix_end_s - span.mix_start_s) * SR)
+    seg = _stretch_pitch_vocal(
+        seg, target_len=target_len, pitch_semi=span.pitch_shift_semi
+    )
     if len(seg) > target_len:
         seg = seg[:target_len]
     elif len(seg) < target_len:
@@ -125,13 +136,10 @@ def _render_acap_loop(
         ref_i0 = int(sl.ref_start_s * SR)
         ref_i1 = int(sl.ref_end_s * SR)
         seg = y[ref_i0:ref_i1]
-        seg = _stretch_pitch_vocal(
-            seg,
-            host_bpm=span.host_bpm,
-            payload_bpm=span.payload.bpm,
-            pitch_semi=span.pitch_shift_semi,
-        )
         target_len = int((sl.mix_end_s - sl.mix_start_s) * SR)
+        seg = _stretch_pitch_vocal(
+            seg, target_len=target_len, pitch_semi=span.pitch_shift_semi
+        )
         if len(seg) > target_len:
             seg = seg[:target_len]
         elif len(seg) < target_len:
@@ -155,13 +163,10 @@ def _render_regular(
     ref_i0 = int(span.ref_start_s * SR)
     ref_i1 = int(min(span.ref_end_s, m / SR - 0.01) * SR)
     seg = full[ref_i0:ref_i1]
-    seg = _stretch_pitch_vocal(
-        seg,
-        host_bpm=span.host_bpm,
-        payload_bpm=span.regular.bpm,
-        pitch_semi=span.pitch_shift_semi,
-    )
     target_len = int((span.mix_end_s - span.mix_start_s) * SR)
+    seg = _stretch_pitch_vocal(
+        seg, target_len=target_len, pitch_semi=span.pitch_shift_semi
+    )
     if len(seg) > target_len:
         seg = seg[:target_len]
     elif len(seg) < target_len:

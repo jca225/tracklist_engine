@@ -60,7 +60,9 @@ def _write_window(out_dir: Path, window, rendered) -> None:
 
     write_flac(out_dir / "mix.flac", rendered.mix, rendered.sr)
     write_flac(out_dir / "mix_vocals.flac", rendered.mix_vocals, rendered.sr)
-    write_flac(out_dir / "mix_instrumental.flac", rendered.mix_instrumental, rendered.sr)
+    write_flac(
+        out_dir / "mix_instrumental.flac", rendered.mix_instrumental, rendered.sr
+    )
 
     seen: set[str] = set()
     for block in window.instrumentals:
@@ -125,9 +127,7 @@ def generate(args: argparse.Namespace) -> int:
             if args.verbose:
                 print(f"  reject {mix_id}: {'; '.join(issues)}")
             continue
-        rendered = render_window_v2(
-            window, crossfade_s=cfg.handoff_crossfade_s
-        )
+        rendered = render_window_v2(window, crossfade_s=cfg.handoff_crossfade_s)
         mix_dir = out_root / mix_id
         _write_window(mix_dir, window, rendered)
         st = stats_from_gt(gt)
@@ -151,7 +151,9 @@ def generate(args: argparse.Namespace) -> int:
 
 
 def validate_corpus(root: Path, curriculum: str) -> int:
-    dirs = sorted(p for p in root.iterdir() if p.is_dir() and p.name.startswith("synthv2_"))
+    dirs = sorted(
+        p for p in root.iterdir() if p.is_dir() and p.name.startswith("synthv2_")
+    )
     if not dirs:
         print(f"no synthv2_* dirs in {root}", file=sys.stderr)
         return 1
@@ -177,17 +179,21 @@ def validate_corpus(root: Path, curriculum: str) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--n", type=int, default=20)
     p.add_argument(
         "--curriculum",
-        choices=["bb12-lite", "bb12-med", "bb12-full"],
+        choices=["bb12-lite", "bb12-warp", "bb12-med", "bb12-full"],
         default="bb12-lite",
     )
     p.add_argument("--out", type=Path, default=DEFAULT_OUT)
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--no-key-bpm", action="store_true")
-    p.add_argument("--no-validate", action="store_true", help="Accept windows failing stats gate")
+    p.add_argument(
+        "--no-validate", action="store_true", help="Accept windows failing stats gate"
+    )
     p.add_argument("--verbose", action="store_true")
     p.add_argument(
         "--validate-only",

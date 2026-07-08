@@ -36,7 +36,7 @@ def _instr_track(block: InstrumentalBlock) -> GroundTruthTrack:
         ref_end_s=ref_end,
         slot_label=block.slot_label,
         ref_source="synthetic_stem",
-        tempo_ratio=1.0,
+        tempo_ratio=block.tempo_ratio,
         pitch_shift_semi=block.pitch_shift_semi,
         ref_segments=segs,
     )

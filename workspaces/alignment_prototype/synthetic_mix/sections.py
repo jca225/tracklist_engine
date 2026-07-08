@@ -20,6 +20,27 @@ CURRICULUM_V2 = {
         "loop_phrase_s": (3.5, 5.5),
         "loop_repeats": (3, 5),
     },
+    "bb12-warp": {
+        # Dead-simple saturated at ~40 windows (flat 40->75). This rung applies
+        # the empirical warp prior (warp_prior.json, fitted on BB11+BB12): beds
+        # near-native N(1,~0.0115), overlays DERIVED tempo_ratio = mix_BPM/native
+        # (the correct direction; the old payload/bed was reciprocal), + deeper
+        # layering. NO FX. Everything else mirrors lite so the A/B isolates warp.
+        "window_s": 180.0,
+        "n_instrumentals": 2,
+        "acap_count": (7, 10),
+        "n_loops": (1, 2),
+        "n_regulars": (0, 1),
+        "instr_jump_segments": (2, 3),
+        "instr_jump_prob": 0.85,
+        "max_key_dist": 1,
+        "max_bpm_fold": 0.05,
+        "handoff_crossfade_s": 3.0,
+        "acap_duration_s": (22.0, 42.0),
+        "loop_phrase_s": (3.5, 5.5),
+        "loop_repeats": (3, 5),
+        "warp_prior": True,  # drive warp from warp_prior.json (beds+overlays)
+    },
     "bb12-med": {
         "window_s": 300.0,
         "n_instrumentals": 2,
@@ -69,6 +90,7 @@ class CurriculumV2:
     acap_duration_s: tuple[float, float]
     loop_phrase_s: tuple[float, float]
     loop_repeats: tuple[int, int]
+    warp_prior: bool = False  # False => legacy slope-1 beds / payload-BPM overlays
 
 
 def get_curriculum(name: str) -> CurriculumV2:
@@ -89,4 +111,5 @@ def get_curriculum(name: str) -> CurriculumV2:
         acap_duration_s=tuple(raw["acap_duration_s"]),
         loop_phrase_s=tuple(raw["loop_phrase_s"]),
         loop_repeats=tuple(raw["loop_repeats"]),
+        warp_prior=bool(raw.get("warp_prior", False)),
     )
