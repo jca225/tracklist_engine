@@ -40,6 +40,14 @@ workspaces/separation_qa/smoke_run.log
 workspaces/alignment_prototype/.cache/
 workspaces/alignment_prototype/.feat_cache/
 workspaces/alignment_prototype/out/
+# external-dataset caches (UnmixDB/SALAMI audio + features — GBs, regenerable)
+workspaces/alignment_prototype/external/.chroma_cache/
+workspaces/alignment_prototype/external/.salami_audio/
+workspaces/alignment_prototype/external/.salami_data/
+workspaces/alignment_prototype/external/out/
+# looptrace: audit_*.json caches stay TRACKED (failure_analysis reads them); logs don't
+workspaces/alignment_prototype/looptrace/out/*.log
+eda/alignment/warp_analysis/out/
 workspaces/section_hsmm/.cache/
 workspaces/section_hsmm/out/
 workspaces/source_detection/.cache/

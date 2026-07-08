@@ -3,294 +3,142 @@
 Incubates in `workspaces/` per [alignment_program_plan.md](../../docs/alignment_program_plan.md).
 Promote to top-level `alignment/` when stable.
 
-## Current scope
+**Closed experiments live in [attic/](attic/EXPERIMENTS.md)** — a verdict ledger
+of ~20 one-off probes/evals whose questions are answered. Read the verdict
+before re-testing an idea; most attic scripts are there because the idea was
+measured and rejected.
 
-- Load exported `*_ground_truth.yaml` → `SpanTarget` rows
-- Held-out split by base slot (`split.py`)
-- Eval metrics + baselines (`eval.py`, `model.py`)
-- `CopyGTBaseline` sanity model (loss should be 0 on eval)
-- Huber placement + identity CE loss stubs
-- `MertAlignHead` seed ensemble (`TrainConfig.n_heads`) + joint slot decoding:
-  identity = max over (mix window, ref window) pairs in the search band; a
-  slot's k spans assign to top-k candidates, and `predict_sequence` then
-  re-scores each multi-span slot's span→candidate assignment by global
-  decode total (`_sweep_slot_assignments`) — the anchor-band match-time
-  ordering swapped slots 058/059 (spans minutes apart, band covers neither)
+## Live kernel
 
-**BB12 held-out eval (2026-06-09):** identity 100% (30/30), ref_start MAE
-0.84 s, set placement MAE 39 s (median 37 s, p90 78 s) via
-`predict_sequence` — a whole-mix monotonic DP (`sequence_decode.py`)
-replacing the per-slot anchor band. Candidates without MERT embeddings are
-logged loudly, never silently zero-filled (that hid the slot-039 miss).
-All-span identity (train+eval) is 147/147 after the assignment sweep
-(2026-06-10) and printed by `train.py --eval --train-mert` as a `MISS`
-report — watch it on new sets; within-slot swaps don't show in held-out
-metrics.
+Six entry points; everything else at top level is a module they import.
 
-> **⚠ Label corruption (fixed 2026-06-11, commit a450005):** the GT export
-> read the warp anchor instead of the clip trim, so most ref_start labels
-> were ≈0 — the 0.84 s ref MAE above was self-consistent-but-wrong, and any
-> head trained before the bb12_ground_truth.yaml regeneration learned to
-> predict ~0 ref offsets. **Retrain on the regenerated yaml** before
-> trusting decode ref offsets. Set placement + identity metrics unaffected.
-> Detector eval vs corrected GT (`eval_ref_detection.py`, n=20 straight
-> clips): regular 42% exact <2 s / 67% repeat-equivalent, acappella 0%/14%
-> (vocal chroma weak — needs a vocal-specific signal), stretch err 1.2%
-> median (grid heuristic validated). Loops/segments (83/166 GT rows!) are
-> outside linear scoring — span output must become segment lists.
->
-> End-to-end pipeline on BB12 vs corrected GT (`score_timeline_vs_gt.py`,
-> retrained head, in-domain upper bound, 2026-06-11): identity 66% (time-
-> overlap matching — placement error >5 s can mark correct ids wrong),
-> set placement median 30 s / p90 76 s (cue-anchored), ref offsets median
-> 50 s on straight clips (repeat ambiguity dominates; needs continuity
-> decode). The mix-side timebase bug (c43fa62) is fixed in this number.
+| entry point | role |
+|---|---|
+| `infer.py` | cross-set inference: identity (MERT `predict_sequence`) + placement (`--fp-placement` + `--stem-placement`, both default on) + ref offsets |
+| `joint_ref_decode.py` | post-infer segment decode: `path_decode.decode_path` Viterbi writes per-span `ref_segments` into the timeline JSON (feature-routed: acappella→HuBERT, else chroma; `--decoder looptrace` for the loop-collapse variant) |
+| `train.py` | MERT head training / eval (`--eval`, `--train-mert`); watch the `MISS` report on new sets |
+| `path_decode.py` | Viterbi span decoder over ref offset (loop/jump/odd-ratio); `--eval` = oracle-placement upper bound; also home of `trajectory_acc` scoring |
+| `agentic/` | POMDP agentic loop (`python -m ...agentic --set-id <id> --gt <yaml>`); `--live` runs real fp/lyrics/HuBERT/mert/surprise probes |
+| `harness/` | Probe/AlignmentResult/DeterministicDriver contract; `axes.py` = stem→axis routing; `merge.py` `source_priority` = axis-priority fusion |
 
-**Measured limitation (MERT):** pooled-MERT cosine does not *localize* content
-in the mix — with the oracle ref segment, the unconstrained argmax is ~900 s
-off at every layer (0–24). MERT is identity, not placement. (The old ~39 s
-"placement wall" was read off the monotonic tiling prior.)
+Core modules (imported, not run): `dataset/records/split/losses/eval` (GT spans),
+`mert_store/mert_features/mert_model` (identity), `landmark_fp/fp_index/mix_fp_hits/
+fp_placement_refine` (fingerprint placement), `refine_ref_offsets` (chroma
+matched filter), `stem_placement` (HuBERT acappella set_start), `ref_fibers`
+(repeat classes), `lyrics_align` (+`vocal_enhance`/`enhance_vocal` subprocess),
+`continuity_refine`, `sequence_decode`, `slot_priors`, `fine_refine`, `fiber_ab`,
+`eval_bench`+`nmf_baseline` (external André-2024 benchmark), `tempo_curve`
+(als tempo primitives; imported by main-suite tests), `seed_als_from_timeline` +
+`render_review_snippets` (review loop), `review_server`/`fiber_server`/`fiber_ui`/
+`discern_server` (human-review UIs), `export_mert_from_pi`, `pretrain` (UnmixDB).
 
-**PLACEMENT REFRAME (2026-06-28) — the ~30 s "wall" was a decomposition error.**
-The landmark fingerprint localizes the mix↔ref *alignment diagonal* to **0.2 s
-median / 76 %** (BB12 regular). set_start looked stuck at ~30 s only because we
-measured it as the alignment offset, but DJs start tracks mid-song (GT ref_start
-median ~56 s), so **set_start = ref_start + d**. The fingerprint's own
-vote-density extent along the diagonal gives the span directly:
-`mix_fp_hits.span_from_offset_votes` (single ref, set_start median 5.7 s) →
-`offset_candidates` (top-K diagonals) → `decode_placements` (monotonic decode
-over tracklist order, rejects out-of-order wrong-diagonal/repeat picks): **BB12
-regular set_start median 4.1 s, <15 s 73 %.** Run: `python -m
-workspaces.alignment_prototype.eval_placement`. Requires the fingerprint backfill
-(`scripts/backfill_track_fingerprints.py`, done corpus-wide). The ~27 % outliers
-are weak-fp / repeat spans (true diagonal absent from top-K) → per-stem + fibers;
-cheap post-hoc fixes (cluster-strength, isotonic, boundary-snap) were all measured
-and REJECTED — see the `project_placement_wall_was_decomposition_error` memory.
+Subdirectories: `looptrace/` (acappella loop-collapse decode), `trajectory/`
+(learned segment-trajectory decoder), `neuro/` (probe-precision fusion),
+`synthetic_mix/` (synthetic mashup pretrain data), `external/` (UnmixDB/SALAMI
+loaders + caches).
 
-**Axis decomposition (the unifying principle).** song ≈ timbre × harmony ×
-language, near-orthogonal: timbre=MERT (identity only), harmony=chroma,
-language=HuBERT. Match/fiber on the NUISANCE-INVARIANT axis per stem — vocals →
-HuBERT ("lyrics don't transpose"; key-invariant, beats chroma on acappella
-ref-offset 2.1 s vs 39.6 s median), instrumental → chroma+fingerprint. `harness/
-axes.py` routes stem → (mix_file, ref_stem, invariant_feature, placement_probes,
-in priority order). Key changes break chroma (31 % of BB11 acappellas re-pitched;
-transposition search adds spurious peaks) — HuBERT sidesteps it. Fusion must use
-the axis prior, not raw cross-probe confidence (`harness/merge.py` source_priority).
+## Scorecard — the source of truth for "did it help"
 
-**Design decision (2026-06-11) — stem-wise alignment.** A mix moment is a
-sum of layers (host instrumental + overlaid acappellas), so full-mix-only
-matching entangles them and matches no single ref — the root cause of the
-localization failure above, on BB12 too. Alignment is computed per stem
-channel (mix_vocals↔ref vocals stem, mix_instrumental↔ref instrumental
-stem) AND on the full mix, as separate channels fused at decode. Division
-of labor: identity = MERT head (100% BB12 held-out); ref-offset placement =
-matched-filter correlation (`refine_ref_offsets.py` — BB11 151/151
-relocated, median move 100 s vs decode, peak median 0.83); tempo = the
-instrumental-BPM-anchor heuristic (host grid never changes within a span;
-acappellas beat-synced to it ⇒ stretch = ref_bpm / mix_local_bpm from
-set_measures × track_measures, search in beat space with bar-quantized
-offsets — v1's seconds-space stretch grid saturated at its 0.92/1.08 edges).
+```bash
+make scorecard        # per-span table + impact-weighted failure attribution (BB11+BB12)
+# or per set:
+venvs/audio/bin/python -m workspaces.alignment_prototype.score_timeline_vs_gt \
+    --set-id 1fsnxchk [--fibers] [--decompose]
+```
 
-## Harness + new modules (2026-06-28)
+`eda/alignment/failure_analysis/` is the canonical breakdown (one binding cause
+per span, weighted by GT-seconds lost). **Axis rule: take `claimed_stem` from
+the matched GT row, never from the timeline span** — the materialized value was
+corrupted by the row-text drop bug (fixed 888aca, but pre-fix timelines and the
+canonical DB until re-materialization still carry it; BB12 showed 2
+instrumentals vs 25 real). `score_timeline_vs_gt` does this now.
 
-The unified-aligner consolidation (plan: `.claude/plans/and-then-can-we-cuddly-sparrow.md`):
-- `harness/` Probe/AlignmentResult/DeterministicDriver contract; probes:
-  `chroma_probe`, `fingerprint_probe`, `path_decode_probe`, **`hubert_probe`**
-  (vocal/language axis), **`continuity_probe`** (repeat-robust stack). `axes.py`
-  = the stem→axis routing. `merge.py` `source_priority` = axis-priority arbitration.
-- `ref_fibers.compute_fibers_soft` (μ membership + per-fiber confidence) +
-  `fiber_ambiguity` (instance-abstain signal). Fibers are HuBERT+silence-gate, never chroma.
-- `mix_fp_hits.{span_from_offset_votes, offset_candidates, decode_placements}` =
-  the placement pipeline; `eval_placement.py` runs it vs GT.
+State (2026-07-08, corrected routing, BB11+BB12): identity 84/83%, set_start
+median 6.3/7.9 s, acappella trajectory 21% (up from 11% mis-routed), 81% of
+GT-seconds still lost. Loss attribution: decode-residual 45% (the "which
+chorus" repeat-instance wall) > placement ~31% > identity 6%. Acappella is 51%
+of mix-seconds and the worst axis. Full numbers + prioritized levers:
+[failure_analysis/FINDINGS.md](../../eda/alignment/failure_analysis/FINDINGS.md).
 
-## Wired (2026-06-28) — fp placement is the infer default
+## Design decisions (load-bearing — do not relearn these)
 
-`decode_placements` is now the placement source in `infer.py` (`--fp-placement`,
-default on). Identity still comes from `predict_sequence` (recording_id per span);
-the ~30s MERT placement is replaced by the landmark-fp vote-extent, and
-`ref_start_s = set_start_s + offset_s` (surfaced via `decode_placements(...,
-with_offset=True)`). Spans with no cached `regular` fp (or no diagonal) keep their
-MERT placement.
-
-**Consistency gate (`--fp-placement-gate-s`, default 90s):** fp is precise but
-UNLEASHED — a wrong-diagonal / wrong-identity pick places a span hundreds of
-seconds off (raw fp p90 was 340s). MERT is coarse but anchored (cue prior +
-monotonic decode, p90 ~78s). So fp is trusted only as a LOCAL refinement of MERT;
-when `|fp-mert| > gate`, keep the MERT placement. NB the scraped cue is **0.0 for
-every `w`-row** (concurrent mashup layers), so the leash must be MERT, not the cue.
-
-**In-domain BB12 (1fsnxchk) end-to-end vs GT** (A/B via `--no-fp-placement`):
-
-| metric | MERT (old) | fp, no gate | fp + gate 90s |
-|---|---|---|---|
-| set placement median | 30.5s | 9.2s | **6.6s** |
-| <15s | 31% | 57% | **63%** |
-| p90 | 78s | 340s | **61s** |
-| ref offset median | 50s | 31s | 26.5s |
-
-The gate improves BOTH median and p90 (reverting wrong-diagonal outliers helps
-everywhere, not just the tail). Band sweep: 90s optimal; ≤0 disables.
-`--fp-placement-compare` writes `mert_set_start_s` per span for A/B;
-`--no-fp-placement` restores the old MERT + DTW/`--fp-refine` path.
-
-**Per-stem acappella set_start (`--stem-placement`, default on; `stem_placement.py`):**
-the full-mix fp is weak on vocals, so acappella spans fall back to the ~30s MERT
-placement. HuBERT (phonetic, key-invariant) localizes the vocal in `mix_vocals`
-where chroma/fp can't. `place_joint` = the HuBERT analog of `span_from_offset_votes`:
-tile the ref vocal stem, slide each window over a BAND (`--stem-placement-band-s`
-90s, around the coarse prior) of mix_vocals HuBERT, vote for the alignment
-diagonal, set_start = start of the densest contiguous on-diagonal run. A fusion
-guard (`--stem-placement-guard-s` 8s) keeps the prior when HuBERT agrees closely
-(protects near-hits). **Refines set_start ONLY** — the joint ref_start is
-repeat-ambiguous (~52s), left to `refine_ref_offsets` + fibers. Needs
-`mix_vocals.flac` + ref vocals stems in `manifest.json` (present in pulled aligning
-folders). Cost: HuBERT on the hour-long mix_vocals once (~minutes, MPS).
-
-BB12 acappella set_start A/B (`--no-stem-placement`, n=41): a tail-for-precision
-tradeoff — **<8s 54→66%, <15s 61→76%, p90 96→72s**, but **<4s 44→34%** (HuBERT
-sometimes overrides an already-good MERT placement). Net end-to-end: p90 61→55s,
-<15s 63→67% (best-yet), <4s 41→38%, median flat 6.6→6.7s. Validated upper bound
-(oracle ref_start, whole-mix) = 1.1s median, so the gap is the joint diagonal
-search under chorus repeats. Instrumental set_start NOT wired (chroma fails on
-instrumental presence; GT n=5 can't validate).
-
-**Segment-list output (2026-06-29) — 63% of spans are non-straight.** BB12 GT is
-37% straight / 44% multiseg / 13% odd-ratio / 6% loop; a single `ref_start` can't
-represent the majority. Now the aligner emits per-span `ref_segments`
-(`[{mix_start_s, ref_start_s, ref_end_s}]`, the GT schema) and they're **scored**:
-- `joint_ref_decode.py` runs `path_decode.decode_path` (Viterbi: stay-on-diagonal
-  free, jump = loop/edit) **feature-routed** (acappella→HuBERT, else chroma),
-  post-infer, writing `ref_segments` into the timeline JSON.
-- `score_timeline_vs_gt.py --fibers` scores every span via `path_decode.trajectory_acc`
-  (ref(mix_t) coverage within 2s, fiber-aware repeat-equivalence) per class
-  (linear/multiseg/loop/oddratio) + stem; **headline = multiseg+loop fiber-aware**.
-- `seed_als_from_timeline.py` renders one warped clip per segment (round-trip:
-  BB12 799 clips parse back; content-based validation; `.seedbak` backup guard).
-
-BB12 fiber-aware traj-acc (real placement): HEADLINE multiseg+loop **26%**,
-acappella 11→**18%** (HuBERT routing), regular ~23%. Oracle upper bound
-(`path_decode --eval`, GT placement) = 59% ALL / 62% multiseg — the gap is real-vs-GT
-placement + repeat ambiguity. `SpanPrediction` stays scalar; `ref_segments` lives on
-the timeline JSON dict only (minimal blast radius).
-
-## Not wired yet
-
-- **Multi-set co-train (SCOPED 2026-07-02, not small):** train.py's `--yaml` is
-  single-set because `_run_mert_eval` binds ONE set's stores by `gt.set_id`
-  (`load_bb12_mert`, `AudioContext.from_set`, `FpPlacementContext.from_set`) and
-  `SpanTarget` carries no set tag. Real design: SpanTarget += set_id; a
-  per-set store map {set_id -> (mert, audio_ctx, fp_ctx)}; batches routed by
-  tag. Gated anyway on a third COMPLETE GT set to hold out (BB12+BB11 exist;
-  BB10/Murph not started). Don't bolt a concat hack.
-- **Seeding-for-labeling is DEAD as a use case (John, 2026-07-06).** John
-  hand-labels every set in his own convention (clean session, varying master
-  tempo) — do NOT pitch seeded sessions as labeling acceleration or ask him
-  to choose seeding options; the Jun-16 seeds were trashed as more hindrance
-  than help. The seeder's remaining role is **prediction rendering for the
-  review loop only** (step 3 of "Human review loop" above). What's fixed
-  (2026-07-06, d01b7ea): provenance is stamped — output is `<SET> SEEDED.als`
-  (hard-refuses `* align.als` even via `--out`) with locator #1 = `SEEDED
-  <date> — machine predictions, NOT GT` — and the correct tempo-placement
-  primitive exists (`labeling.als.tempo_sec_to_beat`, property-tested inverse
-  of `tempo_beat_to_sec`) for any future code that writes tempo automation.
-  Master-tempo *emission*: deferred, but it HAS an eventual consumer — the
-  aligner's **product-grade `.als` output** (the north-star deliverable is an
-  Ableton session in the hand convention: varying master tempo, unwarped
-  mix). Build it when aligner quality warrants shipping sessions to humans,
-  not for labeling. `tempo_sec_to_beat` is its core primitive.
-
-- **Segment traj-acc is still low (26%)** — bounded by set_start placement error
-  (segments decode off the placed mix window) + repeat ambiguity. Levers: tighter
-  octave band for regular (a small Phase-2 regression source), per-segment
-  confidence/abstain, better placement.
-- Per-stem acappella **ref_start** (which part of the song): the joint ref_start is
-  repeat-ambiguous; route `refine_ref_offsets` vocals→HuBERT + fibers/continuity.
-- Per-stem **instrumental** set_start: needs a validated feature (stem fp backfill
-  or beat-grid matched filter); chroma fails and GT n=5 can't validate.
-- A confidence floor on the HuBERT peak to stop the `<4s` over-override regression.
-- B3 live decode: `fiber_ambiguity`/μ computed but not yet fed into the live decode.
-- Learned fusion arbiter (C1/C2): probe-feature extractor + small head over
-  {axis scores, fiber conf, fp sharpness} — needs more GT (leave-one-set-out CV).
-- PyTorch training loop beyond the small `MertAlignHead`; learned weighted-sum over MERT layers.
+- **Axis decomposition:** song ≈ timbre × harmony × language, near-orthogonal.
+  timbre=MERT (identity ONLY — pooled-MERT cosine cannot localize; ~900 s off
+  unconstrained), harmony=chroma, language=HuBERT. Match on the
+  nuisance-invariant axis per stem: vocals→HuBERT (key-invariant — 31% of BB11
+  acappellas are re-pitched and key changes break chroma; 2.1 s vs 39.6 s median
+  ref-offset), instrumental→chroma+fingerprint. Fusion uses the axis prior
+  (`harness/merge.py` `source_priority`), never raw cross-probe confidence.
+- **Stem-wise alignment:** a mix moment is a sum of layers; full-mix-only
+  matching entangles them. Align per stem channel (mix_vocals↔ref vocals, etc.)
+  AND full mix, fused at decode.
+- **set_start = ref_start + fp diagonal offset.** The old ~30 s "placement wall"
+  was a decomposition error: the landmark fp localizes the alignment diagonal to
+  0.2 s/76%; DJs start tracks mid-song. `mix_fp_hits.decode_placements` (vote
+  extent + monotonic decode) is the placement source in `infer`.
+- **fp is precise but unleashed** — wrong-diagonal picks land hundreds of
+  seconds off. `--fp-placement-gate-s 90` trusts fp only as a local refinement
+  of MERT (BB12: median 30.5→6.6 s, p90 78→61 s; gate helps median AND tail).
+- **Acappella set_start needs HuBERT** (`--stem-placement`): full-mix fp is weak
+  on vocals; `place_joint` votes the diagonal in mix_vocals (BB12 <15 s
+  61→76%, p90 96→72 s; known regression <4 s 44→34% — confidence floor TODO).
+  Refines set_start ONLY; joint ref_start stays repeat-ambiguous.
+- **Segment-list output:** 63% of GT spans are non-straight (multiseg/loop/
+  odd-ratio); the aligner emits per-span `ref_segments` and `trajectory_acc`
+  scores every class. Headline = multiseg+loop fiber-aware.
+- **Fibers are HuBERT+silence-gate, never chroma** (`ref_fibers`); externally
+  validated precise-but-low-recall (SALAMI P .88 / R .06) — that under-merge is
+  why `fiber_gate` doesn't transfer; multimodal fibers are the open lever.
+- **Old checkpoints:** any MERT head trained before the 2026-06-11 GT
+  regeneration (a450005) learned ~0 ref offsets — retrain, don't reuse.
 
 ## Commands
 
 ```bash
-venvs/audio/bin/python -m workspaces.alignment_prototype.train --dry-run
-venvs/audio/bin/python -m workspaces.alignment_prototype.train --eval
 venvs/audio/bin/python -m workspaces.alignment_prototype.train --eval --train-mert
-# cross-set inference (train on BB12 GT, predict target set)
 venvs/audio/bin/python -m workspaces.alignment_prototype.infer --set-id 2nvzlh2k --band-s 45
-# human verification of a predicted timeline (after infer):
-venvs/audio/bin/python -m workspaces.alignment_prototype.render_review_snippets --set-id 2nvzlh2k
-venvs/audio/bin/python -m workspaces.alignment_prototype.seed_als_from_timeline --set-id 2nvzlh2k
+venvs/audio/bin/python -m workspaces.alignment_prototype.joint_ref_decode --set-id 2nvzlh2k
+# fingerprint backfill (corpus-wide, done) + per-set hit cache:
+venvs/audio/bin/python scripts/backfill_track_fingerprints.py --dry-run
+venvs/audio/bin/python scripts/cache_set_fingerprint_hits.py --set-id 1fsnxchk
+# UnmixDB pretrain (external/unmixdb.py loader):
+venvs/audio/bin/python -m workspaces.alignment_prototype.pretrain --dry-run --unmixdb-root ~/data/unmixdb-v1.1
 ```
 
 ## Human review loop (predictions → GT)
 
 1. `infer` writes `out/<set_id>_predicted_timeline.json`.
-2. `render_review_snippets` renders per-span A/B clips (mix at predicted
-   position vs ref at predicted offset; acappella/instrumental spans use the
-   Demucs stem) + `out/review/<set_id>/review.html` — keyboard verdicts,
-   worst-suspicion-first. Listening pass ≈ 30–40 min for ~150 spans.
-3. `seed_als_from_timeline` writes a pre-seeded Live project to the Desktop
-   (60 BPM = 1 beat/s; clips warped onto predicted ref segments; color =
-   suspicion). Self-validates by round-tripping its own output through
-   `labeling/als_io` (placement, identity, stem). Human fixes failures only.
-4. The corrected `.als` exports via `labeling/export_als_to_gt.py` → the
-   target set becomes new GT; diff vs the predicted timeline = honest
-   placement/identity scorecard. Requires the set pulled via
-   `labeling/pull_set_for_alignment.py` (slot-spine fix ed7f121 — older
-   pulls silently dropped Rvmor-gap slots).
+2. `render_review_snippets --set-id <id>` → per-span A/B clips +
+   `out/review/<set_id>/review.html` (keyboard verdicts, worst-first; ~30–40 min
+   for ~150 spans).
+3. `seed_als_from_timeline --set-id <id>` → pre-seeded Live project, **stamped
+   `<SET> SEEDED.als`** (hard-refuses `* align.als`; locator #1 marks it
+   machine-predicted). Round-trips its own output through `labeling/als`.
+4. Human corrects → `labeling/export_als_to_gt.py` → new GT; diff vs the
+   predicted timeline = honest scorecard. Requires a pull via
+   `labeling/pull_set_for_alignment.py` (slot-spine fix ed7f121).
 
-## UnmixDB pretrain (external)
+**Seeding-for-labeling is DEAD as a use case (John, 2026-07-06).** John
+hand-labels every set in his own convention (clean session, varying master
+tempo). Never pitch seeded sessions as labeling acceleration. The seeder's only
+role is review-loop rendering. Master-tempo *emission* is deferred but has an
+eventual consumer — the product-grade `.als` output (north-star deliverable:
+hand-convention session, varying master tempo, unwarped mix);
+`labeling.als.tempo_sec_to_beat` (property-tested) is its core primitive.
 
-Download [UnmixDB](https://zenodo.org/records/1422385), then:
+## Not wired yet / scoped
 
-```bash
-# label parse smoke (no audio)
-venvs/audio/bin/python -m workspaces.alignment_prototype.pretrain --dry-run \\
-  --unmixdb-root ~/data/unmixdb-v1.1
-
-# chroma pretrain (pipeline validation; dim=12, no BB12 weight transfer)
-venvs/audio/bin/python -m workspaces.alignment_prototype.pretrain \\
-  --unmixdb-root ~/data/unmixdb-v1.1 --features chroma --max-mixes 50
-
-# MERT pretrain → BB12 ablation (use --features mert for weight transfer)
-venvs/audio/bin/python -m workspaces.alignment_prototype.pretrain --ablation \\
-  --pretrain-checkpoint workspaces/alignment_prototype/.cache/pretrain_mert.pt
-```
-
-Loader: `external/unmixdb.py`. Features: `external/feature_series.py` (chroma
-1 s bins or cached MERT 2 s bins). Checkpoints: `external/checkpoint.py`.
-
-## Landmark fingerprint index
-
-Backfill reference rows, then `refine_ref_offsets` reads the local cache:
-
-```bash
-venvs/audio/bin/python scripts/backfill_track_fingerprints.py --dry-run
-venvs/audio/bin/python scripts/backfill_track_fingerprints.py --limit 100
-venvs/audio/bin/python -m workspaces.alignment_prototype.refine_ref_offsets \\
-  --set-id 2nvzlh2k
-```
-
-Writes `track_fingerprints` (kind=landmark JSON) + `.cache/fp_index/`.
-Spans with weak chroma **and** weak fingerprint get `abstain_ref_offset: true`
-on the timeline JSON. This improves **ref_offset** recovery and safety; it does
-**not** fix the ~30–39 s **set_start** placement bottleneck by itself.
-
-## Mix fingerprint hits + placement refine
-
-Scan the mix per slot (cue ± band) into `set_fingerprint_hits`, then optional
-sharpness-gated per-span argmax on coarse decode:
-
-```bash
-venvs/audio/bin/python scripts/cache_set_fingerprint_hits.py --set-id 1fsnxchk --dry-run
-venvs/audio/bin/python scripts/cache_set_fingerprint_hits.py --set-id 1fsnxchk
-venvs/audio/bin/python -m workspaces.alignment_prototype.infer \\
-  --set-id 2nvzlh2k --fp-refine --fp-band-s 45 --fp-gate-z 1.0
-```
-
-Module: `mix_fp_hits.py` (scan + placement curves), `fp_placement_refine.py`
-(per-span override — **not** joint re-decode; see `docs/fine_placement_plan.md`).
+- **Multi-set co-train (SCOPED 2026-07-02, not small):** `train.py --yaml` is
+  single-set (`_run_mert_eval` binds one set's stores by `gt.set_id`;
+  `SpanTarget` has no set tag). Real design: SpanTarget += set_id, per-set store
+  map, batches routed by tag. Gated on a third COMPLETE GT set (BB10/Murph not
+  started). Don't bolt a concat hack.
+- **Acappella ref-offset instance selection** — the biggest modelling prize
+  (34% of all loss; six decode-layer threads dead, see looptrace/NOTES.md).
+  Live lever: learned selector over {HuBERT diagonal evidence, fiber
+  μ/ambiguity, fp sharpness}; needs the third GT set for leave-one-set-out.
+- Acappella set_start p90 tail; HuBERT confidence floor (the <4 s regression).
+- Per-stem instrumental set_start (chroma fails on instrumental presence;
+  GT n=5 can't validate).
+- B3: `fiber_ambiguity`/μ not yet fed into live decode; learned fusion arbiter
+  (C1/C2) gated on more GT.
