@@ -466,7 +466,6 @@ def main(argv: list[str] | None = None) -> int:
         help="also report fiber-aware accuracy (credit same self-repeat class — "
         "isolates true placement error from within-fiber repeat ambiguity)",
     )
-    p.add_argument("--fiber-k", type=int, default=6, help="sections per ref")
     p.add_argument(
         "--warp-jump",
         action="store_true",
