@@ -97,41 +97,62 @@ def _cummax_arg(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _viterbi(
-    reward: np.ndarray, lam_fwd: float, lam_back: float | None = None
+    reward: np.ndarray,
+    lam_fwd: float,
+    lam_back: float | None = None,
+    *,
+    fwd_slope: float = 0.0,
+    back_slope: float = 0.0,
 ) -> tuple[float, np.ndarray]:
     """Best piecewise-constant-offset path with a DIRECTIONAL jump penalty.
 
     reward[t, k] is the emission for window t at clip-start state k (larger k =
     later in the ref). Staying is free; a FORWARD jump (k increases — the DJ
-    skips ahead, 51% of plays) costs lam_fwd; a BACKWARD jump (replay an earlier
-    section) costs lam_back >> lam_fwd. This is the monotonic prior: among
-    equivalent repeats (same fiber) the path prefers the forward-consistent
-    instance, converting within-fiber ambiguity into correct placement.
+    skips ahead, 51% of plays) costs ``lam_fwd + fwd_slope*(k-j)``; a BACKWARD
+    jump (replay an earlier section) costs ``lam_back + back_slope*(j-k)``, with
+    lam_back >> lam_fwd. This is the monotonic prior: among equivalent repeats
+    (same fiber) the path prefers the forward-consistent instance, converting
+    within-fiber ambiguity into correct placement.
 
-    O(K) per step via exclusive prefix max (best forward source, j<k) and
-    suffix max (best backward source, j>k)."""
+    The optional *distance-graded* slopes (``fwd_slope``/``back_slope``, 0 =
+    the original flat penalty, exact-behaviour default) make a jump's cost scale
+    with its magnitude |Δk| in ref frames. This breaks the within-fiber tie the
+    flat penalty leaves — when several equivalent instances have identical
+    emission, the graded cost prefers the nearer (prior-consistent) one instead
+    of an arbitrary DP end-bias. Calibrated from the warp prior's ref-jump
+    scale (``warp_prior.json`` cut_up: forward jumps typical to +91s, backward
+    rare). Still O(K) per step: a linear-in-distance penalty keeps the source
+    search a prefix/suffix max on the shifted potential dp[j] ± slope*j.
+    """
     if lam_back is None:
         lam_back = lam_fwd
     tm, K = reward.shape
     dp = reward[0].astype(np.float64).copy()
     src = np.empty((tm, K), dtype=np.int32)
     ar = np.arange(K)
+    arf = ar.astype(np.float64)
     for t in range(1, tm):
-        # forward source: max over j<k (exclusive prefix)
-        pm, pa = _cummax_arg(dp)
+        # forward source: max over j<k of dp[j] - fwd_slope*(k-j)
+        #   = max_{j<k}(dp[j] + fwd_slope*j) - fwd_slope*k  (prefix max of g_f)
+        g_f = dp + fwd_slope * arf
+        pm, pa = _cummax_arg(g_f)
         pmv = np.empty(K)
         pmv[0] = -np.inf
         pmv[1:] = pm[:-1]
+        pmv[1:] -= fwd_slope * arf[1:]  # subtract the -slope*k term
         pmi = np.empty(K, np.int32)
         pmi[0] = 0
         pmi[1:] = pa[:-1]
-        # backward source: max over j>k (exclusive suffix) via reversed prefix
-        rm, ra = _cummax_arg(dp[::-1])
+        # backward source: max over j>k of dp[j] - back_slope*(j-k)
+        #   = max_{j>k}(dp[j] - back_slope*j) + back_slope*k  (suffix max of g_b)
+        g_b = dp - back_slope * arf
+        rm, ra = _cummax_arg(g_b[::-1])
         sm_inc = rm[::-1]
         sa_inc = (K - 1 - ra)[::-1]
         smv = np.empty(K)
         smv[-1] = -np.inf
         smv[:-1] = sm_inc[1:]
+        smv[:-1] += back_slope * arf[:-1]  # add the +slope*k term
         smi = np.empty(K, np.int32)
         smi[-1] = 0
         smi[:-1] = sa_inc[1:]
@@ -178,6 +199,28 @@ def _scores_at_stretch(
     return (num / den).astype(np.float32)
 
 
+def warp_jump_slopes(
+    fps: float, *, kappa: float, prior_path: Path | None = None
+) -> tuple[float, float]:
+    """Per-ref-frame (fwd, back) jump slopes calibrated from the warp prior.
+
+    The empirical DJ ref-jump distribution (``warp_prior.json`` cut_up) is
+    forward-skewed: forward skips reach ~+p90 s, backward replays only ~p10 s
+    and are rarer. We set each direction's per-second slope so a jump at that
+    direction's tail percentile costs a fixed ``kappa`` — so a big *forward*
+    skip (large p90) is cheap per second while a *backward* jump (small |p10|)
+    is expensive per second. Both scale to frames by /fps. This graduates the
+    flat lam penalty by jump magnitude, nudging the within-fiber tie toward the
+    nearer, prior-consistent instance (vs the flat penalty's arbitrary pick)."""
+    prior_path = prior_path or (
+        Path(__file__).resolve().parent / "synthetic_mix" / "warp_prior.json"
+    )
+    cut = json.loads(prior_path.read_text())["cut_up"]["ref_jump_s"]
+    p90 = abs(float(cut["p90"])) or 91.4
+    p10 = abs(float(cut["p10"])) or 38.4
+    return kappa / (p90 * fps), kappa / (p10 * fps)
+
+
 def decode_path(
     M: np.ndarray,
     R: np.ndarray,
@@ -187,6 +230,8 @@ def decode_path(
     hop_frames: int = 86,  # ~2 s window hop
     lam_back: float | None = None,  # backward-jump penalty (monotonic prior)
     weight: np.ndarray | None = None,  # per-span-frame fader gain (gain_curve)
+    fwd_slope: float = 0.0,  # per-ref-frame forward-jump cost (0 = flat, warp-off)
+    back_slope: float = 0.0,  # per-ref-frame backward-jump cost (0 = flat)
 ) -> tuple[list[tuple[float, float, float]], float]:
     """(segments, score). M=(D,Tm) span, R=(D,Tr) ref, both L2-normed per col.
 
@@ -229,7 +274,9 @@ def decode_path(
             continue
         lr0 = min(c.size - sh for c, sh, _ in valid)
         e = np.stack([c[sh : sh + lr0] for c, sh, _ in valid]).astype(np.float32)
-        score, path_r0 = _viterbi(e, lam, lam_back)  # path over windows
+        score, path_r0 = _viterbi(
+            e, lam, lam_back, fwd_slope=fwd_slope, back_slope=back_slope
+        )  # path over windows
         rel_v = [r for _, _, r in valid]
         if best is None or score > best[0]:
             best = (score, s, np.asarray(rel_v), path_r0)
@@ -360,12 +407,35 @@ def _stretch_band(t, mix_series, ref_series) -> tuple[float, ...]:
 
 
 def _job(args: tuple) -> dict:
-    idx, mix_npy, a, n, ref_npy, stretches, lam, wlen, hop, lam_back = args
+    (
+        idx,
+        mix_npy,
+        a,
+        n,
+        ref_npy,
+        stretches,
+        lam,
+        wlen,
+        hop,
+        lam_back,
+        fwd_sl,
+        back_sl,
+    ) = args
     M = np.load(mix_npy, mmap_mode="r")[:, a : a + n]
     R = np.load(ref_npy, mmap_mode="r")
     M = np.ascontiguousarray(M, dtype=np.float32)
     R = np.ascontiguousarray(R, dtype=np.float32)
-    segs, score = decode_path(M, R, tuple(stretches), lam, wlen, hop, lam_back)
+    segs, score = decode_path(
+        M,
+        R,
+        tuple(stretches),
+        lam,
+        wlen,
+        hop,
+        lam_back,
+        fwd_slope=fwd_sl,
+        back_slope=back_sl,
+    )
     return {"idx": idx, "segs": segs, "score": round(score, 3)}
 
 
@@ -397,6 +467,21 @@ def main(argv: list[str] | None = None) -> int:
         "isolates true placement error from within-fiber repeat ambiguity)",
     )
     p.add_argument("--fiber-k", type=int, default=6, help="sections per ref")
+    p.add_argument(
+        "--warp-jump",
+        action="store_true",
+        help="grade the jump penalty by magnitude, calibrated from the warp "
+        "prior's ref-jump percentiles (forward skips cheap, backward jumps "
+        "expensive). Breaks the within-fiber tie toward the nearer instance. "
+        "NB the flat --lam-back sweep HURT — this is a magnitude-graded variant, "
+        "A/B it against baseline (default off) before trusting it.",
+    )
+    p.add_argument(
+        "--warp-kappa",
+        type=float,
+        default=None,
+        help="cost (in emission units) of a tail-percentile jump; default = --lam",
+    )
     p.add_argument("--workers", type=int, default=8)
     p.add_argument(
         "--dump",
@@ -409,6 +494,15 @@ def main(argv: list[str] | None = None) -> int:
     if not args.eval:
         p.error("only --eval is wired")
     want_stems = {s.strip() for s in args.stems.split(",") if s.strip()}
+    fwd_sl, back_sl = (0.0, 0.0)
+    if args.warp_jump:
+        fwd_sl, back_sl = warp_jump_slopes(
+            FPS, kappa=(args.warp_kappa if args.warp_kappa is not None else args.lam)
+        )
+        print(
+            f"warp-jump ON: fwd_slope={fwd_sl:.4g} back_slope={back_sl:.4g} /frame",
+            file=sys.stderr,
+        )
 
     import yaml as _yaml
     from core.result import Err, Ok
@@ -502,6 +596,8 @@ def main(argv: list[str] | None = None) -> int:
                 wlen,
                 hop,
                 lam_back,
+                fwd_sl,
+                back_sl,
             )
         )
         meta.append((t, row, str(ref_npy), str(ref_path)))
@@ -532,12 +628,22 @@ def main(argv: list[str] | None = None) -> int:
             fiber_cache[ref_audio] = compute_fibers(hf, FPS, audio_path=ref_audio)
         return fiber_cache[ref_audio]
 
+    from workspaces.alignment_prototype.ref_fibers import fiber_ambiguity
+
     rows = []
     for (i, *_), (t, row, ref_npy, ref_audio) in zip(jobs, meta):
         r = res[i]
         fib = fibers_for(ref_audio) if args.fibers else None
         acc, n_pred, facc = trajectory_acc(r["segs"], row, fiber=fib)
         gt_n = len(row.get("ref_segments") or [1])
+        # ref-instance ambiguity of THIS decode: does the predicted ref_start land
+        # in a repeat class (>=2 instances)? — the signal fiber_gate keys on. amb
+        # correlated with a strict MISS validates the gate (flagging = wrong-prone).
+        ambiguous, n_inst = False, 1
+        if fib is not None and r["segs"]:
+            labels, hz = fib
+            info = fiber_ambiguity(labels, hz, float(r["segs"][0][1]))
+            ambiguous, n_inst = info["ambiguous"], info["n_instances"]
         rows.append(
             (
                 _span_class(row),
@@ -548,6 +654,8 @@ def main(argv: list[str] | None = None) -> int:
                 t.slot_label,
                 t.label or "",
                 facc,
+                ambiguous,
+                n_inst,
             )
         )
 
@@ -601,7 +709,55 @@ def main(argv: list[str] | None = None) -> int:
     print("  by stem:")
     for st in ("regular", "acappella", "instrumental"):
         rep(f"  {st}", [r for r in rows if r[1] == st])
+
+    if args.fibers:
+        _instance_calibration(rows)
     return 0
+
+
+def _instance_calibration(rows: list, tol: float = 0.5) -> None:
+    """Ref-INSTANCE metric: is the predicted ref on the exact instance, and does
+    the fiber-ambiguity flag predict when it isn't?
+
+    A span is instance-correct if its strict traj-acc (exact <2s ref) covers
+    >=``tol`` of the span; fiber-correct if the repeat-equivalent acc does. The
+    gap = the repeat-ambiguity cost. Bucketing by the ambiguity FLAG (predicted
+    ref falls in a >=2-instance class) tells whether the flag is a calibrated
+    abstain signal: if flagged spans are much less instance-correct than
+    unflagged, fiber_gate is right to down-weight them (and an instance selector
+    has headroom exactly there). Reported per stem — acappella is the axis."""
+
+    def _bucket(sel: list) -> str:
+        if not sel:
+            return "n=0"
+        inst = np.array([r[2] >= tol for r in sel], float)
+        fib = np.array([r[7] >= tol for r in sel], float)
+        return (
+            f"n={len(sel):3}  instance-acc={100 * inst.mean():3.0f}%  "
+            f"fiber-acc={100 * fib.mean():3.0f}%  "
+            f"gap(repeat-ambig)={100 * (fib.mean() - inst.mean()):+3.0f}pp"
+        )
+
+    print("\n=== ref-INSTANCE calibration (fiber_gate validation) ===")
+    for st in ("acappella", "regular", "instrumental", None):
+        sub = rows if st is None else [r for r in rows if r[1] == st]
+        if not sub:
+            continue
+        flagged = [r for r in sub if r[8]]  # ambiguous flag
+        clean = [r for r in sub if not r[8]]
+        name = st or "ALL"
+        print(f"  [{name}]")
+        print(f"    flagged (fiber>=2) : {_bucket(flagged)}")
+        print(f"    unflagged          : {_bucket(clean)}")
+        if flagged and clean:
+            lift = 100 * (
+                np.mean([r[2] >= tol for r in clean])
+                - np.mean([r[2] >= tol for r in flagged])
+            )
+            verdict = "GATE VALID" if lift > 5 else "gate weak/uninformative"
+            print(
+                f"    => unflagged − flagged instance-acc = {lift:+.0f}pp  ({verdict})"
+            )
 
 
 if __name__ == "__main__":
