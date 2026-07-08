@@ -328,10 +328,26 @@ def _build_spans(set_dir: Path, gt: dict, cached_only: bool):
     aca.sort(key=lambda s: _slot_order(s["slot_label"]))
     spans, meta = [], []
     for s in aca:
-        vpath = (byid.get(s["track_id"], {}).get("stems") or {}).get("vocals")
+        tr = byid.get(s["track_id"], {})
+        vpath = (tr.get("stems") or {}).get("vocals")
         if not vpath or not Path(vpath).is_file():
+            # No separated `vocals` stem. For an acappella slot the downloaded
+            # source IS essentially the vocal (acappella rip), so transcribe it
+            # directly rather than dropping the candidate. Whisper reads lyrics
+            # fine even if a source turns out to carry backing. ~3x more BB11/
+            # BB12 acappella candidates resolve this way. See memory
+            # project_vocal_enhance_lyrics_deadend (separation/routing gap).
+            src = tr.get("local_path")
+            vpath = src if (src and Path(src).is_file()) else None
+        if not vpath:
             continue
-        cw = load_cached(vpath) if cached_only else transcribe_words(vpath)
+        try:
+            cw = load_cached(vpath) if cached_only else transcribe_words(vpath)
+        except (
+            Exception
+        ) as e:  # one unreadable/odd-codec source must not kill the batch
+            warnings.warn(f"skipping unreadable candidate {vpath}: {e}", stacklevel=2)
+            continue
         if not cw:
             continue
         cands = candidate_diagonals(_norm(cw), mix_bt)
