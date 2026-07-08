@@ -133,15 +133,50 @@ def main(argv: list[str] | None = None) -> int:
 
     tl_path = args.timeline or OUT_DIR / f"{args.set_id}_predicted_timeline.json"
     timeline = json.loads(tl_path.read_text())
-    spans = [
-        SpanCtx(
-            slot_label=str(s["slot_label"]),
-            recording_id=str(s["recording_id"]),
-            claimed_stem=s.get("claimed_stem") or "regular",
-            data=s,
+
+    # Stem-axis routing MUST come from GT, not the timeline: the timeline inherits
+    # `claimed_stem` from the DB, whose materialize dropped row-text (Instrumental)/
+    # (Acappella) markers and stored 'regular' (fixed in code, not re-materialized
+    # on pi). Measured drift: timeline marks ~2 instrumental spans/set vs ~25 in GT,
+    # and undercounts acappella too — so instrumental/acappella spans get mis-routed
+    # to the wrong stem probes (vocals miss lyrics/HuBERT) and the stem axis is never
+    # measured fairly. Slice it from GT by slot_label (the unique per-span key).
+    import re as _re
+
+    def _norm_slot(x) -> str:
+        # GT uses zero-padded '001'/'001w1'; the timeline uses '1'/'1w1'. Strip
+        # leading zeros from the numeric prefix so the two key the same.
+        m = _re.match(r"^0*(\d+)(.*)$", str(x))
+        return (m.group(1) + m.group(2)) if m else str(x)
+
+    gt_rows = yaml.safe_load(args.gt.read_text())["tracks"]
+    gt_stem_by_slot = {
+        _norm_slot(r.get("slot_label")): (r.get("claimed_stem") or "regular")
+        for r in gt_rows
+        if r.get("slot_label") and str(r.get("slot_label")) != "mix"
+    }
+    corrected = 0
+
+    def _stem_for(s: dict) -> str:
+        tl_stem = s.get("claimed_stem") or "regular"
+        gt_stem = gt_stem_by_slot.get(_norm_slot(s["slot_label"]))
+        return gt_stem if gt_stem else tl_stem
+
+    spans = []
+    for s in timeline["spans"]:
+        stem = _stem_for(s)
+        if stem != (s.get("claimed_stem") or "regular"):
+            corrected += 1
+        spans.append(
+            SpanCtx(
+                slot_label=str(s["slot_label"]),
+                recording_id=str(s["recording_id"]),
+                claimed_stem=stem,
+                data={**s, "claimed_stem": stem},  # runners read data['claimed_stem']
+            )
         )
-        for s in timeline["spans"]
-    ]
+    if corrected:
+        print(f"[stem-route] corrected {corrected} spans' claimed_stem from GT")
     if args.live:
         from workspaces.alignment_prototype.agentic.live_runners import (
             LiveContext,
