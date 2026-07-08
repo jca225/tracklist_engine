@@ -23,7 +23,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-_REPO = Path(__file__).resolve().parents[2]
+_REPO = Path(__file__).resolve().parents[3]
 _MOD = "workspaces.alignment_prototype"
 OUT_DIR = Path(__file__).resolve().parent / "out"
 PY = str(_REPO / "venvs/audio/bin/python")
