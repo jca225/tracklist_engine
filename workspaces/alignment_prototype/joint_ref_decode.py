@@ -117,7 +117,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
 
-    timeline_path = args.timeline or (OUT_DIR / f"{args.set_id}_predicted_timeline.json")
+    timeline_path = args.timeline or (
+        OUT_DIR / f"{args.set_id}_predicted_timeline.json"
+    )
     timeline = json.loads(timeline_path.read_text())
     spans = timeline["spans"]
 
@@ -279,6 +281,8 @@ def main(argv: list[str] | None = None) -> int:
                 wlen,
                 hop,
                 lam_back,
+                0.0,  # fwd_slope: flat (warp-off) — path_decode._job unpacks 12
+                0.0,  # back_slope: flat — neutral default matches decode_path
             )
         )
 
