@@ -159,6 +159,12 @@ expect a separate downloaded acappella master unless you explicitly acquired one
   [../docs/alignment_program_plan.md](../docs/alignment_program_plan.md) P1).
 - Anchor-check: `venvs/audio/bin/python -m labeling.anchor_check` compares YAML
   vs fresh `.als` re-export (offline; no pi-storage).
+- **Audio audit (run before trusting a GT export):** `make audit-gt SET=<set_id>`
+  audio-verifies every clip of the labeling `.als` against the actual mix
+  (identity / placement / ref-offset / pitch via chroma matched filter). The
+  XML round-trip tests in `tests/labeling/` prove the codec; only this catches
+  a session whose *assertions* silently drift from the mix audio. Wraps
+  `workspaces/source_detection/als_audit.py`.
 - CLI: `venvs/audio/bin/python -m labeling.write_back_ground_truth --db ... --yaml ...`
   upserts [set_ground_truth](../web_crawler/database/schema.sql). Dry-run with
   `--dry-run`. Uses `slot_label` as DB `label` when present. Algorithmic aligner

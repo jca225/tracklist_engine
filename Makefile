@@ -14,7 +14,7 @@ REPO         := ~/tracklist_engine
 PIP          := $(REPO)/venvs/web_crawler/bin/pip
 DB           := /mnt/storage/data/db/music_database.db
 
-.PHONY: help check check-inventory deploy deploy-storage deploy-worker \
+.PHONY: help check check-inventory audit-gt scorecard deploy deploy-storage deploy-worker \
         restart-jobqueue start-scraper stop-scraper restart-retry \
         install-taste-scrape restart-taste-scrape logs-taste-scrape \
         status logs-jobqueue logs-scraper logs-retry queue ssh-storage ssh-worker
@@ -23,6 +23,8 @@ help:
 	@echo "Common targets:"
 	@echo "  make check            — guardrails script + full pytest suite"
 	@echo "  make check-inventory SET=<set_id> — slot satisfaction gate (pi-storage)"
+	@echo "  make audit-gt SET=<set_id> — audio-verify a labeling .als vs the mix"
+	@echo "  make scorecard        — aligner per-span scorecard + failure attribution"
 	@echo "  make deploy           — git pull + pip install on both Pis"
 	@echo "  make status           — service states + scrape_failures queue depth"
 	@echo "  make queue            — just the scrape_failures count"
@@ -54,6 +56,20 @@ typecheck:
 check-inventory:
 	@test -n "$(SET)" || (echo "Usage: make check-inventory SET=<set_id>" && exit 1)
 	venvs/audio/bin/python labeling/pull_set_for_alignment.py $(SET) --check
+
+# Audio-verify a labeling .als against the actual mix (identity / placement /
+# ref-offset / pitch per clip). Run after (re-)labeling a set and before
+# trusting a GT export — catches silent timestamp drift the XML round-trip
+# tests cannot see.
+audit-gt:
+	@test -n "$(SET)" || (echo "Usage: make audit-gt SET=<set_id> [ALS=<path>]" && exit 1)
+	venvs/audio/bin/python -m workspaces.source_detection.als_audit --set-id $(SET) $(if $(ALS),--als $(ALS),)
+
+# One-command aligner scorecard: per-span table + impact-weighted failure
+# attribution for BB11+BB12 (reads out/<set>_predicted_timeline_lt.json).
+scorecard:
+	venvs/audio/bin/python -m eda.alignment.failure_analysis.build_span_table
+	venvs/audio/bin/python -m eda.alignment.failure_analysis.analyze
 
 # ---------- deploy ----------------------------------------------------------
 
