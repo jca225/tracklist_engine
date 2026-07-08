@@ -49,7 +49,6 @@ def norm_slot(s: str) -> str:
     return f"{m.group(1)}{m.group(2) or ''}" if m else str(s).strip()
 
 
-
 def _decompose_span(pred_segs, row) -> tuple[int, int, int]:
     """(n_seconds, n_outside_decode, n_inside_correct) — mirrors
     trajectory_acc's sampling exactly (same helpers, same inputs) and adds
@@ -77,7 +76,6 @@ def _decompose_span(pred_segs, row) -> tuple[int, int, int]:
         elif abs(pr - gr) < 2.0:
             n_ok += 1
     return n_tot, n_out, n_ok
-
 
 
 def _pred_segs_from_span(
@@ -116,12 +114,16 @@ def _pred_segs_from_span(
     return [(0.0, rs, re_)]
 
 
-def _resolve_ref_audio(span: dict, track: dict | None) -> str | None:
+def _resolve_ref_audio(
+    span: dict, track: dict | None, stem: str | None = None
+) -> str | None:
     """Stem-routed reference audio path for a span (vocals/instrumental stem or the
-    full track), for HuBERT fiber computation."""
+    full track), for HuBERT fiber computation. `stem` overrides the span's own
+    `claimed_stem` (which is the materialized set_track_slots value — stale on
+    pre-888aca timelines; the matched GT row is authoritative)."""
     if track is None:
         return None
-    stem_key = _STEM_FILE.get(span.get("claimed_stem") or "regular")
+    stem_key = _STEM_FILE.get(stem or span.get("claimed_stem") or "regular")
     if stem_key:
         p = (track.get("stems") or {}).get(stem_key)
         if p and Path(p).is_file():
@@ -245,6 +247,11 @@ def main(argv: list[str] | None = None) -> int:
             no_gt += 1
             continue
         g = min(rows, key=lambda r: abs(float(r["set_start_s"]) - s["set_start_s"]))
+        # Axis from the matched GT row, NEVER the timeline span: the span's
+        # claimed_stem is the materialized set_track_slots value, corrupted by
+        # the row-text drop bug on pre-888aca timelines (BB12 showed 2
+        # instrumentals vs 25 in GT) — see eda/alignment/failure_analysis.
+        gstem = g.get("claimed_stem") or s.get("claimed_stem") or "regular"
         place_errs.append(
             (
                 abs(float(g["set_start_s"]) - s["set_start_s"]),
@@ -258,16 +265,18 @@ def main(argv: list[str] | None = None) -> int:
         # (linear / multiseg / loop / oddratio), the metric that was previously
         # excluded for loops/segments. strict = fraction of mix-time within 2s of
         # GT ref; fiber-aware credits a content-identical repeat.
-        fib = fibers_for(_resolve_ref_audio(s, by_tid.get(s["recording_id"])))
+        fib = fibers_for(
+            _resolve_ref_audio(s, by_tid.get(s["recording_id"]), stem=gstem)
+        )
         strict, _npred, facc = trajectory_acc(
             _pred_segs_from_span(s, anchor_s=float(g["set_start_s"])), g, fiber=fib
         )
-        traj.append((_span_class(g), s.get("claimed_stem") or "regular", strict, facc))
+        traj.append((_span_class(g), gstem, strict, facc))
         if args.decompose:
             nt, no, nk = _decompose_span(
                 _pred_segs_from_span(s, anchor_s=float(g["set_start_s"])), g
             )
-            decomp.append((s.get("claimed_stem") or "regular", nt, no, nk, strict))
+            decomp.append((gstem, nt, no, nk, strict))
         if g.get("is_loop") or g.get("ref_segments"):
             loops_hit += 1
             continue
@@ -283,7 +292,7 @@ def main(argv: list[str] | None = None) -> int:
             (
                 abs(s["ref_start_s"] - expected),
                 slot,
-                s.get("claimed_stem") or "regular",
+                gstem,
                 s["ref_start_s"],
                 expected,
                 s["name"][:36],
@@ -364,7 +373,11 @@ def main(argv: list[str] | None = None) -> int:
             )
         # GT-side: acappella rows never matched by any timeline span
         matched_tids = {s2["recording_id"] for s2 in timeline["spans"]}
-        gt_aca = [r for r in gt_rows if r.get("claimed_stem") == "acappella" and r.get("track_id")]
+        gt_aca = [
+            r
+            for r in gt_rows
+            if r.get("claimed_stem") == "acappella" and r.get("track_id")
+        ]
         unmatched = [r for r in gt_aca if str(r["track_id"]) not in matched_tids]
         print(
             f"  GT acappella rows: {len(gt_aca)}; recording matched by SOME timeline span: "
