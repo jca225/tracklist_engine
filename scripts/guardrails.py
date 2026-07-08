@@ -11,6 +11,7 @@ Used by git pre-commit, Cursor afterFileEdit hook, and GitHub Actions.
 
 from __future__ import annotations
 
+import ast
 import re
 import sys
 from dataclasses import dataclass
@@ -18,7 +19,11 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-SKIP_DIR_NAMES = frozenset({"venvs", "cue-detr", "data", "__pycache__", ".git"})
+# Vendored third-party trees (own LICENSE, upstream-authored) are not ours to
+# police — cue-detr (DETR cue model), msst_webui (MSST-WebUI separation trainer).
+SKIP_DIR_NAMES = frozenset(
+    {"venvs", "cue-detr", "msst_webui", "data", "__pycache__", ".git"}
+)
 
 # Intentional uses of legacy strings (DB source labels, etc.)
 AUDIO_PIPELINE_ALLOW_SUBSTR = frozenset({"audio_pipeline_v1"})
@@ -209,6 +214,74 @@ def _check_adapter_parents(path: Path, text: str) -> list[Violation]:
     return violations
 
 
+# A declared-but-unread argparse flag is a silent lie: you pass it, nothing
+# happens (the `--fiber-k` / `--tol-s` class). Detect statically, but stay
+# conservative — this check blocks commits, so it must never false-positive.
+# Files that reach flags dynamically are skipped entirely.
+_DYNAMIC_ARGS_ACCESS = re.compile(
+    r"\bvars\s*\(|\bgetattr\s*\(|\basdict\s*\(|namespace\s*="
+)
+
+
+def _argparse_dest(call: ast.Call) -> str | None:
+    """The ``dest`` an ``add_argument`` call binds, or None if uninferable.
+
+    Explicit ``dest=`` wins; otherwise derive from the first ``--long`` option.
+    Returns None for positional args (always read by name) and short-only opts.
+    """
+    for kw in call.keywords:
+        if (
+            kw.arg == "dest"
+            and isinstance(kw.value, ast.Constant)
+            and isinstance(kw.value.value, str)
+        ):
+            return kw.value.value
+    for arg in call.args:
+        if not (isinstance(arg, ast.Constant) and isinstance(arg.value, str)):
+            continue
+        opt = arg.value
+        if opt.startswith("--"):
+            return opt[2:].replace("-", "_")
+        if opt.startswith("-"):
+            continue  # short option — keep looking for a long one
+        return None  # positional argument
+    return None
+
+
+def _check_dead_argparse_flags(path: Path, text: str) -> list[Violation]:
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return []  # a broken file is CI/pytest's problem, not this check's
+    if _DYNAMIC_ARGS_ACCESS.search(text):
+        return []  # dynamic flag access — can't statically prove one unused
+    declared: dict[str, int] = {}  # dest -> first add_argument lineno
+    accessed: set[str] = set()  # every `<obj>.<attr>` name in the file
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "add_argument"
+        ):
+            dest = _argparse_dest(node)
+            if dest is not None:
+                declared.setdefault(dest, node.lineno)
+        elif isinstance(node, ast.Attribute):
+            accessed.add(node.attr)
+    violations: list[Violation] = []
+    for dest, lineno in sorted(declared.items(), key=lambda kv: kv[1]):
+        if dest not in accessed:
+            violations.append(
+                Violation(
+                    path,
+                    lineno,
+                    "dead_flag",
+                    f"--{dest.replace('_', '-')} declared but args.{dest} never read",
+                )
+            )
+    return violations
+
+
 def run_checks() -> list[Violation]:
     violations: list[Violation] = []
     for path in _iter_py_files():
@@ -224,6 +297,7 @@ def run_checks() -> list[Violation]:
         violations.extend(_check_variant_tag(path, text))
         violations.extend(_check_adapter_parents(path, text))
         violations.extend(_check_als_core_boundary(path, text))
+        violations.extend(_check_dead_argparse_flags(path, text))
     if DOCS_DIR.is_dir():
         for path in sorted(DOCS_DIR.glob("*.md")):
             try:
