@@ -141,6 +141,18 @@ class SegmentConfig:
     gate_out_frac: float = 0.8
     gate_pad_s: float = 45.0
     evidence_tol_s: float = 0.3  # tight tol for cross-slope path evidence
+    # long-weave window growth (INSTRUMENTAL spans only). Oracle-window bound
+    # (failure_analysis FINDINGS §C2c): 90-300 s instrumental weaves go
+    # 0.21->0.58 with a correct window; acappella shows NO window gain
+    # (0.08->0.06) so it keeps the single-pad self-placement gate above.
+    # Ladder: decode padded rungs while ev_out_frac >= gate_out_frac
+    # (content genuinely outside the believed window) AND the rung's
+    # evidence_rate holds >= weave_rate_margin x the previous rung's —
+    # a WITHIN-SPAN comparison (absolute evidence_rate floors failed to
+    # transfer twice, see gate history above). Regressions in the oracle
+    # A/B came from unguarded widening; the margin is the guard.
+    weave_pads_s: tuple[float, ...] = (45.0, 120.0, 240.0)
+    weave_rate_margin: float = 0.8
 
 
 @dataclass(frozen=True)

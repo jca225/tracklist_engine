@@ -445,14 +445,35 @@ long spans: **BB12 0.10→0.21, BB11 0.14→0.42**; pooled long bucket
 
 **Pooled value if wired: ~+6 pp corpus-wide trajectory** (+5.9 pp from the
 90–300 s class alone) — the largest measured unbuilt lever, not BB10-gated.
-Recommended shape (kernel lane): (1) first increment entirely inside
-`joint_ref_decode`/looptrace — generalize the existing acappella
-self-placement padded-retry into an evidence-gated window growth (retry at
-2×/4× pad when `ev_out_frac` ≥ gate, accept on inlier-evidence win, cap
-~300 s, else `ref_decode_status='weave-too-long'` → abstention); (2) the
-fuller fix in `infer` — emit multiple appearance anchors per slot from the
-fp/lyrics vote clusters (`mix_fp_hits.decode_placements` already sees the
-diagonal clusters) so long slots get one span per appearance.
+
+**Per-axis decomposition of the 90–300 s oracle gain (changes the wiring):**
+
+| true axis | GT-sec | base → oracle | pooled value |
+|---|---|---|---|
+| instrumental | 1,609 | 0.21 → **0.58** | **+3.9 pp** |
+| regular | 1,110 | 0.20 → **0.51** | **+2.2 pp** |
+| acappella | 1,146 | 0.08 → 0.06 | **≈ 0** |
+
+**Acappella gets NOTHING from a correct window** — its long-weave wall is
+decode-under-repeats, same as its short spans. So do NOT build acappella
+window growth. Wiring: (1) instrumental is looptrace-routed → an
+evidence-gated window-growth ladder inside `joint_ref_decode` (pads
+45/120/240 s; grow while `ev_out_frac` ≥ gate AND the rung's evidence_rate
+holds ≥ 0.8× the previous rung — within-span guard, since absolute
+evidence-rate floors failed to transfer twice) captures the +3.9 pp lane —
+**implemented and A/B'd 2026-07-09 evening (KEPT)**; (2) regular is
+legacy-path → needs the `infer`-side multi-appearance anchors from the fp
+vote clusters (kernel lane, +2.2 pp).
+
+**Weave-ladder A/B (`_weave_lt` vs `_diskfix` baselines, identical scorer):**
+BB12 instrumental traj **20→28%**, headline **24→26%**, from 3 growth events
+— span-level: slot 2 (97 s) 0.04→**0.63 (= its oracle bound)**, slot 6 (53 s)
+0.00→0.87, slot 30 (61 s) 0.07→0.34 (it also rescues mis-windowed 50–90 s
+spans below the "long" cutoff). BB11: 1 growth, +1 pp instrumental.
+**Zero regressions on any axis in either set** — acappella/regular
+byte-identical; the rate-margin guard held. Remaining long-weave upside:
+regular (+2.2 pp, infer-side) and the instrumental spans whose first-rung
+`ev_out_frac` never trips the gate.
 BB12's GT yaml uses plain numeric slots (`002`) where timelines carry
 w-layers (`2w1`); BB11's GT has w-layers. The audit was faithful to GT all
 along — the slot-keyed join was the bug. `build_span_table` now joins audits

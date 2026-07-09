@@ -197,6 +197,7 @@ def main(argv: list[str] | None = None) -> int:
         from workspaces.alignment_prototype.looptrace.run import decode_span, mix_slice
 
         n_retry = 0
+        n_weave = 0
         for idx, s in enumerate(spans):
             stem = s.get("claimed_stem") or "regular"
             if stem not in lt_stems:
@@ -266,6 +267,42 @@ def main(argv: list[str] | None = None) -> int:
                 if segs_p and of is not None and of >= SEG_V1.gate_out_frac:
                     segs = [(round(m - (s0 - off), 3), r0, r1) for m, r0, r1 in segs_p]
                     n_retry += 1
+            # long-weave window growth (instrumental only — oracle-window
+            # bound shows the window is the wall for 90-300 s instrumental
+            # weaves (0.21->0.58) but does NOTHING for acappella; see
+            # SegmentConfig.weave_pads_s). Grow the decode window while the
+            # evidence keeps landing OUTSIDE the believed span AND the
+            # evidence rate holds up (within-span guard against the
+            # measured widen-admits-rivals regressions).
+            if segs is None and stem == "instrumental":
+                prev_rate = None
+                for pad in SEG_V1.weave_pads_s:
+                    off = max(0.0, s0 - pad)
+                    y_pad = mix_slice(
+                        str(mix_path), offset_s=off, duration_s=(s1 + pad) - off
+                    )
+                    segs_p, meta_p = decode_span(
+                        y_pad,
+                        ref_h,
+                        sorted(slopes),
+                        song_lags_s=song_lags,
+                        song_pairs=song_pairs,
+                        ref_path=str(ref_path),
+                        belief_window=(s0 - off, s1 - off),
+                        enable_loops=enable_loops,
+                    )
+                    of = meta_p.get("ev_out_frac")
+                    rate = float(meta_p.get("evidence_rate") or 0.0)
+                    if not segs_p or of is None or of < SEG_V1.gate_out_frac:
+                        break  # content contained -> tight decode is right
+                    if (
+                        prev_rate is not None
+                        and rate < SEG_V1.weave_rate_margin * prev_rate
+                    ):
+                        break  # wider window diluted evidence: keep last rung
+                    segs = [(round(m - (s0 - off), 3), r0, r1) for m, r0, r1 in segs_p]
+                    prev_rate = rate
+                    n_weave += 1
             if segs is None:
                 y = mix_slice(str(mix_path), offset_s=s0, duration_s=s1 - s0)
                 segs, _meta = decode_span(
@@ -289,7 +326,7 @@ def main(argv: list[str] | None = None) -> int:
             n_status[v] = n_status.get(v, 0) + 1
         print(
             f"looptrace decoded {len(lt_res)} spans (stems={sorted(lt_stems)}, "
-            f"{n_retry} self-placement retries); "
+            f"{n_retry} self-placement retries, {n_weave} weave window growths); "
             f"fallbacks: {n_status or 'none'}",
             file=sys.stderr,
         )
