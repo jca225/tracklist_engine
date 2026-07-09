@@ -76,6 +76,7 @@ def _manifest_by_tid(set_dir: Path, set_id: str) -> dict[str, dict]:
                 by_tid.setdefault(rec, by_tid[tlp])
     return by_tid
 
+
 from workspaces.alignment_prototype.dataset import (
     load_set,
     slot_candidates_from_targets,
@@ -267,6 +268,27 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--stem-placement-band-s", type=float, default=90.0)
     p.add_argument("--stem-placement-guard-s", type=float, default=8.0)
+    p.add_argument(
+        "--instr-stem-placement",
+        action="store_true",
+        help="place INSTRUMENTAL spans by fingerprinting the instrumental stem on "
+        "both sides (mix_instrumental.flac <-fp-> ref Demucs instrumental stem). The "
+        "full-mix fp/chroma fail on instrumental (vocal-carrying mix vs vocal-less "
+        "ref); stem-vs-stem fp recovers regular-level placement (probe: BB11 5.0s "
+        "set_start). Sets set_start AND ref_start (=set_start+offset), gated to the "
+        "prior like --fp-placement. Default OFF (opt-in). NOTE: infer's DB "
+        "claimed_stem is stale (~2 instrumentals/set vs ~25 real, row-text drop bug) "
+        "— pass --instr-stem-gt-yaml to route the real instrumental spans.",
+    )
+    p.add_argument(
+        "--instr-stem-gt-yaml",
+        type=Path,
+        default=None,
+        help="GT yaml supplying true per-span claimed_stem + original slot_label for "
+        "--instr-stem-placement (the axis label only, as the scorer uses — NOT "
+        "placement). Without it the channel sees only DB-visible instrumentals.",
+    )
+    p.add_argument("--instr-stem-gate-s", type=float, default=90.0)
     p.add_argument(
         "--lyrics-placement",
         action=argparse.BooleanOptionalAction,
@@ -606,6 +628,79 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 f"stem placement: {n_stem} acappella set_starts refined by HuBERT "
                 f"({n_keep} kept prior — agreed within {args.stem_placement_guard_s:.0f}s)"
+            )
+
+    # ---- 2d. instrumental stem-fp placement (set_start + ref_start) ---------
+    # The full-mix fp / chroma fail on instrumental (vocal-carrying mix bus vs
+    # vocal-less ref stem — timbral mismatch). Fingerprint the instrumental stem
+    # on BOTH sides (mix_instrumental.flac <-fp-> ref Demucs instrumental) and it
+    # recovers regular-level placement (probe: BB11 88% id / 5.0s median). Same
+    # decode primitive + gate as --fp-placement; ref_start = set_start + offset.
+    # Default OFF. STALE-STEM guard: DB claimed_stem marks ~2 instrumentals/set
+    # vs ~25 real, so without --instr-stem-gt-yaml the channel barely fires —
+    # we log the shortfall loudly rather than silently no-op.
+    if args.instr_stem_placement:
+        import dataclasses
+
+        from workspaces.alignment_prototype.fp_placement_refine import find_aligning_dir
+        from workspaces.alignment_prototype.instr_stem_placement import (
+            load_stem_overrides,
+            place_instr_spans,
+        )
+
+        set_dir = find_aligning_dir(args.set_id)
+        overrides = (
+            load_stem_overrides(
+                args.instr_stem_gt_yaml,
+                id_map_dir=_REPO / "labeling" / "fixtures" / "id_maps",
+            )
+            if args.instr_stem_gt_yaml
+            else None
+        )
+        if set_dir is None or not (set_dir / "mix_instrumental.flac").is_file():
+            print("(instr stem placement skipped — mix_instrumental.flac missing)")
+        else:
+            placements, ist = place_instr_spans(
+                list(preds),
+                set_dir=set_dir,
+                set_id=args.set_id,
+                mix_dur_s=mix_end,
+                stem_overrides=overrides,
+            )
+            if overrides is None and ist["db_instr"] <= 2:
+                print(
+                    f"  WARNING: --instr-stem-placement sees only {ist['db_instr']} "
+                    "instrumental spans from the STALE DB claimed_stem (row-text "
+                    "drop bug marks ~2/set vs ~25 real). Pass --instr-stem-gt-yaml "
+                    "to route the real instrumental spans."
+                )
+            gate = args.instr_stem_gate_s
+            new_preds = list(preds)
+            n_placed = n_gated = 0
+            for i, (ss, se, off) in placements.items():
+                probe_proposals[i]["instr_fp"] = ss
+                prior = preds[i].set_start_s
+                # Consistency gate, same as --fp-placement: the stem fp is precise
+                # but unleashed (wrong-diagonal/repeat picks land far off); trust it
+                # only as a local refinement of the anchored prior.
+                if gate > 0 and abs(ss - prior) > gate:
+                    n_gated += 1
+                    continue
+                new_preds[i] = dataclasses.replace(
+                    preds[i],
+                    set_start_s=ss,
+                    set_end_s=se,
+                    ref_start_s=ss + off,
+                    ref_end_s=off + se,
+                )
+                start_source[i] = "instr_fp"
+                n_placed += 1
+            preds = tuple(new_preds)
+            print(
+                f"instr stem placement: {n_placed} instrumental spans placed "
+                f"({n_gated} gated |instr_fp-prior|>{gate:.0f}s; "
+                f"gt_instr={ist['gt_instr']} db_instr={ist['db_instr']} "
+                f"ref_resolved={ist['resolved']} fp_decoded={ist['placed']})"
             )
 
     # ---- 3. fine placement (per-span DTW vs roformer mix instrumental) -----
