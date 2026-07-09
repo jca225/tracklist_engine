@@ -84,6 +84,13 @@ Phases; each has an exit criterion. Owner key: **[K]** kernel/infra lane
 (this doc's lane), **[M]** model lane (parallel agent — trajectory training +
 `drivers/ml`, live now), **[J]** John (labeling / listening decisions).
 
+> **Execution detail lives in
+> [kernel_data_engine_plan.md](kernel_data_engine_plan.md)** (2026-07-09):
+> the estimation-kernel contracts (probe factors, span posteriors,
+> calibration), the data-engine mechanics adopted from prior art
+> (Snorkel/Tesla/Waymo/FixMatch), and the week-by-week W1–W6 sequencing of
+> P1/P2/P4 against Aug 1.
+
 - **P0 — DONE 2026-07-09.** Contracts A1/A2, driver race, taxonomy
   (scripts + prototype satellites), sensor-phase freeze, branch landed.
 - **P1 — kernel v1. [K]** `make align SET=<id>` runs the best-known
