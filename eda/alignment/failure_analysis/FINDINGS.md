@@ -389,15 +389,18 @@ axis prior the pipeline currently ignores; `set_track_slots.layer_role`
   multi-anchor placement (fp diagonal votes already produce multiple
   candidates) / windowing per slot-appearance — kernel-lane, and now the
   single largest quantified bucket.
-- **Synthetic slot rows cost BB11 ~5 pp identity.** 7 BB11 spans predict raw
-  `tlp*` recording ids — `set_track_slots` rows with `source='synthetic'`
-  (the Rvmor sided-row gap) never reconciled to canonical recordings. No
-  recording → no audio, no fingerprint, no GT match: identity, placement and
-  decode all fail by construction (they are most of BB11's no-fp bucket:
-  ss_med 17.9 s, traj 0.05, n=17). 7/151 spans ≈ 29% of BB11's identity
-  misses. Fix is upstream (reconcile synthetic rows by name against
-  `recording`/`work`), BB12 has zero — this is a per-set data-quality axis to
-  preflight before GT-labeling any new set.
+- **Synthetic slot rows: CORRECTED — cost is ~1–2 spans, not 5 pp identity.**
+  7 BB11 spans predict raw `tlp*` recording ids (`source='synthetic'`, the
+  Rvmor sided-row gap). Initial read (29% of identity misses) was wrong:
+  the GT yaml inherited the same tlp ids from the spine, the pull fetched
+  audio for them, so **5/7 identity-HIT and decode normally** (traj up to
+  0.97). Real damage: slots 001/027 have no GT anchor (2 spans), plus the
+  namespace pollution itself — tlp recordings can't join `track_metadata` /
+  fingerprints / canonical features corpus-wide, and title-only name-match
+  is UNSAFE for reconciling them (Gazzo "Nothing To Lose" ≠ VASSY "Nothing
+  To Lose"; several have no canonical recording at all, e.g. The Scrantones,
+  Rent). Verdict: upstream artist+title reconcile is hygiene + a preflight
+  check for new GT sets, **not an aligner lever on BB11**.
 - **REFUTED: BB12's fingerprint-coverage gap is not a placement lever.** BB12
   has fingerprints for only 74/139 matched spans' recordings, but no-fp spans
   place *no worse* (ss_med 5.9 vs 4.4 s, traj 0.27 vs 0.25) — w-layer
@@ -408,7 +411,48 @@ axis prior the pipeline currently ignores; `set_track_slots.layer_role`
   now confirm: decode-coverage repairs don't move the board; placement and
   the long-weave window do.
 
-## C3. Audit "staleness" was actually a GT slot-namespace mismatch
+## C2c. Fix measurements (2026-07-09 evening) — routing floor + long-weave oracle
+
+**Routing fix floor (GT-axis relabel on postfix timelines → re-decode only,
+placement held; `_postfix_gtstem_lt` timelines).** Fixing the 40 mis-axed
+spans' decode routing alone is worth, vs the identically-scored baseline:
+
+| set | acappella | instrumental | oddratio | headline |
+|---|---|---|---|---|
+| BB11 | 14→17% | 33→**41%** | 9→16% | 20→22% |
+| BB12 | 25→25% | 20→**28%** | 18→16% | 25→25% |
+
+This is the floor — the earlier full re-run (Re-measure 2) showed the larger
+gain arrives when the corrected axis also drives *placement* (HuBERT/lyrics
+channels) in `infer`. Verdict: **wire the axis fix (w-layer prior or
+audio-gate) ahead of infer, not just decode** — decode-only captures the
+instrumental win but little acappella.
+
+**Long-weave oracle-window bound (`_longoracle_lt` timelines: >90 s spans get
+GT window + GT axis, decode otherwise unchanged).** Sec-weighted traj on the
+long spans: **BB12 0.10→0.21, BB11 0.14→0.42**; pooled long bucket
+0.12→0.29. Structure of the win:
+
+- **90–300 s spans (3,865 GT-sec) go 0.17→0.41** — many near-perfect
+  (0.02→1.00, 0.05→0.91): for this class the *window is the wall*, decode is
+  already good enough.
+- The two **839 s mega-weaves stay dead** (0.01→0.03) even with oracle
+  windows — decode-hard, exclude from the windowing fix; abstain them.
+- **4 regressions** (e.g. 0.49→0.02) where the larger window admits rival
+  content — any wiring needs an accept-guard (keep the wider decode only if
+  path inlier evidence beats the tight decode's, the same comparison the
+  slope competition already runs).
+
+**Pooled value if wired: ~+6 pp corpus-wide trajectory** (+5.9 pp from the
+90–300 s class alone) — the largest measured unbuilt lever, not BB10-gated.
+Recommended shape (kernel lane): (1) first increment entirely inside
+`joint_ref_decode`/looptrace — generalize the existing acappella
+self-placement padded-retry into an evidence-gated window growth (retry at
+2×/4× pad when `ev_out_frac` ≥ gate, accept on inlier-evidence win, cap
+~300 s, else `ref_decode_status='weave-too-long'` → abstention); (2) the
+fuller fix in `infer` — emit multiple appearance anchors per slot from the
+fp/lyrics vote clusters (`mix_fp_hits.decode_placements` already sees the
+diagonal clusters) so long slots get one span per appearance.
 BB12's GT yaml uses plain numeric slots (`002`) where timelines carry
 w-layers (`2w1`); BB11's GT has w-layers. The audit was faithful to GT all
 along — the slot-keyed join was the bug. `build_span_table` now joins audits

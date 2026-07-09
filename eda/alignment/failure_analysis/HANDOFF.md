@@ -176,6 +176,26 @@ owns `infer.py`/`stem_placement.py` and the abstention contract:
   span-level predictors (|rho|≤.15, n=34) — temper expectations for them as
   selector features.
 
+## EDA-lane addendum (2026-07-09 evening) — two wire-ready levers, measured
+
+Full numbers: FINDINGS.md §C2c. For the kernel lane, in priority order:
+
+1. **Long-weave windowing = ~+6 pp corpus-wide trajectory at oracle quality**
+   (the largest measured unbuilt lever; not BB10-gated). >90 s GT spans are 40%
+   of all loss; oracle windows take them 0.12→0.29 sec-weighted (90–300 s class:
+   0.17→0.41, many spans → ~1.0). Two-step wiring in FINDINGS: evidence-gated
+   window-growth retry in joint_ref_decode (accept-guard REQUIRED — 4 spans
+   regress when the window admits rivals), then multi-appearance anchors from
+   the fp vote clusters in infer. The two 839 s mega-weaves stay dead even at
+   oracle — abstain (`ref_decode_status='weave-too-long'`), don't chase.
+2. **Axis fix ahead of infer** (w-layer prior / audio gate, NOTES.md): GT-axis
+   decode-only floor measured at BB11 instr 33→41% / acap 14→17% / headline
+   20→22%; BB12 linear 29→34% / instr 20→28%. Placement-side gain on top per
+   Re-measure 2.
+3. Synthetic tlp rows: DOWNGRADED to hygiene (5/7 spans actually identity-hit;
+   GT inherited the tlp ids and audio exists). Preflight check for new GT sets;
+   title-only reconcile is unsafe (artist+title required).
+
 ## Kernel-lane session note (2026-07-09, Fable agent — W0/W1 of docs/kernel_data_engine_plan.md)
 
 For the model-lane agent; none of this touches your interfaces:
