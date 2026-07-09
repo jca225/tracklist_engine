@@ -116,7 +116,13 @@ def next_task(
         "AND track_id IS NOT NULL) "
         f"{skip_clause}"
         f"{shard_clause}"
-        "ORDER BY ta.track_audio_id LIMIT 1"
+        # stem-missing REFERENCE rows first: they gate downstream consumers
+        # (aligner re-runs); never-analyzed aux rows follow (62 of them sat
+        # ahead of BB11's 6 refs by id order, 2026-07-09)
+        "ORDER BY (CASE WHEN ta.is_reference=1 AND NOT EXISTS "
+        "(SELECT 1 FROM track_stems ts2 WHERE ts2.track_audio_id=ta.track_audio_id "
+        "AND ts2.stem_name='vocals') THEN 0 ELSE 1 END), "
+        "ta.track_audio_id LIMIT 1"
     )
     out = ssh_pi(sql)
     if not out:
