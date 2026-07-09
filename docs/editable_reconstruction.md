@@ -18,7 +18,7 @@ this session (2026-06-25); see [alignment_research_plan.md](alignment_research_p
 
 ```bash
 # benchmark on UnmixDB (placement + warp + identity)
-venvs/audio/bin/python -m workspaces.alignment_prototype.eval_bench \
+venvs/audio/bin/python -m workspaces.alignment_prototype.external.eval_bench \
     --unmixdb-root ~/data/unmixdb-v1.1 --max-mixes 150 \
     --methods fused,grid_mf,nmf --n-distractors 10 --identity
 

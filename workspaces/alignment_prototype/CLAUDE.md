@@ -21,21 +21,28 @@ Six entry points; everything else at top level is a module they import.
 | `agentic/` | POMDP agentic loop (`python -m ...agentic --set-id <id> --gt <yaml>`); `--live` runs real fp/lyrics/HuBERT/mert/surprise probes |
 | `harness/` | Probe/AlignmentResult/DeterministicDriver contract; `axes.py` = stem→axis routing; `merge.py` `source_priority` = axis-priority fusion |
 
-Core modules (imported, not run): `dataset/records/split/losses/eval` (GT spans),
-`mert_store/mert_features/mert_model` (identity), `landmark_fp/fp_index/mix_fp_hits/
-fp_placement_refine` (fingerprint placement), `refine_ref_offsets` (chroma
-matched filter), `stem_placement` (HuBERT acappella set_start), `ref_fibers`
-(repeat classes), `lyrics_align` (+`vocal_enhance`/`enhance_vocal` subprocess),
-`continuity_refine`, `sequence_decode`, `slot_priors`, `fine_refine`, `fiber_ab`,
-`eval_bench`+`nmf_baseline` (external André-2024 benchmark), `tempo_curve`
-(als tempo primitives; imported by main-suite tests), `seed_als_from_timeline` +
-`render_review_snippets` (review loop), `review_server`/`fiber_server`/`fiber_ui`/
-`discern_server` (human-review UIs), `export_mert_from_pi`, `pretrain` (UnmixDB).
+Core modules (imported, not run — these stay **flat**; the high fan-in makes
+moving them a 100-file rewrite for no capability): `dataset/records/split/
+losses/eval` (GT spans), `mert_store/mert_features/mert_model` (identity),
+`landmark_fp/fp_index/mix_fp_hits/fp_placement_refine` (fingerprint placement),
+`refine_ref_offsets` (chroma matched filter), `stem_placement` (HuBERT
+acappella set_start), `instr_stem_placement`+`instrumental_probe` (instrumental
+stem-fp), `ref_fibers` (repeat classes) + `fp_probe`/`harmony_fibers` (fiber
+detectors), `lyrics_align` (+`vocal_enhance`/`enhance_vocal` subprocess),
+`recon_probe` (reconstruction features; feeds `trajectory/` + `drivers/ml`),
+`continuity_refine`, `sequence_decode`, `slot_priors`, `fine_refine`,
+`stem_resolve`, `tempo_curve` (als tempo primitives), `export_mert_from_pi`.
 
-Subdirectories: `looptrace/` (acappella loop-collapse decode), `trajectory/`
-(learned segment-trajectory decoder), `neuro/` (probe-precision fusion),
-`synthetic_mix/` (synthetic mashup pretrain data), `external/` (UnmixDB/SALAMI
-loaders + caches).
+Subdirectories: `drivers/` (classical/agentic/ml end-to-end drivers + `make
+race`), `looptrace/` (acappella loop-collapse decode), `trajectory/` (learned
+segment-trajectory decoder), `neuro/` (probe-precision fusion), `synthetic_mix/`
+(synthetic mashup pretrain data), `external/` (UnmixDB/SALAMI loaders + caches;
+also the external-corpus runners `eval_bench`+`nmf_baseline` (André-2024
+benchmark) and `pretrain` (UnmixDB)), `review/` (human-review loop:
+`review_server`/`fiber_server`/`fiber_ui`/`discern_server`,
+`render_review_snippets`, `seed_als_from_timeline`), `evals/` (internal evals:
+`fiber_ab`, `lyrics_ref_decode`, `verify_vocal`), `harness/`, `agentic/`,
+`attic/` (closed experiments, see ledger).
 
 ## Scorecard — the source of truth for "did it help"
 
@@ -102,7 +109,7 @@ venvs/audio/bin/python -m workspaces.alignment_prototype.joint_ref_decode --set-
 venvs/audio/bin/python scripts/backfill_track_fingerprints.py --dry-run
 venvs/audio/bin/python scripts/cache_set_fingerprint_hits.py --set-id 1fsnxchk
 # UnmixDB pretrain (external/unmixdb.py loader):
-venvs/audio/bin/python -m workspaces.alignment_prototype.pretrain --dry-run --unmixdb-root ~/data/unmixdb-v1.1
+venvs/audio/bin/python -m workspaces.alignment_prototype.external.pretrain --dry-run --unmixdb-root ~/data/unmixdb-v1.1
 ```
 
 ## Human review loop (predictions → GT)

@@ -17,7 +17,7 @@ modes, seek keys, verdicts (pass / nudge / wrong) with localStorage
 persistence + JSON export. Spans are ordered most-suspicious-first.
 
 Usage:
-    venvs/audio/bin/python -m workspaces.alignment_prototype.render_review_snippets \\
+    venvs/audio/bin/python -m workspaces.alignment_prototype.review.render_review_snippets \\
         --set-id 2nvzlh2k [--max-window-s 45]
 """
 from __future__ import annotations
@@ -29,7 +29,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-_REPO = Path(__file__).resolve().parents[2]
+_REPO = Path(__file__).resolve().parents[3]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 

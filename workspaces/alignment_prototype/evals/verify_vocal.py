@@ -14,7 +14,7 @@ This module proves the verifier DECISION before any fetch/retrieve plumbing:
 - decide from the peak + the margin over the runner-up, with a no-vocal ABSTAIN.
 
 Run (offline, no pi-storage):
-    venvs/audio/bin/python -m workspaces.alignment_prototype.verify_vocal --set-id 1rfb0yl9
+    venvs/audio/bin/python -m workspaces.alignment_prototype.evals.verify_vocal --set-id 1rfb0yl9
 
 Proof harness: known-truth windows (confident vocal tracks + one instrumental)
 × candidate ref vocals → a confusion matrix; the diagonal should win, the
@@ -32,7 +32,7 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
-_REPO = Path(__file__).resolve().parents[2]
+_REPO = Path(__file__).resolve().parents[3]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 

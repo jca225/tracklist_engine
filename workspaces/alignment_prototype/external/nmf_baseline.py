@@ -15,7 +15,7 @@ documented root cause) head-on, and the activation matrix yields, per track:
 v0 = fixed-W KL-NMF, affine warp read from the ridge. v1 (TODO) = multi-pass:
 re-warp the dictionary from the ridge and re-solve (handles loops/jumps).
 
-    venvs/audio/bin/python -m workspaces.alignment_prototype.nmf_baseline --synthetic
+    venvs/audio/bin/python -m workspaces.alignment_prototype.external.nmf_baseline --synthetic
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from pathlib import Path
 
 import numpy as np
 
-_REPO = Path(__file__).resolve().parents[2]
+_REPO = Path(__file__).resolve().parents[3]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 

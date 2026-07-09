@@ -15,7 +15,7 @@ cut from the SAME stem the fibers were computed on (e.g. the vocal stem), so you
 hear exactly what the algorithm compared.
 
 Usage:
-    venvs/audio/bin/python -m workspaces.alignment_prototype.fiber_ui \
+    venvs/audio/bin/python -m workspaces.alignment_prototype.review.fiber_ui \
         --set-id 1fsnxchk [--stems acappella] [--feature hubert] [--k 6] \
         [--max-refs 12] [--borderline 0.6]
 """
@@ -32,7 +32,7 @@ from pathlib import Path
 
 import numpy as np
 
-_REPO = Path(__file__).resolve().parents[2]
+_REPO = Path(__file__).resolve().parents[3]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 

@@ -12,8 +12,8 @@ tempo_ratio, score)`; metrics report the UnmixDB / André-2024 units:
 The synthetic adapter runs in *feature space* and needs no audio, so the whole
 harness smoke-tests before UnmixDB finishes downloading.
 
-    venvs/audio/bin/python -m workspaces.alignment_prototype.eval_bench --synthetic
-    venvs/audio/bin/python -m workspaces.alignment_prototype.eval_bench \
+    venvs/audio/bin/python -m workspaces.alignment_prototype.external.eval_bench --synthetic
+    venvs/audio/bin/python -m workspaces.alignment_prototype.external.eval_bench \
         --unmixdb-root ~/data/unmixdb-v1.1 --max-mixes 20 --feature chroma
 """
 
@@ -29,7 +29,7 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 
-_REPO = Path(__file__).resolve().parents[2]
+_REPO = Path(__file__).resolve().parents[3]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
@@ -100,7 +100,7 @@ def method_nmf(sample: Sample) -> dict[int, Pred]:
     so it runs on UnmixDB samples only; returns {} in feature-only (synthetic)."""
     if sample.mix_path is None or not sample.track_paths:
         return {}
-    from workspaces.alignment_prototype.nmf_baseline import recover_audio
+    from workspaces.alignment_prototype.external.nmf_baseline import recover_audio
 
     preds = recover_audio(sample.mix_path, sample.track_paths)
     return {

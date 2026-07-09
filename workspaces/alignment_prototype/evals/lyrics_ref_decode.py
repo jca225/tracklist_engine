@@ -32,7 +32,7 @@ comparable to the acoustic decoder's eval. Read-only imports; nothing here mutat
 the modules it borrows from.
 
 Usage:
-    venvs/audio/bin/python -m workspaces.alignment_prototype.lyrics_ref_decode \
+    venvs/audio/bin/python -m workspaces.alignment_prototype.evals.lyrics_ref_decode \
         --gt labeling/fixtures/bb12_ground_truth.yaml [--hubert] [--lam 0.6]
 """
 
@@ -46,7 +46,7 @@ from pathlib import Path
 
 import numpy as np
 
-_REPO = Path(__file__).resolve().parents[2]
+_REPO = Path(__file__).resolve().parents[3]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 

@@ -6,25 +6,25 @@ Synthetic generator: workspaces.alignment_prototype.synthetic_mix.generate
 
 Examples:
   # Parse-only / pipeline smoke (no audio):
-  venvs/audio/bin/python -m workspaces.alignment_prototype.pretrain --dry-run \\
+  venvs/audio/bin/python -m workspaces.alignment_prototype.external.pretrain --dry-run \\
     --unmixdb-root /path/to/unmixdb-v1.1
 
   # Fast chroma pretrain (validates the loop; weights won't transfer to MERT):
-  venvs/audio/bin/python -m workspaces.alignment_prototype.pretrain \\
+  venvs/audio/bin/python -m workspaces.alignment_prototype.external.pretrain \\
     --unmixdb-root /path/to/unmixdb-v1.1 --features chroma --max-mixes 50 \\
     --out workspaces/alignment_prototype/.cache/pretrain_chroma.pt
 
   # MERT pretrain for weight-transfer ablation on BB12:
-  venvs/audio/bin/python -m workspaces.alignment_prototype.pretrain \\
+  venvs/audio/bin/python -m workspaces.alignment_prototype.external.pretrain \\
     --unmixdb-root /path/to/unmixdb-v1.1 --features mert --max-mixes 100 \\
     --out workspaces/alignment_prototype/.cache/pretrain_mert.pt
 
   # Decisive ablation (frozen BB12 held-out):
-  venvs/audio/bin/python -m workspaces.alignment_prototype.pretrain --ablation \\
+  venvs/audio/bin/python -m workspaces.alignment_prototype.external.pretrain --ablation \\
     --pretrain-checkpoint workspaces/alignment_prototype/.cache/pretrain_mert.pt
 
   # Synthetic corpus pretrain (fast chroma smoke):
-  venvs/audio/bin/python -m workspaces.alignment_prototype.pretrain \\
+  venvs/audio/bin/python -m workspaces.alignment_prototype.external.pretrain \\
     --synthetic-root data/synthetic_mixes --features chroma --max-mixes 50 \\
     --out workspaces/alignment_prototype/.cache/pretrain_synthetic_chroma.pt
 """
@@ -35,7 +35,7 @@ import argparse
 import sys
 from pathlib import Path
 
-_REPO = Path(__file__).resolve().parents[2]
+_REPO = Path(__file__).resolve().parents[3]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 

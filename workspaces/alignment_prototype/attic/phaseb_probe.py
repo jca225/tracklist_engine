@@ -25,7 +25,7 @@ from pathlib import Path
 
 import numpy as np
 
-from workspaces.alignment_prototype.fiber_ab import _load_gt_rows, _match_gt
+from workspaces.alignment_prototype.evals.fiber_ab import _load_gt_rows, _match_gt
 from workspaces.alignment_prototype.path_decode import _gt_pieces, _pieces, _ref_at
 
 HALF = 6.0  # +/- window (~ the 12 s matched-filter window)

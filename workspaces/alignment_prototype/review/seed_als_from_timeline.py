@@ -24,7 +24,7 @@ The script self-validates: it re-parses its own output with als_io and asserts
 every span survives the round trip before the human ever opens it.
 
 Usage:
-    venvs/audio/bin/python -m workspaces.alignment_prototype.seed_als_from_timeline \\
+    venvs/audio/bin/python -m workspaces.alignment_prototype.review.seed_als_from_timeline \\
         --set-id 2nvzlh2k [--out ~/Desktop/...] [--template <als>]
 """
 
@@ -38,7 +38,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-_REPO = Path(__file__).resolve().parents[2]
+_REPO = Path(__file__).resolve().parents[3]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 

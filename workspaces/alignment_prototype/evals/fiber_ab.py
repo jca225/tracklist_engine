@@ -12,7 +12,7 @@ GT row and re-score with a chosen equivalence source:
 
 Never tunes on GT: fibers only affect the *credit* rule, not the predictions.
 
-    venvs/audio/bin/python -m workspaces.alignment_prototype.fiber_ab \
+    venvs/audio/bin/python -m workspaces.alignment_prototype.evals.fiber_ab \
         --pred looptrace/out/pred_1fsnxchk_hubert.json \
         --gt labeling/fixtures/bb12_ground_truth.yaml --fiber hubert
 """

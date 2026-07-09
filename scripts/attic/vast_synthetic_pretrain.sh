@@ -240,10 +240,10 @@ if [ "$GENERATE" = "1" ]; then
 fi
 
 RUN_CMD="cd ${REPO_REMOTE} && PYTHONPATH=${REPO_REMOTE} ${GEN_CMD} \
-${PY} -m workspaces.alignment_prototype.pretrain \
+${PY} -m workspaces.alignment_prototype.external.pretrain \
   --synthetic-root data/${SYNTH_SUBDIR} --features mert --epochs 40 --n-heads 3 \
   --out workspaces/alignment_prototype/.cache/${CKPT_NAME} \
-  && ${PY} -m workspaces.alignment_prototype.pretrain --ablation \
+  && ${PY} -m workspaces.alignment_prototype.external.pretrain --ablation \
   --pretrain-checkpoint workspaces/alignment_prototype/.cache/${CKPT_NAME} \
   --epochs 40 --n-heads 3 \
   2>&1 | tee ${REPO_REMOTE}/synth_pretrain.log"

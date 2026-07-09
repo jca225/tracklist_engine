@@ -12,7 +12,7 @@ Audio is cut on demand (cached) from the SAME stem the fibers were computed on,
 so you hear precisely what the algorithm compared. Single-user, localhost only.
 
 Usage:
-    venvs/audio/bin/python -m workspaces.alignment_prototype.fiber_server \
+    venvs/audio/bin/python -m workspaces.alignment_prototype.review.fiber_server \
         [--port 8765] [--open]
 """
 
@@ -31,7 +31,7 @@ from urllib.parse import parse_qs, urlparse
 
 import numpy as np
 
-_REPO = Path(__file__).resolve().parents[2]
+_REPO = Path(__file__).resolve().parents[3]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 

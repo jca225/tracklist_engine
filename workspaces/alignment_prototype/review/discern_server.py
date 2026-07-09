@@ -17,7 +17,7 @@ agnostic, so it also serves BB11/BB10 once their candidates land (another agent
 is acquiring those). Localhost only.
 
 Usage:
-    venvs/audio/bin/python -m workspaces.alignment_prototype.discern_server \
+    venvs/audio/bin/python -m workspaces.alignment_prototype.review.discern_server \
         [--port 8799] [--open]
 """
 
@@ -34,7 +34,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-_REPO = Path(__file__).resolve().parents[2]
+_REPO = Path(__file__).resolve().parents[3]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
