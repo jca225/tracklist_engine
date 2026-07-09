@@ -422,6 +422,56 @@ def main(argv: list[str] | None = None) -> int:
         if len(segs) > 1:
             n_multi += 1
 
+    # --- fiber hypothesis set (B3, additive): every decoded span carries the
+    # instance set of the repeat class its ref_start lands in, plus the
+    # membership/ambiguity signals. This is the W2 span-posterior hypothesis
+    # set: when ambiguous=True, content alone cannot fix WHICH instance played
+    # and downstream consumers (fusion, review, offboard labeler) must treat
+    # the exact instance as decode-prior, not audio evidence.
+    fiber_soft_cache: dict[str, tuple] = {}
+
+    def _fiber_soft(ref_path: str):
+        if ref_path not in fiber_soft_cache:
+            from workspaces.alignment_prototype.fibers import compute_fibers_soft
+
+            hf = np.load(_ensure_feat(ref_path, ref_path, "hubert", args.hubert_layer))
+            fiber_soft_cache[ref_path] = compute_fibers_soft(
+                hf, FPS, audio_path=ref_path
+            )
+        return fiber_soft_cache[ref_path]
+
+    n_amb = 0
+    for s in spans:
+        if not s.get("ref_segments"):
+            continue
+        t = by_tid.get(s["recording_id"])
+        ref_path = _ref_audio_for(s, t, set_dir) if t is not None else None
+        if ref_path is None:
+            continue
+        try:
+            labels, hz, mu, conf = _fiber_soft(str(ref_path))
+        except Exception as exc:  # loud, never silent (kernel law 5)
+            s["fiber_status"] = f"unavailable: {exc}"
+            continue
+        from workspaces.alignment_prototype.fibers import (
+            fiber_ambiguity,
+            fiber_intervals,
+        )
+
+        rs = float(s["ref_segments"][0]["ref_start_s"])
+        amb = fiber_ambiguity(labels, hz, rs, mu=mu)
+        s["fiber_ambiguity"] = amb
+        fid = amb["fiber_id"]
+        if fid >= 0:
+            s["fiber_instances"] = [
+                {"start_s": round(a, 2), "end_s": round(b, 2)}
+                for a, b, lab in fiber_intervals(labels, hz, min_len_s=3.0)
+                if lab == fid
+            ]
+            if amb["ambiguous"]:
+                n_amb += 1
+    print(f"fiber hypothesis sets: {n_amb} spans instance-ambiguous")
+
     timeline["ref_decode"] = (
         "path_decode jump-Viterbi, feature-routed (joint_ref_decode)"
         if args.decoder == "legacy"
