@@ -41,20 +41,44 @@ end-to-end. Full write-up: [FINDINGS.md](FINDINGS.md). This file = state + TODO.
   NB `0960565` (shared stem-path resolver, disk-truth fallback) may partly subsume
   this — verify against the driver's fresh numbers.
 
-## IN-FLIGHT — DO NOT COLLIDE
-`scripts/reinfer_driver.sh` (task `bk4unxwn7`) is running now: BB12 infer → BB11 infer
-→ `joint_ref_decode --decoder looptrace` ×2 (writes `out/<set>_predicted_timeline_lt_v2.json`)
-→ scorecard `--fibers`. It **owns `out/` and the placement code path.** Do not run
-infer / joint_ref_decode / score, and do not edit `infer.py`, until it finishes and
-wakes with the post-fix grid. Logs: `logs/reinfer_bb11.log`, `logs/jointdecode_*.log`.
+## RESOLVED 2026-07-09 — driver's "BB11 catastrophe" was a scorer footgun, NOT the manifest
+The reinfer driver (`bk4unxwn7`, DONE 07:06) reported BB11 identity 0% / placement
+~1000 s. Root cause: `score_timeline_vs_gt --gt` **silently defaulted to
+`bb12_ground_truth.yaml`** — the driver passed no `--gt`, so BB11's timeline was
+scored against BB12's GT (the "GT titles" in that scorecard are BB12 songs). The
+manifest `slot_label=None` theory was wrong — infer's spine comes live from pi and
+the raw timeline was verified sane (151/151 (slot,recording) pairs identical to the
+committed run). **Fixed in `43c24a6`:** `--gt` now resolves from `--set-id` by
+scanning fixtures (errors on no match), and `pull_set_for_alignment` emits
+`slot_label` so the manifest-schema drift is closed too (all 5 aligning manifests
+patched in place, `.pre_slotlabel_fix` backups alongside).
 
-**Queued behind it (other session, task `bmo144bfr`): BB11 ref separation.** A watcher
-polls for `alignment_prototype.(infer|infer_fused|lyrics_align)` to be gone 2 min, then
-runs `timeout 10800 venvs/audio/bin/python scripts/mac_analyze_loop.py --set-ids 2nvzlh2k
---separator roformer --only-reference` (the ~15 missing refs; Roformer on MPS). Log:
-session scratchpad `bb11_separation.log`. Caveat: the gate does NOT match
-`joint_ref_decode`, so separation may start while the driver's decode stage runs —
-possible MPS contention, tolerable. **Do not launch a second mac_analyze_loop.**
+**Real BB11 lt_v2 numbers** (rescored with correct GT; scratchpad
+`bb11_ltv2_score.txt`): identity **84%**, set_start median **7.1 s** / <15 s 64%,
+headline multiseg+loop **31%**, regular 49%, instrumental **45%** (ref-offset
+median 3.9 s, <2 s 50%), acappella 19% — i.e. consistent with the committed
+`763fb8c` run; instrumental confirms the stem-fp channel on a second set. The
+BB12 lt_v2 leg was valid all along (default GT happened to be BB12's):
+identity 84%, placement median 4.5 s / <15 s 74%.
+
+## IN-FLIGHT — DO NOT COLLIDE
+**BB11 ref separation is RUNNING NOW on MPS** (other session, task `bmo144bfr`,
+started ~07:05): `mac_analyze_loop --set-ids 2nvzlh2k --separator roformer
+--only-reference` for the ~15 missing refs, 3 h timeout. **MPS is NOT free** — do
+not start GPU work (infer re-runs, synthetic A/B, another mac_analyze_loop) until
+it exits. After it lands: delta-refresh the BB11 pull, re-run BB11 infer →
+looptrace decode → score (the first full-coverage acappella test).
+
+## Manifest audit 2026-07-09 (all 5 ~/aligning sets)
+All 488 distinct `pi_path`s exist on pi; local_path + stem paths verified on disk for
+BB10/BB11/BB12/Murph. `slot_label` now emitted by the pull and patched into all
+manifests. Two holes remain: **Disco Lines (1rfb0yl9)** — every local path broken
+(oldest manifest schema, no `label` key); heal by re-pull when next touched. **BB10
+bed rows absent from the manifest** for mashup slots (e.g. 001 bed = "Let The Drummer
+Kick", a tlp-id row with no audio) — the pull drops slot rows it can't resolve to a
+track_audio, so the als interpreter can't map those beds; needs a decision (emit
+audio-less rows vs leave dropped). Do NOT re-pull BB10 until the Birdy `is_reference`
+flip below is reverted, or the pull will fetch the instrumental as the slot's main file.
 
 ## TODO (prioritized)
 1. **[after driver] Reconcile + prune.** Diff the driver's fresh `_lt_v2` fibered
@@ -97,3 +121,15 @@ possible MPS contention, tolerable. **Do not launch a second mac_analyze_loop.**
   redundant mass-separation.
 - **John's one non-delegable task: label BB10** (`w1mgcjt`) — it gates TODO #4, the
   highest-ceiling lever. Everything else on this list an agent can drive.
+- **BB10 Birdy (slot 001w, track `2bsw9zvf`):** official Don Diablo Remix instrumental
+  ingested as `track_audio` 23733 (correction 1267). Side effect: `acquire_variant`'s
+  default-promote flipped `is_reference` to the instrumental — **needs manual revert
+  on pi** (permission-blocked for the agent):
+  `sqlite3 /mnt/storage/data/db/music_database.db "UPDATE track_audio SET is_reference=1 WHERE track_audio_id=21151; UPDATE track_audio SET is_reference=0 WHERE track_audio_id=23733;"`
+  Also fix the footgun: stem-sibling adds should not steal the reference
+  (`--no-promote-reference` should be the default for canonical stem adds).
+- The claimed "Discord instrumental candidate" for Birdy KYHU does not exist in
+  `/mnt/storage/staging/discord_stems` — the correct candidate was the local YouTube
+  fetch (cand1, now canonical). Ref file content verified = Don Diablo Remix (Radio
+  Edit), matching its player_id; what exactly sounded "wrong version" still needs
+  John's ear (full-length remix vs radio edit is the leading theory).
