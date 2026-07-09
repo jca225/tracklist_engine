@@ -141,3 +141,30 @@ flip below is reverted, or the pull will fetch the instrumental as the slot's ma
   fetch (cand1, now canonical). Ref file content verified = Don Diablo Remix (Radio
   Edit), matching its player_id; what exactly sounded "wrong version" still needs
   John's ear (full-length remix vs radio edit is the leading theory).
+
+## Kernel-lane session note (2026-07-09, Fable agent — W0/W1 of docs/kernel_data_engine_plan.md)
+
+For the model-lane agent; none of this touches your interfaces:
+
+- **`--instr-stem-placement` is now default ON** (81ac097) — your armed BB11
+  chain passes it explicitly, which is now a harmless no-op. Verified the pi
+  re-materialize you rely on: BB12 19 instr / BB11 19 visible (GT-only
+  residual ~6/set = class-1 inventory gaps).
+- **`SetContext.for_set` now runs a boot preflight** (validates the manifest
+  via `core.contracts.load_manifest`, checks pull completeness). Escape
+  hatch: `for_set(..., preflight=False)` if you construct contexts for sets
+  without a local pull.
+- **New scoped ratchet `kernel_flags` = 39** (add_argument on infer /
+  joint_ref_decode / drivers). Adding a kernel CLI flag now fails `make
+  check` — add to the plan's burn-in table instead, or raise with
+  justification.
+- **A guarded `make determinism SET=1fsnxchk` is queued in background**
+  (waits for GPU idle ×2). It will regenerate
+  `out/1fsnxchk_predicted_timeline.json` + `1fsnxchk_classical_timeline.json`
+  — with instr placement ON, so BB12 classical numbers may shift (expected:
+  instr axis improves). Re-run `make race` before quoting the old board.
+- Both pis deployed to `b2b2edd` (the branch merge landed on main).
+- Plans landed: docs/architecture_north_star.md (OS map, P0–P6) +
+  docs/kernel_data_engine_plan.md (estimation contracts W2 = the factor/
+  posterior records; I'll hand off the `ProbeFactor` shape here before
+  touching `harness/contract.py`).
