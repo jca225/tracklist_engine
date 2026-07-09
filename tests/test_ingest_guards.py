@@ -12,7 +12,7 @@ import csv
 from pathlib import Path
 
 from ingest.guards import duration_sane, parse_play_time, sniff_audio_payload
-from ingest.main import _pick_mix_link
+from ingest.main import _mix_link_candidates
 from core.models import SetMediaLink
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "ingest"
@@ -98,18 +98,21 @@ def _link(platform: str) -> SetMediaLink:
     return SetMediaLink(set_id="s", platform=platform, url=f"https://x/{platform}")
 
 
-def test_pick_mix_link_platform_preference():
-    """CHARACTERIZATION of current behavior: YouTube outranks SoundCloud.
-
-    NB the 2026-07-09 ingest-queue work argues SC-first (usually the DJ's own
-    full-length upload; the queue scores SC over YT) — if the preference
-    flips, update this test WITH the flip so the change is deliberate.
-    """
-    picked = _pick_mix_link((_link("soundcloud"), _link("youtube")))
-    assert picked is not None and picked.platform == "youtube"
-    only_sc = _pick_mix_link((_link("soundcloud"),))
-    assert only_sc is not None and only_sc.platform == "soundcloud"
-    assert _pick_mix_link(()) is None
+def test_mix_link_candidates_sc_first_full_chain():
+    """DELIBERATE flip 2026-07-09 (was YT-first, single pick): SoundCloud
+    outranks YouTube — the SC embed is usually the DJ's own full-length
+    upload and is rarely label-blocked, while YT mirrors draw SME/UMG
+    content claims (pilot ingest lost 2 of its first 4 sets that way with
+    unused SC links on both). The FULL ordered chain is returned so
+    `_process_set_mix` falls through on block/duration-suspect instead of
+    committing to one link."""
+    chain = _mix_link_candidates(
+        (_link("youtube"), _link("soundcloud"), _link("mixcloud"))
+    )
+    assert [c.platform for c in chain] == ["soundcloud", "youtube", "mixcloud"]
+    only_yt = _mix_link_candidates((_link("youtube"),))
+    assert [c.platform for c in only_yt] == ["youtube"]
+    assert _mix_link_candidates(()) == ()
 
 
 # ── correction-ledger snapshot invariants ────────────────────────────────────
