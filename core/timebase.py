@@ -183,3 +183,82 @@ class TimeMap:
             if not kept or (a > kept[-1][0] and b > kept[-1][1]):
                 kept.append((float(a), float(b)))
         return TimeMap(src_domain, dst_domain, tuple(kept), policy=policy)
+
+
+@dataclass(frozen=True)
+class Trajectory:
+    """Piecewise-linear dst(src) — a span's ref(mix_t), loops included.
+
+    Unlike TimeMap this is NOT globally monotonic (a DJ loop jumps ref
+    backward), so it is not invertible; each piece is a straight line and
+    evaluation extrapolates on the edge pieces outside the covered range.
+    Semantics are the extraction of the prototype's `_pieces`/`_ref_at`
+    (differential-tested against them) so scorer and decoder share ONE
+    implementation.
+
+    ``pieces``: ordered ``(src_lo, src_hi, dst_at_lo, slope)`` in absolute
+    src coordinates; contiguous by construction from ``from_segments``.
+    """
+
+    src_domain: str
+    dst_domain: str
+    pieces: tuple[tuple[float, float, float, float], ...]
+
+    def __post_init__(self) -> None:
+        if not self.pieces:
+            raise TimeMapError(
+                f"Trajectory {self.src_domain}->{self.dst_domain}: no pieces"
+            )
+
+    @staticmethod
+    def from_segments(
+        src_domain: str,
+        dst_domain: str,
+        seg_list: Iterable[tuple[float, float, float]],
+        *,
+        span_end: float,
+        default_slope: float,
+    ) -> Trajectory:
+        """Normalize ``(src_start, dst_start, dst_end)`` segments to pieces.
+
+        Each piece extends to the next segment's src start (the last to
+        ``span_end``). A dst-degenerate segment (dst_end == dst_start, e.g. a
+        stab) takes ``default_slope`` — the span's tempo_ratio — rather than
+        slope 0.
+        """
+        segs = list(seg_list)
+        pieces: list[tuple[float, float, float, float]] = []
+        for i, (ms, rs, re) in enumerate(segs):
+            me = segs[i + 1][0] if i + 1 < len(segs) else span_end
+            dur = max(me - ms, 1e-6)
+            slope = (re - rs) / dur if (re - rs) else default_slope
+            pieces.append((ms, me, rs, slope))
+        return Trajectory(src_domain, dst_domain, tuple(pieces))
+
+    @staticmethod
+    def linear(
+        src_domain: str,
+        dst_domain: str,
+        *,
+        span_start: float,
+        span_end: float,
+        dst_start: float,
+        slope: float,
+    ) -> Trajectory:
+        """A straight single-piece trajectory (the scalar-ref_start span)."""
+        return Trajectory(
+            src_domain, dst_domain, ((span_start, span_end, dst_start, slope),)
+        )
+
+    def value_at(self, t: float) -> float:
+        """dst at src=t; first covering piece wins, edge pieces extrapolate."""
+        for ms, me, rs, slope in self.pieces:
+            if ms <= t <= me:
+                return rs + (t - ms) * slope
+        if t < self.pieces[0][0]:
+            ms, _me, rs, slope = self.pieces[0]
+            return rs + (t - ms) * slope
+        ms, _me, rs, slope = self.pieces[-1]
+        return rs + (t - ms) * slope
+
+    __call__ = value_at

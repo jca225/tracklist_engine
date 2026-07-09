@@ -38,6 +38,8 @@ import warnings
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
+from core.timebase import Trajectory
+
 import numpy as np
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -301,16 +303,17 @@ def decode_path(
 
 
 # --- trajectory scoring (works for linear / loop / multi-seg alike) -------
+# Piecewise ref(mix_t) evaluation lives in core.timebase.Trajectory (one
+# implementation shared by decoder + scorers). These shims keep the historic
+# list-of-tuples calling convention; new code should build Trajectory directly.
 def _pieces(seg_list, span_start: float, span_end: float, default_slope: float):
     """Normalize a segment list to [(mix_lo, mix_hi, ref_at_lo, slope)] in
     absolute mix seconds, for piecewise-linear ref(mix_t) interpolation."""
-    out = []
-    for i, (ms, rs, re) in enumerate(seg_list):
-        me = seg_list[i + 1][0] if i + 1 < len(seg_list) else span_end
-        dur = max(me - ms, 1e-6)
-        slope = (re - rs) / dur if (re - rs) else default_slope
-        out.append((ms, me, rs, slope))
-    return out
+    return list(
+        Trajectory.from_segments(
+            "mix", "ref", seg_list, span_end=span_end, default_slope=default_slope
+        ).pieces
+    )
 
 
 def _gt_pieces(row: dict):
@@ -323,18 +326,16 @@ def _gt_pieces(row: dict):
             for s in segs
         ]
         return _pieces(seq, s0, s1, slope)
-    return [(s0, s1, float(row["ref_start_s"]), slope)]
+    return list(
+        Trajectory.linear(
+            "mix", "ref", span_start=s0, span_end=s1,
+            dst_start=float(row["ref_start_s"]), slope=slope,
+        ).pieces
+    )
 
 
 def _ref_at(pieces, t: float) -> float:
-    for ms, me, rs, slope in pieces:
-        if ms <= t <= me:
-            return rs + (t - ms) * slope
-    if t < pieces[0][0]:
-        ms, _me, rs, slope = pieces[0]
-        return rs + (t - ms) * slope
-    ms, me, rs, slope = pieces[-1]
-    return rs + (t - ms) * slope
+    return Trajectory("mix", "ref", tuple(pieces)).value_at(t)
 
 
 def trajectory_acc(
