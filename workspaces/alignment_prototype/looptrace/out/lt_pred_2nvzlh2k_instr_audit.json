@@ -1,0 +1,632 @@
+{
+ "gt": "labeling/fixtures/bb11_ground_truth.yaml",
+ "decoder": "looptrace",
+ "spans": [
+  {
+   "slot_label": "003",
+   "track_id": "1wv1fsrx",
+   "set_start_s": 299.524,
+   "set_end_s": 383.429,
+   "claimed_stem": "instrumental",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/stems/003__Audien - Crazy Love (MOTi Remix)/instrumental.flac",
+   "segs": [
+    [
+     0.0,
+     30.395,
+     56.395
+    ],
+    [
+     26.0,
+     48.779,
+     106.279
+    ]
+   ],
+   "meta": {
+    "n_points": 59057,
+    "slope": 1.0,
+    "evidence": 930.0,
+    "evidence_rate": 11.08,
+    "ev_out_frac": null,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "004",
+   "track_id": "270vfcpx",
+   "set_start_s": 383.333,
+   "set_end_s": 462.72,
+   "claimed_stem": "instrumental",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/stems/004__Dzeko & Torres - L'amour Toujours (Ti\u00ebsto Edit)/instrumental.flac",
+   "segs": [
+    [
+     0.0,
+     44.28,
+     123.28
+    ]
+   ],
+   "meta": {
+    "n_points": 65621,
+    "slope": 1.0,
+    "evidence": 1914.0,
+    "evidence_rate": 24.11,
+    "ev_out_frac": null,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "006",
+   "track_id": "20jcmut5",
+   "set_start_s": 542.118,
+   "set_end_s": 645.972,
+   "claimed_stem": "instrumental",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/stems/006__Thomas Hayes - Neon (Ryos Remix)/instrumental.flac",
+   "segs": [
+    [
+     0.0,
+     93.437,
+     188.437
+    ],
+    [
+     95.0,
+     94.675,
+     103.175
+    ]
+   ],
+   "meta": {
+    "n_points": 73611,
+    "slope": 1.0,
+    "evidence": 1548.0,
+    "evidence_rate": 14.91,
+    "ev_out_frac": null,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "007",
+   "track_id": "280rmv5x",
+   "set_start_s": 639.738,
+   "set_end_s": 750.164,
+   "claimed_stem": "instrumental",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/tracks/007__The Killers - Mr. Brightside (Two Friends Remix).m4a",
+   "segs": [
+    [
+     0.0,
+     0.0,
+     1.672
+    ],
+    [
+     1.672,
+     1.672,
+     4.458
+    ],
+    [
+     4.458,
+     4.458,
+     8.5
+    ],
+    [
+     8.5,
+     1.998,
+     8.143
+    ],
+    [
+     14.645,
+     1.672,
+     4.458
+    ],
+    [
+     17.431,
+     8.143,
+     9.998
+    ],
+    [
+     19.286,
+     13.365,
+     26.865
+    ],
+    [
+     32.786,
+     32.786,
+     88.329
+    ],
+    [
+     88.329,
+     88.329,
+     89.443
+    ],
+    [
+     89.443,
+     89.443,
+     101.286
+    ],
+    [
+     101.286,
+     180.234,
+     180.25
+    ],
+    [
+     101.302,
+     88.329,
+     89.443
+    ],
+    [
+     102.416,
+     89.443,
+     101.286
+    ],
+    [
+     102.416,
+     180.25,
+     188.234
+    ]
+   ],
+   "meta": {
+    "n_points": 79748,
+    "slope": 1.0,
+    "evidence": 1922.0,
+    "evidence_rate": 18.04,
+    "ev_out_frac": null,
+    "loops": [
+     {
+      "source_start_s": 1.672,
+      "source_end_s": 4.458,
+      "period_s": 12.973,
+      "n_iter": 2
+     },
+     {
+      "source_start_s": 88.329,
+      "source_end_s": 89.443,
+      "period_s": 12.973,
+      "n_iter": 2
+     }
+    ]
+   }
+  },
+  {
+   "slot_label": "010",
+   "track_id": "1gscm4q5",
+   "set_start_s": 916.139,
+   "set_end_s": 978.498,
+   "claimed_stem": "instrumental",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/stems/010__Gazzo - Never Touch The Ground/instrumental.flac",
+   "segs": [
+    [
+     0.0,
+     199.192,
+     202.192
+    ],
+    [
+     3.0,
+     67.064,
+     68.244
+    ],
+    [
+     4.18,
+     68.244,
+     72.98
+    ],
+    [
+     8.916,
+     72.98,
+     90.064
+    ],
+    [
+     26.0,
+     94.778,
+     95.455
+    ],
+    [
+     26.68,
+     68.244,
+     72.98
+    ],
+    [
+     31.416,
+     72.98,
+     90.064
+    ],
+    [
+     31.416,
+     95.455,
+     126.278
+    ]
+   ],
+   "meta": {
+    "n_points": 55785,
+    "slope": 1.0,
+    "evidence": 861.0,
+    "evidence_rate": 14.94,
+    "ev_out_frac": null,
+    "loops": [
+     {
+      "source_start_s": 4.18,
+      "source_end_s": 8.916,
+      "period_s": 22.4999,
+      "n_iter": 2
+     }
+    ]
+   }
+  },
+  {
+   "slot_label": "011w2",
+   "track_id": "2m4452pp",
+   "set_start_s": 1047.62,
+   "set_end_s": 1143.45,
+   "claimed_stem": "instrumental",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/stems/011w2__Calvin Harris - Feel So Close (Big Z Remix)/instrumental.flac",
+   "segs": [
+    [
+     0.0,
+     78.079,
+     92.435
+    ],
+    [
+     13.5,
+     58.879,
+     98.225
+    ],
+    [
+     50.5,
+     44.192,
+     92.045
+    ]
+   ],
+   "meta": {
+    "n_points": 67590,
+    "slope": 1.0634,
+    "evidence": 586.0,
+    "evidence_rate": 6.11,
+    "ev_out_frac": null,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "022",
+   "track_id": "tlp2594111",
+   "set_start_s": 2093.5,
+   "set_end_s": 2164.31,
+   "claimed_stem": "instrumental",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/stems/022__Gazzo - Feel The Love/instrumental.flac",
+   "segs": [
+    [
+     0.0,
+     30.284,
+     96.554
+    ]
+   ],
+   "meta": {
+    "n_points": 71459,
+    "slope": 0.94,
+    "evidence": 669.0,
+    "evidence_rate": 9.45,
+    "ev_out_frac": null,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "023",
+   "track_id": "2814q10p",
+   "set_start_s": 2196.61,
+   "set_end_s": 2243.47,
+   "claimed_stem": "instrumental",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/stems/023__Two Friends - Out Of Love/instrumental.flac",
+   "segs": [
+    [
+     0.0,
+     41.169,
+     87.669
+    ]
+   ],
+   "meta": {
+    "n_points": 50857,
+    "slope": 1.0,
+    "evidence": 1016.0,
+    "evidence_rate": 21.68,
+    "ev_out_frac": null,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "028",
+   "track_id": "1uzxl36x",
+   "set_start_s": 2546.53,
+   "set_end_s": 2633.57,
+   "claimed_stem": "instrumental",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/tracks/028__The Chainsmokers - Paris (Pegboard Nerds Remix).m4a",
+   "segs": [
+    [
+     0.0,
+     -0.139,
+     10.861
+    ],
+    [
+     11.0,
+     169.267,
+     188.267
+    ],
+    [
+     30.0,
+     58.77,
+     86.898
+    ],
+    [
+     58.329,
+     86.898,
+     90.032
+    ],
+    [
+     61.486,
+     90.032,
+     110.727
+    ],
+    [
+     82.329,
+     86.898,
+     90.032
+    ],
+    [
+     85.486,
+     90.032,
+     110.727
+    ],
+    [
+     85.486,
+     110.727,
+     112.27
+    ]
+   ],
+   "meta": {
+    "n_points": 77986,
+    "slope": 1.0,
+    "evidence": 1249.0,
+    "evidence_rate": 14.89,
+    "ev_out_frac": null,
+    "loops": [
+     {
+      "source_start_s": 58.329,
+      "source_end_s": 61.486,
+      "period_s": 24.0,
+      "n_iter": 2
+     }
+    ]
+   }
+  },
+  {
+   "slot_label": "029",
+   "track_id": "tlp2594130",
+   "set_start_s": 2633.53,
+   "set_end_s": 2637.61,
+   "claimed_stem": "instrumental",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/stems/029__Gazzo - Nothing To Lose/instrumental.flac",
+   "segs": [
+    [
+     0.0,
+     0.492,
+     3.416
+    ]
+   ],
+   "meta": {
+    "n_points": 19083,
+    "slope": 0.731,
+    "evidence": 262.0,
+    "evidence_rate": 64.22,
+    "ev_out_frac": null,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "029",
+   "track_id": "tlp2594130",
+   "set_start_s": 2637.61,
+   "set_end_s": 2654.13,
+   "claimed_stem": "instrumental",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/stems/029__Gazzo - Nothing To Lose/instrumental.flac",
+   "segs": [
+    [
+     0.0,
+     11.136,
+     27.141
+    ]
+   ],
+   "meta": {
+    "n_points": 17637,
+    "slope": 0.97,
+    "evidence": 334.0,
+    "evidence_rate": 20.22,
+    "ev_out_frac": null,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "029",
+   "track_id": "tlp2594130",
+   "set_start_s": 2654.13,
+   "set_end_s": 2724.24,
+   "claimed_stem": "instrumental",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/stems/029__Gazzo - Nothing To Lose/instrumental.flac",
+   "segs": [
+    [
+     0.0,
+     41.099,
+     108.599
+    ],
+    [
+     67.5,
+     238.794,
+     241.294
+    ]
+   ],
+   "meta": {
+    "n_points": 68432,
+    "slope": 1.0,
+    "evidence": 1337.0,
+    "evidence_rate": 19.07,
+    "ev_out_frac": null,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "032",
+   "track_id": "1r8rnl5x",
+   "set_start_s": 2885.97,
+   "set_end_s": 2947.08,
+   "claimed_stem": "instrumental",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/stems/032__Justin Caruso - Talk About Me/instrumental.flac",
+   "segs": [
+    [
+     0.0,
+     57.771,
+     63.771
+    ],
+    [
+     6.0,
+     6.046,
+     27.817
+    ],
+    [
+     27.771,
+     27.817,
+     28.046
+    ],
+    [
+     28.0,
+     32.505,
+     36.36
+    ],
+    [
+     31.858,
+     36.36,
+     43.934
+    ],
+    [
+     39.438,
+     27.817,
+     28.046
+    ],
+    [
+     39.667,
+     32.505,
+     36.36
+    ],
+    [
+     43.525,
+     43.934,
+     61.505
+    ]
+   ],
+   "meta": {
+    "n_points": 27780,
+    "slope": 1.0,
+    "evidence": 727.0,
+    "evidence_rate": 12.75,
+    "ev_out_frac": null,
+    "loops": [
+     {
+      "source_start_s": 27.771,
+      "source_end_s": 31.858,
+      "period_s": 11.6666,
+      "n_iter": 2
+     }
+    ]
+   }
+  },
+  {
+   "slot_label": "036",
+   "track_id": "1c5fq6vp",
+   "set_start_s": 3159.28,
+   "set_end_s": 3208.65,
+   "claimed_stem": "instrumental",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/tracks/036__Mako - Let Go Of The Wheel (WE ARE FURY Remix).m4a",
+   "segs": [
+    [
+     0.0,
+     150.79,
+     158.29
+    ],
+    [
+     7.5,
+     39.683,
+     81.183
+    ]
+   ],
+   "meta": {
+    "n_points": 66170,
+    "slope": 1.0,
+    "evidence": 256.0,
+    "evidence_rate": 5.19,
+    "ev_out_frac": null,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "037",
+   "track_id": "2l8vbt4p",
+   "set_start_s": 3231.76,
+   "set_end_s": 3297.75,
+   "claimed_stem": "instrumental",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/stems/037__Tove Lo - Cool Girl (Two Friends Remix)/instrumental.flac",
+   "segs": [
+    [
+     0.0,
+     0.07,
+     15.209
+    ],
+    [
+     15.139,
+     15.209,
+     17.067
+    ],
+    [
+     16.997,
+     17.067,
+     24.315
+    ],
+    [
+     24.245,
+     15.209,
+     17.067
+    ],
+    [
+     26.103,
+     24.315,
+     24.57
+    ],
+    [
+     26.358,
+     26.427,
+     65.927
+    ]
+   ],
+   "meta": {
+    "n_points": 50199,
+    "slope": 1.0,
+    "evidence": 1355.0,
+    "evidence_rate": 21.13,
+    "ev_out_frac": null,
+    "loops": [
+     {
+      "source_start_s": 15.139,
+      "source_end_s": 16.997,
+      "period_s": 9.1059,
+      "n_iter": 2
+     }
+    ]
+   }
+  }
+ ]
+}

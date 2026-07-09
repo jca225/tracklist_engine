@@ -1,0 +1,805 @@
+{
+ "gt": "labeling/fixtures/bb12_ground_truth.yaml",
+ "decoder": "looptrace",
+ "spans": [
+  {
+   "slot_label": "003",
+   "track_id": "2uq9800f",
+   "set_start_s": 64.4457,
+   "set_end_s": 129.767,
+   "claimed_stem": "instrumental",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/tracks/013w3__Two Friends - Pacific Coast Highway (Acappella) (Acappella).m4a",
+   "segs": [
+    [
+     0.0,
+     112.884,
+     125.134
+    ],
+    [
+     24.5,
+     121.111,
+     124.209
+    ],
+    [
+     30.743,
+     124.209,
+     124.256
+    ],
+    [
+     30.836,
+     124.256,
+     124.715
+    ],
+    [
+     31.762,
+     124.715,
+     124.947
+    ],
+    [
+     32.229,
+     124.947,
+     125.336
+    ],
+    [
+     33.014,
+     125.336,
+     127.991
+    ],
+    [
+     38.362,
+     124.209,
+     124.256
+    ],
+    [
+     38.455,
+     124.256,
+     124.715
+    ],
+    [
+     39.381,
+     124.715,
+     124.947
+    ],
+    [
+     39.848,
+     127.991,
+     130.135
+    ],
+    [
+     44.169,
+     130.135,
+     130.135
+    ],
+    [
+     45.562,
+     124.947,
+     125.336
+    ],
+    [
+     46.347,
+     125.336,
+     127.991
+    ],
+    [
+     53.181,
+     127.991,
+     130.135
+    ],
+    [
+     60.333,
+     130.135,
+     132.611
+    ]
+   ],
+   "meta": {
+    "n_points": 53356,
+    "slope": 0.5,
+    "evidence": 404.0,
+    "evidence_rate": 8.47,
+    "ev_out_frac": null,
+    "loops": [
+     {
+      "source_start_s": 30.743,
+      "source_end_s": 32.229,
+      "period_s": 7.6191,
+      "n_iter": 2
+     },
+     {
+      "source_start_s": 30.836,
+      "source_end_s": 44.169,
+      "period_s": 13.3333,
+      "n_iter": 2
+     },
+     {
+      "source_start_s": 30.836,
+      "source_end_s": 39.381,
+      "period_s": 20.9524,
+      "n_iter": 2
+     },
+     {
+      "source_start_s": 46.347,
+      "source_end_s": 51.827,
+      "period_s": 7.619,
+      "n_iter": 2
+     }
+    ]
+   }
+  },
+  {
+   "slot_label": "155",
+   "track_id": "mtck04x",
+   "set_start_s": 125.368,
+   "set_end_s": 222.571,
+   "claimed_stem": "instrumental",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/002__Manse - Freeze Time (Instrumental Mix)/instrumental.flac",
+   "segs": [
+    [
+     0.0,
+     67.349,
+     90.108
+    ],
+    [
+     23.0,
+     183.601,
+     195.475
+    ],
+    [
+     35.0,
+     180.433,
+     241.782
+    ]
+   ],
+   "meta": {
+    "n_points": 90929,
+    "slope": 0.9895,
+    "evidence": 1137.0,
+    "evidence_rate": 11.7,
+    "ev_out_frac": null,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "007",
+   "track_id": "y10w66f",
+   "set_start_s": 222.6,
+   "set_end_s": 290.889,
+   "claimed_stem": "instrumental",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/tracks/002w3__Calvin Harris - Outside (Acappella) (Acappella).m4a",
+   "segs": [
+    [
+     0.0,
+     155.324,
+     156.236
+    ],
+    [
+     1.95,
+     156.236,
+     159.741
+    ],
+    [
+     9.45,
+     156.236,
+     159.741
+    ],
+    [
+     16.95,
+     156.236,
+     159.741
+    ],
+    [
+     24.45,
+     159.741,
+     180.234
+    ]
+   ],
+   "meta": {
+    "n_points": 46253,
+    "slope": 0.47,
+    "evidence": 326.0,
+    "evidence_rate": 6.12,
+    "ev_out_frac": null,
+    "loops": [
+     {
+      "source_start_s": 1.95,
+      "source_end_s": 9.45,
+      "period_s": 7.5,
+      "n_iter": 3
+     }
+    ]
+   }
+  },
+  {
+   "slot_label": "020",
+   "track_id": "qn6lhlp",
+   "set_start_s": 507.626,
+   "set_end_s": 560.446,
+   "claimed_stem": "instrumental",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/006__Armin van Buuren - Freefall (Manse Remix)/instrumental.flac",
+   "segs": [
+    [
+     0.0,
+     30.437,
+     39.837
+    ],
+    [
+     9.5,
+     137.223,
+     179.772
+    ]
+   ],
+   "meta": {
+    "n_points": 73619,
+    "slope": 0.9895,
+    "evidence": 431.0,
+    "evidence_rate": 8.16,
+    "ev_out_frac": null,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "027",
+   "track_id": "nupqlv5",
+   "set_start_s": 673.471,
+   "set_end_s": 759.308,
+   "claimed_stem": "instrumental",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/008__KYLE - iSpy (Two Friends Remix)/instrumental.flac",
+   "segs": [
+    [
+     0.0,
+     114.097,
+     117.058
+    ],
+    [
+     3.0,
+     3.228,
+     36.114
+    ],
+    [
+     36.316,
+     36.114,
+     40.149
+    ],
+    [
+     40.403,
+     40.149,
+     41.624
+    ],
+    [
+     41.897,
+     36.114,
+     40.149
+    ],
+    [
+     45.984,
+     40.149,
+     41.624
+    ],
+    [
+     45.984,
+     41.624,
+     41.725
+    ],
+    [
+     46.087,
+     46.34,
+     85.331
+    ]
+   ],
+   "meta": {
+    "n_points": 55601,
+    "slope": 0.9871,
+    "evidence": 1702.0,
+    "evidence_rate": 20.82,
+    "ev_out_frac": null,
+    "loops": [
+     {
+      "source_start_s": 36.316,
+      "source_end_s": 40.403,
+      "period_s": 5.5814,
+      "n_iter": 2
+     }
+    ]
+   }
+  },
+  {
+   "slot_label": "034",
+   "track_id": "j2dbhzf",
+   "set_start_s": 834.171,
+   "set_end_s": 920.814,
+   "claimed_stem": "instrumental",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/010__Vicetone - Nothing Stopping Me/instrumental.flac",
+   "segs": [
+    [
+     0.0,
+     139.738,
+     145.238
+    ],
+    [
+     5.5,
+     5.848,
+     37.348
+    ],
+    [
+     37.0,
+     52.604,
+     64.357
+    ],
+    [
+     48.762,
+     64.357,
+     79.465
+    ],
+    [
+     63.88,
+     64.357,
+     79.465
+    ],
+    [
+     63.88,
+     79.465,
+     79.465
+    ],
+    [
+     78.998,
+     79.465,
+     79.465
+    ],
+    [
+     78.998,
+     79.465,
+     87.104
+    ]
+   ],
+   "meta": {
+    "n_points": 73901,
+    "slope": 1.0,
+    "evidence": 725.0,
+    "evidence_rate": 10.14,
+    "ev_out_frac": null,
+    "loops": [
+     {
+      "source_start_s": 48.762,
+      "source_end_s": 63.88,
+      "period_s": 15.1181,
+      "n_iter": 2
+     }
+    ]
+   }
+  },
+  {
+   "slot_label": "066",
+   "track_id": "22gqmxm5",
+   "set_start_s": 1552.48,
+   "set_end_s": 1599.15,
+   "claimed_stem": "instrumental",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/019__Passion Pit - Sleepyhead (Two Friends Remix)/instrumental.flac",
+   "segs": [
+    [
+     0.0,
+     0.186,
+     28.7
+    ],
+    [
+     28.514,
+     28.7,
+     28.7
+    ],
+    [
+     28.514,
+     28.7,
+     30.186
+    ],
+    [
+     30.0,
+     44.303,
+     47.398
+    ],
+    [
+     33.22,
+     28.7,
+     28.7
+    ],
+    [
+     33.22,
+     28.7,
+     30.186
+    ],
+    [
+     34.706,
+     44.303,
+     47.398
+    ],
+    [
+     37.926,
+     47.398,
+     55.803
+    ]
+   ],
+   "meta": {
+    "n_points": 34220,
+    "slope": 1.0,
+    "evidence": 743.0,
+    "evidence_rate": 17.71,
+    "ev_out_frac": null,
+    "loops": [
+     {
+      "source_start_s": 28.514,
+      "source_end_s": 33.22,
+      "period_s": 4.7059,
+      "n_iter": 2
+     }
+    ]
+   }
+  },
+  {
+   "slot_label": "068",
+   "track_id": "sjwvyqx",
+   "set_start_s": 1637.34,
+   "set_end_s": 1705.97,
+   "claimed_stem": "instrumental",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/020__Fifth Harmony - Work From Home (Young Bombs Remix)/instrumental.flac",
+   "segs": [
+    [
+     0.0,
+     0.042,
+     17.578
+    ],
+    [
+     17.74,
+     17.578,
+     18.771
+    ],
+    [
+     18.947,
+     18.771,
+     24.26
+    ],
+    [
+     24.5,
+     25.796,
+     25.891
+    ],
+    [
+     24.597,
+     17.578,
+     18.771
+    ],
+    [
+     25.804,
+     25.891,
+     67.808
+    ]
+   ],
+   "meta": {
+    "n_points": 62921,
+    "slope": 0.9885,
+    "evidence": 1357.0,
+    "evidence_rate": 20.13,
+    "ev_out_frac": null,
+    "loops": [
+     {
+      "source_start_s": 17.74,
+      "source_end_s": 18.947,
+      "period_s": 6.8571,
+      "n_iter": 2
+     }
+    ]
+   }
+  },
+  {
+   "slot_label": "072",
+   "track_id": "2gk2y9yp",
+   "set_start_s": 1733.47,
+   "set_end_s": 1784.52,
+   "claimed_stem": "instrumental",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/021__JAUZ & Crankdat - I Hold Still/instrumental.flac",
+   "segs": [
+    [
+     0.0,
+     177.74,
+     186.47
+    ],
+    [
+     9.0,
+     104.96,
+     120.645
+    ],
+    [
+     25.17,
+     120.645,
+     122.087
+    ],
+    [
+     26.657,
+     122.087,
+     122.42
+    ],
+    [
+     27.0,
+     35.841,
+     41.315
+    ],
+    [
+     32.659,
+     120.645,
+     122.087
+    ],
+    [
+     34.146,
+     41.315,
+     57.666
+    ],
+    [
+     34.146,
+     122.087,
+     122.42
+    ]
+   ],
+   "meta": {
+    "n_points": 57598,
+    "slope": 0.97,
+    "evidence": 292.0,
+    "evidence_rate": 5.89,
+    "ev_out_frac": null,
+    "loops": [
+     {
+      "source_start_s": 25.17,
+      "source_end_s": 26.657,
+      "period_s": 7.4892,
+      "n_iter": 2
+     }
+    ]
+   }
+  },
+  {
+   "slot_label": "076",
+   "track_id": "1r8f4fc5",
+   "set_start_s": 1815.42,
+   "set_end_s": 1914.16,
+   "claimed_stem": "instrumental",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/022__Thomas Gold - Saints & Sinners (Manse Remix)/instrumental.flac",
+   "segs": [
+    [
+     0.0,
+     96.874,
+     105.874
+    ],
+    [
+     9.0,
+     121.106,
+     179.815
+    ],
+    [
+     67.709,
+     179.815,
+     183.531
+    ],
+    [
+     71.425,
+     183.531,
+     187.315
+    ],
+    [
+     75.209,
+     179.815,
+     183.531
+    ],
+    [
+     78.925,
+     187.315,
+     187.606
+    ],
+    [
+     79.216,
+     191.368,
+     210.868
+    ]
+   ],
+   "meta": {
+    "n_points": 79227,
+    "slope": 1.0,
+    "evidence": 876.0,
+    "evidence_rate": 9.22,
+    "ev_out_frac": null,
+    "loops": [
+     {
+      "source_start_s": 67.709,
+      "source_end_s": 71.425,
+      "period_s": 7.5,
+      "n_iter": 2
+     }
+    ]
+   }
+  },
+  {
+   "slot_label": "104",
+   "track_id": "lvzr9s5",
+   "set_start_s": 2447.98,
+   "set_end_s": 2508.95,
+   "claimed_stem": "instrumental",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/030__Mako - Smoke Filled Room/instrumental.flac",
+   "segs": [
+    [
+     0.0,
+     101.182,
+     161.047
+    ]
+   ],
+   "meta": {
+    "n_points": 57018,
+    "slope": 0.9895,
+    "evidence": 638.0,
+    "evidence_rate": 10.46,
+    "ev_out_frac": null,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "108",
+   "track_id": "860w28f",
+   "set_start_s": 2536.19,
+   "set_end_s": 2591.44,
+   "claimed_stem": "instrumental",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/031__Calvin Harris - Sweet Nothing/instrumental.flac",
+   "segs": [
+    [
+     0.0,
+     121.139,
+     128.139
+    ],
+    [
+     7.0,
+     7.232,
+     12.232
+    ],
+    [
+     12.0,
+     4.709,
+     47.709
+    ]
+   ],
+   "meta": {
+    "n_points": 58686,
+    "slope": 1.0,
+    "evidence": 532.0,
+    "evidence_rate": 9.63,
+    "ev_out_frac": null,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "121",
+   "track_id": "1q9r2r8x",
+   "set_start_s": 2793.78,
+   "set_end_s": 2879.8,
+   "claimed_stem": "instrumental",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/tracks/034__Manse - All Around.m4a",
+   "segs": [
+    [
+     0.0,
+     46.777,
+     51.187
+    ],
+    [
+     4.5,
+     16.161,
+     63.278
+    ],
+    [
+     52.756,
+     63.278,
+     67.903
+    ],
+    [
+     57.493,
+     67.903,
+     70.6
+    ],
+    [
+     60.256,
+     63.278,
+     67.903
+    ],
+    [
+     64.993,
+     67.903,
+     70.6
+    ],
+    [
+     64.993,
+     70.6,
+     91.131
+    ]
+   ],
+   "meta": {
+    "n_points": 58839,
+    "slope": 0.98,
+    "evidence": 525.0,
+    "evidence_rate": 6.46,
+    "ev_out_frac": null,
+    "loops": [
+     {
+      "source_start_s": 52.756,
+      "source_end_s": 57.493,
+      "period_s": 7.5,
+      "n_iter": 2
+     }
+    ]
+   }
+  },
+  {
+   "slot_label": "140",
+   "track_id": "pr18kmx",
+   "set_start_s": 3210.5,
+   "set_end_s": 3258.55,
+   "claimed_stem": "instrumental",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/039__Porter Robinson & Madeon - Shelter/instrumental.flac",
+   "segs": [
+    [
+     0.0,
+     0.246,
+     10.431
+    ],
+    [
+     10.5,
+     116.319,
+     121.089
+    ],
+    [
+     15.418,
+     121.089,
+     122.621
+    ],
+    [
+     16.997,
+     122.621,
+     129.899
+    ],
+    [
+     24.5,
+     151.23,
+     151.514
+    ],
+    [
+     24.799,
+     121.089,
+     122.621
+    ],
+    [
+     26.378,
+     151.514,
+     172.085
+    ]
+   ],
+   "meta": {
+    "n_points": 50350,
+    "slope": 0.97,
+    "evidence": 838.0,
+    "evidence_rate": 18.03,
+    "ev_out_frac": null,
+    "loops": [
+     {
+      "source_start_s": 15.418,
+      "source_end_s": 16.997,
+      "period_s": 9.3814,
+      "n_iter": 2
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -451,6 +451,24 @@ The 9 BB12 acappella GT recordings never matched by any timeline span
 BB11 has zero such losses. No looptrace action; filed for the
 tokenizer/ingest side.
 
+**UPDATE 2026-07-07 — class 2 (claimed_stem) FIXED (commit 888caca).**
+Root cause: `materialize.py` re-derived slot `claimed_stem` from
+`scrape_claimed_stem(tr.full_name)`, but `full_name` (schema.org <meta
+name>) has the `(Acappella)`/`(Instrumental)` parenthetical stripped. When
+the marker lives ONLY in the visible row text (the BB mashup w-layer shape —
+all 4 slots: Life Is A Highway / I Just Had Sex / Payphone / All We Know),
+the re-derivation always returned 'regular'. `parse_track_row` already
+computes the correct stem from the full row text and exposes it on
+`tr.claimed_stem`; materialize now reuses it. Verified on the real row_html
+(old→regular, new→acappella) + regression test. NOT corpus-wide in the
+scary sense: the full_name path already tags the 53k acappella slots whose
+marker IS in the meta name; only the row-text-only slots were lost
+(directional ~9k `regular` rows carry a marker in `text_excerpt`, but that
+column is sparsely populated so the authoritative delta = a re-materialize
+diff on pi). **Deploy: `python -m tokenizer.materialize` on pi re-writes
+slot claimed_stem; infer's identity decode then routes these to the
+acappella stem.** Class 1 (5 inventory gaps) still open — ingest/matcher.
+
 ## Upstream follow-ups batch (2026-07-07): status
 
 1. **BB10 pipeline backfill — RUNNING.** 116/131 canonical rows lacked
@@ -488,3 +506,60 @@ tokenizer/ingest side.
 - Loop detection (Phase 2): no existing DJ-loop detector in the repo (the Viterbi
   *represents* backward jumps but never detects mix-side digital copies) — this is
   genuinely new code.
+
+## Regular / instrumental span routing (2026-07-08)
+
+**Built:** `--lt-stems` flag on `joint_ref_decode` (default
+`acappella,regular,instrumental`) routes the named stems through the looptrace
+landmark Hough+DP; others keep the legacy matched-filter path. Per-stem mix
+sources: acappella→`mix_vocals.flac` vs ref vocal stem; regular→full mix vs full
+ref; instrumental→`mix_instrumental.flac` vs ref instrumental stem (side fp cache
+`.cache/fp_instr/`, per `instrumental_probe.py`). Loop-collapse is guarded OFF for
+full-mix regular (measured harm, see below). New file `instr_stem_placement.py`.
+Oracle-placement A/B (strict traj-acc, `_gtstem`-free — GT set_start crop):
+
+| set · stem | class | legacy | looptrace | Δ |
+|---|---|---|---|---|
+| BB12 regular | linear (n=12) | 59.4 | 33.2 | **−26.3** |
+| BB12 regular | multiseg (n=24) | 63.2 | 54.6 | −8.6 |
+| BB12 regular | loop (n=1) | 38.7 | 64.0 | +25.3 |
+| **BB12 regular** | **ALL (n=38)** | **60.0** | **47.0** | **−13.0** |
+| BB11 regular | linear (n=15) | 56.9 | 59.2 | +2.3 |
+| BB11 regular | multiseg (n=14) | 63.5 | 71.5 | +8.0 |
+| BB11 regular | loop (n=2) | 45.2 | 73.1 | +27.9 |
+| **BB11 regular** | **ALL (n=31)** | **59.1** | **65.7** | **+6.5** |
+| BB12 instr | linear (n=2) | 100.0 | 99.3 | −0.7 |
+| BB12 instr | multiseg (n=12) | 51.2 | 51.9 | +0.7 |
+| **BB12 instr** | **ALL (n=14)** | **58.2** | **58.7** | **+0.5** |
+| BB11 instr | linear (n=11) | 71.2 | 80.2 | +8.9 |
+| BB11 instr | multiseg (n=4) | 50.2 | 58.3 | +8.1 |
+| **BB11 instr** | **ALL (n=15)** | **65.6** | **74.3** | **+8.7** |
+
+**Verdicts.**
+
+- **Instrumental → looptrace: GO.** Net positive both sets (BB12 +0.5, BB11
+  +8.7), gains on the weak multiseg class, and — crucially — **no linear
+  penalty** (BB12 linear −0.7). Instrumental is a weak grid cell; this is a clean
+  win. Keep `instrumental` in the default `--lt-stems`.
+- **Regular → whole-stem looptrace: NO-GO as-is.** The loop/multiseg gains (+8 to
+  +28) are real and consistent, but BB12 **linear collapses −26.3** and sinks the
+  set (ALL −13). Regular linear is the strongest cell in the whole grid (legacy
+  59–63%); trading it for loop gains is a bad deal. The set-dependence (BB11 +6.5
+  vs BB12 −13) is entirely the BB12 linear penalty — the landmark cloud on
+  dense full-mix content picks a wrong near-diagonal that legacy chroma nails.
+- **Regular → loop-gated routing: MEASURED NOT WORTH WIRING.** looptrace beats
+  legacy on regular **loop** by +25/+28, so a router that sends only loop spans
+  through looptrace looked like the surgical win. But an **oracle** loop-gate
+  (GT class==loop → looptrace, upper bound; a real `detect_loops` gate does
+  less) lifts regular-ALL by only **+0.79 pp BB12 / +1.47 pp BB11**
+  (seconds-weighted) — because regular loop is just **3.1% / 5.2% of regular
+  seconds** (1 / 2 spans). The grid's "regular · loops 🟡" is a tiny-n cell, not
+  an aggregate lever; a detect-loops pre-gate isn't worth the routing complexity.
+  Regular stays on legacy. (Bound computed from the A/B artifacts,
+  `scratchpad/score_ab.py` logic; no new decode.)
+
+**Default changed:** `--lt-stems` default is now `acappella,instrumental` (regular
+dropped). Regular stays on legacy (strongest cell, no lever); instrumental joins
+acappella on looptrace (clean +0.5/+8.7). The real regular/instrumental takeaways:
+regular is already solved by legacy; **instrumental is the actual win** and lands
+in the default.
