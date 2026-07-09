@@ -282,6 +282,77 @@ def _check_dead_argparse_flags(path: Path, text: str) -> list[Violation]:
     return violations
 
 
+# ---------------------------------------------------------------------------
+# Ratchet checks — entropy counters that may only go DOWN.
+#
+# Each detector greps for a known failure-class pattern
+# (docs/entropy_reduction_plan.md, workstream F). The committed baseline in
+# guardrails_ratchet.json is the maximum allowed count; introducing a new
+# occurrence fails `make check`, removing occurrences prompts a baseline
+# lowering. Attic (closed experiments) and tests are exempt.
+
+RATCHET_BASELINE_PATH = REPO_ROOT / "scripts" / "guardrails_ratchet.json"
+
+_KNOWN_SET_IDS = r"(?:1fsnxchk|2nvzlh2k|w1mgcjt|pwgrrb1|1rfb0yl9)"
+
+RATCHET_PATTERNS: dict[str, re.Pattern[str]] = {
+    # a hardcoded set id used as a default / constant (the --gt=BB12 class)
+    "set_id_default": re.compile(rf'(?:default\s*=\s*|=\s*)"{_KNOWN_SET_IDS}"'),
+    # raw manifest.json parsing outside core/contracts (schema-drift class)
+    "raw_manifest_read": re.compile(r"manifest\.json"),
+    # relative-depth path anchoring (path-resolution class)
+    "parents_depth": re.compile(r"parents\[[0-9]\]"),
+}
+
+_RATCHET_SKIP_PARTS = frozenset({"attic", "tests"})
+
+
+def _ratchet_counts() -> dict[str, int]:
+    counts = {name: 0 for name in RATCHET_PATTERNS}
+    for path in _iter_py_files():
+        if _RATCHET_SKIP_PARTS & set(path.parts):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for name, pat in RATCHET_PATTERNS.items():
+            counts[name] += sum(1 for line in text.splitlines() if pat.search(line))
+    return counts
+
+
+def _check_ratchets() -> list[Violation]:
+    import json
+
+    if not RATCHET_BASELINE_PATH.is_file():
+        return []  # no baseline committed yet — ratchet disarmed
+    baseline: dict[str, int] = json.loads(RATCHET_BASELINE_PATH.read_text())
+    violations: list[Violation] = []
+    for name, count in _ratchet_counts().items():
+        allowed = baseline.get(name)
+        if allowed is None:
+            continue
+        if count > allowed:
+            violations.append(
+                Violation(
+                    RATCHET_BASELINE_PATH,
+                    0,
+                    f"ratchet:{name}",
+                    f"{count} occurrences > baseline {allowed} — a new instance of "
+                    f"this failure class was introduced (pattern "
+                    f"{RATCHET_PATTERNS[name].pattern!r}); fix it or, if truly "
+                    "intentional, raise the baseline with justification",
+                )
+            )
+        elif count < allowed:
+            # progress! not a violation — nudge to lock it in
+            print(
+                f"guardrails: ratchet {name} improved {allowed} -> {count}; "
+                f"lower it in {RATCHET_BASELINE_PATH.name}"
+            )
+    return violations
+
+
 def run_checks() -> list[Violation]:
     violations: list[Violation] = []
     for path in _iter_py_files():
@@ -306,6 +377,7 @@ def run_checks() -> list[Violation]:
                 violations.append(Violation(path, 0, "read_error", str(exc)))
                 continue
             violations.extend(_check_stale_audio_pipeline_docs(path, text))
+    violations.extend(_check_ratchets())
     return violations
 
 

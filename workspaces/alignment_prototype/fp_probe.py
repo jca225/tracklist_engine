@@ -108,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--gt", type=Path, default=_REPO / "labeling/fixtures/bb12_ground_truth.yaml"
     )
-    p.add_argument("--set-id", default="1fsnxchk")
+    p.add_argument("--set-id", required=True)
     p.add_argument("--stems", default="regular,instrumental")
     p.add_argument("--max-win-s", type=float, default=15.0)
     p.add_argument("--stretches", default="0.98,1.0,1.02")

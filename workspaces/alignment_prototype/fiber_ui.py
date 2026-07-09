@@ -101,7 +101,7 @@ def _cut(src: Path, s: float, e: float, out: Path) -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--set-id", default="1fsnxchk")
+    p.add_argument("--set-id", required=True)
     p.add_argument("--stems", default="acappella")
     p.add_argument(
         "--method",

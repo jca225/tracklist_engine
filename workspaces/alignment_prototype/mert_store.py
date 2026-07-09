@@ -131,7 +131,7 @@ def _parse_bundle(path: Path) -> tuple[int, MertSeries, dict[str, MertSeries]]:
 
 
 def load_bb12_mert(
-    set_id: str = "1fsnxchk",
+    set_id: str,
     *,
     refresh: bool = False,
 ) -> Result[tuple[int, MertSeries, dict[str, MertSeries]], str]:
