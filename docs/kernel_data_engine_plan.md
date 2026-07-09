@@ -31,6 +31,43 @@ agent: `trajectory/` training + `drivers/ml`), **[J]** John. The race board
 is the only coupling point between [K] and [M]; interface changes ship as
 *parallel emissions*, never in-place rewrites of what [M] consumes.
 
+## W0 — the substrate (pi-storage / pi-worker / Vast / Mac)
+
+Added 2026-07-09 after review: the original draft was Mac-centric. The
+cluster is not a deployment detail — it is the memory hierarchy of the OS
+map, and two kernel correctness items live there.
+
+**Storage tiers (the page-cache analogy, made literal):**
+
+| tier | role |
+|---|---|
+| pi-storage (`/mnt/storage`) | **origin / disk** — canonical DB, track audio objects, stems, Essentia models. The only source of truth. |
+| Mac caches (`mert_store`, `.cache/fp_*`, whisper, `~/aligning/`) | **page cache / RAM** — everything here must be re-derivable from origin + code; W3's content-hash keys are machine-independent so a feature computed anywhere is a hit everywhere. |
+| Vast box | **ephemeral compute** — mounts origin over sshfs, writes results back, dies. Never holds unique state. |
+
+**Rules:** (1) any W4/W5 artifact that trains a model (pseudo-labels, queue
+state, audited timelines) gets a canonical home on pi-storage (files or DB
+table), never only a Mac `out/` dir; (2) the repo's local `data/db` copy is
+never consulted (existing rule, restated because the engine raises the
+stakes); (3) compute placement: offboard labeler GPU stages on Vast/Mac-MPS,
+CPU stages (beats, chroma) can drain to pi-worker idle.
+
+**Kernel-blocking substrate items (do first):**
+
+- **W0.1 — deploy + re-materialize.** The `claimed_stem` row-text fix
+  (888caca/f678f3a) is deployed as *code* but the canonical
+  `set_track_slots` rows were never regenerated — the DB still shows ~2
+  instrumentals/set vs ~25 real. Until `python -m tokenizer.materialize`
+  re-runs on pi, the instrumental placement channel cannot route on
+  *unlabeled* sets (the `--instr-stem-gt-yaml` workaround only works where
+  GT exists — exactly where we don't need it). Procedure: backup DB →
+  `make deploy` → materialize → verify counts. This unblocks W1's last
+  default flip.
+- **W0.2 — stems coverage as a boot gate.** The aligner needs mix stems +
+  ref stems from ingest/analysis (pi/Vast loops). W1's inventory preflight
+  reads pi state; a set whose stems aren't ready fails at boot with a
+  provenance-grade message, not mid-decode.
+
 ## Workstreams
 
 ### W1 — kernel v1: defaults, determinism, one command [K] — week of 7/9
