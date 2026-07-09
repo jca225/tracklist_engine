@@ -21,3 +21,4 @@ plotly>=5.20
 # (CPU vs GPU) is host-specific and installed by scripts/setup_separation.sh —
 # Mac uses the bundled CPU onnxruntime, CUDA hosts need onnxruntime-gpu.
 audio-separator>=0.44.1
+msgspec>=0.21

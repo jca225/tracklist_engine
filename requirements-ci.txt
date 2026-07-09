@@ -16,3 +16,4 @@ PyYAML
 yt-dlp
 httpx
 soundfile
+msgspec>=0.21

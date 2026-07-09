@@ -23,6 +23,8 @@ from pathlib import Path
 import numpy as np
 import yaml
 
+from core.contracts import join_guard, load_timeline
+
 _REPO = Path(__file__).resolve().parents[2]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
@@ -181,6 +183,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"(gt: {args.gt.name})")
 
     tl_path = args.timeline or (OUT_DIR / f"{args.set_id}_predicted_timeline.json")
+    # contracts boundary: validate the consumed span fields + prove all three
+    # inputs (timeline, --set-id, GT yaml) describe the SAME set before any
+    # join — the 2026-07-09 BB11-scored-against-BB12-GT class.
+    tl_record = load_timeline(tl_path)
+    join_guard(tl_record.sid, args.set_id, context="timeline vs --set-id")
     timeline = json.loads(Path(tl_path).read_text())
     # manifest by track_id — only needed for fiber ref-audio resolution
     by_tid: dict[str, dict] = {}
@@ -190,11 +197,9 @@ def main(argv: list[str] | None = None) -> int:
             by_tid[t["track_id"]] = t
             if t.get("recording_id"):
                 by_tid.setdefault(t["recording_id"], t)
-    gt_rows = [
-        r
-        for r in yaml.safe_load(args.gt.read_text())["tracks"]
-        if str(r.get("slot_label")) != "mix"
-    ]
+    gt_doc = yaml.safe_load(args.gt.read_text())
+    join_guard(tl_record.sid, gt_doc.get("set_id") or "", context="timeline vs GT yaml")
+    gt_rows = [r for r in gt_doc["tracks"] if str(r.get("slot_label")) != "mix"]
     # Identity is scored in the CANONICAL recording_id namespace. GT rows that
     # path-matched the pull manifest carry scrape-namespace tlp* ids; map them
     # through labeling/fixtures/id_maps/<set>.json (tlp_id -> recording_id,
