@@ -153,22 +153,33 @@ BB11/12 method: 6 real-id slots never downloaded (`002`, `002w6`, `004`,
 
 ## Workstream D — Discord retrieval backlog (bulk, background)
 
-The staged corpus (2,908 files) is ~12% of the channel content the misfire
-ledger counted (~23k). Missing items are invisible to every stem search —
-the Birdy KYHU instrumental was almost certainly one of them.
+**Corrected 2026-07-09** (the "~23k / 12% retrieved" framing conflated the
+stem-cand-misfire ledger with the Discord corpus — wrong). Actual state, from
+`/mnt/storage/staging/discord_stems/manifest_all.csv` + channel manifests:
+**1,776 cataloged links, 1,568 downloaded (88%), 151 error (all unnamed
+dead/private Drive links), 34 manual-host (MEGA/WeTransfer/…), 23 skipped**;
+plus per-channel manifests with ~150 more error rows (overlapping). Retrieval
+tooling exists and resumes: `scripts/discord_scrape.py` (user-token API walk,
+manifest-deduped; ToS-risk acknowledged in-file) and `scripts/discord_grab.sh`
+(Mac clipboard loop). Birdy KYHU appears in NO manifest — never cataloged; if
+it was in-channel it sits behind a dead unnamed Drive link or an unscraped
+scroll region/channel.
 
-- **D1** Locate the retrieval state: where the 23,099-item list came from, what
-  "leftovers 20911" points at, whether channel scrape state is resumable.
-  (Not in the repo — likely session notes / Discord client side.)
-- **D2** Resumable retrieval of the remainder into
-  `/mnt/storage/staging/discord_stems/<source>/`, preserving the existing
-  layout; archives kept as-is; a flat `INDEX.tsv` (filename, source, size,
-  sha256) written as we go so searches never need `find` again.
+- **D1** Completeness check: the winning scrape path was the no-token browser
+  DOM snippet (auto-scroll + URL harvest → `discord_scrape.py --paste`), NOT
+  the user-token walk. Re-run the snippet per channel and diff harvested URLs
+  vs the manifest — any new URLs = unscraped scroll regions. [JOHN: ~15 min of
+  browser scrolling per channel]
+- **D2** Error-row retry: limited upside — 109/151 are dead 2021 Drive 404s
+  (unrecoverable). Retry only the ~42 non-404 errors (soundcloud/youtube via
+  ingest adapters); mark the dead ones `dead` in the manifest so they stop
+  counting as backlog. Also: unzip the 49 stem-pack archives; delete the
+  redundant per-channel subfolders (subset of `all/`).
 - **D3** Stem-library matcher (the standing TODO): map staged stems →
   `recording` (`origin=library`, **additive `is_reference=0`** — E3's rule).
   This converts the corpus from a folder into a queryable asset.
-- **D4** Re-check Birdy KYHU + all BB-set acappella/instrumental gaps against
-  the completed corpus; prefer library stems over separations where they exist.
+- **D4** Re-check BB-set acappella/instrumental gaps against the completed
+  corpus; prefer library stems over separations where they exist.
 
 ## Workstream F — latent-bug audit (the taxonomy as a detector kit)
 
