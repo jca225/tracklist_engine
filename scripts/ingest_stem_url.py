@@ -110,6 +110,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Skip pi git SHA and materialize warnings",
     )
+    p.add_argument(
+        "--skip-if-ingested",
+        action="store_true",
+        help="Add mode: exit 0 without ingesting if this exact content already "
+        "has a track_audio row for the same track_id + stem (sha256 match; "
+        "--url matches on the ledger's new_url). Batch-wrapper re-run guard.",
+    )
     return p.parse_args(argv)
 
 
@@ -275,6 +282,26 @@ def _fail_on_set(spec: str) -> frozenset[str]:
     return frozenset(out)
 
 
+def _sql_quote(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _pi_sql(sql: str, timeout: int = 30) -> list[str] | None:
+    """Read-only query against the canonical DB over ssh; None on any failure."""
+    try:
+        r = subprocess.run(
+            ["ssh", PI_HOST, f"sqlite3 {CANONICAL_DB} {shlex.quote(sql)}"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    if r.returncode != 0:
+        return None
+    return [ln.strip() for ln in r.stdout.splitlines() if ln.strip()]
+
+
 def _resolve_track_id_on_pi(
     track_id: str | None, track_audio_id: int | None
 ) -> str | None:
@@ -282,19 +309,10 @@ def _resolve_track_id_on_pi(
         return track_id
     if track_audio_id is None:
         return None
-    sql = f"SELECT track_id FROM track_audio WHERE track_audio_id = {track_audio_id}"
-    try:
-        r = subprocess.run(
-            ["ssh", PI_HOST, f"sqlite3 {CANONICAL_DB} {shlex.quote(sql)}"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-    except (subprocess.TimeoutExpired, OSError):
-        return None
-    if r.returncode != 0:
-        return None
-    return r.stdout.strip() or None
+    rows = _pi_sql(
+        f"SELECT track_id FROM track_audio WHERE track_audio_id = {track_audio_id}"
+    )
+    return rows[0] if rows else None
 
 
 def _resolve_slot_on_pi(set_id: str, recording_id: str) -> str | None:
@@ -306,23 +324,97 @@ def _resolve_slot_on_pi(set_id: str, recording_id: str) -> str | None:
     but no --position still get a correctly-keyed acquisition case, without each
     reimplementing the lookup.
     """
-    sql = (
+    labels = _pi_sql(
         "SELECT slot_label FROM set_track_slots "
-        f"WHERE set_id = '{set_id}' AND recording_id = '{recording_id}'"
+        f"WHERE set_id = {_sql_quote(set_id)} "
+        f"AND recording_id = {_sql_quote(recording_id)}"
     )
-    try:
-        r = subprocess.run(
-            ["ssh", PI_HOST, f"sqlite3 {CANONICAL_DB} {shlex.quote(sql)}"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-    except (subprocess.TimeoutExpired, OSError):
+    if labels is None:
         return None
-    if r.returncode != 0:
-        return None
-    labels = [ln.strip() for ln in r.stdout.splitlines() if ln.strip()]
     return labels[0] if len(labels) == 1 else None
+
+
+def _source_sha256(args: argparse.Namespace) -> str | None:
+    """sha256 of the ingest source (local file hashed here, pi file remotely).
+
+    Valid dedup key because the pi-side writer places files byte-identical
+    (shutil.copy2 in replace_track_audio._place_file_in_canonical) and stores
+    sha256 of the placed copy.
+    """
+    if args.file:
+        import hashlib
+
+        digest = hashlib.sha256()
+        with open(args.file, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+    if args.pi_file:
+        try:
+            r = subprocess.run(
+                ["ssh", PI_HOST, f"sha256sum {shlex.quote(args.pi_file)}"],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            return None
+        parts = r.stdout.split() if r.returncode == 0 else []
+        return parts[0] if parts else None
+    return None
+
+
+def _already_ingested(args: argparse.Namespace) -> bool:
+    """Add-mode re-run guard: has this exact source already landed?
+
+    File sources match on content hash against track_audio.sha256 for the same
+    track_id + stem; URL sources match on the correction ledger's new_url. A
+    hash hit under a *different* track/stem is the 2026-06-09 misfire shape
+    (same bytes attached to unrelated recordings) — warn loudly but proceed,
+    since sibling-version cross-attachment is legitimate. Fails open: if the
+    source can't be hashed or the pi is unreachable, ingest proceeds.
+    """
+    if args.track_audio_id is not None or not args.track_id or not args.role:
+        return False
+    stem = _norm_role(args.role)
+    if args.url:
+        rows = _pi_sql(
+            "SELECT correction_id FROM track_audio_correction "
+            f"WHERE track_id = {_sql_quote(args.track_id)} AND axis = 'stem' "
+            f"AND action = 'add' AND new_url = {_sql_quote(args.url)}"
+        )
+        if rows:
+            print(
+                f"SKIP: url already ingested for {args.track_id}/{stem} "
+                f"(correction_id {rows[0]})"
+            )
+            return True
+        return False
+    digest = _source_sha256(args)
+    if not digest:
+        print("skip-if-ingested: could not hash source — proceeding", file=sys.stderr)
+        return False
+    rows = _pi_sql(
+        "SELECT track_audio_id, track_id, stem FROM track_audio "
+        f"WHERE sha256 = {_sql_quote(digest)}"
+    )
+    if not rows:
+        return False
+    hits = [r.split("|") for r in rows]
+    same = [h for h in hits if len(h) == 3 and h[1] == args.track_id and h[2] == stem]
+    if same:
+        print(
+            f"SKIP: identical content already ingested as track_audio_id "
+            f"{same[0][0]} ({args.track_id}/{stem})"
+        )
+        return True
+    print(
+        f"WARNING: identical bytes already exist under a DIFFERENT track/stem "
+        f"({', '.join('/'.join(h) for h in hits)}) — proceeding, but check this "
+        f"is a deliberate sibling attachment, not a misrouted batch",
+        file=sys.stderr,
+    )
+    return False
 
 
 def _post_flight(
@@ -480,6 +572,9 @@ def _run_pull(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     _preflight(args)
+
+    if args.skip_if_ingested and _already_ingested(args):
+        return 0
 
     remote_file: str | None = None
     if args.pi_file:

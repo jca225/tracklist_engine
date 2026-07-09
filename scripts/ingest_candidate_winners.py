@@ -34,6 +34,12 @@ def main() -> int:
     ap.add_argument("--set-id", required=True)
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--reason", default="source:candidate_winner|quality:human_pick")
+    ap.add_argument(
+        "--force",
+        action="store_true",
+        help="re-ingest even if identical content already landed (drops the "
+        "--skip-if-ingested guard, e.g. after a deliberate WINNER.txt rewrite)",
+    )
     args = ap.parse_args()
     set_dir = args.set_dir.expanduser().resolve()
     n = 0
@@ -52,6 +58,8 @@ def main() -> int:
             "--reason",
             args.reason,
         ]
+        if not args.force:
+            cmd.append("--skip-if-ingested")
         if args.dry_run:
             cmd.append("--dry-run")
         print("+", " ".join(cmd))
