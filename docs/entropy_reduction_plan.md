@@ -21,9 +21,9 @@ regular row.
 |---|------|-------|
 | E1 | scorer `--gt` resolves from `--set-id`, errors on no match | DONE `43c24a6` |
 | E2 | `pull_set_for_alignment` emits `slot_label`; existing manifests patched | DONE `43c24a6` |
-| E3 | `acquire_variant`: canonical **stem** adds must NOT steal `is_reference` from the regular row — flip the default (promote only same-stem replaces); regression test | TODO |
-| E4 | Sweep remaining hardcoded set defaults in the prototype (`train.py DEFAULT_TRAIN_YAML`, any `bb12` literals on CLI defaults); each becomes derive-from-set-id-or-error | TODO |
-| E5 | Ad-hoc driver scripts (`reinfer_driver.sh` etc.) converge on `make scorecard` / documented entry points; a driver must never pass fewer args than the entry point requires to be set-safe | TODO |
+| E3 | `acquire_variant`: canonical **stem** adds must NOT steal `is_reference` from the regular row — flip the default (promote only same-stem replaces); regression test | DONE `9bc36f1` |
+| E4 | Sweep remaining hardcoded set defaults in the prototype (`train.py DEFAULT_TRAIN_YAML`, any `bb12` literals on CLI defaults); each becomes derive-from-set-id-or-error | live-kernel DONE `6fd1bfc`; long tail baselined by F1 |
+| E5 | Ad-hoc driver scripts (`reinfer_driver.sh` etc.) converge on `make scorecard` / documented entry points; a driver must never pass fewer args than the entry point requires to be set-safe | mostly subsumed: scorer is set-safe by default `43c24a6` |
 
 Exit: no CLI in the repo silently assumes a set.
 
@@ -92,6 +92,18 @@ become the **laws** of the contracts layer:
   annotator-tag-renamed variants (generalize `match_manifest_for_path`'s
   tag-insensitive matching); the glob-both-slot-forms and parents-depth logic
   live exactly once.
+
+**Execution state (2026-07-09):** A0 DONE (`core/contracts/README.md`).
+A1 DONE for Timeline+Manifest (`b682b7f`, `1d0370a`): records + loaders +
+join_guard live in the scorer AND failure_analysis; ratchet armed and already
+caught its first violation in review. A2 STARTED (`adb175b`, `5bffc60`,
+`ab923d6`): TimeMap + Trajectory in `core/timebase.py`; path_decode trajectory
+internals migrated (differential-tested, scorecard byte-identical); pull emits
+audio-less rows for unresolved slots. NEXT: infer/joint_ref_decode WRITE
+through contracts (after the BB11 full-coverage re-run — don't destabilize
+infer mid-test), then the als-boundary TimeMap adapter (note: the
+als_core_boundary guardrail forbids labeling/als core from importing core/ —
+the adapter lives project-side).
 
 **Phases (incremental; each lands independently):**
 - **A0** (½ day): inventory table — artifact × writers × readers × known drift —
