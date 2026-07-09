@@ -93,10 +93,18 @@ def next_task(
     # dj_set_track_media_links — gap rows (sided rows with no scraped media
     # links, e.g. 14 of BB11's re-sourced tail) have zero link rows and
     # would silently fall out of the loop.
+    # Two queue conditions: never-analyzed rows, PLUS reference rows whose
+    # separation is missing (analyzed pre-stems era — BB11's 11 stem-less
+    # refs, 2026-07-09; analyze_track re-runs are idempotent DELETE+INSERT).
     sql = (
         "SELECT ta.track_audio_id, ta.path FROM track_audio ta "
         "LEFT JOIN track_analysis tan ON tan.track_audio_id=ta.track_audio_id "
-        f"WHERE tan.track_audio_id IS NULL AND ta.track_id IN "
+        "WHERE (tan.track_audio_id IS NULL "
+        "       OR (ta.is_reference=1 AND NOT EXISTS "
+        "           (SELECT 1 FROM track_stems ts "
+        "            WHERE ts.track_audio_id=ta.track_audio_id "
+        "            AND ts.stem_name='vocals'))) "
+        f"AND ta.track_id IN "
         f"(SELECT DISTINCT track_id FROM set_track_slots WHERE set_id IN ({bb_csv}) "
         "AND track_id IS NOT NULL) "
         f"{skip_clause}"
