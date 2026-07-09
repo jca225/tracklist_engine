@@ -40,15 +40,22 @@ import numpy as np
 from workspaces.alignment_prototype.refine_ref_offsets import HOP, SR
 
 
-def _long_repeats(g, g_hz, nonsil, min_repeat_s, thresh):
+def _long_repeats(g, g_hz, nonsil, min_repeat_s, thresh, min_voiced_frac=0.4):
     """Candidate repeated SEGMENTS by scanning self-similarity diagonals.
 
     A sustained high run on the lag-L diagonal means [i..j] recurs at [i+L..j+L]
     — this captures the LONG, loud repeats (a 29 s chorus) that fixed short
-    sections fragment and miss. Both ends must be audible (silence is perfectly
-    self-similar and would otherwise form spurious repeats). Overlapping detected
-    intervals are merged into canonical segments. Returns (start, end) in
-    ds-frames."""
+    sections fragment and miss. Overlapping detected intervals are merged into
+    canonical segments. Returns (start, end) in ds-frames.
+
+    Silence gating is per-RUN, not per-frame. The old per-frame AND of the
+    nonsil mask fragmented sparse vocals at every breath (median voiced run
+    1.6 s < min_repeat_s=6 s ⇒ breathy repeated verses could NEVER qualify —
+    the structural acappella recall hole; same lesson as looptrace audit-v2).
+    Instead: runs form on content similarity alone, silent ENDS are trimmed
+    (both sides must end audible, so silence never pads length), and the run
+    must be ≥ `min_voiced_frac` voiced on BOTH sides (pure/mostly silence —
+    perfectly self-similar — still never forms a repeat)."""
     from scipy.ndimage import uniform_filter1d
 
     t = g.shape[1]
@@ -58,16 +65,26 @@ def _long_repeats(g, g_hz, nonsil, min_repeat_s, thresh):
     ivs: list[tuple[int, int]] = []
     for lag in range(max(1, int(4 * g_hz)), t):
         d = uniform_filter1d(np.diagonal(s, lag).astype(np.float32), pw, mode="nearest")
-        good = (d > thresh) & nonsil[: t - lag] & nonsil[lag:t]
+        good = d > thresh
         i = 0
         while i < len(good):
             if good[i]:
                 j = i
                 while j < len(good) and good[j]:
                     j += 1
-                if j - i >= ml:
-                    ivs.append((i, j))
-                    ivs.append((i + lag, j + lag))
+                # trim to endpoints audible on both sides of the diagonal
+                a, b = i, j
+                while a < b and not (nonsil[a] and nonsil[a + lag]):
+                    a += 1
+                while b > a and not (nonsil[b - 1] and nonsil[b - 1 + lag]):
+                    b -= 1
+                if (
+                    b - a >= ml
+                    and float(nonsil[a:b].mean()) >= min_voiced_frac
+                    and float(nonsil[a + lag : b + lag].mean()) >= min_voiced_frac
+                ):
+                    ivs.append((a, b))
+                    ivs.append((a + lag, b + lag))
                 i = j
             else:
                 i += 1

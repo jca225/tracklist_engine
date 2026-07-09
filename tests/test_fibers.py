@@ -150,3 +150,42 @@ def test_fiber_intervals_roundtrip() -> None:
         (8.75, 15.0, 0),
         (15.0, 20.0, 1),
     ]
+
+
+def test_breathy_repeat_survives_silence_gate(tmp_path) -> None:
+    """A repeated vocal phrase with breath gaps every ~1.6s must still fiber.
+
+    The old per-frame gate ANDed silence into the diagonal run, fragmenting it
+    below min_repeat_s at every breath — the structural acappella recall hole
+    (looptrace audit-v2). The per-run voiced-fraction gate must keep it."""
+    import soundfile as sf
+
+    rng = np.random.default_rng(6)
+    sr = 22050
+    # one 12s "phrase": 1.6s voiced bursts separated by 0.4s breaths
+    burst = rng.standard_normal(int(1.6 * sr)).astype(np.float32) * 0.3
+    breath = np.zeros(int(0.4 * sr), dtype=np.float32)
+    phrase = np.concatenate([np.concatenate([burst, breath]) for _ in range(6)])
+    filler = rng.standard_normal(int(20 * sr)).astype(np.float32) * 0.3
+    y = np.concatenate([phrase, filler, phrase, np.zeros(int(5 * sr), np.float32)])
+    wav = tmp_path / "breathy.wav"
+    sf.write(wav, y, sr)
+
+    # matching features: repeat the same smooth content at both positions,
+    # near-zero columns during breaths (silence is self-similar)
+    def _sec(rng2, s):
+        return _rand_feat(rng2, s)
+
+    rng2 = np.random.default_rng(7)
+    b_feat = _sec(rng2, 1.6)
+    br_feat = np.full((32, int(0.4 * FPS)), 1e-6, dtype=np.float32)
+    phrase_feat = np.concatenate(
+        [np.concatenate([b_feat, br_feat], axis=1) for _ in range(6)], axis=1
+    )
+    fill_feat = _sec(rng2, 20.0)
+    tail = np.full((32, int(5 * FPS)), 1e-6, dtype=np.float32)
+    feat = np.concatenate([phrase_feat, fill_feat, phrase_feat.copy(), tail], axis=1)
+
+    labels, hz = compute_fibers(feat, FPS, audio_path=str(wav))
+    assert labels.max() >= 0, "breathy repeat must fiber under the per-run gate"
+    assert same_fiber(labels, hz, 3.0, 12.0 + 20.0 + 3.0)

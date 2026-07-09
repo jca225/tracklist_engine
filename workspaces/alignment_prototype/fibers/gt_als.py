@@ -25,7 +25,9 @@ his native tool:
     * missed repeat no arm proposed       -> duplicate a region of the ruler
                                              onto a class track (position = the
                                              ref seconds; identity warp)
-    * leftovers on CAND tracks            -> rejected (recorded as reviewed)
+    * candidate is NOT a repeat           -> move it to a track named "REJ"
+                                             (explicit negative)
+    * leftovers on CAND tracks            -> unreviewed (NOT rejections)
 
   import:  parse the corrected .als -> `<name>.fiber_gt.yaml` (classes =
     interval lists) + pairwise precision/recall of each machine arm against
@@ -312,10 +314,18 @@ def import_als(als_path: Path, gt_out: Path | None) -> int:
 
     classes: dict[str, list[tuple[float, float]]] = {}
     rejected: list[tuple[float, float]] = []
+    unreviewed: list[tuple[float, float]] = []
     for c in clips:
         iv = (round(c.ref_start_s(), 3), round(c.ref_end_s(), 3))
-        if c.track_name.startswith("CAND"):
+        # Rejection must be an ACT, not a default: only clips the human moved
+        # onto a track named REJ* count as negatives. CAND clips left in place
+        # are UNREVIEWED — treating them as rejections poisoned the first GT
+        # import (fp/harmony proposals of the SAME repeat family the human had
+        # confirmed on the green track read back as false-merge negatives).
+        if c.track_name.startswith("REJ"):
             rejected.append(iv)
+        elif c.track_name.startswith("CAND"):
+            unreviewed.append(iv)
         else:
             classes.setdefault(c.track_name, []).append(iv)
     classes = {k: sorted(v) for k, v in classes.items() if len(v) >= 2}
@@ -336,6 +346,7 @@ def import_als(als_path: Path, gt_out: Path | None) -> int:
             for k, v in sorted(classes.items())
         ],
         "rejected": [list(i) for i in sorted(rejected)],
+        "unreviewed": [list(i) for i in sorted(unreviewed)],
     }
     out = gt_out or als_path.with_suffix(".fiber_gt.yaml")
     import yaml
@@ -343,7 +354,8 @@ def import_als(als_path: Path, gt_out: Path | None) -> int:
     out.write_text(yaml.safe_dump(gt, sort_keys=False, allow_unicode=True))
     n_inst = sum(len(v) for v in classes.values())
     print(
-        f"wrote {out}: {len(classes)} classes, {n_inst} instances, {len(rejected)} rejected"
+        f"wrote {out}: {len(classes)} classes, {n_inst} instances, "
+        f"{len(rejected)} rejected, {len(unreviewed)} unreviewed"
     )
 
     if sidecar:
