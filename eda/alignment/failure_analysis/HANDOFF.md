@@ -150,6 +150,32 @@ flip below is reverted, or the pull will fetch the instrumental as the slot's ma
   Edit), matching its player_id; what exactly sounded "wrong version" still needs
   John's ear (full-length remix vs radio edit is the leading theory).
 
+## EDA-lane session note (2026-07-09 afternoon, Fable agent — failure correlates + fixes)
+
+Full numbers in FINDINGS.md ("EDA 2026-07-09" + "Fix round" sections). For whoever
+owns `infer.py`/`stem_placement.py` and the abstention contract:
+
+- **`joint_ref_decode` now uses `stem_resolve.resolve_stem`** (disk-truth) and
+  emits per-span **`ref_decode_status`** (`looptrace|looptrace-empty|skip-*|legacy`).
+  BB11 A/B flat on headline (coverage 47→73 spans; oddratio +4 pp, instr
+  ref-offset 7.8→3.9 s) — a robustness/diagnostics fix, not a lever. Namespaced
+  output `out/2nvzlh2k_predicted_timeline_postfix_lt_diskfix.json`; canonical
+  timelines untouched (your lt_v3 chain unaffected).
+- **Abstention: do NOT use span `confidence`** — anti-calibrated (spearman −0.24
+  vs traj; abstaining on it makes the kept set worse). **`start_source` is the
+  calibrated signal**: mert-fallback-placed spans ≈ lost (traj 0.04–0.08,
+  ss_med 15–40 s, n=41); lyrics-placed acappellas 0.26/2.8 s. When you wire the
+  abstention field, route it off start_source (+ ref_decode_status).
+- **40 GT-acappella spans are still mis-axed `regular`** (class-1 inventory gaps,
+  no row-text to parse). w-layer prior quantified in looptrace/NOTES.md
+  (P(acap|w-layer)=82%; 100% of acappellas are w-layers) — filed unwired per the
+  freeze; `layer_role` in set_track_slots is consumed nowhere in the prototype.
+- BB12 audit regenerated (`looptrace/out/audit_1fsnxchk.json`, backup
+  `.pre_wlayer_regen`); BB12 GT uses plain-numeric slots so audit joins must key
+  by track_id (build_span_table does now). Instance-ambiguity fracs are weak
+  span-level predictors (|rho|≤.15, n=34) — temper expectations for them as
+  selector features.
+
 ## Kernel-lane session note (2026-07-09, Fable agent — W0/W1 of docs/kernel_data_engine_plan.md)
 
 For the model-lane agent; none of this touches your interfaces:

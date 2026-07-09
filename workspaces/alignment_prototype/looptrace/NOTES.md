@@ -563,3 +563,22 @@ dropped). Regular stays on legacy (strongest cell, no lever); instrumental joins
 acappella on looptrace (clean +0.5/+8.7). The real regular/instrumental takeaways:
 regular is already solved by legacy; **instrumental is the actual win** and lands
 in the default.
+
+## w-layer axis prior (idea, 2026-07-09 — UNWIRED, sensor-phase freeze)
+
+40 GT-acappella spans (BB11 29 / BB12 11) are routed `regular` because the pi
+slot rows genuinely carry no `(Acappella)` marker — class-1 inventory gaps, no
+parser can recover them. Measured structural prior on BB11+BB12 GT (283
+matched spans): **P(acappella | w-layer slot) = 82% (175/213); 100% of GT
+acappellas are w-layers; main slots are 0% acappella (54% instrumental / 46%
+regular).** Mis-axed spans decode at traj 0.03–0.06 vs 0.19–0.28
+correctly-axed, and never receive HuBERT/lyrics placement (lyrics-placed
+spans run ss_med 2.8 s). Pooled ceiling ~+3–5 pp acappella traj per set plus
+the placement effect. Candidate wiring (post-freeze, or as data-engine
+routing rather than a new sensor): for `w`-suffixed slots claimed `regular`,
+either (a) flip routing on the w-layer prior alone (costs the 16% regular
+w-layers), or (b) gate on cheap audio evidence — ref instrumental-stem
+silence or `candidate_vocal_gate`-style HuBERT check. `set_track_slots.
+layer_role` exists in the DB and is consumed nowhere in the prototype;
+`harness/axes.py` is the natural home. Numbers: eda/alignment/
+failure_analysis/FINDINGS.md §C2.

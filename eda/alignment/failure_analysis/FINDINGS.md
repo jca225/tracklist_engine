@@ -334,3 +334,54 @@ Canonical-DB profile (pi-storage, 2026-07-09; columns audited in the query log):
 
 Companion study: `eda/alignment/low_rank/` (set×track SVD, per-DJ bases,
 metadata/ML probes — low-rank worldview test).
+
+---
+
+# Fix round 2026-07-09 (same day) — intervention results & corrections
+
+Findings A1's causal reading was tested by intervention the same day. Two
+corrections and one new finding; scripts unchanged, timelines
+`out/2nvzlh2k_predicted_timeline_postfix_lt_diskfix.json`.
+
+## C1. CORRECTION: the silent-fallback bucket was confounded — coverage alone lifts ~nothing
+`joint_ref_decode` now resolves stem-routed ref audio through
+`stem_resolve.resolve_stem` (disk-truth; the manifest hint bit it exactly as
+`0960565` documented) and emits `ref_decode_status` per span
+(`looptrace | looptrace-empty | skip-no-ref-audio | skip-manifest-miss |
+skip-too-short | legacy`) instead of silently degrading. BB11 A/B
+(identical scorer, non-fibered): looptrace coverage **47 → 73 spans, zero
+un-diagnosed fallbacks** (only `skip-too-short: 12` remains) — but headline
+**flat** (21→20%), acappella traj flat (14%), with real small wins:
+oddratio traj 5→9%, instrumental ref-offset median 7.8→3.9 s. So A1's
+0.03-vs-0.21 gap was **selection bias** (decodable spans were also the
+well-placed ones), not a causal coverage loss — consistent with the
+oracle↔e2e decomposition: placement gates decode. The fix stands on
+robustness/diagnostics grounds (the stale-manifest class can no longer
+silently eat spans), not as a headline lever.
+
+## C2. NEW: the REAL residual axis problem — 40 GT-acappella spans still routed `regular`
+The claimed_stem fix (solution 1) left a residual 5× bigger than the "~6/set
+class-1 gaps" estimate: **BB11 29/92 + BB12 11/83 GT-acappella spans are
+mis-axed as `regular` in the post-fix timelines** (traj 0.03/0.06 vs
+0.19/0.28 correctly-axed). Verified upstream: the pi slot rows genuinely say
+`regular` with no `(Acappella)` row-text — the scrape never knew, so **no
+parser can fix these**; routing must come from structure or audio at
+inference. Pooled ceiling if routed correctly: ~+3–5 pp acappella traj per
+set, plus the (larger) placement-channel effect — mis-axed spans never get
+HuBERT/lyrics placement, and lyrics-placed spans run at ss_med 2.8 s.
+
+**Quantified structural prior (unwired — sensor-phase freeze, filed in
+looptrace/NOTES.md):** across both sets, **P(acappella | w-layer slot) =
+82%** (175/213), **100% of GT acappellas are w-layers** (0 in main slots),
+and main slots are 54% instrumental / 46% regular. Slot position is a strong
+axis prior the pipeline currently ignores; `set_track_slots.layer_role`
+(bed/payload/…) exists in the DB and is consumed nowhere in the prototype.
+
+## C3. Audit "staleness" was actually a GT slot-namespace mismatch
+BB12's GT yaml uses plain numeric slots (`002`) where timelines carry
+w-layers (`2w1`); BB11's GT has w-layers. The audit was faithful to GT all
+along — the slot-keyed join was the bug. `build_span_table` now joins audits
+by `track_id` too (coverage 15→42 spans, BB12 audit regenerated alongside).
+With the fixed join: **instance-ambiguity fractions do NOT meaningfully
+predict span outcome** (|spearman| ≤ 0.15, n=34) — frac_clone/frac_distinct
+are weak span-level features for the learned selector at current n.
