@@ -89,6 +89,22 @@ align:
 	venvs/audio/bin/python -m workspaces.alignment_prototype.drivers.race \
 		--sets $(SET) --drivers classical $(EXTRA)
 
+# W1 determinism check (kernel_data_engine_plan): run the kernel twice, diff.
+# Expensive (two full aligns) — nightly-grade, not pre-commit. Byte-identity
+# is the bar; if MPS nondeterminism ever breaks it, the span diff below says
+# exactly where, and the plan's stated fallback is tolerance-based equality.
+PROTO_OUT := workspaces/alignment_prototype/out
+determinism:
+	@test -n "$(SET)" || { echo "usage: make determinism SET=<set_id>"; exit 1; }
+	$(MAKE) align SET=$(SET)
+	cp $(PROTO_OUT)/$(SET)_classical_timeline.json $(PROTO_OUT)/$(SET)_determinism_run1.json
+	$(MAKE) align SET=$(SET)
+	@cmp -s $(PROTO_OUT)/$(SET)_determinism_run1.json $(PROTO_OUT)/$(SET)_classical_timeline.json \
+		&& echo "DETERMINISM OK — two runs byte-identical" \
+		|| { echo "DETERMINISM FAILED — span-level diff:"; \
+		     diff <(venvs/audio/bin/python -m json.tool $(PROTO_OUT)/$(SET)_determinism_run1.json) \
+		          <(venvs/audio/bin/python -m json.tool $(PROTO_OUT)/$(SET)_classical_timeline.json) | head -40; exit 1; }
+
 # ---------- deploy ----------------------------------------------------------
 
 deploy: deploy-storage deploy-worker

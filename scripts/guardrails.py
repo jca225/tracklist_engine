@@ -308,9 +308,28 @@ RATCHET_PATTERNS: dict[str, re.Pattern[str]] = {
 # the artifact files is the FIX for the class, not an instance of it
 _RATCHET_SKIP_PARTS = frozenset({"attic", "tests", "contracts"})
 
+# Scoped ratchets: (roots, pattern) counted ONLY under the named roots.
+# kernel_flags = CLI surface of the kernel path (W1, kernel_data_engine_plan):
+# a flag that has been default-on for two weeks becomes code and its flag
+# dies, so this number only goes down.
+_KERNEL_ROOTS = (
+    "workspaces/alignment_prototype/infer.py",
+    "workspaces/alignment_prototype/joint_ref_decode.py",
+    "workspaces/alignment_prototype/drivers",
+)
+SCOPED_RATCHETS: dict[str, tuple[tuple[str, ...], re.Pattern[str]]] = {
+    "kernel_flags": (_KERNEL_ROOTS, re.compile(r"add_argument\(")),
+}
+
+
+def _under_roots(path: Path, roots: tuple[str, ...]) -> bool:
+    rel = path.relative_to(REPO_ROOT).as_posix()
+    return any(rel == r or rel.startswith(r + "/") for r in roots)
+
 
 def _ratchet_counts() -> dict[str, int]:
     counts = {name: 0 for name in RATCHET_PATTERNS}
+    counts.update({name: 0 for name in SCOPED_RATCHETS})
     for path in _iter_py_files():
         if _RATCHET_SKIP_PARTS & set(path.parts):
             continue
@@ -318,8 +337,12 @@ def _ratchet_counts() -> dict[str, int]:
             text = path.read_text(encoding="utf-8")
         except OSError:
             continue
+        lines = text.splitlines()
         for name, pat in RATCHET_PATTERNS.items():
-            counts[name] += sum(1 for line in text.splitlines() if pat.search(line))
+            counts[name] += sum(1 for line in lines if pat.search(line))
+        for name, (roots, pat) in SCOPED_RATCHETS.items():
+            if _under_roots(path, roots):
+                counts[name] += sum(1 for line in lines if pat.search(line))
     return counts
 
 

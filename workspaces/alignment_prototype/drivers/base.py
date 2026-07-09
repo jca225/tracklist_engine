@@ -58,6 +58,7 @@ class SetContext:
         *,
         source_set_id: str | None = None,
         out_dir: Path = OUT_DIR,
+        preflight: bool = True,
     ) -> "SetContext":
         if set_id not in GT_BY_SET:
             raise KeyError(
@@ -71,6 +72,8 @@ class SetContext:
             if not others:
                 raise ValueError(f"no cross-set GT source available for {set_id}")
             source_set_id = others[0]
+        if preflight:
+            preflight_set(set_id)
         return SetContext(
             set_id=set_id,
             gt_yaml=GT_BY_SET[set_id],
@@ -81,6 +84,54 @@ class SetContext:
 
     def timeline_path(self, driver_name: str) -> Path:
         return self.out_dir / f"{self.set_id}_{driver_name}_timeline.json"
+
+
+def preflight_set(set_id: str) -> Path:
+    """Boot gate (W0.2, kernel_data_engine_plan): fail BEFORE any decode with a
+    message naming exactly what's missing and how to fix it, instead of dying
+    mid-pipeline. Hard requirements: the pulled aligning dir, its manifest, the
+    mix audio, and tracks/. Mix stems only WARN — the stem channels degrade
+    gracefully (they skip and say so). Returns the aligning dir."""
+    root = Path.home() / "aligning"
+    hits = sorted(root.glob(f"{set_id}__*"))
+    if not hits:
+        raise FileNotFoundError(
+            f"preflight[{set_id}]: no aligning dir under {root} — pull it first: "
+            f"venvs/audio/bin/python labeling/pull_set_for_alignment.py {set_id}"
+        )
+    set_dir = hits[0]
+    # local: keep msgspec off cold paths (same rule as finalize)
+    from core.contracts import MANIFEST_FILENAME, load_manifest
+
+    missing = [
+        req for req in (MANIFEST_FILENAME, "tracks") if not (set_dir / req).exists()
+    ]
+    if not list(set_dir.glob("mix.*")):
+        missing.append("mix.* (set audio)")
+    if missing:
+        raise FileNotFoundError(
+            f"preflight[{set_id}]: {set_dir.name} is missing {missing} — "
+            f"refresh the pull: venvs/audio/bin/python "
+            f"labeling/pull_set_for_alignment.py {set_id}"
+        )
+    # validate, not just stat: schema drift or a wrong-set manifest fails at
+    # boot with field detail instead of three stages later
+    manifest = load_manifest(set_dir / MANIFEST_FILENAME)
+    if str(manifest.sid) != set_id:
+        raise ValueError(
+            f"preflight[{set_id}]: {set_dir.name}/{MANIFEST_FILENAME} carries "
+            f"set_id={manifest.sid!r} — cross-set contamination; re-pull"
+        )
+    for stem_file, channel in (
+        ("mix_vocals.flac", "acappella placement (HuBERT/lyrics)"),
+        ("mix_instrumental.flac", "instrumental stem-fp placement"),
+    ):
+        if not (set_dir / stem_file).is_file():
+            print(
+                f"preflight[{set_id}]: WARNING — {stem_file} missing; "
+                f"{channel} will skip"
+            )
+    return set_dir
 
 
 @runtime_checkable
