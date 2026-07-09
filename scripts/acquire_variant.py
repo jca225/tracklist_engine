@@ -265,6 +265,11 @@ def _identity_check(db_path: Path, track_id: str, stem_axis: str) -> None:
 
 
 def main() -> int:
+    # Run over ssh, stdout is often latin-1 — a non-ASCII char in an advisory
+    # print must never abort an ingest mid-way (insert done, ledger not yet).
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
     ap = argparse.ArgumentParser(
         description="Acquire an acapella/instrumental variant (staging WAV or canonical ingest).",
         formatter_class=argparse.RawDescriptionHelpFormatter,

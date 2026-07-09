@@ -15,6 +15,7 @@ Typical flow (on pi-storage after auditioning YouTube candidates):
 
 See docs/stem_discovery_playbook.md.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -44,31 +45,56 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--track-audio-id", type=int, required=True,
-                   help="track_audio_id of the stem row to replace")
+    p.add_argument(
+        "--track-audio-id",
+        type=int,
+        required=True,
+        help="track_audio_id of the stem row to replace",
+    )
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--url", help="YouTube / YT Music URL")
     g.add_argument("--file", type=Path, help="Local audio file")
-    p.add_argument("--player-id", default=None,
-                   help="player_id for --file (defaults to filename stem)")
-    p.add_argument("--stem", choices=rta._STEM_CHOICES, default=None,
-                   help="Override stem (default: inherit from retired row)")
+    p.add_argument(
+        "--player-id",
+        default=None,
+        help="player_id for --file (defaults to filename stem)",
+    )
+    p.add_argument(
+        "--stem",
+        choices=rta._STEM_CHOICES,
+        default=None,
+        help="Override stem (default: inherit from retired row)",
+    )
     p.add_argument("--set-id", default=None)
     p.add_argument("--position", default=None)
-    p.add_argument("--reason", required=True,
-                   help="Structured note, e.g. quality:good|identity:OK|...")
+    p.add_argument(
+        "--reason",
+        required=True,
+        help="Structured note, e.g. quality:good|identity:OK|...",
+    )
     p.add_argument("--no-identity-check", action="store_true")
     p.add_argument("--no-log", action="store_true")
     p.add_argument("--no-promote-reference", action="store_true")
-    p.add_argument("--db", type=Path,
-                   default=Path(os.environ.get("TRACKLIST_DB",
-                                               "/mnt/storage/data/db/music_database.db")))
-    p.add_argument("--audio-root", type=Path,
-                   default=Path(os.environ.get("TRACKLIST_AUDIO_ROOT", "/mnt/storage")))
+    p.add_argument(
+        "--db",
+        type=Path,
+        default=Path(
+            os.environ.get("TRACKLIST_DB", "/mnt/storage/data/db/music_database.db")
+        ),
+    )
+    p.add_argument(
+        "--audio-root",
+        type=Path,
+        default=Path(os.environ.get("TRACKLIST_AUDIO_ROOT", "/mnt/storage")),
+    )
     return p.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
+    # ssh stdout is often latin-1; advisory prints must never abort a replace
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
     a = _parse_args(argv)
     old = rta.snapshot_row(a.db, a.track_audio_id)
     if old is None:
@@ -89,11 +115,16 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     rta_args = [
-        "--track-audio-id", str(a.track_audio_id),
-        "--axis", "stem",
-        "--reason", a.reason,
-        "--db", str(a.db),
-        "--audio-root", str(a.audio_root),
+        "--track-audio-id",
+        str(a.track_audio_id),
+        "--axis",
+        "stem",
+        "--reason",
+        a.reason,
+        "--db",
+        str(a.db),
+        "--audio-root",
+        str(a.audio_root),
     ]
     if a.set_id:
         rta_args.extend(["--set-id", a.set_id])

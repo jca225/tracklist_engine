@@ -130,9 +130,15 @@ def _norm_role(role: str) -> str:
 
 
 def _remote_shell(parts: list[str]) -> str:
-    """Build `cd repo && venvs/audio/bin/python ...` for ssh."""
+    """Build `cd repo && venvs/audio/bin/python ...` for ssh.
+
+    PYTHONIOENCODING pins the remote stdout to utf-8 — the ssh session's
+    locale is often latin-1, and a non-ASCII verdict print must not crash
+    the pi-side writer (2026-07-09: em-dash aborted 6 ingests post-insert,
+    pre-ledger).
+    """
     inner = " ".join(shlex.quote(p) for p in parts)
-    return f"cd {PI_REPO} && {PI_PYTHON} {inner}"
+    return f"cd {PI_REPO} && PYTHONIOENCODING=utf-8 {PI_PYTHON} {inner}"
 
 
 def build_remote_command(
