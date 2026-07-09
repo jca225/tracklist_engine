@@ -11,7 +11,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
 from core.slot_inventory import derive_layer_role
@@ -25,7 +25,7 @@ def backfill(db_path: Path, *, dry_run: bool = False) -> int:
     cols = {r[1] for r in conn.execute("PRAGMA table_info(set_track_slots)")}
     if "layer_role" not in cols:
         print(
-            "layer_role column missing — run scripts/migrate_layer_role.sql first",
+            "layer_role column missing — run scripts/migrations/migrate_layer_role.sql first",
             file=sys.stderr,
         )
         return 1

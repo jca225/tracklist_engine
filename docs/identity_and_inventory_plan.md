@@ -31,7 +31,7 @@ Status tracked inline below.
 ## Phase 4 — work + recording ✅ (schema + migration)
 
 - Tables: `work`, `recording`, view `identity_mismatch`
-- `scripts/migrate_phase4_recording.sql` on pi-storage after Phase 1 SQL
+- `scripts/migrations/migrate_phase4_recording.sql` on pi-storage after Phase 1 SQL
 - `recording_id` on `track_audio` / `set_track_slots` (= legacy `track_id`)
 
 ## Phase 5 — GT write-back ✅ (v1)
@@ -63,8 +63,8 @@ via `RecordingAxes.key()` in `core/identity.py`. Remix **artist** stays on
 
 ```bash
 # backup, deploy code, then:
-sqlite3 /mnt/storage/data/db/music_database.db < scripts/migrate_identity_axes.sql
-sqlite3 /mnt/storage/data/db/music_database.db < scripts/migrate_phase4_recording.sql
+sqlite3 /mnt/storage/data/db/music_database.db < scripts/migrations/migrate_identity_axes.sql
+sqlite3 /mnt/storage/data/db/music_database.db < scripts/migrations/migrate_phase4_recording.sql
 venvs/web_crawler/bin/python -m tokenizer.materialize   # refresh slots + claims
 venvs/audio/bin/python scripts/reconcile_orphans.py --dry-run
 ```

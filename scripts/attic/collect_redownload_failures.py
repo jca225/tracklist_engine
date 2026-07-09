@@ -14,7 +14,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = Path(__file__).resolve().parents[2]
 OUT = REPO / "logs/redownload_failures_bb10_15.tsv"
 MAC_LOG = REPO / "logs/mac_redownload_bb_remix.log"
 PI_HOST = "pi-storage"

@@ -28,7 +28,7 @@ from pathlib import Path
 
 from lxml import etree
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = Path(__file__).resolve().parents[2]
 PYTHON = REPO / "venvs" / "audio" / "bin" / "python"
 INGEST = REPO / "scripts" / "ingest_stem_url.py"
 DEFAULT_ALS = Path.home() / "Desktop/big bootie 12 labeling Project/big bootie 12 labeling_fast.als"

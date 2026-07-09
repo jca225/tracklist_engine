@@ -94,7 +94,7 @@ Write-back: [labeling/write_back_ground_truth.py](labeling/write_back_ground_tru
 
 1. Backup `music_database.db`
 2. `make deploy`
-3. `scripts/migrate_identity_axes.sql` then `scripts/migrate_phase4_recording.sql`
+3. `scripts/migrations/migrate_identity_axes.sql` then `scripts/migrations/migrate_phase4_recording.sql`
 4. `python -m tokenizer.materialize`
 5. `scripts/reconcile_orphans.py` — **dry-run only** if pass-1/apply already ran
 
