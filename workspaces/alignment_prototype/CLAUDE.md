@@ -66,9 +66,11 @@ venvs/audio/bin/python -m workspaces.alignment_prototype.score_timeline_vs_gt \
 `eda/alignment/failure_analysis/` is the canonical breakdown (one binding cause
 per span, weighted by GT-seconds lost). **Axis rule: take `claimed_stem` from
 the matched GT row, never from the timeline span** — the materialized value was
-corrupted by the row-text drop bug (fixed 888aca, but pre-fix timelines and the
-canonical DB until re-materialization still carry it; BB12 showed 2
-instrumentals vs 25 real). `score_timeline_vs_gt` does this now.
+corrupted by the row-text drop bug (fixed 888caca; pi DB re-materialized
+2026-07-09, now 19/25 real instrumentals visible — the residual ~6/set are
+class-1 inventory gaps the scrape never marked, so GT stays authoritative
+where it exists; pre-re-materialize timelines still carry stale values).
+`score_timeline_vs_gt` does this now.
 
 State (2026-07-08, corrected routing, BB11+BB12): identity 84/83%, set_start
 median 6.3/7.9 s, acappella trajectory 21% (up from 11% mis-routed), 81% of

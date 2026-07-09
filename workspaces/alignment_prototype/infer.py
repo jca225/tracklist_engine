@@ -270,15 +270,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--stem-placement-guard-s", type=float, default=8.0)
     p.add_argument(
         "--instr-stem-placement",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help="place INSTRUMENTAL spans by fingerprinting the instrumental stem on "
         "both sides (mix_instrumental.flac <-fp-> ref Demucs instrumental stem). The "
         "full-mix fp/chroma fail on instrumental (vocal-carrying mix vs vocal-less "
         "ref); stem-vs-stem fp recovers regular-level placement (probe: BB11 5.0s "
         "set_start). Sets set_start AND ref_start (=set_start+offset), gated to the "
-        "prior like --fp-placement. Default OFF (opt-in). NOTE: infer's DB "
-        "claimed_stem is stale (~2 instrumentals/set vs ~25 real, row-text drop bug) "
-        "— pass --instr-stem-gt-yaml to route the real instrumental spans.",
+        "prior like --fp-placement. Default ON since the 2026-07-09 pi "
+        "re-materialize: DB claimed_stem now carries ~19/25 real instrumentals per "
+        "set (residual ~6 are class-1 inventory gaps, GT-only). "
+        "--instr-stem-gt-yaml still tops up routing where GT exists (scoring runs).",
     )
     p.add_argument(
         "--instr-stem-gt-yaml",
@@ -636,9 +638,10 @@ def main(argv: list[str] | None = None) -> int:
     # on BOTH sides (mix_instrumental.flac <-fp-> ref Demucs instrumental) and it
     # recovers regular-level placement (probe: BB11 88% id / 5.0s median). Same
     # decode primitive + gate as --fp-placement; ref_start = set_start + offset.
-    # Default OFF. STALE-STEM guard: DB claimed_stem marks ~2 instrumentals/set
-    # vs ~25 real, so without --instr-stem-gt-yaml the channel barely fires —
-    # we log the shortfall loudly rather than silently no-op.
+    # Default ON (W1 kernel default; A/B: BB12 +0.5 / BB11 +8.7, no linear
+    # penalty). DB claimed_stem re-materialized 2026-07-09 (19/25 real
+    # instrumentals visible per set); --instr-stem-gt-yaml tops up the ~6
+    # GT-only spans where GT exists.
     if args.instr_stem_placement:
         import dataclasses
 

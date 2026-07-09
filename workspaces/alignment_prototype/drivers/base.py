@@ -117,11 +117,14 @@ def finalize(payload: dict, path: Path) -> Path:
 def gt_stem_by_slot(gt_yaml: Path) -> dict[str, str]:
     """slot_label (leading-zeros stripped) -> claimed_stem, from GT.
 
-    The timeline's own `claimed_stem` is the materialized set_track_slots value,
-    corrupted by the row-text drop bug (BB12: ~2 instrumentals vs ~25 real). The
-    scorer already re-routes the axis from GT for scoring; drivers that route
-    DECODE by stem (agentic probe plan, ml feature choice) must do the same or
-    they mis-route acappella/instrumental to the wrong channel.
+    History: the materialized set_track_slots `claimed_stem` was corrupted by
+    the row-text drop bug (BB12: ~2 instrumentals vs ~25 real). The pi DB was
+    re-materialized 2026-07-09 (19/25 visible; the residual ~6/set are class-1
+    inventory gaps the scrape never marked, GT-only). GT therefore remains
+    authoritative wherever it exists: the scorer re-routes the axis from GT,
+    and drivers that route DECODE by stem (agentic probe plan, ml feature
+    choice) must do the same. Timelines predating the re-materialize still
+    carry the stale values.
     """
     import re
 
