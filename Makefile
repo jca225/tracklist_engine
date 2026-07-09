@@ -14,7 +14,7 @@ REPO         := ~/tracklist_engine
 PIP          := $(REPO)/venvs/web_crawler/bin/pip
 DB           := /mnt/storage/data/db/music_database.db
 
-.PHONY: help check check-inventory audit-gt scorecard deploy deploy-storage deploy-worker \
+.PHONY: help check check-inventory audit-gt scorecard race deploy deploy-storage deploy-worker \
         restart-jobqueue start-scraper stop-scraper restart-retry \
         install-taste-scrape restart-taste-scrape logs-taste-scrape \
         status logs-jobqueue logs-scraper logs-retry queue ssh-storage ssh-worker
@@ -25,6 +25,7 @@ help:
 	@echo "  make check-inventory SET=<set_id> — slot satisfaction gate (pi-storage)"
 	@echo "  make audit-gt SET=<set_id> — audio-verify a labeling .als vs the mix"
 	@echo "  make scorecard        — aligner per-span scorecard + failure attribution"
+	@echo "  make race             — race classical/agentic/ml drivers on one board (SETS=, DRIVERS=)"
 	@echo "  make deploy           — git pull + pip install on both Pis"
 	@echo "  make status           — service states + scrape_failures queue depth"
 	@echo "  make queue            — just the scrape_failures count"
@@ -70,6 +71,15 @@ audit-gt:
 scorecard:
 	venvs/audio/bin/python -m eda.alignment.failure_analysis.build_span_table
 	venvs/audio/bin/python -m eda.alignment.failure_analysis.analyze
+
+# Race the three end-to-end aligner drivers (classical / agentic / ml) on one
+# scorecard board. Override SETS/DRIVERS/EXTRA (e.g. make race SETS=2nvzlh2k
+# EXTRA="--fibers --reuse-base 2nvzlh2k=out/2nvzlh2k_predicted_timeline_lt_v2.json").
+SETS ?= 1fsnxchk,2nvzlh2k
+DRIVERS ?= classical,agentic,ml
+race:
+	venvs/audio/bin/python -m workspaces.alignment_prototype.drivers.race \
+		--sets $(SETS) --drivers $(DRIVERS) $(EXTRA)
 
 # ---------- deploy ----------------------------------------------------------
 

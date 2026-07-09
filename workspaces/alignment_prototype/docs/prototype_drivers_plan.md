@@ -1,0 +1,178 @@
+# Plan: Three interchangeable end-to-end aligner prototypes
+
+Status: **BUILT 2026-07-09** — `workspaces/alignment_prototype/drivers/` + `make race`.
+Two scoping decisions locked (see §Decisions).
+
+## BUILT — what shipped
+
+- `drivers/base.py` — `EndToEndDriver` protocol + `SetContext` (cross-set source
+  auto-resolves to the other complete GT set) + timeline helpers (`finalize`
+  validates through `core.contracts.load_timeline`; `gt_stem_by_slot` re-routes
+  the stale materialized stem from GT).
+- `drivers/classical.py` — subprocess `infer` → `joint_ref_decode` (the shipped
+  baseline).
+- `drivers/agentic.py` — `agentic.loop.resolve` over the classical base;
+  committed/review/suggest override set_start, **escalate falls back to
+  classical**. Owns PLACEMENT only — inherits classical's ref-decode verbatim
+  (translating ref_segments double-counts the placement move against the
+  GT-anchored scorer; measured, removed).
+- `drivers/ml.py` — hybrid C1: MERT identity + classical placement + learned
+  `TrajectoryDecoder` (checkpoint `decoder_<source_set>.pt`) for ref_segments;
+  rebuilds the exact `(2,Tm,Tr)` grid `trajectory.data` trains on; graceful
+  keep-classical fallback for short/no-segment spans.
+- `drivers/race.py` + `make race` (SETS=/DRIVERS=/EXTRA=) — runs each driver,
+  scores every timeline through the SAME `score_timeline_vs_gt`, prints the board.
+
+Validated on BB11 (`2nvzlh2k`, base = existing `_lt_v2` timeline, agentic replay):
+
+| driver | id% | place_med | ref_med | head_traj% | acap_traj% |
+|---|---|---|---|---|---|
+| classical | 84 | 7.1 | 25.8 | 20 | 14 |
+| agentic   | 81 | **2.9** | 24.4 | 20 | 14 |
+| ml        | 84 | 7.1 | **3.3** | **22** | **17** |
+
+Each driver wins the stage it owns: agentic → placement (7.1→2.9s), ml →
+ref-offset (25.8→3.3s) + trajectory. Agentic's id dip is a scorer artifact
+(identity is time-overlap-matched, so moving set_start reshuffles a few overlaps;
+recording_id is never changed). Full fresh run (no `--reuse-base`): `make race` —
+needs pi-storage reachable + warm MERT/aligning audio; live agentic needs mix MERT.
+
+## Original plan (as drafted)
+
+## Framing
+
+We don't need to build three aligners from scratch — ~2.5 already exist, they're
+just not wired as interchangeable end-to-end drivers scored on one board:
+
+- **Classical** already runs end-to-end: `infer.py` (MERT identity + fp/stem/lyrics
+  placement, fixed gates) → `joint_ref_decode.py` (Viterbi ref-segments) → timeline JSON.
+- **Agentic** already runs: `agentic/ --live` (belief fusion + `Ladder` + budget-aware
+  worst-belief-first scheduling + escalation) — but emits per-rung precision/recall,
+  **not** a full timeline, so it never hits the real scorecard.
+- **ML** exists only for the *trajectory* stage: `trajectory/TrajectoryDecoder`
+  (.425 strict / .490 fiber held-out BB11). No learned identity/placement → a "full
+  ML driver" is genuinely partial.
+
+So the real work is **unification** (one driver interface + one scorecard for all
+three) plus **filling the ML gap**, not three greenfield builds.
+
+## Organizing idea
+
+Every aligner solves the same three sub-problems per span — **identity** (which
+recording), **placement** (set_start / where in the mix), **trajectory**
+(ref_segments / internal warp). Drivers differ only in *how* they decide each stage.
+Put them behind one interface, race them on one scorecard.
+
+```
+set_id + {tokenized tracklist, track audios, set audio}
+    → [DRIVER] → predicted_timeline.json (list[SpanPrediction] w/ ref_segments)
+    → score_timeline_vs_gt → scorecard row
+```
+
+The scorecard (`score_timeline_vs_gt.py` / `build_span_table.py`) already consumes a
+timeline JSON and emits identity%, set_start err, ref_offset err, trajectory_acc, and
+impact-weighted failure attribution. **That is the shared judge — nothing new needed
+there.** The whole plan hangs off making all three drivers emit that same timeline JSON.
+
+## 1. Common driver interface (the only genuinely new abstraction)
+
+Thin protocol in `harness/`, one level above the existing `Probe`/`AlignmentResult`
+contract:
+
+```python
+class EndToEndDriver(Protocol):
+    name: str
+    def align_set(self, ctx: SetContext) -> PredictedTimeline: ...
+```
+
+- `SetContext` = existing loader (`dataset.load_set` + aligning-folder `manifest.json`:
+  mix.m4a, mix_vocals/instrumental, per-slot candidate audios + stems).
+- `PredictedTimeline` = `list[SpanPrediction]` — `records.py` already has the right
+  fields (slot_label, recording_id, set_start/end, ref_start/end, ref_segments,
+  tempo_ratio, confidence).
+- One runner `race.py` (`--driver {classical,agentic,ml} --set-id …`) → writes
+  `out/<set>_<driver>_timeline.json` → invokes existing scorer. Plus `make race` to run
+  all three on BB11+BB12 and print a side-by-side board.
+
+This is the load-bearing deliverable. Once it exists the three drivers are adapters.
+
+## 2. Driver A — Classical / Deterministic (low effort; mostly wrapping)
+
+Wrap existing `infer.py` → `joint_ref_decode.py` behind `align_set`. Fixed, no
+learning at decision time: MERT `predict_sequence` identity, axis-routed placement
+(`--fp-placement` regular/instr, `--stem-placement`+`--lyrics-placement` acappella,
+90s gate), chroma/HuBERT Viterbi ref_segments.
+- Effort: small — refactor CLI-oriented I/O into a callable returning `PredictedTimeline`.
+- Expected: reproduces today's headline (identity 84/83%, set_start median 6.3/7.9s,
+  acappella traj 21%). **Baseline the other two must beat.**
+- Risk: low.
+
+## 3. Driver B — Agentic (medium effort; gap is output, not logic)
+
+Reuse `agentic/loop.resolve()` + `--live` runners + `SpanBelief` + `Ladder` +
+budget-aware scheduling + escalation (all built). Missing piece: it doesn't commit a
+full timeline. Add adapter: after `resolve()`, each span's dominant belief cluster →
+`SpanPrediction` (auto_commit/review/suggest → predictions; **escalate → fall back to
+Driver A's prediction for that span** so the timeline is complete — see Decisions).
+- Effort: medium — belief→prediction serializer + escalation-fill.
+- Uniquely tests: does precision-weighted fusion + abstention beat fixed gates on the
+  same board? Ladder gives a free **auto-commit clean%** (pseudo-GT quality) metric
+  relevant to the bootstrap flywheel.
+- Risk: medium. Live probe costs (Whisper/HuBERT) → slow full-set runs; needs feature
+  caches warm.
+
+## 4. Driver C — ML (highest effort; partial today)
+
+Honest scope: identity = existing MERT head, trajectory = existing `TrajectoryDecoder`
++ `viterbi_segments`, placement = weak link (no learned model).
+
+- **C1 (BUILD NOW):** MERT identity → *borrow* classical/agentic placement → learned
+  trajectory decoder for ref_segments. "Hybrid ML": learning does the trajectory stage
+  (its proven .425/.490 lane), heuristics do placement. Real third contestant, no new GT.
+- **C2 (DEFERRED — research, blocked on GT):** small learned placement selector over
+  probe evidence (HuBERT diagonal, fp sharpness, fiber ambiguity, lyrics score) — the
+  "learned fusion arbiter." Needs a 3rd labeled set (BB10/Murph); n=2 overfits.
+- Effort: C1 medium, C2 large + blocked.
+
+## 5. Sequence
+
+1. Interface + `race.py` + `make race` (~½ day).
+2. Driver A wrap → confirm it reproduces current scorecard (validates harness). (~½ day)
+3. Driver B belief→timeline adapter → first agentic-vs-classical board. (~1 day)
+4. Driver C1 hybrid-ML. (~1 day)
+5. C2 only after a third GT set exists.
+
+## 6. Payoff
+
+Reproducible three-way scorecard where each stage is swappable — "does the ML
+trajectory decoder beat Viterbi in a full pipeline?" and "does agentic abstention beat
+fixed gates?" become one `make race` away instead of buried in ad-hoc `out/*.json`.
+Turns the aligner from a pile of probes into three nameable systems, improvable
+independently — the north-star shape (interchangeable drivers behind the harness contract).
+
+## Decisions (locked 2026-07-09)
+
+- **ML scope = C1 hybrid only.** MERT identity + borrowed placement + learned
+  trajectory decoder. Defer C2 (learned placement selector) until a 3rd labeled set
+  exists; BB11+BB12 (n=2) would overfit.
+- **Agentic escalation → fall back to classical.** Escalated spans (belief quality
+  < 0.10) filled by Driver A's prediction so all drivers emit complete, span-for-span
+  comparable timelines. Agentic "auto-commit clean%" survives as its own metric.
+
+## Key file paths (from 2026-07-09 code map)
+
+| Item | Path |
+|---|---|
+| Prototype root | `workspaces/alignment_prototype/` |
+| Driver contract (extend here) | `harness/contract.py`, `harness/driver.py`, `harness/merge.py`, `harness/axes.py` |
+| Prediction record | `workspaces/alignment_prototype/records.py` (`SpanPrediction`) |
+| GT loader | `workspaces/alignment_prototype/dataset.py` (`load_set`) |
+| Classical stages | `infer.py`, `joint_ref_decode.py` |
+| Agentic | `agentic/loop.py` (`resolve`), `belief.py`, `policy.py` (`Ladder`), `live_runners.py` |
+| ML trajectory | `trajectory/model.py` (`TrajectoryDecoder`), `trajectory/decode.py` (`viterbi_segments`), `trajectory/train.py` |
+| Scorecard | `score_timeline_vs_gt.py`, `eda/alignment/failure_analysis/build_span_table.py` + `analyze.py`; `make scorecard` |
+| GT fixtures | `labeling/fixtures/bb11_ground_truth.yaml` (2nvzlh2k), `labeling/fixtures/bb12_ground_truth.yaml` (1fsnxchk) |
+| Existing e2e driver script | `scripts/reinfer_driver.sh` |
+
+GT sets: BB11 `2nvzlh2k` (150 spans), BB12 `1fsnxchk` (166 spans). Others available
+(inference-only, no full GT): `1rfb0yl9` Disco Lines, `pwgrrb1` Murph, `w1mgcjt` BB10.
