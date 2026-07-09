@@ -3,6 +3,16 @@
 Incubates in `workspaces/` per [alignment_program_plan.md](../../docs/alignment_program_plan.md).
 Promote to top-level `alignment/` when stable.
 
+**Phase policy (2026-07-09): the sensor phase is closed.** The channel
+inventory (fp/HuBERT/lyrics/fibers/chroma/surprise/recon/warp-prior) is rich
+enough; the wall is the actor, not perception. Until the learned model
+(`trajectory/` + `drivers/ml`) and its data engine (agentic pseudo-labels)
+ship, do NOT add new probes/channels/priors — new ideas go to a note in
+`looptrace/NOTES.md` or the attic ledger, not to code. The three sanctioned
+lanes: (1) the canonical driver path (`drivers/` + `make race`), (2) the
+learned trajectory decoder + training data, (3) contracts/entropy work
+([entropy_reduction_plan](../../docs/entropy_reduction_plan.md)).
+
 **Closed experiments live in [attic/](attic/EXPERIMENTS.md)** — a verdict ledger
 of ~20 one-off probes/evals whose questions are answered. Read the verdict
 before re-testing an idea; most attic scripts are there because the idea was
