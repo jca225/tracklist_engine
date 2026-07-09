@@ -380,6 +380,7 @@ def import_als(als_path: Path, gt_out: Path | None) -> int:
     classes: dict[str, list[tuple[float, float]]] = {}
     rejected: list[tuple[float, float]] = []
     unreviewed: list[tuple[float, float]] = []
+    cand_classes: dict[str, list[tuple[float, float]]] = {}
     for c in clips:
         iv = (round(c.ref_start_s(), 3), round(c.ref_end_s(), 3))
         # Rejection must be an ACT, not a default: only clips the human moved
@@ -390,7 +391,7 @@ def import_als(als_path: Path, gt_out: Path | None) -> int:
         if c.track_name.startswith("REJ"):
             rejected.append(iv)
         elif c.track_name.startswith("CAND"):
-            unreviewed.append(iv)
+            cand_classes.setdefault(c.track_name, []).append(iv)
         else:
             classes.setdefault(c.track_name, []).append(iv)
     classes = {k: sorted(v) for k, v in classes.items() if len(v) >= 2}
@@ -405,16 +406,33 @@ def import_als(als_path: Path, gt_out: Path | None) -> int:
     # for mu calibration and provably-free decode credit
     tiers: dict[str, list[str]] = {}
     n_cert = 0
+    n_auto = 0
     if audio and Path(audio).is_file():
         from workspaces.alignment_prototype.looptrace.selfsim import load_audio
 
         y = load_audio(str(audio))
+        # auto-promote CAND classes whose every pair is clone-certified: the
+        # certificate is deterministic same-lineage ground truth, so a human
+        # rename adds nothing. Everything else stays unreviewed.
+        for k, v in sorted(cand_classes.items()):
+            v = sorted(v)
+            if len(v) >= 2 and all(
+                clone_verdict(y, v[0], v[j])["verdict"] in ("CLONE", "KEYLOCK")
+                for j in range(1, len(v))
+            ):
+                classes[f"AUTO {k}"] = v
+                n_auto += 1
+            else:
+                unreviewed.extend(v)
         for k, v in classes.items():
             verdicts = ["anchor"] + [
                 clone_verdict(y, v[0], v[j])["verdict"] for j in range(1, len(v))
             ]
             tiers[k] = verdicts
             n_cert += sum(1 for t in verdicts if t in ("CLONE", "KEYLOCK"))
+    else:  # no audio to certify against — every CAND stays unreviewed
+        for v in cand_classes.values():
+            unreviewed.extend(sorted(v))
 
     gt = {
         "audio": audio,
@@ -440,7 +458,7 @@ def import_als(als_path: Path, gt_out: Path | None) -> int:
     print(
         f"wrote {out}: {len(classes)} classes, {n_inst} instances, "
         f"{len(rejected)} rejected, {len(unreviewed)} unreviewed, "
-        f"{n_cert} clone-certified"
+        f"{n_cert} clone-certified, {n_auto} CAND auto-promoted"
     )
 
     if sidecar:
