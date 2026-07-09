@@ -1,0 +1,20 @@
+=== BB12 looptrace decompose ===
+gap decomposition (per sampled GT second):
+  acappella  seconds=3046  outside-decode 25%  in-window acc 8%  (xcheck strict-per-span 17% vs metric 18%)
+  regular    seconds=5000  outside-decode 10%  in-window acc 18%  (xcheck strict-per-span 14% vs metric 15%)
+  GT acappella rows: 100; recording matched by SOME timeline span: 91; NEVER matched (invisible to metric): 9
+
+worst placement:
+    658.0s 42w4   pred=  3436.0 gt=  2778.0  Calvin Harris ft. Frank Ocean & Migo
+    232.5s 7w3    pred=   419.7 gt=   652.2  Drake ft. Kanye West & Lil Wayne & E
+    195.1s 9w2    pred=   545.3 gt=   740.4  Afrojack ft. Wrabel - Ten Feet Tall 
+=== BB11 looptrace decompose ===
+gap decomposition (per sampled GT second):
+  acappella  seconds=2651  outside-decode 11%  in-window acc 14%  (xcheck strict-per-span 14% vs metric 16%)
+  regular    seconds=4449  outside-decode 25%  in-window acc 17%  (xcheck strict-per-span 12% vs metric 15%)
+  GT acappella rows: 92; recording matched by SOME timeline span: 92; NEVER matched (invisible to metric): 0
+
+worst placement:
+    177.5s 4w1    pred=   391.6 gt=   214.0  Good Charlotte - Girls And Boys
+    106.1s 23w2   pred=  2220.0 gt=  2113.9  Panic! At The Disco - I Write Sins N
+    102.5s 35     pred=  3164.9 gt=  3062.5  Jay Hardway - Bootcamp

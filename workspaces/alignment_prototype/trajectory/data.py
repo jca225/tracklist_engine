@@ -72,15 +72,19 @@ class TrajectorySpanDataset(Dataset):
         sets: Sequence[tuple[str, Path | str]],
         bin_s: float = BIN_S,
         min_gain: float = 0.1,
+        aligning_dirs: dict[str, Path] | None = None,
     ) -> None:
         self.bin_s = bin_s
         self.min_gain = min_gain
         self.bank = FeatureBank(bin_s)
         self.specs: list[SpanSpec] = []
         self.skipped: list[SkippedSpan] = []
+        aligning_dirs = aligning_dirs or {}
 
         for set_id, yaml_path in sets:
-            aligning = find_aligning_dir(set_id)
+            # Synthetic sets pass an explicit folder (no ~/aligning entry); real
+            # sets resolve by set-id prefix as before.
+            aligning = aligning_dirs.get(set_id) or find_aligning_dir(set_id)
             if aligning is None:
                 raise FileNotFoundError(f"no ~/aligning folder for {set_id}")
             manifest = json.load(open(aligning / "manifest.json"))

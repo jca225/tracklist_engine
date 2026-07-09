@@ -560,7 +560,7 @@ def fusion_feasibility(feat_reg: list[tuple[dict, int]]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--set-id", default="1fsnxchk")
+    ap.add_argument("--set-id", required=True)
     ap.add_argument("--gt", default="labeling/fixtures/bb12_ground_truth.yaml")
     ap.add_argument("--max-spans", type=int, default=0, help="0 = all")
     ap.add_argument(

@@ -15,6 +15,7 @@ This is the **data-analysis phase** described in
 | `boundaries.py` | GT boundary extraction, peak picking, scoring |
 | `artifacts.py` | `.npz` cache format for per-bar mix MERT |
 | `mix_structure_probe.py` | CLI entry point |
+| `warp_analysis/` | GT warp ↔ BPM/stem structure; emits `warp_prior.json` for synthetic-mashup generation (see its [README](warp_analysis/README.md)) |
 
 ## Phase 0 — build a mix MERT artifact
 

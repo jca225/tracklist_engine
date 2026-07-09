@@ -299,6 +299,59 @@ def common_fate(band_envs: np.ndarray) -> float:
     return float(off)
 
 
+def comodulation_residual(band_envs: np.ndarray) -> np.ndarray:
+    """Per-frame overlay saliency by suppressing the comodulated component.
+
+    Comodulation masking release: the cochlear-nucleus **wideband inhibitor** is
+    driven by energy that fluctuates *coherently* across many bands and
+    suppresses the response to it — so a target modulating on its own POPS out of
+    a comodulated masker (adding more comodulated flanking energy *helps*
+    detection, the paradox of CMR). Here the shared across-band modulator is the
+    bed; the residual after projecting it out is whatever modulates
+    independently — an overlay.
+
+    Unlike ``cocktail_party`` (which subtracts a *committed* predicted-bed) this
+    is BLIND: no placement needed. Where one coherent source plays, every band
+    tracks the shared carrier and the excess is ~0; where an independently
+    modulating overlay (an acappella over a bed) enters, its bands rise ABOVE the
+    carrier and the excess spikes. Returns a per-frame, unnormalized
+    overlay-energy curve (~0 under one coherent source) — an order-independent
+    "second source entered here" placement candidate, complementing the
+    boundary-surprise prior. ``band_envs`` is (n_bands, frames), nonnegative
+    amplitude envelopes.
+
+    VALIDATION (2026-07-06, BB11+BB12): NULL on BOTH the full mix AND the
+    bed-removed residual. Curve percentile at true overlay-entry times is 39–49%
+    (≈50 = no signal): (1) blind on 16-band mel subbands of the whole mix, and
+    (2) on the mix_vocals stem (ideal-separation limit of the cocktail_party
+    subtraction), where a plain vocal-onset envelope is ALSO null (±5s window-max
+    lift ~0 vs random). Root cause is the DOMAIN, not the probe: BB mixes are
+    wall-to-wall vocal-layered, so "a new overlay entered" is never a
+    silence→sound pop — it's one source joining an already-dense residual. The
+    CMR overlay-pop premise (quiet bed + distinct overlay entrance) does not hold
+    for mashup mixes. Synthetic test passes (mechanism correct); the audio lacks
+    the structure. DEAD END for overlay localization — stays validated=False,
+    unwired. Acappella placement lever remains HuBERT/lyrics identity + fibers,
+    not energy/novelty overlay detection.
+    """
+    x = np.asarray(band_envs, dtype=float)
+    if x.ndim != 2 or x.shape[0] < 2 or x.shape[1] < 2:
+        return np.zeros(x.shape[-1] if x.ndim == 2 else 0, dtype=float)
+    # per-band gain-normalize so a loud bed band and a quiet band compare fairly
+    # (keep amplitude structure in time — do NOT z-score to unit variance, which
+    # would inflate a near-silent noisy band to look as big as the bed).
+    g = x.mean(axis=1, keepdims=True)
+    g[g <= 0] = 1.0
+    xn = x / g
+    # robust shared "fate" = across-band median: it tracks the bed even when a
+    # minority of bands carry an overlay. This is the wideband inhibitor — the
+    # comodulated common component that gets suppressed.
+    common = np.median(xn, axis=0)
+    # what each band carries IN EXCESS of the bed survives (half-wave rectified —
+    # an overlay adds energy), summed across bands.
+    return np.maximum(xn - common, 0.0).sum(axis=0)
+
+
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------

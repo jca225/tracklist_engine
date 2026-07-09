@@ -25,6 +25,7 @@ class InstrumentalBlock:
     slices: tuple[MixSlice, ...]
     slot_label: str
     pitch_shift_semi: int = 0
+    tempo_ratio: float = 1.0  # bed.bpm / master_bpm (1.0 = unwarped)
 
 
 @dataclass(frozen=True)

@@ -55,6 +55,10 @@ CACHE = Path(__file__).resolve().parent / ".cache" / "lyrics"
 MODEL = "openai/whisper-large-v3-turbo"
 BLOCK_S = 300.0
 
+# VoiceFixer restore before ASR (coverage lever; --enhance-vocals). Off by
+# default; when on, mix + candidate vocals are restored (see vocal_enhance.py).
+ENHANCE_VOCALS = False
+
 # diagonal search / decode params
 SLOPES = np.arange(0.5, 2.01, 0.02)
 INTERCEPT_BIN = 4.0
@@ -74,13 +78,17 @@ def _pipe():
         import torch
         from transformers import pipeline
 
-        dev = "mps" if torch.backends.mps.is_available() else "cpu"
+        dev = (
+            "cuda"
+            if torch.cuda.is_available()
+            else ("mps" if torch.backends.mps.is_available() else "cpu")
+        )
         print(f"loading {MODEL} on {dev} …", file=sys.stderr)
         _PIPE = pipeline(
             "automatic-speech-recognition",
             model=MODEL,
             device=dev,
-            dtype=torch.float16 if dev == "mps" else torch.float32,
+            dtype=torch.float16 if dev in ("mps", "cuda") else torch.float32,
             chunk_length_s=28,
             stride_length_s=4,
         )
@@ -94,12 +102,26 @@ def _cache_file(path: str | Path) -> Path:
 
 
 def load_cached(path: str | Path) -> list[dict] | None:
-    cf = _cache_file(path)
+    from .vocal_enhance import resolve_for_cache
+
+    cf = _cache_file(resolve_for_cache(path, ENHANCE_VOCALS))
     return json.loads(cf.read_text()) if cf.is_file() else None
 
 
-def transcribe_words(path: str | Path) -> list[dict]:
-    """[{w,s,e}] word stream, global timestamps; blocked for bounded GPU memory."""
+def transcribe_words(path: str | Path, enhance: bool | None = None) -> list[dict]:
+    """[{w,s,e}] word stream, global timestamps; blocked for bounded GPU memory.
+
+    ``enhance`` overrides the module ``ENHANCE_VOCALS`` flag (None = inherit).
+    The dense, hour-long mix_vocals is passed enhance=False — VoiceFixer is a
+    single-voice restorer and would distort the concurrent-vocal anchor stream;
+    only the single-song candidate stems are restored.
+    """
+    from .vocal_enhance import maybe_enhance
+
+    en = ENHANCE_VOCALS if enhance is None else enhance
+    # restore before ASR (no-op unless enabled); enhanced audio gets its own
+    # cache key, so raw vs enhanced transcriptions never collide.
+    path = maybe_enhance(path, en)
     cf = _cache_file(path)
     if cf.is_file():
         return json.loads(cf.read_text())
@@ -283,7 +305,11 @@ def _build_spans(set_dir: Path, gt: dict, cached_only: bool):
 
     manifest = json.loads((set_dir / "manifest.json").read_text())
     byid = {t["track_id"]: t for t in manifest["tracks"]}
-    mix_bt = _bigram_times(_norm(transcribe_words(set_dir / "mix_vocals.flac")))
+    # mix vocal stays raw (dense/hour-long, out of VoiceFixer's domain); only
+    # candidate acappella stems are restored under --enhance-vocals.
+    mix_bt = _bigram_times(
+        _norm(transcribe_words(set_dir / "mix_vocals.flac", enhance=False))
+    )
     mix_dur = float(manifest.get("mix_duration_s") or 0) or max(
         float(t.get("set_end_s") or 0) for t in gt["tracks"]
     )
@@ -302,10 +328,26 @@ def _build_spans(set_dir: Path, gt: dict, cached_only: bool):
     aca.sort(key=lambda s: _slot_order(s["slot_label"]))
     spans, meta = [], []
     for s in aca:
-        vpath = (byid.get(s["track_id"], {}).get("stems") or {}).get("vocals")
+        tr = byid.get(s["track_id"], {})
+        vpath = (tr.get("stems") or {}).get("vocals")
         if not vpath or not Path(vpath).is_file():
+            # No separated `vocals` stem. For an acappella slot the downloaded
+            # source IS essentially the vocal (acappella rip), so transcribe it
+            # directly rather than dropping the candidate. Whisper reads lyrics
+            # fine even if a source turns out to carry backing. ~3x more BB11/
+            # BB12 acappella candidates resolve this way. See memory
+            # project_vocal_enhance_lyrics_deadend (separation/routing gap).
+            src = tr.get("local_path")
+            vpath = src if (src and Path(src).is_file()) else None
+        if not vpath:
             continue
-        cw = load_cached(vpath) if cached_only else transcribe_words(vpath)
+        try:
+            cw = load_cached(vpath) if cached_only else transcribe_words(vpath)
+        except (
+            Exception
+        ) as e:  # one unreadable/odd-codec source must not kill the batch
+            warnings.warn(f"skipping unreadable candidate {vpath}: {e}", stacklevel=2)
+            continue
         if not cw:
             continue
         cands = candidate_diagonals(_norm(cw), mix_bt)
@@ -338,7 +380,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--transcribe", action="store_true", help="warm cache (needs GPU/MPS)"
     )
+    p.add_argument(
+        "--enhance-vocals",
+        action="store_true",
+        help="VoiceFixer-restore stems before ASR (needs venvs/voicefixer; "
+        "own cache key, so A/B against the raw run)",
+    )
     args = p.parse_args(argv)
+
+    global ENHANCE_VOCALS
+    ENHANCE_VOCALS = args.enhance_vocals
 
     set_dir = _resolve_glob(args.set_dir)
     gt = yaml.safe_load(Path(args.gt).read_text())

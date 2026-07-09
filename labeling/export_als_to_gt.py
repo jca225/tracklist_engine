@@ -46,6 +46,7 @@ from labeling.als import (
     tempo_ratio,
     track_display_name,
 )
+from labeling.als.validate import has_errors, validate_session
 from labeling.ground_truth.schema import (
     GroundTruthSet,
     GroundTruthTrack,
@@ -585,6 +586,25 @@ def print_review(review: list[ReviewRow]) -> None:
         print(f"  ... +{len(review) - 40} more")
 
 
+def _reader_drop_count(root) -> int:
+    """Non-mix AudioClips in the tree minus those ``parse_layer_clips`` returned.
+
+    Mirrors the reader's track filter (skips ``1-mix``/``2-mix``); any positive
+    delta is clips the *total* reader dropped silently — no resolvable path,
+    missing CurrentStart/CurrentEnd/Loop, or malformed numerics. Each dropped
+    clip is a GT label that would vanish without a trace.
+    """
+    raw = 0
+    for track_el in root.xpath(".//LiveSet/Tracks/*"):
+        if track_el.tag != "AudioTrack":
+            continue
+        nm = track_display_name(track_el)
+        if nm.startswith("1-mix") or nm.startswith("2-mix"):
+            continue
+        raw += len(track_el.xpath(".//AudioClip"))
+    return raw - len(parse_layer_clips(root))
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -596,6 +616,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--review", action="store_true", help="print review table only")
     p.add_argument("--include-all-clips", action="store_true")
+    p.add_argument(
+        "--allow-invalid",
+        action="store_true",
+        help="export even when the .als has error-severity diagnostics "
+        "(clips the reader silently drops / malformed timing). Default: refuse.",
+    )
     args = p.parse_args(argv)
 
     if not args.als.is_file():
@@ -604,6 +630,43 @@ def main(argv: list[str] | None = None) -> int:
     if not args.set_dir.is_dir():
         print(f"not found: {args.set_dir}", file=sys.stderr)
         return 2
+
+    # Gate: the reader (parse_layer_clips) is *total* — it silently drops clips
+    # with no path / missing CurrentStart|CurrentEnd|Loop / malformed numerics,
+    # any one of which is a silently-missing GT label. Two blocking signals:
+    #   (1) validate error-severity diagnostics, and
+    #   (2) a direct drop count — raw non-mix AudioClips vs what the reader
+    #       returned. This catches drops `validate` grades below "error"
+    #       (clip-incomplete is a warning) or doesn't model (missing Path).
+    # Both fail-fast at the edge; --allow-invalid overrides. Warnings print but
+    # do not block.
+    root = load_als_xml(args.als)
+    diags = validate_session(root)
+    if diags:
+        errs = [d for d in diags if d.severity == "error"]
+        warns = [d for d in diags if d.severity != "error"]
+        print(
+            f"validate: {len(errs)} error(s), {len(warns)} warning(s) in {args.als.name}",
+            file=sys.stderr,
+        )
+        for d in diags:
+            print(f"  {d}", file=sys.stderr)
+
+    dropped = _reader_drop_count(root)
+    if dropped:
+        print(
+            f"reader silently dropped {dropped} non-mix clip(s) "
+            "(no path / missing timing / malformed numerics) — each is a lost GT label",
+            file=sys.stderr,
+        )
+
+    if (has_errors(diags) or dropped) and not args.allow_invalid:
+        print(
+            "REFUSING to export: the .als has clips the reader drops silently "
+            "(bad/missing labels). Fix the .als, or pass --allow-invalid to override.",
+            file=sys.stderr,
+        )
+        return 1
 
     try:
         gt, review = export_gt(

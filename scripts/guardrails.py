@@ -11,6 +11,7 @@ Used by git pre-commit, Cursor afterFileEdit hook, and GitHub Actions.
 
 from __future__ import annotations
 
+import ast
 import re
 import sys
 from dataclasses import dataclass
@@ -18,7 +19,11 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-SKIP_DIR_NAMES = frozenset({"venvs", "cue-detr", "data", "__pycache__", ".git"})
+# Vendored third-party trees (own LICENSE, upstream-authored) are not ours to
+# police — cue-detr (DETR cue model), msst_webui (MSST-WebUI separation trainer).
+SKIP_DIR_NAMES = frozenset(
+    {"venvs", "cue-detr", "msst_webui", "data", "__pycache__", ".git"}
+)
 
 # Intentional uses of legacy strings (DB source labels, etc.)
 AUDIO_PIPELINE_ALLOW_SUBSTR = frozenset({"audio_pipeline_v1"})
@@ -209,6 +214,147 @@ def _check_adapter_parents(path: Path, text: str) -> list[Violation]:
     return violations
 
 
+# A declared-but-unread argparse flag is a silent lie: you pass it, nothing
+# happens (the `--fiber-k` / `--tol-s` class). Detect statically, but stay
+# conservative — this check blocks commits, so it must never false-positive.
+# Files that reach flags dynamically are skipped entirely.
+_DYNAMIC_ARGS_ACCESS = re.compile(
+    r"\bvars\s*\(|\bgetattr\s*\(|\basdict\s*\(|namespace\s*="
+)
+
+
+def _argparse_dest(call: ast.Call) -> str | None:
+    """The ``dest`` an ``add_argument`` call binds, or None if uninferable.
+
+    Explicit ``dest=`` wins; otherwise derive from the first ``--long`` option.
+    Returns None for positional args (always read by name) and short-only opts.
+    """
+    for kw in call.keywords:
+        if (
+            kw.arg == "dest"
+            and isinstance(kw.value, ast.Constant)
+            and isinstance(kw.value.value, str)
+        ):
+            return kw.value.value
+    for arg in call.args:
+        if not (isinstance(arg, ast.Constant) and isinstance(arg.value, str)):
+            continue
+        opt = arg.value
+        if opt.startswith("--"):
+            return opt[2:].replace("-", "_")
+        if opt.startswith("-"):
+            continue  # short option — keep looking for a long one
+        return None  # positional argument
+    return None
+
+
+def _check_dead_argparse_flags(path: Path, text: str) -> list[Violation]:
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return []  # a broken file is CI/pytest's problem, not this check's
+    if _DYNAMIC_ARGS_ACCESS.search(text):
+        return []  # dynamic flag access — can't statically prove one unused
+    declared: dict[str, int] = {}  # dest -> first add_argument lineno
+    accessed: set[str] = set()  # every `<obj>.<attr>` name in the file
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "add_argument"
+        ):
+            dest = _argparse_dest(node)
+            if dest is not None:
+                declared.setdefault(dest, node.lineno)
+        elif isinstance(node, ast.Attribute):
+            accessed.add(node.attr)
+    violations: list[Violation] = []
+    for dest, lineno in sorted(declared.items(), key=lambda kv: kv[1]):
+        if dest not in accessed:
+            violations.append(
+                Violation(
+                    path,
+                    lineno,
+                    "dead_flag",
+                    f"--{dest.replace('_', '-')} declared but args.{dest} never read",
+                )
+            )
+    return violations
+
+
+# ---------------------------------------------------------------------------
+# Ratchet checks — entropy counters that may only go DOWN.
+#
+# Each detector greps for a known failure-class pattern
+# (docs/entropy_reduction_plan.md, workstream F). The committed baseline in
+# guardrails_ratchet.json is the maximum allowed count; introducing a new
+# occurrence fails `make check`, removing occurrences prompts a baseline
+# lowering. Attic (closed experiments) and tests are exempt.
+
+RATCHET_BASELINE_PATH = REPO_ROOT / "scripts" / "guardrails_ratchet.json"
+
+_KNOWN_SET_IDS = r"(?:1fsnxchk|2nvzlh2k|w1mgcjt|pwgrrb1|1rfb0yl9)"
+
+RATCHET_PATTERNS: dict[str, re.Pattern[str]] = {
+    # a hardcoded set id used as a default / constant (the --gt=BB12 class)
+    "set_id_default": re.compile(rf'(?:default\s*=\s*|=\s*)"{_KNOWN_SET_IDS}"'),
+    # raw manifest.json parsing outside core/contracts (schema-drift class)
+    "raw_manifest_read": re.compile(r"manifest\.json"),
+    # relative-depth path anchoring (path-resolution class)
+    "parents_depth": re.compile(r"parents\[[0-9]\]"),
+}
+
+# contracts is the sanctioned home for artifact reads — its loaders naming
+# the artifact files is the FIX for the class, not an instance of it
+_RATCHET_SKIP_PARTS = frozenset({"attic", "tests", "contracts"})
+
+
+def _ratchet_counts() -> dict[str, int]:
+    counts = {name: 0 for name in RATCHET_PATTERNS}
+    for path in _iter_py_files():
+        if _RATCHET_SKIP_PARTS & set(path.parts):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for name, pat in RATCHET_PATTERNS.items():
+            counts[name] += sum(1 for line in text.splitlines() if pat.search(line))
+    return counts
+
+
+def _check_ratchets() -> list[Violation]:
+    import json
+
+    if not RATCHET_BASELINE_PATH.is_file():
+        return []  # no baseline committed yet — ratchet disarmed
+    baseline: dict[str, int] = json.loads(RATCHET_BASELINE_PATH.read_text())
+    violations: list[Violation] = []
+    for name, count in _ratchet_counts().items():
+        allowed = baseline.get(name)
+        if allowed is None:
+            continue
+        if count > allowed:
+            violations.append(
+                Violation(
+                    RATCHET_BASELINE_PATH,
+                    0,
+                    f"ratchet:{name}",
+                    f"{count} occurrences > baseline {allowed} — a new instance of "
+                    f"this failure class was introduced (pattern "
+                    f"{RATCHET_PATTERNS[name].pattern!r}); fix it or, if truly "
+                    "intentional, raise the baseline with justification",
+                )
+            )
+        elif count < allowed:
+            # progress! not a violation — nudge to lock it in
+            print(
+                f"guardrails: ratchet {name} improved {allowed} -> {count}; "
+                f"lower it in {RATCHET_BASELINE_PATH.name}"
+            )
+    return violations
+
+
 def run_checks() -> list[Violation]:
     violations: list[Violation] = []
     for path in _iter_py_files():
@@ -224,6 +370,7 @@ def run_checks() -> list[Violation]:
         violations.extend(_check_variant_tag(path, text))
         violations.extend(_check_adapter_parents(path, text))
         violations.extend(_check_als_core_boundary(path, text))
+        violations.extend(_check_dead_argparse_flags(path, text))
     if DOCS_DIR.is_dir():
         for path in sorted(DOCS_DIR.glob("*.md")):
             try:
@@ -232,6 +379,7 @@ def run_checks() -> list[Violation]:
                 violations.append(Violation(path, 0, "read_error", str(exc)))
                 continue
             violations.extend(_check_stale_audio_pipeline_docs(path, text))
+    violations.extend(_check_ratchets())
     return violations
 
 

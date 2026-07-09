@@ -273,6 +273,12 @@ def _label_rows(
     return labeled
 
 
+#: Slot-spine rows with NO resolvable track_audio, recorded by the last
+#: fetch_tracks() call. These become audio-less manifest rows so the als
+#: interpreter can map EVERY slot (silent drop hid BB10's beds — 001/002/004).
+LAST_UNRESOLVED: list[dict] = []
+
+
 def fetch_tracks(set_id: str) -> list[TrackRow]:
     # First pass: per-slot labels. The canonical source is set_track_slots —
     # the tokenizer already resolved sided/gap rows that dj_set_rows can't
@@ -281,7 +287,8 @@ def fetch_tracks(set_id: str) -> list[TrackRow]:
     slot_rows = ssh_sqlite(f"""
         SELECT row_index, slot_label,
                COALESCE(recording_id, track_id) AS track_id,
-               claimed_stem, claimed_variant
+               claimed_stem, claimed_variant,
+               COALESCE(full_name, title, '') AS slot_title
         FROM set_track_slots
         WHERE set_id = '{set_id}'
         ORDER BY row_index;
@@ -294,6 +301,7 @@ def fetch_tracks(set_id: str) -> list[TrackRow]:
                 r["track_id"],
                 r.get("claimed_stem") or "regular",
                 r.get("claimed_variant") or "regular",
+                r.get("slot_title") or "",
             )
             for r in slot_rows
             if r.get("track_id") and r.get("slot_label")
@@ -316,7 +324,7 @@ def fetch_tracks(set_id: str) -> list[TrackRow]:
         row_rows = [r for r in row_rows if r.get("track_id")]
         # dj_set_rows has no claimed axes -> regular/regular (current behavior).
         labeled = [
-            (lbl, ri, tid, "regular", "regular")
+            (lbl, ri, tid, "regular", "regular", "")
             for (lbl, ri, tid) in _label_rows(row_rows)
         ]
     if not labeled:
@@ -365,12 +373,35 @@ def fetch_tracks(set_id: str) -> list[TrackRow]:
     # Resolve each slot to its best-matching track_audio row (claim-aware),
     # then bulk-fetch stems for just the chosen rows.
     resolved: list[tuple[str, int, str, dict]] = []
-    for label, row_index, tid, c_stem, c_variant in labeled:
+    LAST_UNRESOLVED.clear()
+    for label, row_index, tid, c_stem, c_variant, slot_title in labeled:
         chosen, tier = resolve_slot_audio(
             c_stem, c_variant, candidates_by_tid.get(tid, [])
         )
         if chosen is None:
-            continue  # in the spine but no track_audio yet; skip
+            # in the spine but no track_audio yet — keep as an audio-less
+            # manifest stub instead of silently vanishing from the pull
+            LAST_UNRESOLVED.append(
+                {
+                    "track_id": tid,
+                    "track_audio_id": None,
+                    "label": label,
+                    "slot_label": label,
+                    "artist": "",
+                    "title": slot_title,
+                    "version": None,
+                    "stem": c_stem,
+                    "variant": c_variant,
+                    "axes_key": None,
+                    "local_path": None,
+                    "pi_path": None,
+                    "duration_s": None,
+                    "stems": {},
+                    "satisfaction": "unresolved",
+                    "gap": "no track_audio row resolves this slot (download missing)",
+                }
+            )
+            continue
         if tier is not None and tier >= TIER_VARIANT_FALLBACK:
             print(
                 f"  [resolve] {label}: claimed {c_stem}/{c_variant} -> "
@@ -788,6 +819,10 @@ def main() -> int:
             "track_id": t.track_id,
             "track_audio_id": t.track_audio_id,
             "label": t.label,
+            # canonical set_track_slots.slot_label — readers (labeling/als
+            # identity, enrich_gt_track_ids) key on slot_label; label is the
+            # same value kept for older consumers
+            "slot_label": t.label,
             "artist": t.artist,
             "title": t.title,
             "version": t.version,
@@ -842,8 +877,13 @@ def main() -> int:
         "mix_local_path": str(mix_dst),
         "mix_pi_path": mix.pi_path,
         "mix_duration_s": mix.duration_s,
-        "tracks": succeeded,
+        "tracks": succeeded + LAST_UNRESOLVED,
     }
+    if LAST_UNRESOLVED:
+        print(
+            f"[manifest] {len(LAST_UNRESOLVED)} unresolved slot(s) recorded "
+            "audio-less: " + ", ".join(u["label"] for u in LAST_UNRESOLVED)
+        )
     if not args.dry_run:
         (dest_root / "manifest.json").write_text(json.dumps(manifest, indent=2))
 

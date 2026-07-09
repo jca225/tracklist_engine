@@ -1,0 +1,652 @@
+{
+ "gt": "labeling/fixtures/bb12_ground_truth.yaml",
+ "decoder": "looptrace",
+ "spans": [
+  {
+   "slot_label": "012",
+   "track_id": "2p25k23p",
+   "set_start_s": 321.968,
+   "set_end_s": 359.526,
+   "claimed_stem": "acappella",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/004w1__Martin Garrix & Bebe Rexha - In The Name Of Love (Acappella)/vocals.flac",
+   "segs": [
+    [
+     0.0,
+     0.188,
+     18.988
+    ],
+    [
+     20.0,
+     33.472,
+     49.922
+    ]
+   ],
+   "meta": {
+    "n_points": 46268,
+    "slope": 0.94,
+    "evidence": 629.0,
+    "evidence_rate": 16.75,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "014",
+   "track_id": "1b4hd9lp",
+   "set_start_s": 403.703,
+   "set_end_s": 419.72,
+   "claimed_stem": "acappella",
+   "span_class": "oddratio",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/004w3__Chromeo - Jealous (Acappella)/vocals.flac",
+   "segs": [
+    [
+     0.0,
+     52.881,
+     68.561
+    ]
+   ],
+   "meta": {
+    "n_points": 26789,
+    "slope": 0.98,
+    "evidence": 240.0,
+    "evidence_rate": 14.98,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "019",
+   "track_id": "1v0zv1s5",
+   "set_start_s": 491.097,
+   "set_end_s": 507.611,
+   "claimed_stem": "acappella",
+   "span_class": "oddratio",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/tracks/005w4__Eminem - Just Lose It.m4a",
+   "segs": [
+    [
+     0.0,
+     160.095,
+     177.09
+    ]
+   ],
+   "meta": {
+    "n_points": 32676,
+    "slope": 1.03,
+    "evidence": 325.0,
+    "evidence_rate": 19.68,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "029",
+   "track_id": "nsvvu7p",
+   "set_start_s": 708.049,
+   "set_end_s": 731.073,
+   "claimed_stem": "acappella",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/tracks/008w2__Blink-182 - Bored To Death (Acappella).m4a",
+   "segs": [
+    [
+     0.0,
+     33.4,
+     57.752
+    ]
+   ],
+   "meta": {
+    "n_points": 42248,
+    "slope": 1.0588,
+    "evidence": 479.0,
+    "evidence_rate": 20.8,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "032",
+   "track_id": "186yndjf",
+   "set_start_s": 740.404,
+   "set_end_s": 813.001,
+   "claimed_stem": "acappella",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/009w2__AFROJACK - Ten Feet Tall (Acappella)/vocals.flac",
+   "segs": [
+    [
+     17.5,
+     137.746,
+     154.226
+    ],
+    [
+     33.5,
+     8.257,
+     26.797
+    ],
+    [
+     51.5,
+     37.816,
+     42.066
+    ],
+    [
+     55.728,
+     42.066,
+     43.185
+    ],
+    [
+     56.842,
+     43.185,
+     49.198
+    ],
+    [
+     62.824,
+     42.066,
+     43.185
+    ],
+    [
+     63.938,
+     49.198,
+     57.901
+    ]
+   ],
+   "meta": {
+    "n_points": 53771,
+    "slope": 1.03,
+    "evidence": 411.0,
+    "evidence_rate": 5.75,
+    "loops": [
+     {
+      "source_start_s": 55.728,
+      "source_end_s": 56.842,
+      "period_s": 7.0958,
+      "n_iter": 2
+     }
+    ]
+   }
+  },
+  {
+   "slot_label": "039",
+   "track_id": "2qy7u05p",
+   "set_start_s": 915.104,
+   "set_end_s": 960.164,
+   "claimed_stem": "acappella",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/011w1__Halsey - Now Or Never/vocals.flac",
+   "segs": [
+    [
+     0.0,
+     76.513,
+     82.894
+    ],
+    [
+     5.0,
+     12.406,
+     31.548
+    ],
+    [
+     20.0,
+     29.618,
+     50.674
+    ],
+    [
+     36.5,
+     49.243,
+     60.09
+    ]
+   ],
+   "meta": {
+    "n_points": 53664,
+    "slope": 1.2761,
+    "evidence": 625.0,
+    "evidence_rate": 13.87,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "040",
+   "track_id": "1znyu24x",
+   "set_start_s": 961.929,
+   "set_end_s": 976.343,
+   "claimed_stem": "acappella",
+   "span_class": "oddratio",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/011w2__DJ Snake - Middle (Acappella)/vocals.flac",
+   "segs": [
+    [
+     0.0,
+     46.351,
+     62.99
+    ]
+   ],
+   "meta": {
+    "n_points": 29376,
+    "slope": 1.1885,
+    "evidence": 353.0,
+    "evidence_rate": 24.49,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "047",
+   "track_id": "2uq9800f",
+   "set_start_s": 1119.35,
+   "set_end_s": 1135.03,
+   "claimed_stem": "acappella",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/013w3__Two Friends - Pacific Coast Highway (Acappella)/vocals.flac",
+   "segs": [
+    [
+     0.0,
+     194.577,
+     210.542
+    ]
+   ],
+   "meta": {
+    "n_points": 33354,
+    "slope": 1.03,
+    "evidence": 225.0,
+    "evidence_rate": 14.35,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "051",
+   "track_id": "ygllqp",
+   "set_start_s": 1194.38,
+   "set_end_s": 1209.56,
+   "claimed_stem": "acappella",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/014w3__Usher - DJ Got Us Fallin' In Love (Acappella)/vocals.flac",
+   "segs": [
+    [
+     0.0,
+     38.904,
+     54.378
+    ]
+   ],
+   "meta": {
+    "n_points": 37656,
+    "slope": 1.0316,
+    "evidence": 295.0,
+    "evidence_rate": 19.43,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "053",
+   "track_id": "dgrjwux",
+   "set_start_s": 1211.1,
+   "set_end_s": 1262.47,
+   "claimed_stem": "acappella",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/042w3__The Chainsmokers - Honest (Acappella)/vocals.flac",
+   "segs": [
+    [
+     0.0,
+     20.948,
+     67.055
+    ],
+    [
+     36.5,
+     138.098,
+     156.414
+    ]
+   ],
+   "meta": {
+    "n_points": 52126,
+    "slope": 1.2632,
+    "evidence": 310.0,
+    "evidence_rate": 6.03,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "058",
+   "track_id": "2m5knd0f",
+   "set_start_s": 1344.02,
+   "set_end_s": 1360.43,
+   "claimed_stem": "acappella",
+   "span_class": "oddratio",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/016w2__Matoma - Running Out/vocals.flac",
+   "segs": [
+    [
+     0.0,
+     81.698,
+     102.716
+    ]
+   ],
+   "meta": {
+    "n_points": 27644,
+    "slope": 1.3136,
+    "evidence": 273.0,
+    "evidence_rate": 16.64,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "062",
+   "track_id": "1gv9w2px",
+   "set_start_s": 1438.65,
+   "set_end_s": 1453.41,
+   "claimed_stem": "acappella",
+   "span_class": "oddratio",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/017w2__Major Lazer - Be Together (Acappella)/vocals.flac",
+   "segs": [
+    [
+     0.0,
+     63.569,
+     86.921
+    ]
+   ],
+   "meta": {
+    "n_points": 36376,
+    "slope": 1.6105,
+    "evidence": 184.0,
+    "evidence_rate": 12.47,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "069",
+   "track_id": "21kvmkk5",
+   "set_start_s": 1650.69,
+   "set_end_s": 1704.72,
+   "claimed_stem": "acappella",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/020w1__Galantis - Rich Boy (Acappella)/vocals.flac",
+   "segs": [
+    [
+     0.0,
+     -0.11,
+     0.49
+    ],
+    [
+     0.464,
+     0.49,
+     15.98
+    ],
+    [
+     12.446,
+     15.98,
+     32.21
+    ],
+    [
+     25.0,
+     79.36,
+     100.799
+    ],
+    [
+     41.63,
+     0.49,
+     15.98
+    ],
+    [
+     53.612,
+     15.98,
+     32.21
+    ],
+    [
+     53.612,
+     100.799,
+     101.338
+    ]
+   ],
+   "meta": {
+    "n_points": 45380,
+    "slope": 1.2928,
+    "evidence": 677.0,
+    "evidence_rate": 16.1,
+    "loops": [
+     {
+      "source_start_s": 0.464,
+      "source_end_s": 12.446,
+      "period_s": 41.1662,
+      "n_iter": 2
+     }
+    ]
+   }
+  },
+  {
+   "slot_label": "071",
+   "track_id": "jwwcskx",
+   "set_start_s": 1703.9,
+   "set_end_s": 1733.89,
+   "claimed_stem": "acappella",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/020w3__Disclosure - Latch (Acappella)/vocals.flac",
+   "segs": [
+    [
+     0.0,
+     176.587,
+     176.97
+    ],
+    [
+     0.743,
+     176.97,
+     177.639
+    ],
+    [
+     2.043,
+     177.639,
+     183.539
+    ],
+    [
+     13.5,
+     39.569,
+     47.046
+    ],
+    [
+     28.203,
+     176.97,
+     177.639
+    ],
+    [
+     29.503,
+     47.046,
+     47.294
+    ],
+    [
+     29.503,
+     177.639,
+     183.539
+    ]
+   ],
+   "meta": {
+    "n_points": 47617,
+    "slope": 0.515,
+    "evidence": 216.0,
+    "evidence_rate": 7.53,
+    "loops": [
+     {
+      "source_start_s": 0.743,
+      "source_end_s": 2.043,
+      "period_s": 27.4603,
+      "n_iter": 2
+     }
+    ]
+   }
+  },
+  {
+   "slot_label": "073",
+   "track_id": "252ys8cx",
+   "set_start_s": 1739.96,
+   "set_end_s": 1771.39,
+   "claimed_stem": "acappella",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/tracks/021w1__Idina Menzel - Let It Go (Acappella).m4a",
+   "segs": [
+    [
+     0.0,
+     46.847,
+     75.987
+    ]
+   ],
+   "meta": {
+    "n_points": 40900,
+    "slope": 0.94,
+    "evidence": 824.0,
+    "evidence_rate": 26.22,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "003",
+   "track_id": "2uq9800f",
+   "set_start_s": 1913.44,
+   "set_end_s": 1959.72,
+   "claimed_stem": "acappella",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/013w3__Two Friends - Pacific Coast Highway (Acappella)/vocals.flac",
+   "segs": [
+    [
+     0.0,
+     57.634,
+     152.394
+    ]
+   ],
+   "meta": {
+    "n_points": 58172,
+    "slope": 2.06,
+    "evidence": 208.0,
+    "evidence_rate": 4.49,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "082",
+   "track_id": "2tscznp5",
+   "set_start_s": 1973.48,
+   "set_end_s": 1994.61,
+   "claimed_stem": "acappella",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/023w3__Vicetone - Nothing Stopping Me (Acappella)/vocals.flac",
+   "segs": [
+    [
+     0.0,
+     48.41,
+     69.208
+    ]
+   ],
+   "meta": {
+    "n_points": 37578,
+    "slope": 0.9904,
+    "evidence": 465.0,
+    "evidence_rate": 22.01,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "127",
+   "track_id": "dkg1c995",
+   "set_start_s": 2909.33,
+   "set_end_s": 2937.27,
+   "claimed_stem": "acappella",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/035w2__Daniel Powter - Bad Day/vocals.flac",
+   "segs": [
+    [
+     0.0,
+     54.284,
+     80.959
+    ]
+   ],
+   "meta": {
+    "n_points": 43659,
+    "slope": 0.97,
+    "evidence": 926.0,
+    "evidence_rate": 33.14,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "128",
+   "track_id": "1q89rul5",
+   "set_start_s": 2952.32,
+   "set_end_s": 2970.42,
+   "claimed_stem": "acappella",
+   "span_class": "linear",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/tracks/035w3__Audien - Something Better.m4a",
+   "segs": [
+    [
+     0.0,
+     53.573,
+     68.019
+    ],
+    [
+     13.5,
+     205.456,
+     210.272
+    ]
+   ],
+   "meta": {
+    "n_points": 38334,
+    "slope": 1.0701,
+    "evidence": 413.0,
+    "evidence_rate": 22.82,
+    "loops": []
+   }
+  },
+  {
+   "slot_label": "134",
+   "track_id": "2p248zwf",
+   "set_start_s": 3087.86,
+   "set_end_s": 3119.07,
+   "claimed_stem": "acappella",
+   "span_class": "loop",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/037w2__Martin Jensen - Solo Dance/vocals.flac",
+   "segs": [
+    [
+     0.0,
+     34.5,
+     36.892
+    ],
+    [
+     2.229,
+     36.892,
+     52.933
+    ],
+    [
+     17.176,
+     36.892,
+     52.933
+    ]
+   ],
+   "meta": {
+    "n_points": 34382,
+    "slope": 1.0843,
+    "evidence": 1134.0,
+    "evidence_rate": 66.02,
+    "loops": [
+     {
+      "source_start_s": 2.229,
+      "source_end_s": 17.176,
+      "period_s": 14.947,
+      "n_iter": 2
+     }
+    ]
+   }
+  },
+  {
+   "slot_label": "144",
+   "track_id": "2uq9800f",
+   "set_start_s": 3311.71,
+   "set_end_s": 3339.31,
+   "claimed_stem": "acappella",
+   "span_class": "multiseg",
+   "ref_audio": "/Users/johnnycabrahams/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/stems/013w3__Two Friends - Pacific Coast Highway (Acappella)/vocals.flac",
+   "segs": [
+    [
+     0.0,
+     114.781,
+     119.255
+    ],
+    [
+     8.5,
+     114.709,
+     124.708
+    ]
+   ],
+   "meta": {
+    "n_points": 43938,
+    "slope": 0.5263,
+    "evidence": 202.0,
+    "evidence_rate": 7.32,
+    "loops": []
+   }
+  }
+ ]
+}

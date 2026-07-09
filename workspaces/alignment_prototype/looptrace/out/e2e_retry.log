@@ -1,0 +1,20 @@
+=== BB12 lt+retry e2e ===
+ref trajectory (fiber-aware, ref(mix_t) within 2s; n=139 matched):
+  class linear    n= 49 traj-acc=17%  >=80%covered: 8%
+  class multiseg  n= 65 traj-acc=26%  >=80%covered: 8%
+  class loop      n=  9 traj-acc=16%  >=80%covered: 11%
+  class oddratio  n= 16 traj-acc=14%  >=80%covered: 6%
+  stem  regular   n= 96 traj-acc=24%  >=80%covered: 9%
+  stem  acappella n= 41 traj-acc=12%  >=80%covered: 5%
+  stem  instrumental n=  2 traj-acc=23%  >=80%covered: 0%
+  HEADLINE multiseg+loop n= 74 traj-acc=25%  >=80%covered: 8%
+=== BB11 lt+retry e2e ===
+ref trajectory (fiber-aware, ref(mix_t) within 2s; n=144 matched):
+  class linear    n= 53 traj-acc=24%  >=80%covered: 11%
+  class multiseg  n= 55 traj-acc=24%  >=80%covered: 7%
+  class loop      n=  6 traj-acc=6%  >=80%covered: 0%
+  class oddratio  n= 30 traj-acc=7%  >=80%covered: 3%
+  stem  regular   n= 75 traj-acc=26%  >=80%covered: 8%
+  stem  acappella n= 67 traj-acc=12%  >=80%covered: 7%
+  stem  instrumental n=  2 traj-acc=5%  >=80%covered: 0%
+  HEADLINE multiseg+loop n= 61 traj-acc=22%  >=80%covered: 7%

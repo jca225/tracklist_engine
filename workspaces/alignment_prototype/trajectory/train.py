@@ -215,8 +215,8 @@ def evaluate(
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--split", choices=("set", "slot"), default="set")
-    ap.add_argument("--train-set", default="1fsnxchk")
-    ap.add_argument("--eval-set", default="2nvzlh2k")
+    ap.add_argument("--train-set", required=True)
+    ap.add_argument("--eval-set", required=True)
     ap.add_argument("--val-frac", type=float, default=0.2)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--epochs", type=int, default=40)

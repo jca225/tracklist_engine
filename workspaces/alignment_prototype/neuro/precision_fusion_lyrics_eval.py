@@ -25,7 +25,7 @@ the cross-channel argmax — that is the calibration the raw arbiter lacked.
 
 Usage:
     venvs/audio/bin/python -m workspaces.alignment_prototype.neuro.precision_fusion_lyrics_eval \
-        [--tol-s 5] [--max-win-s 15]
+        [--max-win-s 15]
 """
 
 from __future__ import annotations
@@ -97,7 +97,6 @@ def _zstd(vals: list[float | None]) -> list[float | None]:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--tol-s", type=float, default=5.0)
     p.add_argument("--max-win-s", type=float, default=15.0)
     p.add_argument("--min-win-s", type=float, default=4.0)
     p.add_argument("--hubert-layer", type=int, default=9)

@@ -296,7 +296,7 @@ def persist_set_mert_measures(
     """Replace per-measure MERT rows on the mix side (P4 / 6b).
 
     Patches the ``mert`` key in ``set_analysis.analyzer_versions_json``.
-    Requires ``scripts/migrate_set_mert_measures.sql`` on the target DB.
+    Requires ``scripts/migrations/migrate_set_mert_measures.sql`` on the target DB.
     """
     try:
         with connect(db_path) as conn:

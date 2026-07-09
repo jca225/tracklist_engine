@@ -277,7 +277,7 @@ def backfill_existing_originals(conn: sqlite3.Connection) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--set-id", default="2nvzlh2k")
+    parser.add_argument("--set-id", required=True)
     parser.add_argument("--db", type=Path, default=DEFAULT_DB_PATH)
     args = parser.parse_args()
 

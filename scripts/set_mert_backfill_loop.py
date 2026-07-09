@@ -1,7 +1,7 @@
 """Set-side MERT-only backfill (P4 / 6b): embed DJ mixes on the beat grid.
 
 Requires ``set_analysis.measure_times_json`` (run ``mac_analyze_sets.py`` first)
-and ``scripts/migrate_set_mert_measures.sql`` on pi-storage.
+and ``scripts/migrations/migrate_set_mert_measures.sql`` on pi-storage.
 
 Unlike ``mert_backfill_loop.py`` (reference tracks), this rsyncs ``set_audio``,
 embeds per measure boundary, and writes ``set_mert_measures``.
@@ -137,7 +137,7 @@ def init_scratch_db() -> None:
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='set_mert_measures'"
     ).fetchone()
     if row is None:
-        migrate = (REPO / "scripts/migrate_set_mert_measures.sql").read_text()
+        migrate = (REPO / "scripts/migrations/migrate_set_mert_measures.sql").read_text()
         conn.executescript(migrate)
         conn.commit()
         log.info("applied set_mert_measures migration to stale scratch DB")

@@ -12,15 +12,20 @@ the `set_section_alignment` table) — that's the labeling sense, not the model.
 
 ## ⚠️ Session provenance — seeded vs hand-labeled (NEVER export GT from the wrong one)
 
-Root-level **`<SET> align.als`** files in `~/aligning/<set>/` are **SEEDER
-OUTPUT** — `seed_als_from_timeline` renders the aligner's own *predictions*
-into a Live session for human correction. They are machine noise until the
-human has actually worked them; exporting GT from one feeds the model its own
-predictions back (this happened with BB10/BB11 on 2026-07-02). The **human
-hand sessions** live inside Ableton **`<name> Project/`** folders (e.g.
-`BB11 align Project/BB11 align.als`, `_backups/.../big bootie 12 labeling
-Project/big bootie 12 labeling_fast.als`). Seeder tells: unfilled `[?]` clip
-names, flat 60 BPM master tempo (the 1-beat=1-second seeding convention),
+Seeded sessions are **SEEDER OUTPUT** — `seed_als_from_timeline` renders the
+aligner's own *predictions* into a Live session for human correction. They are
+machine noise until the human has actually worked them; exporting GT from one
+feeds the model its own predictions back (this happened with BB10/BB11 on
+2026-07-02). Since 2026-07-06 the seeder stamps provenance: output is
+**`<SET> SEEDED.als`** (it hard-refuses to write any `* align.als` name) and
+the first arrangement locator reads `SEEDED <date> — machine predictions,
+NOT GT`. **Pre-stamp seeds floating around may still carry the old
+`<SET> align.als` name** — treat any root-level `<SET> align.als` in
+`~/aligning/<set>/` as seeder output. The **human hand sessions** live inside
+Ableton **`<name> Project/`** folders (e.g. `BB11 align Project/BB11
+align.als`, `_backups/.../big bootie 12 labeling Project/big bootie 12
+labeling_fast.als`). Other seeder tells: the SEEDED locator, unfilled `[?]`
+clip names, flat 60 BPM master tempo (the 1-beat=1-second seeding convention),
 clip count ≈ predicted-span count. When in doubt, **ask the annotator** —
 coverage/density stats cannot certify provenance.
 
@@ -154,6 +159,12 @@ expect a separate downloaded acappella master unless you explicitly acquired one
   [../docs/alignment_program_plan.md](../docs/alignment_program_plan.md) P1).
 - Anchor-check: `venvs/audio/bin/python -m labeling.anchor_check` compares YAML
   vs fresh `.als` re-export (offline; no pi-storage).
+- **Audio audit (run before trusting a GT export):** `make audit-gt SET=<set_id>`
+  audio-verifies every clip of the labeling `.als` against the actual mix
+  (identity / placement / ref-offset / pitch via chroma matched filter). The
+  XML round-trip tests in `tests/labeling/` prove the codec; only this catches
+  a session whose *assertions* silently drift from the mix audio. Wraps
+  `workspaces/source_detection/als_audit.py`.
 - CLI: `venvs/audio/bin/python -m labeling.write_back_ground_truth --db ... --yaml ...`
   upserts [set_ground_truth](../web_crawler/database/schema.sql). Dry-run with
   `--dry-run`. Uses `slot_label` as DB `label` when present. Algorithmic aligner

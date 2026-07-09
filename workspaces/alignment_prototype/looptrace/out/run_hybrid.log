@@ -1,0 +1,14 @@
+=== BB12 hybrid ===
+=== looptrace.run — 1fsnxchk trajectory accuracy (frozen metric) ===
+  ALL       n= 21  traj-acc(<2s) mean  41%
+  linear    n=  8  traj-acc(<2s) mean  47%
+  multiseg  n=  7  traj-acc(<2s) mean  34%
+  loop      n=  1  traj-acc(<2s) mean  94%
+  oddratio  n=  5  traj-acc(<2s) mean  32%
+=== BB11 hybrid ===
+=== looptrace.run — 2nvzlh2k trajectory accuracy (frozen metric) ===
+  ALL       n= 17  traj-acc(<2s) mean  47%
+  linear    n=  5  traj-acc(<2s) mean  60%
+  multiseg  n=  7  traj-acc(<2s) mean  17%
+  loop      n=  1  traj-acc(<2s) mean   0%
+  oddratio  n=  4  traj-acc(<2s) mean  95%

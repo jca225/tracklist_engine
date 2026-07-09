@@ -1,0 +1,17 @@
+lyrics placement: updated 4/71 acappella spans (abstain 0, leash 0, no-stem 67, no-transcript 0, no-candidates 0)
+wrote workspaces/alignment_prototype/out/2nvzlh2k_predicted_timeline_lyr.json
+chroma(mix.m4a) …
+hubert(mix_vocals.flac) …
+chroma(mix_instrumental.flac) …
+looptrace decoded 55 acappella spans (25 self-placement retries)
+joint decode: 89 spans (7 no-audio), win=12s hop=2s lam=0.15, 8 workers…
+  25/89
+  50/89
+  75/89
+
+updated 118 spans (55 looptrace); multi-segment (loops/edits): 47; path conf median=9.32
+wrote workspaces/alignment_prototype/out/2nvzlh2k_predicted_timeline_lyr.json
+=== BB11 lyrics+looptrace e2e ===
+  acappella     n= 23 median=36.1s  <2s: 30%  <5s: 30%
+  stem  acappella n= 67 traj-acc=16%  >=80%covered: 12%
+  HEADLINE multiseg+loop n= 61 traj-acc=24%  >=80%covered: 8%

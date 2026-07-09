@@ -48,7 +48,7 @@ that workstream is live.** Before any file move:
 `labeling/export_als_to_gt.py`, `labeling/enrich_gt_track_ids.py`, `labeling/als_path_audit.py`,
 `labeling/relink_als_after_tag.py`, `workspaces/alignment_prototype/seed_als_from_timeline.py`,
 `workspaces/alignment_prototype/transition_probe.py`, `.../seed_tempo_test.py`,
-`scripts/ingest_bb12_winners.py`, `scripts/fetch_candidate_stems.py`. Also the tag→relink→fill
+`scripts/attic/ingest_bb12_winners.py`, `scripts/fetch_candidate_stems.py`. Also the tag→relink→fill
 trio (`inline_tag_aligning_folder.py`, `relink_als_after_tag.py`, `fill_als_clip_tags.py`).
 
 ## Target structure (proposed — the agent may refine)

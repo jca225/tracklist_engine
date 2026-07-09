@@ -169,7 +169,7 @@ harness compares pretrain→finetune vs finetune-only on the same decoder.
 **Goal:** pretrain consumes `ref_segments`; smoke on 20 windows locally.
 
 ```bash
-venvs/audio/bin/python -m workspaces.alignment_prototype.pretrain \
+venvs/audio/bin/python -m workspaces.alignment_prototype.external.pretrain \
   --synthetic-root data/synthetic_mixes_v2 --features mert --max-mixes 20 \
   --out workspaces/alignment_prototype/.cache/pretrain_synthetic_v2_smoke.pt
 ```

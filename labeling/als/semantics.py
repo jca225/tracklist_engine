@@ -143,6 +143,41 @@ def tempo_beat_to_sec(pts: tuple[tuple[float, float], ...], beat: float) -> floa
     return sec + (beat - pts[-1][0]) * 60.0 / pts[-1][1]
 
 
+def tempo_sec_to_beat(pts: tuple[tuple[float, float], ...], sec: float) -> float:
+    """Inverse of :func:`tempo_beat_to_sec` — seconds → arrangement beats.
+
+    THE tempo-breakpoint placement primitive: any event meant to happen at
+    mix-second T (a tempo change at a song boundary, a clip start) must be
+    written at beat ``tempo_sec_to_beat(pts, T)``. Placing it at ``T`` or at
+    ``T·bpm/60`` without integrating the curve before it is the Jun-16 seeder
+    bug — every breakpoint after the first tempo change lands wrong and the
+    error ripples. Over a linear ramp v0→v1 (slope m per beat) the inverse of
+    the ``60/m·ln(v/v0)`` integral is ``b0 + v0·(exp(m·sec/60) − 1)/m``.
+    """
+    if not pts:
+        return sec
+    b0, v0 = pts[0]
+    first_sec = b0 * 60.0 / v0
+    if sec <= first_sec:
+        return sec * v0 / 60.0
+    acc = first_sec
+    for (b0, v0), (b1, v1) in zip(pts, pts[1:]):
+        if b1 <= b0:
+            continue  # zero-width step — instantaneous jump, no time passes
+        if abs(v1 - v0) < 1e-9:
+            seg = 60.0 * (b1 - b0) / v0
+            if sec <= acc + seg:
+                return b0 + (sec - acc) * v0 / 60.0
+        else:
+            m = (v1 - v0) / (b1 - b0)
+            seg = 60.0 / m * math.log(v1 / v0)
+            if sec <= acc + seg:
+                return b0 + v0 * (math.exp(m * (sec - acc) / 60.0) - 1.0) / m
+        acc += seg
+    b_last, v_last = pts[-1]
+    return b_last + (sec - acc) * v_last / 60.0
+
+
 @dataclass(frozen=True)
 class TempoArrangementMapper:
     """Map arrangement-beats → mix-seconds via master-tempo automation.

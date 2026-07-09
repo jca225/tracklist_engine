@@ -74,6 +74,7 @@ def ssh_pi(sql: str) -> str:
 def next_task(
     skip_tids: frozenset[int] = frozenset(),
     sets: tuple[str, ...] = BB_SETS,
+    shard: tuple[int, int] | None = None,
 ) -> tuple[int, str] | None:
     """Returns (track_audio_id, audio_path) for the next BB10-15 track that
     has no track_analysis row yet. `skip_tids` is the in-session "tried and
@@ -85,6 +86,12 @@ def next_task(
     a transient rsync truncation).
     """
     bb_csv = ",".join(f"'{s}'" for s in sets)
+    # shard=(index, count): disjoint track partition so N boxes can work one
+    # set concurrently without racing on the same next-track pick
+    shard_clause = ""
+    if shard is not None:
+        idx, count = shard
+        shard_clause = f"AND ta.track_audio_id % {count} = {idx} "
     skip_clause = ""
     if skip_tids:
         skip_csv = ",".join(str(t) for t in skip_tids)
@@ -93,13 +100,22 @@ def next_task(
     # dj_set_track_media_links — gap rows (sided rows with no scraped media
     # links, e.g. 14 of BB11's re-sourced tail) have zero link rows and
     # would silently fall out of the loop.
+    # Two queue conditions: never-analyzed rows, PLUS reference rows whose
+    # separation is missing (analyzed pre-stems era — BB11's 11 stem-less
+    # refs, 2026-07-09; analyze_track re-runs are idempotent DELETE+INSERT).
     sql = (
         "SELECT ta.track_audio_id, ta.path FROM track_audio ta "
         "LEFT JOIN track_analysis tan ON tan.track_audio_id=ta.track_audio_id "
-        f"WHERE tan.track_audio_id IS NULL AND ta.track_id IN "
+        "WHERE (tan.track_audio_id IS NULL "
+        "       OR (ta.is_reference=1 AND NOT EXISTS "
+        "           (SELECT 1 FROM track_stems ts "
+        "            WHERE ts.track_audio_id=ta.track_audio_id "
+        "            AND ts.stem_name='vocals'))) "
+        f"AND ta.track_id IN "
         f"(SELECT DISTINCT track_id FROM set_track_slots WHERE set_id IN ({bb_csv}) "
         "AND track_id IS NOT NULL) "
         f"{skip_clause}"
+        f"{shard_clause}"
         "ORDER BY ta.track_audio_id LIMIT 1"
     )
     out = ssh_pi(sql)
@@ -244,7 +260,15 @@ def main() -> int:
     p.add_argument("--set-ids", default=None,
                    help="Comma-separated set_ids to scope the loop to "
                         "(default: the 6 BB10-15 sets).")
+    p.add_argument("--shard", default=None,
+                   help="i/N (e.g. 0/2): work only track_audio_id %% N == i, "
+                        "so N boxes can split one set without racing.")
     args = p.parse_args()
+    shard: tuple[int, int] | None = None
+    if args.shard:
+        idx_s, count_s = args.shard.split("/", 1)
+        shard = (int(idx_s), int(count_s))
+        assert 0 <= shard[0] < shard[1], "--shard must be i/N with 0 <= i < N"
     active_sets: tuple[str, ...] = (
         tuple(s.strip() for s in args.set_ids.split(",") if s.strip())
         if args.set_ids else BB_SETS
@@ -323,7 +347,7 @@ def main() -> int:
             bg.join()
             bg = None
 
-        nxt = next_task(frozenset(failed_tids), sets=active_sets)
+        nxt = next_task(frozenset(failed_tids), sets=active_sets, shard=shard)
         if nxt is None:
             log.info("queue drained — analyzed %d, failed %d", n_done, n_failed)
             return 0

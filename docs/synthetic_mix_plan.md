@@ -66,12 +66,12 @@ venvs/audio/bin/python -m workspaces.alignment_prototype.synthetic_mix.generate 
   --n 100 --curriculum medium --out data/synthetic_mixes
 
 # Pretrain (chroma = fast smoke; mert = real run — required for BB12 ablation)
-venvs/audio/bin/python -m workspaces.alignment_prototype.pretrain \
+venvs/audio/bin/python -m workspaces.alignment_prototype.external.pretrain \
   --synthetic-root data/synthetic_mixes --features mert --max-mixes 100 \
   --out workspaces/alignment_prototype/.cache/pretrain_synthetic_mert.pt
 
 # Decisive ablation
-venvs/audio/bin/python -m workspaces.alignment_prototype.pretrain --ablation \
+venvs/audio/bin/python -m workspaces.alignment_prototype.external.pretrain --ablation \
   --pretrain-checkpoint workspaces/alignment_prototype/.cache/pretrain_synthetic_mert.pt
 ```
 

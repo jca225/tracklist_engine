@@ -11,9 +11,9 @@ from .catalog import (
     StemCatalog,
     compatible,
     pitch_shift_semi,
-    tempo_ratio,
 )
 from .sections import CurriculumV2, get_curriculum
+from .warp_model import WarpPrior
 from .timeline import (
     AcappellaSpan,
     InstrumentalBlock,
@@ -61,7 +61,11 @@ def _instr_slices(
     mix_end: float,
     cfg: CurriculumV2,
     rng: np.random.Generator,
+    tr: float = 1.0,
 ) -> tuple[MixSlice, ...]:
+    """`tr` = bed.bpm / master_bpm: the ref advances `tr`x per mix-second, so a
+    span of mix duration D consumes D*tr ref-seconds (tr=1 => slope-1 diagonal,
+    the legacy behaviour). The renderer time-stretches by the same tr."""
     dur = mix_end - mix_start
     if dur < 12.0:
         return ()
@@ -72,10 +76,12 @@ def _instr_slices(
                 mix_start_s=mix_start,
                 mix_end_s=mix_end,
                 ref_start_s=ref0,
-                ref_end_s=ref0 + dur,
+                ref_end_s=ref0 + dur * tr,
             ),
         )
-    n_seg = int(rng.integers(cfg.instr_jump_segments[0], cfg.instr_jump_segments[1] + 1))
+    n_seg = int(
+        rng.integers(cfg.instr_jump_segments[0], cfg.instr_jump_segments[1] + 1)
+    )
     cuts = sorted(rng.uniform(mix_start + 8.0, mix_end - 8.0, size=max(0, n_seg - 1)))
     bounds = [mix_start, *cuts, mix_end]
     slices: list[MixSlice] = []
@@ -92,12 +98,15 @@ def _instr_slices(
                 mix_start_s=bounds[i],
                 mix_end_s=bounds[i + 1],
                 ref_start_s=ref_start,
-                ref_end_s=ref_start + seg_dur,
+                ref_end_s=ref_start + seg_dur * tr,
             )
         )
-    return tuple(slices) if slices else (
-        MixSlice(mix_start, mix_end, 0.0, dur),
-    )
+    return tuple(slices) if slices else (MixSlice(mix_start, mix_end, 0.0, dur * tr),)
+
+
+def _bed_tr(warp: WarpPrior | None, rng: np.random.Generator) -> float:
+    """Bed warp: near-native N(1, sigma) from the prior, else 1.0 (legacy)."""
+    return warp.bed_tempo_ratio(rng) if warp is not None else 1.0
 
 
 def _schedule_instrumentals(
@@ -106,17 +115,20 @@ def _schedule_instrumentals(
     cfg: CurriculumV2,
     rng: np.random.Generator,
     slot_base: int,
+    warp: WarpPrior | None = None,
 ) -> tuple[InstrumentalBlock, ...]:
     fade = cfg.handoff_crossfade_s
     n = len(beds)
     if n == 1:
+        tr = _bed_tr(warp, rng)
         return (
             InstrumentalBlock(
                 bed=beds[0],
                 mix_start_s=0.0,
                 mix_end_s=window_s,
-                slices=_instr_slices(beds[0], 0.0, window_s, cfg, rng),
+                slices=_instr_slices(beds[0], 0.0, window_s, cfg, rng, tr),
                 slot_label=str(slot_base),
+                tempo_ratio=tr,
             ),
         )
     # Overlapping handoffs: each next bed starts before previous ends.
@@ -125,13 +137,15 @@ def _schedule_instrumentals(
     for i, bed in enumerate(beds):
         start = max(0.0, i * seg - fade * 0.5)
         end = window_s if i == n - 1 else min(window_s, (i + 1) * seg + fade * 0.5)
+        tr = _bed_tr(warp, rng)
         blocks.append(
             InstrumentalBlock(
                 bed=bed,
                 mix_start_s=start,
                 mix_end_s=end,
-                slices=_instr_slices(bed, start, end, cfg, rng),
+                slices=_instr_slices(bed, start, end, cfg, rng, tr),
                 slot_label=str(slot_base + i),
+                tempo_ratio=tr,
             )
         )
     return tuple(blocks)
@@ -155,12 +169,32 @@ def _pick_payloads(
     pool = [
         p
         for p in catalog.payloads
-        if compatible(host, p, max_key_dist=cfg.max_key_dist, max_bpm_fold=cfg.max_bpm_fold)
+        if compatible(
+            host, p, max_key_dist=cfg.max_key_dist, max_bpm_fold=cfg.max_bpm_fold
+        )
     ]
     if len(pool) < n:
         return None
     idx = rng.choice(len(pool), size=n, replace=False)
     return tuple(pool[i] for i in idx)
+
+
+def _overlay_warp(
+    payload_bpm: float,
+    mix_bpm: float,
+    native_over_mix_default: float,
+    warp: WarpPrior | None,
+    rng: np.random.Generator,
+) -> float:
+    """Slope for an acappella/regular overlay.
+
+    Prior (correct): tempo_ratio = mix_BPM / payload_native (derived, +octave
+    fold). Legacy: the old ``native/mix`` value passed in, preserved verbatim so
+    bb12-lite is byte-identical.
+    """
+    if warp is None:
+        return native_over_mix_default
+    return warp.overlay_tempo_ratio(mix_bpm, payload_bpm, rng)
 
 
 def _linear_acap(
@@ -172,12 +206,14 @@ def _linear_acap(
     slot: str,
     parent: str,
     rng: np.random.Generator,
+    tempo_r: float,
+    mix_bpm: float,
 ) -> AcappellaSpan | None:
     mix_end = min(window_s, mix_start + dur)
     if mix_end - mix_start < 10.0:
         return None
     ref_start = float(rng.uniform(10.0, 80.0))
-    tr = tempo_ratio(host, payload)
+    tr = tempo_r
     ref_dur = (mix_end - mix_start) * tr
     fade_t = mix_end - 4.0
     gain = ((mix_start, 0.0), (mix_start + 3.5, 1.0), (fade_t, 1.0), (mix_end, 0.0))
@@ -185,7 +221,7 @@ def _linear_acap(
         payload=payload,
         mix_start_s=mix_start,
         mix_end_s=mix_end,
-        host_bpm=host.bpm,
+        host_bpm=mix_bpm,
         ref_start_s=ref_start,
         ref_end_s=ref_start + ref_dur,
         slices=(),
@@ -207,6 +243,8 @@ def _loop_acap(
     slot: str,
     parent: str,
     rng: np.random.Generator,
+    tempo_r: float,
+    mix_bpm: float,
 ) -> AcappellaSpan | None:
     phrase = float(rng.uniform(*cfg.loop_phrase_s))
     n_rep = int(rng.integers(cfg.loop_repeats[0], cfg.loop_repeats[1] + 1))
@@ -215,7 +253,7 @@ def _loop_acap(
     if mix_end - mix_start < phrase * 2:
         return None
     ref_lo = float(rng.uniform(20.0, 70.0))
-    tr = tempo_ratio(host, payload)
+    tr = tempo_r
     slices: list[MixSlice] = []
     t = mix_start
     for _ in range(n_rep):
@@ -232,12 +270,17 @@ def _loop_acap(
         t += phrase
     if len(slices) < 2:
         return None
-    gain = ((mix_start, 0.0), (mix_start + 2.0, 1.0), (mix_end - 3.0, 1.0), (mix_end, 0.0))
+    gain = (
+        (mix_start, 0.0),
+        (mix_start + 2.0, 1.0),
+        (mix_end - 3.0, 1.0),
+        (mix_end, 0.0),
+    )
     return AcappellaSpan(
         payload=payload,
         mix_start_s=mix_start,
         mix_end_s=mix_end,
-        host_bpm=host.bpm,
+        host_bpm=mix_bpm,
         ref_start_s=ref_lo,
         ref_end_s=ref_lo + phrase * tr,
         slices=tuple(slices),
@@ -259,12 +302,14 @@ def _regular_span(
     slot: str,
     parent: str,
     rng: np.random.Generator,
+    tempo_r: float,
+    mix_bpm: float,
 ) -> RegularSpan | None:
     mix_end = min(window_s, mix_start + dur)
     if mix_end - mix_start < 12.0:
         return None
     ref_start = float(rng.uniform(5.0, 60.0))
-    tr = host.bpm / regular.bpm if regular.bpm > 0 else 1.0
+    tr = tempo_r
     ref_dur = (mix_end - mix_start) * tr
     pitch = 0
     if host.key_pc is not None and regular.key_pc is not None:
@@ -276,7 +321,7 @@ def _regular_span(
         regular=regular,
         mix_start_s=mix_start,
         mix_end_s=mix_end,
-        host_bpm=host.bpm,
+        host_bpm=mix_bpm,
         ref_start_s=ref_start,
         ref_end_s=ref_start + ref_dur,
         slot_label=slot,
@@ -313,7 +358,29 @@ def sample_window_v2(
         return None
 
     window_s = cfg.window_s
-    instrumentals = _schedule_instrumentals(beds, window_s, cfg, rng, slot_base)
+    # Warp prior (beds near-native, overlays derived mix_BPM/native) when the
+    # curriculum opts in; else None => legacy slope-1 beds + payload/bed overlays.
+    warp = WarpPrior.load() if cfg.warp_prior else None
+    instrumentals = _schedule_instrumentals(
+        beds, window_s, cfg, rng, slot_base, warp=warp
+    )
+
+    def _mix_bpm(host) -> float:
+        # bed plays at tempo_ratio (mix/native), so the mix tempo over this bed
+        # is bed.bpm * tempo_ratio (== bed.bpm when unwarped).
+        return host.bed.bpm * host.tempo_ratio
+
+    def _acap_warp(host, payload) -> tuple[float, float]:
+        mb = _mix_bpm(host)
+        legacy = (
+            payload.bpm / host.bed.bpm if host.bed.bpm > 0 and payload.bpm > 0 else 1.0
+        )
+        return _overlay_warp(payload.bpm, mb, legacy, warp, rng), mb
+
+    def _reg_warp(host, reg) -> tuple[float, float]:
+        mb = _mix_bpm(host)
+        legacy = mb / reg.bpm if reg.bpm > 0 else 1.0
+        return _overlay_warp(reg.bpm, mb, legacy, warp, rng), mb
 
     n_loops = cfg.n_loops
     if isinstance(n_loops, tuple):
@@ -334,11 +401,23 @@ def sample_window_v2(
         pool = _pick_payloads(catalog, host.bed, cfg, 8, rng)
         if pool is None:
             continue
-        payload = next((p for p in pool if p.recording_id not in used_payloads), pool[0])
+        payload = next(
+            (p for p in pool if p.recording_id not in used_payloads), pool[0]
+        )
         used_payloads.add(payload.recording_id)
         slot = f"{host.slot_label}w{w_idx}"
         w_idx += 1
-        ac = _loop_acap(payload, host.bed, t, window_s, cfg, slot, host.slot_label, rng)
+        ac = _loop_acap(
+            payload,
+            host.bed,
+            t,
+            window_s,
+            cfg,
+            slot,
+            host.slot_label,
+            rng,
+            *_acap_warp(host, payload),
+        )
         if ac:
             acappellas.append(ac)
 
@@ -356,7 +435,17 @@ def sample_window_v2(
         dur = float(rng.uniform(*cfg.acap_duration_s))
         slot = f"{host.slot_label}w{w_idx}"
         w_idx += 1
-        ac = _linear_acap(payload, host.bed, t, dur, window_s, slot, host.slot_label, rng)
+        ac = _linear_acap(
+            payload,
+            host.bed,
+            t,
+            dur,
+            window_s,
+            slot,
+            host.slot_label,
+            rng,
+            *_acap_warp(host, payload),
+        )
         if ac:
             acappellas.append(ac)
 
@@ -388,7 +477,17 @@ def sample_window_v2(
         dur = float(rng.uniform(*cfg.acap_duration_s))
         slot = f"{host.slot_label}w{w_idx}"
         w_idx += 1
-        rs = _regular_span(reg, host.bed, t, dur, window_s, slot, host.slot_label, rng)
+        rs = _regular_span(
+            reg,
+            host.bed,
+            t,
+            dur,
+            window_s,
+            slot,
+            host.slot_label,
+            rng,
+            *_reg_warp(host, reg),
+        )
         if rs:
             regulars.append(rs)
 
