@@ -20,6 +20,7 @@ Usage:
     venvs/audio/bin/python -m workspaces.alignment_prototype.review.render_review_snippets \\
         --set-id 2nvzlh2k [--max-window-s 45]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -33,12 +34,15 @@ _REPO = Path(__file__).resolve().parents[3]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-OUT_DIR = Path(__file__).resolve().parent / "out"
+# prototype-level out/ (NOT review/out/): this script moved into review/ in
+# the 2026-07-09 taxonomy reorg and `parent / "out"` silently pointed one
+# level too deep — timelines live at alignment_prototype/out/.
+OUT_DIR = _REPO / "workspaces" / "alignment_prototype" / "out"
 ALIGNING_ROOT = Path.home() / "aligning"
 
-_PRE_ROLL_S = 3.0        # context before the predicted span start
+_PRE_ROLL_S = 3.0  # context before the predicted span start
 _WIN_MIN_S = 20.0
-_PAD_S = 8.0             # window = span length + pad (clamped)
+_PAD_S = 8.0  # window = span length + pad (clamped)
 _UNANCHORED_SCORE = 9999.0  # zero/missing cue -> decode-only, review early
 
 
@@ -54,9 +58,9 @@ class ReviewItem:
     cue_anchor_s: float | None
     confidence: float
     suspicion: float
-    win_s: float          # total A window length (mix seconds, incl. pre-roll)
-    pre_s: float          # pre-roll before the predicted start
-    ratio: float          # ref seconds per mix second (predicted stretch)
+    win_s: float  # total A window length (mix seconds, incl. pre-roll)
+    pre_s: float  # pre-roll before the predicted start
+    ratio: float  # ref seconds per mix second (predicted stretch)
     mix_clip: str
     ref_clip: str
 
@@ -64,7 +68,9 @@ class ReviewItem:
 def find_aligning_dir(set_id: str) -> Path:
     hits = sorted(ALIGNING_ROOT.glob(f"{set_id}__*"))
     if not hits:
-        sys.exit(f"no ~/aligning folder for {set_id} — run pull_set_for_alignment.py first")
+        sys.exit(
+            f"no ~/aligning folder for {set_id} — run pull_set_for_alignment.py first"
+        )
     return hits[0]
 
 
@@ -91,9 +97,18 @@ _dur_cache: dict[Path, float] = {}
 def audio_duration_s(path: Path) -> float:
     if path not in _dur_cache:
         r = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "csv=p=0", str(path)],
-            capture_output=True, text=True,
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "csv=p=0",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
         )
         try:
             _dur_cache[path] = float(r.stdout.strip())
@@ -109,23 +124,40 @@ def suspicion_score(span: dict) -> float:
     return abs(span["set_start_s"] - cue)
 
 
-def ffmpeg_snippet(src: Path, start_s: float, dur_s: float, dst: Path,
-                   *, lead_silence_s: float = 0.0) -> bool:
+def ffmpeg_snippet(
+    src: Path, start_s: float, dur_s: float, dst: Path, *, lead_silence_s: float = 0.0
+) -> bool:
     af = "loudnorm=I=-16:TP=-1.5,afade=t=in:d=0.05"
     if lead_silence_s > 0.0:
         # keep A<->B clock correspondence when the ref window starts before 0
         af += f",adelay={int(lead_silence_s * 1000)}:all=1"
     cmd = [
-        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-        "-ss", f"{max(0.0, start_s):.3f}", "-t", f"{dur_s:.3f}",
-        "-i", str(src),
-        "-af", af,
-        "-ac", "2", "-ar", "44100", "-b:a", "128k",
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-ss",
+        f"{max(0.0, start_s):.3f}",
+        "-t",
+        f"{dur_s:.3f}",
+        "-i",
+        str(src),
+        "-af",
+        af,
+        "-ac",
+        "2",
+        "-ar",
+        "44100",
+        "-b:a",
+        "128k",
         str(dst),
     ]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
-        print(f"  ffmpeg failed for {dst.name}: {r.stderr.strip()[:200]}", file=sys.stderr)
+        print(
+            f"  ffmpeg failed for {dst.name}: {r.stderr.strip()[:200]}", file=sys.stderr
+        )
         return False
     return True
 
@@ -407,11 +439,13 @@ show(false);
 
 def render_html(set_id: str, title: str, items: list[ReviewItem]) -> str:
     import html as _html
-    return (_HTML
-            .replace("__DATA__", json.dumps([i.__dict__ for i in items]))
-            .replace("__TITLE__", _html.escape(title))
-            .replace("__SETID__", set_id)
-            .replace("__N__", str(len(items))))
+
+    return (
+        _HTML.replace("__DATA__", json.dumps([i.__dict__ for i in items]))
+        .replace("__TITLE__", _html.escape(title))
+        .replace("__SETID__", set_id)
+        .replace("__N__", str(len(items)))
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -452,7 +486,9 @@ def main(argv: list[str] | None = None) -> int:
             missing_audio.append(f"{s['slot_label']} {s['name'][:50]}")
             continue
         span_len = max(1.0, s["set_end_s"] - s["set_start_s"])
-        ref_len = max(1.0, (s["ref_end_s"] or s["ref_start_s"] + span_len) - s["ref_start_s"])
+        ref_len = max(
+            1.0, (s["ref_end_s"] or s["ref_start_s"] + span_len) - s["ref_start_s"]
+        )
         ratio = min(1.25, max(0.8, ref_len / span_len))
         win = min(args.max_window_s, max(_WIN_MIN_S, span_len + _PAD_S))
         pre = min(_PRE_ROLL_S, s["set_start_s"], s["ref_start_s"] / ratio)
@@ -472,27 +508,38 @@ def main(argv: list[str] | None = None) -> int:
         ref_take = min(total * ratio + 0.5 - lead, max(1.0, ref_dur - ref_at))
         mix_clip = clips_dir / f"{rank:03d}__{s['slot_label']}__mix.mp3"
         ref_clip = clips_dir / f"{rank:03d}__{s['slot_label']}__ref.mp3"
-        ok = ffmpeg_snippet(mix_path, mix_at, total, mix_clip) \
-            and ffmpeg_snippet(ref_audio, ref_at, ref_take, ref_clip,
-                               lead_silence_s=lead)
+        ok = ffmpeg_snippet(mix_path, mix_at, total, mix_clip) and ffmpeg_snippet(
+            ref_audio, ref_at, ref_take, ref_clip, lead_silence_s=lead
+        )
         if not ok:
             missing_audio.append(f"{s['slot_label']} (ffmpeg)")
             continue
-        items.append(ReviewItem(
-            rank=rank, slot_label=s["slot_label"], name=s["name"],
-            recording_id=s["recording_id"],
-            claimed_stem=s.get("claimed_stem") or "regular",
-            set_start_s=s["set_start_s"], ref_start_s=s["ref_start_s"],
-            cue_anchor_s=s.get("cue_anchor_s"), confidence=s["confidence"],
-            suspicion=suspicion_score(s), win_s=total, pre_s=pre,
-            ratio=ratio,
-            mix_clip=f"clips/{mix_clip.name}", ref_clip=f"clips/{ref_clip.name}",
-        ))
+        items.append(
+            ReviewItem(
+                rank=rank,
+                slot_label=s["slot_label"],
+                name=s["name"],
+                recording_id=s["recording_id"],
+                claimed_stem=s.get("claimed_stem") or "regular",
+                set_start_s=s["set_start_s"],
+                ref_start_s=s["ref_start_s"],
+                cue_anchor_s=s.get("cue_anchor_s"),
+                confidence=s["confidence"],
+                suspicion=suspicion_score(s),
+                win_s=total,
+                pre_s=pre,
+                ratio=ratio,
+                mix_clip=f"clips/{mix_clip.name}",
+                ref_clip=f"clips/{ref_clip.name}",
+            )
+        )
         if rank % 25 == 0:
             print(f"  rendered {rank}/{len(ordered)}")
 
     html_path = review_dir / "review.html"
-    html_path.write_text(render_html(args.set_id, manifest.get("title", args.set_id), items))
+    html_path.write_text(
+        render_html(args.set_id, manifest.get("title", args.set_id), items)
+    )
     print(f"\nrendered {len(items)} spans -> {review_dir}")
     if missing_audio:
         print(f"SKIPPED {len(missing_audio)} spans (no local audio):")
