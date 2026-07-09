@@ -93,15 +93,31 @@ def main(argv: list[str] | None = None) -> int:
         "--decoder",
         choices=["legacy", "looptrace"],
         default="legacy",
-        help="looptrace = landmark Hough + segment-cover DP for ACAPPELLA "
-        "spans (regular/instrumental keep the legacy matched-filter path); "
+        help="looptrace = landmark Hough + segment-cover DP per stem channel "
+        "(acappella: mix_vocals vs ref vocal stem; regular: full mix vs full "
+        "ref; instrumental: mix_instrumental vs ref instrumental stem); "
         "see workspaces/alignment_prototype/looptrace/",
+    )
+    p.add_argument(
+        "--lt-stems",
+        default="acappella,instrumental",
+        help="which claimed_stem values route through looptrace when "
+        "--decoder looptrace (others keep the legacy matched-filter path). "
+        "regular is EXCLUDED by default: whole-stem looptrace on full-mix "
+        "regular regresses BB12 -13pp (linear -26; loop/multiseg gain but "
+        "linear is the grid's strongest cell) — see NOTES.md 'Regular / "
+        "instrumental span routing (2026-07-08)'. Pass regular explicitly "
+        "only for the loop-gated experiment.",
     )
     p.add_argument(
         "--audit",
         type=Path,
+        action="append",
         default=None,
-        help="looptrace Phase-1 audit JSON (enables the loop structural test)",
+        help="looptrace Phase-1 audit JSON (enables the loop structural "
+        "test); repeatable — per-stem audit files merge on track_id. "
+        "Full-mix spans whose track has NO audit entry skip loop-collapse "
+        "(bar-scale EDM self-repeats misread as DJ edits otherwise)",
     )
     p.add_argument(
         "--timeline",
@@ -154,39 +170,52 @@ def main(argv: list[str] | None = None) -> int:
             f, f"{args.set_id}_{stem}", feat, args.hubert_layer
         )
 
-    # looptrace branch: acappella spans decode via the landmark Hough +
-    # segment-cover DP (validated vs the frozen oracle-placement baseline:
-    # multiseg 35/21 vs 27/12); other stems keep the legacy path below.
+    # looptrace branch: spans of the routed stems decode via the landmark
+    # Hough + segment-cover DP (validated vs the frozen oracle-placement
+    # baseline: acappella multiseg 35/21 vs 27/12; regular/instrumental at
+    # parity-or-better with the loop guard, big loop-class wins); other
+    # stems keep the legacy path below.
     lt_res: dict[int, list] = {}
-    audit = json.loads(args.audit.read_text()) if args.audit else None
+    audit = None
+    if args.audit:
+        audit = {"tracks": {}}
+        for f in args.audit:
+            audit["tracks"].update(json.loads(f.read_text()).get("tracks", {}))
+    lt_stems = {s.strip() for s in args.lt_stems.split(",") if s.strip()}
     if args.decoder == "looptrace":
         from workspaces.alignment_prototype.looptrace import (
             landmarks as lt_landmarks,
         )
-        from workspaces.alignment_prototype.looptrace import selfsim as lt_selfsim
-        from workspaces.alignment_prototype.looptrace.run import decode_span
+        from workspaces.alignment_prototype.looptrace.run import decode_span, mix_slice
 
-        mix_vocals = set_dir / "mix_vocals.flac"
         n_retry = 0
         for idx, s in enumerate(spans):
-            if (s.get("claimed_stem") or "regular") != "acappella":
+            stem = s.get("claimed_stem") or "regular"
+            if stem not in lt_stems:
                 continue
             t = by_tid.get(s["recording_id"])
             ref_path = _ref_audio_for(s, t) if t else None
-            if ref_path is None or not mix_vocals.is_file():
+            mix_path = set_dir / _MIX_SOURCE.get(stem, _MIX_SOURCE["regular"])[0]
+            if ref_path is None or not mix_path.is_file():
                 continue
             s0, s1 = float(s["set_start_s"]), float(s["set_end_s"])
             if s1 - s0 < 1.0:
                 continue
-            y = lt_selfsim.load_audio(str(mix_vocals), offset_s=s0, duration_s=s1 - s0)
             ref_h = lt_landmarks.ref_points_cached(str(ref_path))
             song_lags = song_pairs = None
+            ta = None
             if audit is not None:
                 ta = audit["tracks"].get(s["recording_id"]) or audit["tracks"].get(
                     s.get("track_id", "")
                 )
                 song_lags = [q["lag_s"] for q in ta["pairs"]] if ta else []
                 song_pairs = ta["pairs"] if ta else []
+            # loop-collapse guard: full-mix (regular/instrumental) content
+            # self-repeats at bar scale, so without THIS track's Phase-1
+            # repeat map the detector misreads song structure as DJ edits
+            # (measured: BB12 regular oracle 60% -> 47%). Vocal spans keep
+            # the shipped behavior (sparse content, misfires rare).
+            enable_loops = stem == "acappella" or ta is not None
             if mix_series is not None and ref_series is not None:
                 shim = SimpleNamespace(recording_id=s["recording_id"], set_start_s=s0)
                 slopes = set(_stretch_band(shim, mix_series, ref_series))
@@ -195,32 +224,38 @@ def main(argv: list[str] | None = None) -> int:
             for f in (0.94, 0.97, 1.0, 1.03, 1.06):
                 for o in (0.5, 1.0, 2.0):
                     slopes.add(round(f * o, 4))
-            # self-placement gate: decode the PADDED window first; if the
-            # decoded evidence concentrates OUTSIDE the believed span
-            # window (ev_out_frac >= gate), placement was wrong — keep the
+            # self-placement gate (ACAPPELLA only — validated there; regular/
+            # instrumental placement comes from the fp diagonal and is far
+            # tighter, gate untested): decode the PADDED window first; if the
+            # decoded evidence concentrates OUTSIDE the believed span window
+            # (ev_out_frac >= gate), placement was wrong — keep the
             # self-placed padded decode; otherwise decode tight (validated:
             # placed spans keep tight quality 43%, 15s-misplaced 6%->17%).
             from workspaces.alignment_prototype.looptrace.config import SEG_V1
 
-            pad = SEG_V1.gate_pad_s
-            off = max(0.0, s0 - pad)
-            y_pad = lt_selfsim.load_audio(
-                str(mix_vocals), offset_s=off, duration_s=(s1 + pad) - off
-            )
-            segs_p, meta_p = decode_span(
-                y_pad,
-                ref_h,
-                sorted(slopes),
-                song_lags_s=song_lags,
-                song_pairs=song_pairs,
-                ref_path=str(ref_path),
-                belief_window=(s0 - off, s1 - off),
-            )
-            of = meta_p.get("ev_out_frac")
-            if segs_p and of is not None and of >= SEG_V1.gate_out_frac:
-                segs = [(round(m - (s0 - off), 3), r0, r1) for m, r0, r1 in segs_p]
-                n_retry += 1
-            else:
+            segs = None
+            if stem == "acappella":
+                pad = SEG_V1.gate_pad_s
+                off = max(0.0, s0 - pad)
+                y_pad = mix_slice(
+                    str(mix_path), offset_s=off, duration_s=(s1 + pad) - off
+                )
+                segs_p, meta_p = decode_span(
+                    y_pad,
+                    ref_h,
+                    sorted(slopes),
+                    song_lags_s=song_lags,
+                    song_pairs=song_pairs,
+                    ref_path=str(ref_path),
+                    belief_window=(s0 - off, s1 - off),
+                    enable_loops=enable_loops,
+                )
+                of = meta_p.get("ev_out_frac")
+                if segs_p and of is not None and of >= SEG_V1.gate_out_frac:
+                    segs = [(round(m - (s0 - off), 3), r0, r1) for m, r0, r1 in segs_p]
+                    n_retry += 1
+            if segs is None:
+                y = mix_slice(str(mix_path), offset_s=s0, duration_s=s1 - s0)
                 segs, _meta = decode_span(
                     y,
                     ref_h,
@@ -228,12 +263,13 @@ def main(argv: list[str] | None = None) -> int:
                     song_lags_s=song_lags,
                     song_pairs=song_pairs,
                     ref_path=str(ref_path),
+                    enable_loops=enable_loops,
                 )
             if segs:
                 lt_res[idx] = segs
         print(
-            f"looptrace decoded {len(lt_res)} acappella spans "
-            f"({n_retry} self-placement retries)",
+            f"looptrace decoded {len(lt_res)} spans (stems={sorted(lt_stems)}, "
+            f"{n_retry} self-placement retries)",
             file=sys.stderr,
         )
 
@@ -327,7 +363,8 @@ def main(argv: list[str] | None = None) -> int:
     timeline["ref_decode"] = (
         "path_decode jump-Viterbi, feature-routed (joint_ref_decode)"
         if args.decoder == "legacy"
-        else "looptrace landmark Hough+DP (acappella) + path_decode (others)"
+        else f"looptrace landmark Hough+DP ({','.join(sorted(lt_stems))}) "
+        "+ path_decode (others)"
     )
     dest = args.out or timeline_path
     dest.write_text(json.dumps(timeline, indent=2))

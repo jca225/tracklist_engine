@@ -55,14 +55,25 @@ def decode_span(
     belief_window: tuple[float, float] | None = None,  # local coords (lo, hi)
     discrim: bool = False,
     hybrid: bool = False,
+    enable_loops: bool = True,
     lm_cfg=LM_V1,
     seg_cfg=SEG_V1,
     loop_cfg=LOOP_V2,
 ) -> tuple[list[tuple[float, float, float]], dict]:
     """Segment list [(mix_start_s, song_start_s, song_end_s)] for one span
-    (span-relative mix times), plus diagnostics."""
+    (span-relative mix times), plus diagnostics.
+
+    enable_loops=False skips loop-collapse entirely — an AVAILABILITY guard for
+    full-mix (regular/instrumental) spans whose track has no Phase-1 repeat
+    map: full-mix EDM content self-repeats at bar scale (1.9/3.75/7.5 s
+    periods), so without the structural song-lag test the detector reads song
+    structure as DJ edits (measured: BB12 regular oracle 60% -> 47%)."""
     center = slope_candidates[len(slope_candidates) // 2]
-    det = loops.detect_loops(y, loop_cfg, song_lags_s=song_lags_s, slope=center)
+    det = (
+        loops.detect_loops(y, loop_cfg, song_lags_s=song_lags_s, slope=center)
+        if enable_loops
+        else []
+    )
     cs = loops.collapse(y, det) if det else None
     y_dec = loops.collapsed_audio(y, cs) if cs else y
     mix_h = landmarks.audio_points(y_dec, lm_cfg)
@@ -169,6 +180,22 @@ def decode_span(
     return segs, meta
 
 
+_MIX_CACHE: dict[str, np.ndarray] = {}
+
+
+def mix_slice(path: str, offset_s: float, duration_s: float) -> np.ndarray:
+    """Span slice from a memoized full-file decode. The acappella path used
+    per-span `librosa.load(offset=...)`, which is fine for flac (soundfile
+    seeks) but the REGULAR route reads mix.m4a, where the audioread fallback
+    decodes from t=0 on every call — decode once, slice arrays after."""
+    y = _MIX_CACHE.get(path)
+    if y is None:
+        y = _MIX_CACHE.setdefault(path, selfsim.load_audio(path))
+    i0 = int(max(0.0, offset_s) * selfsim.SR)
+    i1 = i0 + int(round(duration_s * selfsim.SR))
+    return y[i0:i1]
+
+
 def outside_frac(
     segs: list[tuple[float, float, float]], dur_s: float, lo: float, hi: float
 ) -> float:
@@ -210,7 +237,10 @@ def main(argv: list[str] | None = None) -> int:
         find_aligning_dir,
         trajectory_acc,
     )
-    from workspaces.alignment_prototype.refine_ref_offsets import ref_audio_for
+    from workspaces.alignment_prototype.refine_ref_offsets import (
+        _MIX_SOURCE,
+        ref_audio_for,
+    )
 
     from core.result import Err, Ok
 
@@ -256,7 +286,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.slot:
         picked = [(r, t) for r, t in picked if str(r.get("slot_label")) == args.slot]
     set_dir = find_aligning_dir(set_id)
-    mix_path = set_dir / "mix_vocals.flac"
     audit = json.loads(args.audit.read_text()) if args.audit else None
 
     match load_set(args.gt):
@@ -285,9 +314,13 @@ def main(argv: list[str] | None = None) -> int:
         t = tgt_by_key.get((str(row.get("slot_label")), round(s0, 2)))
         if t is None:
             continue
+        stem = row.get("claimed_stem") or "regular"
+        mix_path = set_dir / _MIX_SOURCE.get(stem, _MIX_SOURCE["regular"])[0]
+        if not mix_path.is_file():
+            continue
         jit = args.jitter_s * (1 if len(payload) % 2 == 0 else -1)
         off = max(0.0, s0 + jit - args.pad_s)
-        y = selfsim.load_audio(
+        y = mix_slice(
             str(mix_path), offset_s=off, duration_s=(s1 + jit + args.pad_s) - off
         )
         ref_h = landmarks.ref_points_cached(str(rp))
