@@ -233,3 +233,104 @@ headline multiseg+loop 30%, regular traj 49%. Two per-axis stories:
 - `out/span_table.csv` — 303 rows, one per predicted span (both sets); the reusable dataset.
 - `out/analysis_report.txt` — full stratification / attribution / diagnostics dump.
 - `build_span_table.py` / `analyze.py` — reproducers (read-only; import harness scoring).
+
+---
+
+# EDA 2026-07-09 — failure correlates (north-star framing) + generalization profile
+
+Per-span correlate study on the **post-fix** timelines (`build_span_table
+--suffix _postfix_lt` → `out/span_table_postfix.csv`, n=283 matched spans;
+cross-checks harness exactly: identity 84/84%, set_start 5.0/7.1 s), scored
+against the north-star laws (docs/architecture_north_star.md). Reproducer:
+`failure_correlates.py` → `out/failure_correlates.txt`. Corpus numbers from
+read-only pi-storage queries (2026-07-09).
+
+## A. Why we fail — new span-level findings
+
+### A1. The largest un-attributed acappella bucket is a SILENT looptrace-empty fallback
+`ref_decoder` is set only when looptrace emits segments. On acappella:
+
+| set | looptrace decoded | traj | silently fell back | traj |
+|---|---|---|---|---|
+| BB12 | 63 | **0.31** | 20 | 0.08 |
+| BB11 | 47 | **0.21** | 44 | **0.03** |
+
+Attribution via the run's own `~/aligning` manifest (§6b of the report):
+**46/64 fallback spans had the local vocals stem present — looptrace ran and
+returned EMPTY** (~1,885 GT-sec ≈ 24% of all acappella GT-seconds); 14 lacked a
+local vocals stem; 4 were manifest misses. The span then silently degrades to
+the legacy matched filter and scores ~0. This is a *decode-coverage* loss that
+prior attribution filed under decode-residual/placement. Levers: (i) emit
+looptrace-emptiness as a `Diagnostic` + abstention (north-star laws 5/7), (ii)
+investigate why `decode_span` returns empty on stems that exist (quiet/sparse
+separated vocals? landmark threshold?), (iii) BB11 refresh: 23 spine vocal
+stems landed on pi **2026-07-09, after the Jul-8 run** — re-pull + re-infer
+BB11 is cheap and directly feeds the 14 no-local-stem spans.
+
+### A2. `confidence` is anti-calibrated; `start_source` is the real abstention signal
+spearman(confidence, traj) = **−0.24 ALL / −0.31 acappella** — dropping the
+lowest-confidence spans makes the kept set *worse* (0.20 → 0.15 GTsec-weighted
+at 50% abstention). Law 3 ("abstain, never lie") cannot be built on this field.
+But the probe that placed the span stratifies cleanly:
+
+| axis · start_source | n | traj | ss_med |
+|---|---|---|---|
+| acappella · lyrics | 114 | **0.26** | 2.8 s |
+| acappella · mert | 32 | **0.04** | 15.1 s |
+| acappella · fp | 19 | 0.09 | 6.7 s |
+| regular · fp | 57 | 0.30 | 4.1 s |
+| regular · mert | 9 | 0.08 | 40.0 s |
+
+**MERT-fallback placement ≈ span lost** (41 spans, all axes). A rule as dumb as
+"abstain when start_source==mert" is a calibrated, shippable abstention channel
+today, and `start_source` should flow into the Timeline's abstention fields.
+
+### A3. North-star B1 (warp) is a first-order failure dimension; B2 (key) is handled
+60% of GT spans are tempo-stretched >2%, **31% >10%**; traj decays
+monotonically with |ratio−1| (0.28 → 0.11 from <2% to >12%), rho −0.33 on
+acappella — the strongest continuous correlate we have. The warp axis, not
+crosstalk, is where decode difficulty concentrates. Conversely re-pitched
+acappellas decode *no worse* than unpitched (traj 0.21 vs 0.18, ref-offset
+median 16.9 s vs 28.5 s) — the HuBERT key-invariant routing is doing its job.
+
+### A4. Refuted / bounded
+- **Crosstalk (GT layer depth) does NOT predict span failure** (rho +0.15
+  acappella — mildly *positive*; identity holds 83–92% even at depth ≥3).
+- **Long spans are a placement catastrophe:** >90 s spans (n=34, all axes)
+  place at ss_med 31–44 s vs ~4–7 s otherwise — the p90 placement tail is
+  substantially a long-span problem.
+- **Position in set, audibility: no signal** (audible_frac coverage is thin).
+- **Stale instance-ambiguity audits:** BB12's `looptrace/out/audit_*.json`
+  uses pre-w-layer slot keys → 0/83 join to current slots. Regenerate before
+  any learned instance-selection work; frac_clone/distinct is currently
+  unusable as a feature.
+
+## B. Generalization — the corpus vs the north-star 20k target
+
+Canonical-DB profile (pi-storage, 2026-07-09; columns audited in the query log):
+
+- **The runnable corpus today is 547 sets, not ~20k.** dj_sets = 41,492;
+  **561 have set audio** (the hard input-contract requirement) — and where set
+  audio exists, per-set track-audio coverage is already ~93% median. The
+  binding constraint on generalization is **set-audio ingest**, not track
+  audio and not the aligner.
+- **Reference wiring exists only for BB spines:** `is_reference=1` on 425
+  track_audio rows corpus-wide; fingerprints 422 recordings; Roformer vocal
+  stems 562 (2.9% of track_audio). P5 scale-out needs pick-reference →
+  separation → fingerprint backfill over ~19k rows as preflight stages;
+  no data blocker, pure compute.
+- **The acappella wall is BB-specific, not corpus-relevant first-order:**
+  corpus slots are 94.4% regular / 5.0% acappella / 0.6% instrumental;
+  per-set acappella share median **3.1%** vs BB11/BB12 at **43/51% (~p98)** —
+  BB is an outlier even within Two Friends (their average set: 10.5%). The
+  median corpus set lives almost entirely on the *regular* axis, where the
+  stack is strongest (traj 51% BB12, fp placement 4 s). BB-trained transfer
+  numbers therefore likely **understate** typical-set performance — but our GT
+  measures almost nothing about the median set's failure modes; the next GT
+  sets should include at least one low-acappella "normal" set.
+- BB set length is typical (~p50 ≈ 62 min); stale memory correction: the
+  "69/147 BB11 vocals stems" hole is closed in the DB (147/149 as of
+  2026-07-09; the *local* pull is what the Jul-8 run was missing).
+
+Companion study: `eda/alignment/low_rank/` (set×track SVD, per-DJ bases,
+metadata/ML probes — low-rank worldview test).
