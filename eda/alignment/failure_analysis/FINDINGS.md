@@ -148,16 +148,75 @@ stem-coverage gap, not a decoder gap.
 
 ---
 
+## Update 2026-07-08 — oracle↔e2e gap decomposed: placement, not decode, is the shippable lever
+
+The decode-residual share above (45% of *total* loss vs 100%) is real but it is
+**not** the biggest lever for closing the gap between what we ship and what the
+decoder can already do. Decomposing the acappella oracle(37%)↔e2e(16%) gap with
+`score_timeline_vs_gt`'s own pairing (`oracle_e2e_gap.py` →
+[ORACLE_E2E_GAP.md](ORACLE_E2E_GAP.md)):
+
+- **91% of the oracle→e2e gap is "content never entered the scored window"**
+  (placement/windowing/pairing); only 9% is in-window decode error. When the
+  right content is in the window, e2e ≈ oracle (BB12 38% vs 40%).
+- Repairing **set_start placement** to oracle quality lifts pooled acappella e2e
+  **15.7→30.2%** — the largest single lever, **> decode-residual (+11.5 pp)** and
+  **not gated on BB10.** The decode wall (oracle ~37%) is a separate, higher
+  ceiling; the instance-selection model raises *that*, and still needs BB10.
+- The correspondence/scoring buckets (w-layer 1:1 starvation + span extent) total
+  ~10.6% of GT-sec — real but not the story; the grid numbers are honest to ~1 pp.
+
+So the full `infer` re-run's HuBERT `--stem-placement` on the formerly mis-routed
+acappellas (item 1 below) is *also* the top modelling-adjacent lever, and BB11's
+placement gap is partly the 15-reference-track vocals-stem coverage hole. Priority
+order below is unchanged in sequence but **placement (was #3) is now the primary
+e2e lever, ahead of the BB10-gated instance selector (#2)** for near-term gains.
+
+## Re-measure 2 — full post-fix re-run (2026-07-08 evening, BB12): solution 1 DONE
+
+The data fix is landed end-to-end: `f678f3a` on `main` (identical patch to
+888caca, verified by patch-id), pi deployed, corpus-wide
+`tokenizer.materialize` completed 2026-07-08 (BB12 slots 84 acap / 19 instr /
+62 regular; corpus instrumentals 2552). BB12 then got a clean full re-run:
+`infer` (fresh spine over ssh; HuBERT `--stem-placement` now fires for the
+formerly mis-routed acappellas) → `joint_ref_decode --decoder looptrace` →
+scored at `out/1fsnxchk_predicted_timeline_postfix_lt.json`:
+
+| metric | mis-routed baseline | corrected routing (floor) | **full re-run** |
+|---|---|---|---|
+| acappella traj | 11% | 21% | **31%** |
+| HEADLINE multiseg+loop | 26% | — | **38%** |
+| regular traj | 27% | — | **51%** |
+| instrumental traj | invisible | 21% | **33%** (n=21) |
+| acappella ref-offset (median / <2 s) | 33.9 s / 9% | 23.4 s / 30% | **15.3 s / 31%** |
+| set_start (median / <15 s / p90) | 6.6 s / 63% / 61 s | unchanged | **5.0 s / 73% / 48.9 s** |
+| identity | 84% | — | 84% |
+
+The routing-only re-measure was indeed a floor: re-placing with the corrected
+axis ~tripled acappella trajectory vs the contaminated baseline and lifted
+every placement figure — consistent with the oracle↔e2e decomposition above
+(placement is the shippable lever).
+
+**BB11 (cross-set transfer, + `--instr-stem-placement`,
+`out/2nvzlh2k_predicted_timeline_postfix_lt.json`):** identity **84%** (was 79%
+in the transfer scorecard), set_start median 7.1 s / <15 s 65% / p90 53.8 s,
+headline multiseg+loop 30%, regular traj 49%. Two per-axis stories:
+- **instrumental traj 46%** (ref-offset median 7.8 s) — the stem↔stem fp channel
+  (54300c3) delivers beyond BB12's 33% *without* the channel; the axis went from
+  invisible to the second-best stem on a transfer set.
+- **acappella traj 18% / ref-offset 34.3 s — barely moved**, as predicted: BB11's
+  acappella gap is the vocals-stem coverage hole (69/147 refs have a vocals stem
+  on disk), a stem-coverage problem, not routing or decode. That backfill is now
+  the cheapest BB11-specific lever.
+
 ## Prioritized solutions
 
-1. **[data, do first — now quantified] Land `claimed_stem` fix on `main` → deploy →
+1. **[data — DONE 2026-07-08, see Re-measure 2] Land `claimed_stem` fix on `main` → deploy →
    re-materialize → re-infer.** Measured to recover ~+10 pp acappella trajectory (a
    floor), un-hide the instrumental axis, and de-contaminate every per-stem scorecard.
-   The fix (888caca) is on feature branches only, **not `main`**; pi deploys from
-   `main`, so this needs a merge/cherry-pick + `make deploy` + corpus-wide
-   `tokenizer.materialize`, then a full `infer` re-run (which also fixes the acappella
-   **placement** routing this local re-measure left untouched). Lowest effort, highest
-   certainty.
+   ~~The fix (888caca) is on feature branches only, **not `main`**~~ — landed as
+   `f678f3a`, deployed, re-materialized; BB12 re-inferred (BB11 pending). The floor
+   estimate held: the full re-run delivered +20 pp acappella trajectory.
 2. **[modelling, biggest prize] Acappella ref-offset instance selection.** 34% of loss
    sits in acappella multiseg at 13% traj / ~35 s median error. Six decode-layer
    threads are dead; the live lever is a learned selector over {HuBERT diagonal
