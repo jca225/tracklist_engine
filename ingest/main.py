@@ -85,8 +85,11 @@ _BIG_BOOTIE_10_15: frozenset[str] = frozenset(
 # SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET set and timeout ≤30s.
 _PLATFORM_PREFERENCE: tuple[str, ...] = ("youtube", "soundcloud")
 
-# Mix-side preferences include Mixcloud since DJ sets often live there.
-_MIX_PLATFORM_PREFERENCE: tuple[str, ...] = ("youtube", "soundcloud", "mixcloud")
+# Mix-side preference is SoundCloud-first: the SC embed on a tracklist page is
+# usually the DJ's own full-length upload and is almost never label-blocked,
+# whereas YT mirrors get SME/UMG content claims (pilot 2026-07-09: 2 of the
+# first 4 sets lost to YT blocks while an SC link sat unused). Mixcloud last.
+_MIX_PLATFORM_PREFERENCE: tuple[str, ...] = ("soundcloud", "youtube", "mixcloud")
 
 
 @dataclass(frozen=True)
@@ -246,13 +249,16 @@ def _download_via_platform(
     return download_one(track_id, source, cfg)
 
 
-def _pick_mix_link(links: tuple[SetMediaLink, ...]) -> SetMediaLink | None:
-    """Choose the best mix-audio link: YT > SC > Mixcloud, first-match-wins."""
+def _mix_link_candidates(links: tuple[SetMediaLink, ...]) -> tuple[SetMediaLink, ...]:
+    """All mix-audio links ordered SC > YT > Mixcloud. The whole chain is
+    returned (not first-match-wins) so `_process_set_mix` can fall through to
+    the next link when one is content-blocked or fails the duration gate."""
+    out: list[SetMediaLink] = []
     for platform in _MIX_PLATFORM_PREFERENCE:
         for link in links:
             if link.platform == platform:
-                return link
-    return None
+                out.append(link)
+    return tuple(out)
 
 
 def _process_set_mix(
@@ -273,23 +279,24 @@ def _process_set_mix(
         case Ok(links):
             pass
 
-    chosen = _pick_mix_link(links)
-    if chosen is None:
+    candidates = _mix_link_candidates(links)
+    if not candidates:
         return ("no_source", None)
 
-    seen_r = db_adapter.already_downloaded_set(
-        db_path, set_id, chosen.platform, chosen.url
-    )
-    match seen_r:
-        case Err(err):
-            return ("db_failed", f"already_downloaded_set: {err.detail}")
-        case Ok(True):
-            return ("skip_existing", None)
-        case Ok(False):
-            pass
+    for chosen in candidates:
+        seen_r = db_adapter.already_downloaded_set(
+            db_path, set_id, chosen.platform, chosen.url
+        )
+        match seen_r:
+            case Err(err):
+                return ("db_failed", f"already_downloaded_set: {err.detail}")
+            case Ok(True):
+                return ("skip_existing", None)
+            case Ok(False):
+                pass
 
     if dry_run:
-        return ("dry_run", f"{chosen.platform} {chosen.url[:80]}")
+        return ("dry_run", f"{candidates[0].platform} {candidates[0].url[:80]}")
 
     cfg = DownloadConfig(
         out_dir=out_dir,
@@ -297,31 +304,36 @@ def _process_set_mix(
         retries=retries,
         cookies_path=cookies_path,
     )
-    dl_r = download_set_mix(set_id, chosen.platform, chosen.url, cfg)
-    match dl_r:
-        case Err(err):
-            return ("download_failed", f"{err.kind}: {err.detail[:200]}")
-        case Ok(asset):
-            # duration sanity vs the scraped listed length — rejects the
-            # preview/teaser-clip class and multi-hour stream rips before
-            # they become canonical set audio (ingest/guards.py).
-            listed_r = db_adapter.load_set_play_time(db_path, set_id)
-            listed = (
-                parse_play_time(listed_r.value) if isinstance(listed_r, Ok) else None
+    listed_r = db_adapter.load_set_play_time(db_path, set_id)
+    listed = parse_play_time(listed_r.value) if isinstance(listed_r, Ok) else None
+
+    failures: list[str] = []
+    for chosen in candidates:
+        dl_r = download_set_mix(set_id, chosen.platform, chosen.url, cfg)
+        match dl_r:
+            case Err(err):
+                failures.append(f"{chosen.platform} {err.kind}: {err.detail[:120]}")
+                continue
+            case Ok(asset):
+                pass
+        # duration sanity vs the scraped listed length — rejects the
+        # preview/teaser-clip class and multi-hour stream rips before
+        # they become canonical set audio (ingest/guards.py). A suspect
+        # asset is reaped and the next platform's link gets its turn.
+        if not duration_sane(asset.duration_s, listed):
+            Path(asset.path).unlink(missing_ok=True)
+            failures.append(
+                f"{chosen.platform} duration_suspect: got "
+                f"{asset.duration_s or 0:.0f}s vs listed {listed}s"
             )
-            if not duration_sane(asset.duration_s, listed):
-                Path(asset.path).unlink(missing_ok=True)
-                return (
-                    "download_failed",
-                    f"duration_suspect: got {asset.duration_s or 0:.0f}s vs "
-                    f"listed {listed}s ({chosen.platform} {chosen.url[:60]})",
-                )
-            ins_r = db_adapter.insert_set_audio(db_path, asset)
-            match ins_r:
-                case Err(e):
-                    return ("db_failed", f"insert_set_audio: {e.detail}")
-                case Ok(_):
-                    return ("downloaded", asset.path)
+            continue
+        ins_r = db_adapter.insert_set_audio(db_path, asset)
+        match ins_r:
+            case Err(e):
+                return ("db_failed", f"insert_set_audio: {e.detail}")
+            case Ok(_):
+                return ("downloaded", asset.path)
+    return ("download_failed", " | ".join(failures)[:400])
 
 
 def _process_track(
