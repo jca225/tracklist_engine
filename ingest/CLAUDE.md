@@ -1,5 +1,13 @@
 # ingest/ — audio acquisition (download stage)
 
+> **Read first when hardening or scaling acquisition:**
+> [docs/acquisition_lessons.md](../docs/acquisition_lessons.md) — the full
+> paid-for lessons ledger (41 entries), per-entrypoint guard matrix, verified
+> still-open list, requirements for the consolidated core, and the human's
+> revealed acquisition policy from the Ableton GT. Shared guards live in
+> [guards.py](guards.py); the frozen failure dataset is
+> `tests/fixtures/ingest/correction_ledger_snapshot_20260709.tsv`.
+
 Downloads the audio behind each scraped track into the canonical store. Keyed
 on `track_id` / `recording_id` (minted by [tokenizer/](../tokenizer/CLAUDE.md));
 idempotent over `track_audio` (`stem`, `variant` on each row). Inserts go through
