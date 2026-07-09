@@ -73,8 +73,9 @@ scorecard:
 	venvs/audio/bin/python -m eda.alignment.failure_analysis.analyze
 
 # Race the three end-to-end aligner drivers (classical / agentic / ml) on one
-# scorecard board. Override SETS/DRIVERS/EXTRA (e.g. make race SETS=2nvzlh2k
-# EXTRA="--fibers --reuse-base 2nvzlh2k=out/2nvzlh2k_predicted_timeline_lt_v2.json").
+# scorecard board (strict AND fiber-aware always shown). Override SETS/DRIVERS/
+# EXTRA (e.g. make race SETS=2nvzlh2k
+# EXTRA="--reuse-base 2nvzlh2k=out/2nvzlh2k_predicted_timeline_lt_v2.json").
 SETS ?= 1fsnxchk,2nvzlh2k
 DRIVERS ?= classical,agentic,ml
 race:
