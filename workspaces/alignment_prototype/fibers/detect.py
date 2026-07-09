@@ -167,7 +167,12 @@ def _compute_fibers_core(
             warnings.simplefilter("ignore")
             y, _ = librosa.load(audio_path, sr=SR, mono=True)
         rms = librosa.feature.rms(y=y, hop_length=HOP)[0][::step]
-        floor = float(np.median(rms)) * silence_ratio
+        # relative gate PLUS an absolute floor (~-80 dBFS): on an all-quiet
+        # file median(rms)~0 zeroes the relative threshold and every silent
+        # frame passes — perfectly self-similar silence then fibers (caught
+        # by tests/test_fibers.py). The floor only binds on digital silence;
+        # any real stem's median*ratio sits orders of magnitude above it.
+        floor = max(float(np.median(rms)) * silence_ratio, 1e-4)
         nonsil[: rms.size] = rms[:t] >= floor
 
     secs = _long_repeats(g, g_hz, nonsil, min_repeat_s, repeat_thresh)
