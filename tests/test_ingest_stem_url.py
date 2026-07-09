@@ -30,12 +30,14 @@ def _args(**kwargs: object) -> argparse.Namespace:
 
 
 def test_add_url_no_promote_by_default():
+    # additive is the default: no reference flag at all (2026-07-09 flip —
+    # stem siblings must not steal is_reference from the regular row)
     a = _args(url="https://www.youtube.com/watch?v=abc", track_id="tid1", role="acappella")
     cmd = isu.build_remote_command(a)
     assert cmd[0] == "scripts/acquire_variant.py"
     assert "https://www.youtube.com/watch?v=abc" in cmd
-    assert "--no-promote-reference" in cmd
-    assert "--promote" not in cmd
+    assert "--promote-reference" not in cmd
+    assert "--no-promote-reference" not in cmd
     assert "--role" in cmd and "acappella" in cmd
 
 
@@ -47,7 +49,7 @@ def test_add_url_with_promote():
         promote=True,
     )
     cmd = isu.build_remote_command(a)
-    assert "--no-promote-reference" not in cmd
+    assert "--promote-reference" in cmd
 
 
 def test_replace_uses_replace_stem_audio():

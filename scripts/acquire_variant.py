@@ -25,6 +25,7 @@ route through spotdl in canonical mode.
 Canonical mode runs an advisory chromaprint check (_identity_check) after
 insert when a regular reference row exists; it never hard-blocks.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -66,10 +67,18 @@ def basename(slot: int | None, name: str, display: str) -> str:
 def download(url: str, dest: Path, stem: str) -> Path:
     dest.mkdir(parents=True, exist_ok=True)
     cmd = [
-        str(YT_DLP), "--no-playlist",
-        "-f", "bestaudio/best",
-        "-x", "--audio-format", "wav", "--audio-quality", "0",
-        "-o", str(dest / f"{stem}.%(ext)s"), url,
+        str(YT_DLP),
+        "--no-playlist",
+        "-f",
+        "bestaudio/best",
+        "-x",
+        "--audio-format",
+        "wav",
+        "--audio-quality",
+        "0",
+        "-o",
+        str(dest / f"{stem}.%(ext)s"),
+        url,
     ]
     subprocess.run(cmd, check=True)
     out = dest / f"{stem}.wav"
@@ -133,18 +142,32 @@ def canonical_ingest(args: argparse.Namespace) -> int:
 
     if args.url and args.file:
         sys.exit("--url and --file are mutually exclusive")
-    promote = not args.no_promote_reference
+    if args.no_promote_reference:
+        logging.warning(
+            "--no-promote-reference is deprecated: additive (is_reference=0) "
+            "is the default; use --promote-reference to opt in"
+        )
+    promote = args.promote_reference
     if args.url:
         rc = rta._replace_via_url(
-            args.db, args.audio_root, track_id, args.url,
-            track_audio_id=None, stem=stem_axis,
+            args.db,
+            args.audio_root,
+            track_id,
+            args.url,
+            track_audio_id=None,
+            stem=stem_axis,
             promote_reference=promote,
         )
     elif args.file:
         pid = args.player_id or args.file.stem
         rc = rta._replace_via_file(
-            args.db, args.audio_root, track_id, args.file, pid,
-            track_audio_id=None, stem=stem_axis,
+            args.db,
+            args.audio_root,
+            track_id,
+            args.file,
+            pid,
+            track_audio_id=None,
+            stem=stem_axis,
             promote_reference=promote,
         )
     else:
@@ -165,14 +188,18 @@ def _log_to_ledger(args: argparse.Namespace, track_id: str, stem_axis: str) -> N
     new = latest_row(args.db, track_id, stem_axis)
     position = None if args.slot is None else str(args.slot)
     c = Correction(
-        track_id=track_id, axis="stem", action="add",
-        set_id=args.set_id, position=position,
+        track_id=track_id,
+        axis="stem",
+        action="add",
+        set_id=args.set_id,
+        position=position,
         new_track_audio_id=(new or {}).get("track_audio_id"),
         new_platform=(new or {}).get("platform"),
         new_player_id=(new or {}).get("player_id"),
         new_url=(new or {}).get("source_url"),
         stem_value=stem_axis,
-        reason=args.reason, source="acquire_variant",
+        reason=args.reason,
+        source="acquire_variant",
     )
     match log_correction(args.db, c):
         case Ok(cid):
@@ -181,8 +208,11 @@ def _log_to_ledger(args: argparse.Namespace, track_id: str, stem_axis: str) -> N
             print(f"correction log failed (non-fatal): {e.kind} - {e.detail}")
 
 
-def _lookup_audio_path(db_path: Path, track_id: str, stem_axis: str) -> tuple[int, str] | None:
+def _lookup_audio_path(
+    db_path: Path, track_id: str, stem_axis: str
+) -> tuple[int, str] | None:
     import sqlite3
+
     with sqlite3.connect(db_path) as conn:
         row = conn.execute(
             "SELECT track_audio_id, path FROM track_audio "
@@ -208,9 +238,13 @@ def _identity_check(db_path: Path, track_id: str, stem_axis: str) -> None:
         return
     if orig is None:
         print(f"identity-check: WARNING - no 'original' present for track {track_id}.")
-        print("  · the variant has no Essentia-feature source (variants don't get their own BPM/key),")
+        print(
+            "  · the variant has no Essentia-feature source (variants don't get their own BPM/key),"
+        )
         print("  · and the chromaprint identity check can't run.")
-        print("  -> download the regular version first (normal ingest) so the variant can inherit its features.")
+        print(
+            "  -> download the regular version first (normal ingest) so the variant can inherit its features."
+        )
         return
 
     fa = fp.fingerprint_file(orig[1])
@@ -221,9 +255,13 @@ def _identity_check(db_path: Path, track_id: str, stem_axis: str) -> None:
             dur_ratio = (b.duration_s / a.duration_s) if a.duration_s else 0.0
             verdict, detail = fp.classify(stem_axis, sim, dur_ratio)
             print(f"identity-check [{verdict}]: {detail}")
-            print(f"  similarity={sim:.3f}  variant={b.duration_s:.1f}s  original={a.duration_s:.1f}s  ratio={dur_ratio:.2f}")
+            print(
+                f"  similarity={sim:.3f}  variant={b.duration_s:.1f}s  original={a.duration_s:.1f}s  ratio={dur_ratio:.2f}"
+            )
         case (Err(e), _) | (_, Err(e)):
-            print(f"identity-check: skipped (fingerprint failed: {e.kind} - {e.detail})")
+            print(
+                f"identity-check: skipped (fingerprint failed: {e.kind} - {e.detail})"
+            )
 
 
 def main() -> int:
@@ -236,27 +274,63 @@ def main() -> int:
 
     # Staging mode
     ap.add_argument("--name", help='"Artist - Title" (staging mode)')
-    ap.add_argument("--slot", type=int, default=None, help="set position, e.g. 9 -> 009__ (staging)")
+    ap.add_argument(
+        "--slot", type=int, default=None, help="set position, e.g. 9 -> 009__ (staging)"
+    )
     ap.add_argument("--dest", type=Path, default=DEFAULT_DEST, help="staging folder")
 
     # Canonical-ingest mode (presence of --track-id / --track-audio-id selects it)
-    ap.add_argument("--track-id", default=None, help="canonical track_id to attach the variant to")
-    ap.add_argument("--track-audio-id", type=int, default=None,
-                    help="resolve track_id from this taid (canonical mode)")
-    ap.add_argument("--file", type=Path, default=None, help="local audio file (canonical mode)")
-    ap.add_argument("--player-id", default=None,
-                    help="player_id for --file (defaults to filename stem)")
-    ap.add_argument("--db", type=Path,
-                    default=Path(os.environ.get("TRACKLIST_DB",
-                                                "/mnt/storage/data/db/music_database.db")))
-    ap.add_argument("--audio-root", type=Path,
-                    default=Path(os.environ.get("TRACKLIST_AUDIO_ROOT", "/mnt/storage")))
+    ap.add_argument(
+        "--track-id", default=None, help="canonical track_id to attach the variant to"
+    )
+    ap.add_argument(
+        "--track-audio-id",
+        type=int,
+        default=None,
+        help="resolve track_id from this taid (canonical mode)",
+    )
+    ap.add_argument(
+        "--file", type=Path, default=None, help="local audio file (canonical mode)"
+    )
+    ap.add_argument(
+        "--player-id",
+        default=None,
+        help="player_id for --file (defaults to filename stem)",
+    )
+    ap.add_argument(
+        "--db",
+        type=Path,
+        default=Path(
+            os.environ.get("TRACKLIST_DB", "/mnt/storage/data/db/music_database.db")
+        ),
+    )
+    ap.add_argument(
+        "--audio-root",
+        type=Path,
+        default=Path(os.environ.get("TRACKLIST_AUDIO_ROOT", "/mnt/storage")),
+    )
     # Correction-ledger fields (canonical mode)
-    ap.add_argument("--set-id", default=None, help="set where noticed (correction ledger)")
+    ap.add_argument(
+        "--set-id", default=None, help="set where noticed (correction ledger)"
+    )
     ap.add_argument("--reason", default=None, help="free-text why (correction ledger)")
-    ap.add_argument("--no-log", action="store_true", help="skip the correction-ledger row")
-    ap.add_argument("--no-promote-reference", action="store_true",
-                    help="Do not set is_reference=1 on the new row (default: promote).")
+    ap.add_argument(
+        "--no-log", action="store_true", help="skip the correction-ledger row"
+    )
+    ap.add_argument(
+        "--promote-reference",
+        action="store_true",
+        help="Set is_reference=1 on the new stem row. is_reference is "
+        "one-per-track and normally lives on the REGULAR row (423 vs 2 "
+        "in the corpus); promoting a stem sibling steals it, and the "
+        "next pull fetches the stem as the slot's main file "
+        "(BB10 Birdy, 2026-07-09). Default: additive, is_reference=0.",
+    )
+    ap.add_argument(
+        "--no-promote-reference",
+        action="store_true",
+        help="Deprecated no-op (additive is the default now).",
+    )
     args = ap.parse_args()
 
     if args.track_id is not None or args.track_audio_id is not None:

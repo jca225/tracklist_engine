@@ -162,8 +162,8 @@ def build_remote_command(
             cmd.extend(["--player-id", args.player_id or Path(remote_file).stem])
         elif not args.url:
             sys.exit("internal: add mode needs url or file")
-        if not args.promote:
-            cmd.append("--no-promote-reference")
+        if args.promote:
+            cmd.append("--promote-reference")
 
     cmd.extend(["--reason", args.reason])
     if args.set_id:

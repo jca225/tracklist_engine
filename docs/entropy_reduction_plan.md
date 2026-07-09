@@ -196,16 +196,54 @@ attic excluded):
 - **F4** (opportunistic): re-run `make scorecard` + `make audit-gt` after each
   workstream lands — behavioral regression net over the abstractions work.
 
-## Online research (in flight)
+## Research brief — pinned decisions (web research, 2026-07-09)
 
-A web-research pass is running on prior art per class: typed time/units in
-Python (pint / phantom-types / NewType+strict-mypy), invertible piecewise
-time-map APIs (synctoolbox, librosa.sequence, dawtool), artifact contracts
-(pydantic v2 frozen/strict vs attrs+cattrs vs dataclasses+beartype), lightweight
-lineage/freshness (DVC vs content-hash fingerprints vs dagster-style asset
-concepts), and 2-machine SQLite coordination (write API vs litestream/LiteFS vs
-ULID keys). Results get folded into A1/A2 design choices before implementation
-starts — decisions deferred until that brief lands are marked (research) above.
+Five parallel deep-dives on prior art; per-class decisions now pinned:
+
+- **Time algebra (A2):** no off-the-shelf library solves it — `pint` is
+  runtime-only (mypy sees every frame as the same `Quantity`, 10-100× arithmetic
+  overhead) and `Annotated` brands are ignored by type checkers. Build
+  `core/timebase.py`: **NewType-branded floats** per frame (`MixSec`, `RefSec`,
+  `ArrBeat`) + a frozen-dataclass **`TimeMap[A, B]`** over strictly-monotonic
+  anchor arrays with paired directional methods (`pretty_midi`'s
+  `tick_to_time`/`time_to_tick` is the best API-shape precedent), plus
+  `.invert()`/`.compose()` which nothing publishes (synctoolbox and librosa DTW
+  emit bare `(2,N)` index arrays; synctoolbox's `make_path_strictly_monotonic`
+  is the invertibility-filter to copy for DTW-path constructors). Known limit:
+  NewType arithmetic degrades to `float` — so ALL cross-frame conversion routes
+  through TimeMap and raw mixed-frame arithmetic is banned by guardrail.
+- **Artifact records (A1):** **msgspec Structs** — `frozen=True`,
+  `forbid_unknown_fields=True` (off by default — set it), `tag_field` for
+  unions, native mypy-strict (no plugin), emits JSON Schema for free; closest
+  fit to the house frozen-dataclass style. Envelope pattern: top-level
+  `schema_version: Literal[N]` + a per-type `int → upgrade_fn` migration chain
+  inside the single `load()` (~40 lines). Fallback if msgspec's solo-maintainer
+  status bites: pydantic v2 dataclasses + mypy plugin (+ pyrmute for
+  migrations) — same shape, heavier.
+- **Freshness (A1 provenance):** steal Dagster's staleness equation, not its
+  runtime: each artifact embeds (or sidecars, for dirs like `stems/`)
+  `{inputs: {key: sha256|dirhash}, code_version: git_sha, created_at}`; every
+  consumer's `load()` runs a ~20-line `assert_fresh()` re-deriving input hashes
+  and hard-failing with a "regenerate X" message. `dirhash` (Dirhash Standard)
+  for directory fingerprints. `rsync --checksum` for the small derived JSONs
+  only (default size+mtime rsync is exactly how stale copies survive). Skip
+  DVC — it solves transport/dedup; our bug is freshness *verification*.
+- **Id algebra (A3):** NewTypes per namespace minted **only** in the DB
+  row-adapter layer and scrape ingest (accept the one-way-widening hole;
+  escalate a specific id to a frozen wrapper only if it bites). DB side:
+  one **`entity_ids(recording_id, namespace, external_id)`** crosswalk table
+  (the Wikidata shape — one table with a namespace column, not per-pair maps)
+  + a MusicBrainz-style **`recording_redirect(old→new)`** so merges never
+  invalidate ids; one `resolve()` that follows redirects. This subsumes
+  `labeling/fixtures/id_maps/*.json` long-term.
+- **Multi-machine SQLite (coordination):** keep exactly **one writer — pi** —
+  via the FastAPI jobqueue / `ssh sqlite3`; never SQLite over sshfs/NFS
+  (sqlite.org: broken fcntl locking; WAL does not work over network FS).
+  Harden pi locally: `WAL + synchronous=NORMAL + busy_timeout + BEGIN
+  IMMEDIATE` on write transactions. Migrate hot tables from AUTOINCREMENT to
+  **UUIDv7/ULID** app-generated keys so Mac-minted rows can't collide
+  (`a9199d1`'s class). Optional: Litestream v0.5 → SFTP for continuous backup.
+  rqlite/LiteFS/CRDTs: overkill, new failure modes, no fit.
 
 ## Sequencing
 
