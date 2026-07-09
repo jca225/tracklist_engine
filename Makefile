@@ -81,6 +81,14 @@ race:
 	venvs/audio/bin/python -m workspaces.alignment_prototype.drivers.race \
 		--sets $(SETS) --drivers $(DRIVERS) $(EXTRA)
 
+# The kernel entrypoint (P1, docs/architecture_north_star.md): align ONE set
+# with the current-best default composition and score it. No flags needed.
+# The default driver flips to ml when it wins the race board (P3).
+align:
+	@test -n "$(SET)" || { echo "usage: make align SET=<set_id>"; exit 1; }
+	venvs/audio/bin/python -m workspaces.alignment_prototype.drivers.race \
+		--sets $(SET) --drivers classical $(EXTRA)
+
 # ---------- deploy ----------------------------------------------------------
 
 deploy: deploy-storage deploy-worker
