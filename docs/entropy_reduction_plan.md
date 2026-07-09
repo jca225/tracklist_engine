@@ -182,14 +182,31 @@ scroll region/channel.
   the user-token walk. Re-run the snippet per channel and diff harvested URLs
   vs the manifest — any new URLs = unscraped scroll regions. [JOHN: ~15 min of
   browser scrolling per channel]
-- **D2** Error-row retry: limited upside — 109/151 are dead 2021 Drive 404s
-  (unrecoverable). Retry only the ~42 non-404 errors (soundcloud/youtube via
-  ingest adapters); mark the dead ones `dead` in the manifest so they stop
-  counting as backlog. Also: unzip the 49 stem-pack archives; delete the
-  redundant per-channel subfolders (subset of `all/`).
+- **D2** Error-row retry: **EXECUTED 2026-07-09.** All 151 error rows retried
+  (gdown available for folders): ZERO recoveries — every class re-fails
+  identically → all 151 marked `dead` in the manifest (new terminal status;
+  `discord_scrape.py` never re-attempts them). Found on the way: **52 dropbox
+  "downloads" were silent HTML pages** (login-walled links; the harvest saved
+  interstitials as audio) — `_stream_to` now rejects HTML payloads; those rows
+  are `dead` too. Honest retrieval: **1508/1776 downloaded** (was 1568),
+  211 dead, 34 manual, 23 skipped. Archives: 53/54 unzipped into
+  `all/_unzipped/` (1,168+ files; 2 rars needed Mac bsdtar — pi 7z lacks the
+  RAR codec); the 54th "archive" was one of the HTML pages. Per-channel
+  subfolders verified redundant AFTER moving 41 unique real files into `all/`
+  (the "pure subset" assumption was false — beware `find -name` glob-class
+  false-negatives on bracketed filenames); deletion of
+  `instrumentals/ acappellas/ stem_packs/` + the 52 HTML junk files awaits
+  John's sign-off. Manifest backups: `manifest_all.{json,csv}.bak_20260709`.
 - **D3** Stem-library matcher (the standing TODO): map staged stems →
   `recording` (`origin=library`, **additive `is_reference=0`** — E3's rule).
   This converts the corpus from a folder into a queryable asset.
+  *Auto-accept routing WIRED (2026-07-09):* `match_stem_library` now bands
+  metadata∧audio double-confirms as `auto_accept`;
+  `apply_stem_matches --auto --review-out` applies those unreviewed and routes
+  accept-but-unconfirmed rows to the human queue. Re-runs are idempotent —
+  `ingest_stem_url --skip-if-ingested` (sha256 vs canonical `track_audio`) is
+  on by default in both batch wrappers (`--force` overrides). Remaining D3
+  work = run it over the staged corpus once D1/D2 settle.
 - **D4** Re-check BB-set acappella/instrumental gaps against the completed
   corpus; prefer library stems over separations where they exist.
 

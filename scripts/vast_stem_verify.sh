@@ -13,12 +13,12 @@
 #               write ~/.ssh/config Host vast-stem
 #   --bootstrap curl the repo bootstrap (deps + repo@main + tailscale userspace),
 #               apt fpcalc, then PAUSE: user must click the `tailscale up` URL
-#   --mount     authorize the box's SSH key on pi-storage + sshfs /mnt/pi-storage
+#   --mirror    authorize box key on pi + rsync shortlist audio & ref dirs to the box
 #   --run       dump work/recording mini-DB from pi, launch the matcher in tmux
 #   --pull      copy the finished CSV back to pi staging + ~/Desktop
 #   --destroy   destroy the stem-verify instance (and only it)
 #
-# Typical: --rent && --bootstrap  (click URL)  && --mount && --run
+# Typical: --rent && --bootstrap  (click URL)  && --mirror && --run
 #          ... wait ...           --pull && --destroy
 set -euo pipefail
 
@@ -29,7 +29,7 @@ PYTORCH_TEMPLATE_HASH="${PYTORCH_TEMPLATE_HASH:-4e17788f74f075dd9aab7d0d4427968f
 DISK_GB="${DISK_GB:-40}"
 REPO_REMOTE="/workspace/tracklist_engine"
 PY="/venv/main/bin/python"
-STAGING="/mnt/pi-storage/staging/discord_stems"
+STAGING="/workspace/pi-mirror/staging/discord_stems"
 SHORTLIST="${SHORTLIST:-verify_shortlist.txt}"
 OUT_CSV="proposed_matches_verified_$(date +%Y%m%d).csv"
 SSH_OPTS=(-o ConnectTimeout=20 -o StrictHostKeyChecking=accept-new)
@@ -114,6 +114,9 @@ PY
 }
 
 bootstrap() {
+    say "torch fallback first — template drift can deliver the base image (hit 2026-07-02)"
+    ssh "${SSH_OPTS[@]}" "${VAST_SSH_ALIAS}" \
+        '/venv/main/bin/python -c "import torch" 2>/dev/null || /venv/main/bin/pip install -q torch'
     say "bootstrapping (repo@main + deps + tailscale userspace)..."
     ssh "${SSH_OPTS[@]}" "${VAST_SSH_ALIAS}" \
         'curl -fsSL https://raw.githubusercontent.com/jca225/tracklist_engine/main/scripts/vast_bootstrap.sh | bash'
@@ -124,20 +127,25 @@ bootstrap() {
     echo "    ssh ${VAST_SSH_ALIAS} 'tailscale up --hostname=vast-stem-verify'"
 }
 
-mount_pi() {
-    say "authorizing the box's SSH key on pi-storage + sshfs mount"
+mirror_pi() {
+    # Unprivileged Vast containers have no /dev/fuse, so sshfs cannot work
+    # (hit 2026-07-02). Pre-copy the shortlist audio + top-candidate ref dirs.
+    # ref_dirs.txt (objects/<rid> lines, from the metadata CSV) must be scp'd
+    # to /workspace/ref_dirs.txt before this step.
+    say "authorizing the box's SSH key on pi-storage"
     ssh "${SSH_OPTS[@]}" "${VAST_SSH_ALIAS}" \
-        '[ -f ~/.ssh/id_ed25519 ] || ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519 -q; cat ~/.ssh/id_ed25519.pub'
-    say "append that key to pi-storage ~/.ssh/authorized_keys (done automatically):"
+        '[ -f ~/.ssh/id_ed25519 ] || ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519 -q'
     ssh "${SSH_OPTS[@]}" "${VAST_SSH_ALIAS}" 'cat ~/.ssh/id_ed25519.pub' \
         | ssh pi-storage 'cat >> ~/.ssh/authorized_keys'
+    say "rsync mirror (note: --files-from does NOT imply -r; hit 2026-07-02)"
     ssh "${SSH_OPTS[@]}" "${VAST_SSH_ALIAS}" "
-        apt-get install -y -qq sshfs netcat-openbsd >/dev/null 2>&1 || true
-        mkdir -p /mnt/pi-storage
-        mountpoint -q /mnt/pi-storage || sshfs pi-storage:/mnt/storage /mnt/pi-storage \
-            -o StrictHostKeyChecking=no \
-            -o reconnect,ServerAliveInterval=15,ServerAliveCountMax=3
-        ls /mnt/pi-storage | head -3
+        mkdir -p /workspace/pi-mirror/staging/discord_stems /workspace/pi-mirror/objects
+        scp -q pi-storage:/mnt/storage/staging/discord_stems/${SHORTLIST} /workspace/
+        rsync -a --files-from=/workspace/${SHORTLIST} \
+            pi-storage:/mnt/storage/staging/discord_stems/ /workspace/pi-mirror/staging/discord_stems/
+        rsync -ar --files-from=/workspace/ref_dirs.txt \
+            pi-storage:/mnt/storage/ /workspace/pi-mirror/
+        find /workspace/pi-mirror -type f | wc -l
     "
 }
 
@@ -153,9 +161,9 @@ run() {
         tmux new-session -d -s ${TMUX_SESSION} \
         'cd ${REPO_REMOTE} && ${PY} scripts/match_stem_library.py \
             --src ${STAGING} \
-            --files-from ${STAGING}/${SHORTLIST} \
+            --files-from /workspace/${SHORTLIST} \
             --db /workspace/canonical_identity.db \
-            --verify --audio-root /mnt/pi-storage \
+            --verify --audio-root /workspace/pi-mirror \
             --out /workspace/${OUT_CSV} \
             2>&1 | tee /workspace/stem_verify.log'
         sleep 20; tail -3 /workspace/stem_verify.log
@@ -185,7 +193,7 @@ case "${1:-}" in
     --list) list_instances ;;
     --rent) rent ;;
     --bootstrap) bootstrap ;;
-    --mount) mount_pi ;;
+    --mirror) mirror_pi ;;
     --run) run ;;
     --pull) pull ;;
     --destroy) destroy ;;

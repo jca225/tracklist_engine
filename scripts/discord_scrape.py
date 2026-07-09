@@ -120,7 +120,8 @@ class Asset:
     source_url: str
     filename: str  # best-effort name (may be empty for opaque links)
     size: Optional[int] = None  # bytes, attachments only
-    status: str = "pending"  # pending | downloaded | skipped | manual | error
+    status: str = "pending"  # pending | downloaded | skipped | manual | error | dead
+    # 'dead' = confirmed unrecoverable (404/private/removed); never re-attempted
     local_path: str = ""
     note: str = ""
 
@@ -346,12 +347,30 @@ def _safe_name(name: str, fallback: str) -> str:
 
 
 def _stream_to(session: requests.Session, url: str, dest: Path, **kw) -> int:
+    """Stream url to dest; raise if the payload is an HTML page, not the file.
+
+    Dropbox (and friends) serve login/interstitial pages with HTTP 200 — the
+    2026-06 harvest silently saved 52 of them as 'downloaded' audio. Sniff the
+    content-type header AND the first bytes so those land as errors instead.
+    """
     dest.parent.mkdir(parents=True, exist_ok=True)
     with session.get(url, stream=True, timeout=60, **kw) as r:
         r.raise_for_status()
+        if "text/html" in r.headers.get("content-type", ""):
+            raise ValueError("host returned an HTML page, not the file")
         total = 0
+        first = b""
         with open(dest, "wb") as f:
             for chunk in r.iter_content(chunk_size=1 << 16):
+                if not first and chunk:
+                    first = chunk[:256].lstrip()
+                    if (
+                        first[:9].lower() == b"<!doctype"
+                        or first[:5].lower() == b"<html"
+                    ):
+                        f.close()
+                        dest.unlink(missing_ok=True)
+                        raise ValueError("payload starts with HTML, not media")
                 f.write(chunk)
                 total += len(chunk)
     return total
@@ -680,7 +699,7 @@ def main() -> None:
     # Discord CDN links carry expiring signatures — fetch those first.
     ordered = sorted(assets.items(), key=lambda kv: 0 if kv[1].host == "discord" else 1)
     for url, a in ordered:
-        if a.status in ("downloaded", "skipped"):
+        if a.status in ("downloaded", "skipped", "dead"):
             continue
         outdir = args.out / a.channel_label / a.host
         if a.host in MANUAL_HOSTS:
