@@ -304,7 +304,9 @@ RATCHET_PATTERNS: dict[str, re.Pattern[str]] = {
     "parents_depth": re.compile(r"parents\[[0-9]\]"),
 }
 
-_RATCHET_SKIP_PARTS = frozenset({"attic", "tests"})
+# contracts is the sanctioned home for artifact reads — its loaders naming
+# the artifact files is the FIX for the class, not an instance of it
+_RATCHET_SKIP_PARTS = frozenset({"attic", "tests", "contracts"})
 
 
 def _ratchet_counts() -> dict[str, int]:

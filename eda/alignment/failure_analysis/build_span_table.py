@@ -31,6 +31,8 @@ from pathlib import Path
 import numpy as np
 import yaml
 
+from core.contracts import join_guard, load_timeline
+
 _REPO = Path(__file__).resolve().parents[3]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
@@ -90,11 +92,9 @@ FIELDS = [
 def _load_gt(gt_path: Path, set_id: str) -> tuple[list[dict], dict]:
     """GT rows (mix dropped) with tlp* ids normalized to canonical recording_id,
     plus a {recording_id -> [rows]} index. Mirrors score_timeline_vs_gt exactly."""
-    rows = [
-        r
-        for r in yaml.safe_load(gt_path.read_text())["tracks"]
-        if str(r.get("slot_label")) != "mix"
-    ]
+    gt_doc = yaml.safe_load(gt_path.read_text())
+    join_guard(gt_doc.get("set_id") or "", set_id, context="GT yaml vs set_id")
+    rows = [r for r in gt_doc["tracks"] if str(r.get("slot_label")) != "mix"]
     id_map_path = _REPO / "labeling" / "fixtures" / "id_maps" / f"{set_id}.json"
     id_map = json.loads(id_map_path.read_text()) if id_map_path.exists() else {}
     for r in rows:
@@ -122,6 +122,7 @@ def _load_audit(set_id: str) -> dict[str, dict]:
 
 def _rows_for_set(set_id: str, label: str, gt_path: Path, suffix: str) -> list[dict]:
     tl_path = _ALN / "out" / f"{set_id}_predicted_timeline{suffix}.json"
+    join_guard(load_timeline(tl_path).sid, set_id, context="timeline vs set_id")
     timeline = json.loads(tl_path.read_text())
     gt_rows, gt_by_tid = _load_gt(gt_path, set_id)
     audit = _load_audit(set_id)

@@ -14,6 +14,7 @@ from core.contracts.ids import (
     TrackAudioId,
     normalize_slot_label,
 )
+from core.contracts.manifest import Manifest, ManifestRow, load_manifest
 from core.contracts.timeline import (
     PredictedTimeline,
     RefSegment,
@@ -23,6 +24,8 @@ from core.contracts.timeline import (
 )
 
 __all__ = [
+    "Manifest",
+    "ManifestRow",
     "PredictedTimeline",
     "RecordingId",
     "RefSegment",
@@ -34,6 +37,7 @@ __all__ = [
     "TlpId",
     "TrackAudioId",
     "join_guard",
+    "load_manifest",
     "load_timeline",
     "normalize_slot_label",
 ]

@@ -23,7 +23,7 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from core.contracts import join_guard, load_timeline
+from core.contracts import join_guard, load_manifest, load_timeline
 
 _REPO = Path(__file__).resolve().parents[2]
 if str(_REPO) not in sys.path:
@@ -193,10 +193,12 @@ def main(argv: list[str] | None = None) -> int:
     by_tid: dict[str, dict] = {}
     if args.fibers:
         set_dir = find_aligning_dir(args.set_id)
-        for t in json.loads((set_dir / "manifest.json").read_text())["tracks"]:
-            by_tid[t["track_id"]] = t
-            if t.get("recording_id"):
-                by_tid.setdefault(t["recording_id"], t)
+        manifest = load_manifest(set_dir / "manifest.json")
+        join_guard(manifest.sid, tl_record.sid, context="manifest vs timeline")
+        by_tid = {
+            k: {"track_id": r.track_id, "stems": r.stems, "local_path": r.local_path}
+            for k, r in manifest.by_track_id().items()
+        }
     gt_doc = yaml.safe_load(args.gt.read_text())
     join_guard(tl_record.sid, gt_doc.get("set_id") or "", context="timeline vs GT yaml")
     gt_rows = [r for r in gt_doc["tracks"] if str(r.get("slot_label")) != "mix"]
