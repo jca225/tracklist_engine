@@ -107,8 +107,14 @@ def clone_verdict(
     (a0, a1), (b0, _b1) = anchor, other
     dur = min(a1 - a0, 25.0)
     p = RepeatPair(a0=a0, a1=a0 + dur, lag_s=b0 - a0, diag_sim=0.0)
-    r, _lag = verify_pair(y, p)
-    mag_r, drift_ms, _rw = verify_pair_spectral(y, a0, a0 + dur, b0 - a0)
+    # pad 5s: hand-trimmed GT instances are not lag-consistent (each trimmed
+    # where the human heard the section start) — a ±1s search around the
+    # implied lag misses the true alignment and misreads clones as distinct
+    # (caught on Congratulations TRUE acappella: same pair certified on the
+    # regular file, "distinct" on hand-trimmed instances 4.4s off-lag).
+    r, exact_lag = verify_pair(y, p, pad_s=5.0)
+    # spectral check at the REFINED lag (its own per-window search is ±30ms)
+    mag_r, drift_ms, _rw = verify_pair_spectral(y, a0, a0 + dur, exact_lag)
     res = residual_db(r)
     if res <= -12.0 or (r >= 0.9 and mag_r >= 0.9 and drift_ms < 5.0):
         verdict = "CLONE"
@@ -411,11 +417,25 @@ def import_als(als_path: Path, gt_out: Path | None) -> int:
         from workspaces.alignment_prototype.looptrace.selfsim import load_audio
 
         y = load_audio(str(audio))
+
         # auto-promote CAND classes whose every pair is clone-certified: the
         # certificate is deterministic same-lineage ground truth, so a human
         # rename adds nothing. Everything else stays unreviewed.
+        def _overlaps_existing(v: list[tuple[float, float]]) -> bool:
+            """Majority-overlap with any confirmed class = corroboration of
+            that class, not a new one — overlapping GT classes fragment the
+            pairwise grid and read back as fake recall misses."""
+            spans = [iv for vv in classes.values() for iv in vv]
+            tot = sum(e - s for s, e in v)
+            hit = sum(
+                max(0.0, min(e, e2) - max(s, s2)) for s, e in v for s2, e2 in spans
+            )
+            return tot > 0 and hit / tot >= 0.5
+
         for k, v in sorted(cand_classes.items()):
             v = sorted(v)
+            if _overlaps_existing(v):
+                continue  # duplicate proposal of a confirmed class
             if len(v) >= 2 and all(
                 clone_verdict(y, v[0], v[j])["verdict"] in ("CLONE", "KEYLOCK")
                 for j in range(1, len(v))
