@@ -61,13 +61,21 @@ median 3.9 s, <2 s 50%), acappella 19% — i.e. consistent with the committed
 BB12 lt_v2 leg was valid all along (default GT happened to be BB12's):
 identity 84%, placement median 4.5 s / <15 s 74%.
 
-## IN-FLIGHT — DO NOT COLLIDE
-**BB11 ref separation is RUNNING NOW on MPS** (other session, task `bmo144bfr`,
-started ~07:05): `mac_analyze_loop --set-ids 2nvzlh2k --separator roformer
---only-reference` for the ~15 missing refs, 3 h timeout. **MPS is NOT free** — do
-not start GPU work (infer re-runs, synthetic A/B, another mac_analyze_loop) until
-it exits. After it lands: delta-refresh the BB11 pull, re-run BB11 infer →
-looptrace decode → score (the first full-coverage acappella test).
+## IN-FLIGHT — DO NOT COLLIDE (updated 2026-07-09 ~11:05)
+**Vast RTX 4090 (contract `44320363`, label `bb-separation-fable-20260709`,
+~$0.39/hr) is running `scripts/vast_loop.py`** in tmux `analyze`: BB11 refs
+first (5/6 done), then chained onto **all of BB10** (~120 tracks, full
+analysis, done ~15:00). MPS on the Mac is FREE again (mac loop killed;
+superseded). Do NOT rent a second box without checking `--shard`; do NOT
+destroy this one — it is mine and gets torn down (plus the pi authorized_keys
+line removed) when BB10 drains. An armed chain on the Mac fires
+pull-refresh → infer → looptrace → fibered score into
+`out/2nvzlh2k_predicted_timeline_lt_v3.json` the moment BB11's separable
+refs hit zero.
+
+**Known data bug found en route (encoding class):** `track_audio` 23070
+(DJ Kool acappella) has a double-encoded DB path (`IvÃ¡n…`) vs proper UTF-8 on
+disk → rsync fails. One-line path UPDATE needed on pi (agent-blocked).
 
 ## Manifest audit 2026-07-09 (all 5 ~/aligning sets)
 All 488 distinct `pi_path`s exist on pi; local_path + stem paths verified on disk for
