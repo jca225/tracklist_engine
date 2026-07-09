@@ -99,7 +99,15 @@ flip below is reverted, or the pull will fetch the instrumental as the slot's ma
    `<4s` over-override regression), and improve full-mix acappella placement. Touches
    `stem_placement.py` / `infer.py` — coordinate with the parallel agent (they own this
    path right now).
-3. **[BB11-specific cheap win, IN PROGRESS] Vocals-stem backfill.** Corrected scope:
+3. **[RESOLVED NEGATIVE 2026-07-09 11:33] Vocals-stem backfill — coverage was NOT the wall.**
+   Full-coverage re-run (all separable BB11 refs stemmed via Vast 4090; chain
+   pull→infer→looptrace→score, `out/2nvzlh2k_predicted_timeline_lt_v3.json`):
+   acappella trajectory **19%**, identical to pre-backfill (18–19%); identity 84%,
+   placement 6.8 s, headline 31%, instrumental 46% — all flat. Both the coverage
+   theory AND the regular-sibling routing theory are falsified as binding
+   constraints. Remaining acappella levers are therefore #2 (placement) and #4
+   (instance selection, BB10-gated) — as the oracle decomposition predicted.
+   ~~ORIGINAL:~~ **Vocals-stem backfill.** Corrected scope:
    pi already has 132/147; delta refresh done; only ~15 refs need separation and that
    job is **queued** (see in-flight). After it lands: verify stems on pi
    (`track_stems` rows + files), delta-refresh the pull once more, then a **second BB11

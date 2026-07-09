@@ -337,7 +337,14 @@ def main() -> int:
 
         for set_id, set_label, _gt in SETS:
             set_dir = find_aligning_dir(set_id)
-            man = json.loads((Path(set_dir) / "manifest.json").read_text())
+            import msgspec
+
+            from core.contracts import load_manifest
+            from core.contracts.manifest import MANIFEST_FILENAME
+
+            man = msgspec.to_builtins(
+                load_manifest(Path(set_dir) / MANIFEST_FILENAME)
+            )
             by_tid = {t["track_id"]: t for t in man["tracks"]}
             for t in man["tracks"]:
                 if t.get("recording_id"):

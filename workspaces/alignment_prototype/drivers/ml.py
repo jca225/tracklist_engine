@@ -88,7 +88,12 @@ class HybridMlDriver:
         aligning = find_aligning_dir(ctx.set_id)
         if aligning is None:
             raise FileNotFoundError(f"no ~/aligning folder for {ctx.set_id}")
-        manifest = json.loads((aligning / "manifest.json").read_text())
+        import msgspec
+
+        from core.contracts import load_manifest
+        from core.contracts.manifest import MANIFEST_FILENAME
+
+        manifest = msgspec.to_builtins(load_manifest(aligning / MANIFEST_FILENAME))
         # by track_id AND recording_id — timeline spans carry canonical
         # recording_id, the manifest keys on scrape track_id (mirrors
         # joint_ref_decode's bridge).
