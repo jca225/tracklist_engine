@@ -299,7 +299,27 @@ def main(argv: list[str] | None = None) -> int:
         strict, _npred, facc = trajectory_acc(
             _pred_segs_from_span(s, anchor_s=float(g["set_start_s"])), g, fiber=fib
         )
-        traj.append((_span_class(g), gstem, strict, facc))
+        # overlay density: MEDIAN concurrent GT rows over this span's interval
+        # (max counts every crossfade; median finds SUSTAINED pileups). Medley
+        # blocks stack 4-6 layers over a bed — recreating any one layer there
+        # is partly ill-posed (John, 2026-07-09) and those spans dominate the
+        # worst-error tables (BB12 finale, slots 140-153). Stratify, never
+        # drop; the cut (>=4) is empirical: BB12 median-concurrency is 2-3 on
+        # normal transitions, 4-5 only in the medleys.
+        g0, g1 = float(g["set_start_s"]), float(g["set_end_s"])
+        dens = int(
+            np.median(
+                [
+                    sum(
+                        1
+                        for r in gt_rows
+                        if float(r["set_start_s"]) <= t < float(r["set_end_s"])
+                    )
+                    for t in np.linspace(g0, max(g0 + 0.1, g1 - 0.1), 15)
+                ]
+            )
+        )
+        traj.append((_span_class(g), gstem, strict, facc, dens))
         if args.decompose:
             nt, no, nk = _decompose_span(
                 _pred_segs_from_span(s, anchor_s=float(g["set_start_s"])), g
@@ -381,6 +401,17 @@ def main(argv: list[str] | None = None) -> int:
         nonlin = [r for r in traj if r[0] in ("multiseg", "loop")]
         if nonlin:
             print(f"  HEADLINE multiseg+loop {_ta(nonlin)}")
+        # overlay-density stratification: dense pileups (>=3 concurrent GT
+        # layers — intro/finale medleys) are partly ill-posed to recreate;
+        # report them separately so they can't silently dominate the headline.
+        sparse = [r for r in traj if r[4] < 4]
+        dense = [r for r in traj if r[4] >= 4]
+        if dense:
+            print(f"  density med<4 layers {_ta(sparse)}")
+            print(f"  density med>=4       {_ta(dense)}  (sustained medley pileups)")
+            nl_sp = [r for r in sparse if r[0] in ("multiseg", "loop")]
+            if nl_sp:
+                print(f"  HEADLINE (pileups excluded) {_ta(nl_sp)}")
     if args.decompose and decomp:
         print("\ngap decomposition (per sampled GT second):")
         for stem in ("acappella", "regular"):
