@@ -377,6 +377,37 @@ and main slots are 54% instrumental / 46% regular. Slot position is a strong
 axis prior the pipeline currently ignores; `set_track_slots.layer_role`
 (bed/payload/…) exists in the DB and is consumed nowhere in the prototype.
 
+## C2b. Round 3 (same day) — three more problems, two verdicts
+
+- **Long weaves are 40% of ALL loss.** Spans with GT duration >90 s are 34
+  spans (12%) but 5,543 GT-sec (36% of corpus-seconds) and **40% of all
+  GT-seconds lost** (sec-weighted traj 0.12 vs 0.24 for ≤90 s). Not a pairing
+  artifact — single-appearance long spans still place at ss_med 31.6 s. These
+  are finale-style in-and-out weaves (BB12 slot 42: an 839 s GT span placed
+  895 s off); one `set_start` + a ±45 s decode band structurally cannot cover
+  them even though `ref_segments` could represent them. The lever is
+  multi-anchor placement (fp diagonal votes already produce multiple
+  candidates) / windowing per slot-appearance — kernel-lane, and now the
+  single largest quantified bucket.
+- **Synthetic slot rows cost BB11 ~5 pp identity.** 7 BB11 spans predict raw
+  `tlp*` recording ids — `set_track_slots` rows with `source='synthetic'`
+  (the Rvmor sided-row gap) never reconciled to canonical recordings. No
+  recording → no audio, no fingerprint, no GT match: identity, placement and
+  decode all fail by construction (they are most of BB11's no-fp bucket:
+  ss_med 17.9 s, traj 0.05, n=17). 7/151 spans ≈ 29% of BB11's identity
+  misses. Fix is upstream (reconcile synthetic rows by name against
+  `recording`/`work`), BB12 has zero — this is a per-set data-quality axis to
+  preflight before GT-labeling any new set.
+- **REFUTED: BB12's fingerprint-coverage gap is not a placement lever.** BB12
+  has fingerprints for only 74/139 matched spans' recordings, but no-fp spans
+  place *no worse* (ss_med 5.9 vs 4.4 s, traj 0.27 vs 0.25) — w-layer
+  acappellas ride lyrics/HuBERT placement, not fp. Backfilling BB12
+  fingerprints is hygiene, not a lever.
+- **BB12 diskfix A/B: flat**, mirroring BB11 (headline 25→24%, coverage
+  cells slightly up: multiseg ≥80%covered 14→16, acappella 14→17). Both sets
+  now confirm: decode-coverage repairs don't move the board; placement and
+  the long-weave window do.
+
 ## C3. Audit "staleness" was actually a GT slot-namespace mismatch
 BB12's GT yaml uses plain numeric slots (`002`) where timelines carry
 w-layers (`2w1`); BB11's GT has w-layers. The audit was faithful to GT all
