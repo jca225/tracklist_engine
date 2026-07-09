@@ -48,6 +48,7 @@ from pathlib import Path
 from core import db as db_adapter
 from .adapters import spotdl_adapter
 from .adapters.downloader import DownloadConfig, download_one, download_set_mix
+from .guards import duration_sane, parse_play_time
 from .preflight import check_environment
 from .errors import DbError, DownloadError
 from core.models import AudioAsset, MediaSource, SetMediaLink, Track
@@ -301,6 +302,20 @@ def _process_set_mix(
         case Err(err):
             return ("download_failed", f"{err.kind}: {err.detail[:200]}")
         case Ok(asset):
+            # duration sanity vs the scraped listed length — rejects the
+            # preview/teaser-clip class and multi-hour stream rips before
+            # they become canonical set audio (ingest/guards.py).
+            listed_r = db_adapter.load_set_play_time(db_path, set_id)
+            listed = (
+                parse_play_time(listed_r.value) if isinstance(listed_r, Ok) else None
+            )
+            if not duration_sane(asset.duration_s, listed):
+                Path(asset.path).unlink(missing_ok=True)
+                return (
+                    "download_failed",
+                    f"duration_suspect: got {asset.duration_s or 0:.0f}s vs "
+                    f"listed {listed}s ({chosen.platform} {chosen.url[:60]})",
+                )
             ins_r = db_adapter.insert_set_audio(db_path, asset)
             match ins_r:
                 case Err(e):

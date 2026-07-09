@@ -184,6 +184,18 @@ def already_downloaded_set(
     return Ok(row is not None)
 
 
+def load_set_play_time(db_path: Path, set_id: str) -> Result[str | None, DbError]:
+    """The scraped listed length of a set ('1h 2m'), for download sanity checks."""
+    try:
+        with _connect(db_path) as conn:
+            row = conn.execute(
+                "SELECT play_time FROM dj_sets WHERE set_id = ?", (set_id,)
+            ).fetchone()
+    except sqlite3.DatabaseError as e:
+        return Err(DbError(kind="query_failed", detail=str(e)))
+    return Ok(row["play_time"] if row and row["play_time"] else None)
+
+
 def insert_set_audio(db_path: Path, asset: SetAudioAsset) -> Result[int, DbError]:
     try:
         with _connect(db_path) as conn:
