@@ -788,6 +788,10 @@ def main() -> int:
             "track_id": t.track_id,
             "track_audio_id": t.track_audio_id,
             "label": t.label,
+            # canonical set_track_slots.slot_label — readers (labeling/als
+            # identity, enrich_gt_track_ids) key on slot_label; label is the
+            # same value kept for older consumers
+            "slot_label": t.label,
             "artist": t.artist,
             "title": t.title,
             "version": t.version,

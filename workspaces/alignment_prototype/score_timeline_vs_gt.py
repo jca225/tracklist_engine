@@ -136,7 +136,11 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--set-id", required=True)
     p.add_argument(
-        "--gt", type=Path, default=_REPO / "labeling/fixtures/bb12_ground_truth.yaml"
+        "--gt",
+        type=Path,
+        default=None,
+        help="GT yaml (default: the labeling/fixtures/*_ground_truth.yaml whose "
+        "set_id matches --set-id; error if none matches — never a wrong-set GT)",
     )
     p.add_argument(
         "--fibers",
@@ -158,6 +162,23 @@ def main(argv: list[str] | None = None) -> int:
         help="score an arbitrary timeline JSON (default: out/<set-id>_predicted_timeline.json)",
     )
     args = p.parse_args(argv)
+
+    if args.gt is None:
+        # Resolve GT by set_id — a hardcoded default once scored BB11 against
+        # BB12's GT (silent 84%→0% "catastrophe", 2026-07-09).
+        fixtures = sorted((_REPO / "labeling" / "fixtures").glob("*_ground_truth.yaml"))
+        matches = [
+            f
+            for f in fixtures
+            if yaml.safe_load(f.read_text()).get("set_id") == args.set_id
+        ]
+        if len(matches) != 1:
+            p.error(
+                f"--gt not given and {len(matches)} GT fixtures match "
+                f"set_id={args.set_id} (looked in labeling/fixtures/)"
+            )
+        args.gt = matches[0]
+        print(f"(gt: {args.gt.name})")
 
     tl_path = args.timeline or (OUT_DIR / f"{args.set_id}_predicted_timeline.json")
     timeline = json.loads(Path(tl_path).read_text())
