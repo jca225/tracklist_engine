@@ -14,7 +14,13 @@ Pipeline (mirrors the repo's identity stack):
              instrumental -> chromaprint similarity vs candidate reference audio
              acappella    -> HuBERT embed vs candidate's separated mix-vocals
            (only runs with --verify and when the candidate audio is reachable)
-  Stage 4  decision  -> accept if top margin clears --margin, else abstain
+  Stage 4  decision  -> Fellegi-Sunter-style bands:
+             auto_accept  metadata accept AND audio confirm (double-confirm;
+                          only reachable with --verify) — safe to apply unreviewed
+             accept       metadata clears --accept/--margin, audio not run
+             review       metadata accepts but audio disagrees or gave no signal,
+                          or metadata is borderline — the human queue
+             abstain      metadata match too weak to propose
 
 Usage
 -----
@@ -340,6 +346,42 @@ def verify_acappella(file: Path, vocals_stem: Path) -> tuple[Optional[float], st
 
 
 # --------------------------------------------------------------------------- #
+# Stage 4: decision bands
+# --------------------------------------------------------------------------- #
+
+
+def decide(
+    top_score: float,
+    margin: float,
+    audio_score: Optional[float],
+    stem: str,
+    *,
+    accept: float,
+    min_margin: float,
+    verified: bool,
+    hubert_floor: float,
+    chroma_floor: float,
+) -> str:
+    """Band a proposal: auto_accept / accept / review / abstain.
+
+    ``verified`` means Stage 3 ran for this corpus; a metadata accept is then
+    only auto-appliable when the waveform agrees (audio_score clears the
+    per-stem floor). Audio disagreement — or no audio signal at all — demotes
+    to review rather than silently keeping the metadata verdict.
+    """
+    if top_score >= accept and margin >= min_margin:
+        if not verified:
+            return "accept"
+        floor = chroma_floor if stem == "instrumental" else hubert_floor
+        if audio_score is not None and audio_score >= floor:
+            return "auto_accept"
+        return "review"
+    if top_score >= accept * 0.75:
+        return "review"
+    return "abstain"
+
+
+# --------------------------------------------------------------------------- #
 # Main
 # --------------------------------------------------------------------------- #
 
@@ -381,6 +423,19 @@ def main() -> None:
         help="run Stage 3 audio gate (needs --audio-root)",
     )
     ap.add_argument("--audio-root", type=Path, default=Path("/mnt/storage"))
+    ap.add_argument(
+        "--hubert-floor",
+        type=float,
+        default=0.55,
+        help="acappella audio-confirm floor (HuBERT-L9 cosine; the threshold "
+        "validated in the 2026-07 GPU verify round)",
+    )
+    ap.add_argument(
+        "--chroma-floor",
+        type=float,
+        default=0.35,
+        help="instrumental audio-confirm floor (chromaprint similarity; ditto)",
+    )
     ap.add_argument(
         "--files-from",
         type=Path,
@@ -456,11 +511,17 @@ def main() -> None:
                 audio_score, audio_note = verify_acappella(Path(p.path), ref)
             else:
                 audio_note = "no candidate audio on disk"
-        decision = "abstain"
-        if top_s >= args.accept and margin >= args.margin:
-            decision = "accept"
-        elif top_s >= args.accept * 0.75:
-            decision = "review"
+        decision = decide(
+            top_s,
+            margin,
+            audio_score,
+            p.stem,
+            accept=args.accept,
+            min_margin=args.margin,
+            verified=args.verify,
+            hubert_floor=args.hubert_floor,
+            chroma_floor=args.chroma_floor,
+        )
         rows.append(
             {
                 **asdict(p),

@@ -12,6 +12,7 @@ from pathlib import Path
 from scripts.match_stem_library import (
     Recording,
     candidates,
+    decide,
     decode_escaped,
     parse_filename,
 )
@@ -57,6 +58,47 @@ class TestCrossWorkMargin:
         cands, other_s = candidates(p, recs, k=1)
         assert len(cands) == 1
         assert other_s > 0.8  # w2's near-identical title contests the match
+
+
+def _decide(top_s: float, margin: float, audio: float | None, **kw: object) -> str:
+    defaults: dict = dict(
+        stem="acappella",
+        accept=0.80,
+        min_margin=0.08,
+        verified=True,
+        hubert_floor=0.55,
+        chroma_floor=0.35,
+    )
+    defaults.update(kw)
+    return decide(top_s, margin, audio, defaults.pop("stem"), **defaults)
+
+
+class TestDecide:
+    def test_double_confirm_is_auto_accept(self) -> None:
+        assert _decide(0.9, 0.2, 0.7) == "auto_accept"
+
+    def test_audio_disagreement_demotes_to_review(self) -> None:
+        assert _decide(0.9, 0.2, 0.4) == "review"
+
+    def test_no_audio_signal_demotes_to_review(self) -> None:
+        # a metadata accept without waveform confirmation is not auto-appliable
+        assert _decide(0.9, 0.2, None) == "review"
+
+    def test_unverified_run_keeps_plain_accept(self) -> None:
+        assert _decide(0.9, 0.2, None, verified=False) == "accept"
+
+    def test_instrumental_uses_chroma_floor(self) -> None:
+        # 0.4 fails the hubert floor (0.55) but clears the chroma floor (0.35)
+        assert _decide(0.9, 0.2, 0.4, stem="instrumental") == "auto_accept"
+
+    def test_borderline_metadata_is_review(self) -> None:
+        assert _decide(0.7, 0.2, 0.9) == "review"
+
+    def test_weak_metadata_abstains_despite_audio(self) -> None:
+        assert _decide(0.3, 0.2, 0.9) == "abstain"
+
+    def test_low_margin_blocks_accept(self) -> None:
+        assert _decide(0.9, 0.01, 0.9) == "review"
 
 
 class TestDecodeEscaped:

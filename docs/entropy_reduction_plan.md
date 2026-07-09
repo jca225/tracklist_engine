@@ -190,6 +190,13 @@ scroll region/channel.
 - **D3** Stem-library matcher (the standing TODO): map staged stems →
   `recording` (`origin=library`, **additive `is_reference=0`** — E3's rule).
   This converts the corpus from a folder into a queryable asset.
+  *Auto-accept routing WIRED (2026-07-09):* `match_stem_library` now bands
+  metadata∧audio double-confirms as `auto_accept`;
+  `apply_stem_matches --auto --review-out` applies those unreviewed and routes
+  accept-but-unconfirmed rows to the human queue. Re-runs are idempotent —
+  `ingest_stem_url --skip-if-ingested` (sha256 vs canonical `track_audio`) is
+  on by default in both batch wrappers (`--force` overrides). Remaining D3
+  work = run it over the staged corpus once D1/D2 settle.
 - **D4** Re-check BB-set acappella/instrumental gaps against the completed
   corpus; prefer library stems over separations where they exist.
 
