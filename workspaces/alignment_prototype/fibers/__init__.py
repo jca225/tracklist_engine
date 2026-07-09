@@ -21,6 +21,8 @@ be a lie (SALAMI external check: P 0.88 / R 0.065).
 from __future__ import annotations
 
 from workspaces.alignment_prototype.fibers.detect import (
+    FIBER_VERSION,
+    FiberParams,
     _avg_linkage,
     _diag_sim,
     _long_repeats,
@@ -36,6 +38,8 @@ from workspaces.alignment_prototype.fibers.detect import (
 from workspaces.alignment_prototype.fibers.harmony import harmony_fibers
 
 __all__ = [
+    "FIBER_VERSION",
+    "FiberParams",
     "_avg_linkage",
     "_diag_sim",
     "_long_repeats",

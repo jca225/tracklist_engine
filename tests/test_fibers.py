@@ -189,3 +189,20 @@ def test_breathy_repeat_survives_silence_gate(tmp_path) -> None:
     labels, hz = compute_fibers(feat, FPS, audio_path=str(wav))
     assert labels.max() >= 0, "breathy repeat must fiber under the per-run gate"
     assert same_fiber(labels, hz, 3.0, 12.0 + 20.0 + 3.0)
+
+
+def test_clone_verdict_certifies_copy_paste(tmp_path) -> None:
+    """The null-test tier: an exact copy-paste pair must certify CLONE;
+    unrelated content must read distinct (fused rule from fibers/NOTES.md)."""
+    from workspaces.alignment_prototype.fibers.gt_als import clone_verdict
+
+    rng = np.random.default_rng(8)
+    sr = 22050
+    section = rng.standard_normal(int(10 * sr)).astype(np.float32) * 0.3
+    filler = rng.standard_normal(int(15 * sr)).astype(np.float32) * 0.3
+    y = np.concatenate([section, filler, section.copy(), filler.copy()])
+
+    clone = clone_verdict(y, (0.0, 10.0), (25.0, 35.0))
+    assert clone["verdict"] == "CLONE", clone
+    distinct = clone_verdict(y, (0.0, 10.0), (10.0, 20.0))
+    assert distinct["verdict"] == "distinct", distinct

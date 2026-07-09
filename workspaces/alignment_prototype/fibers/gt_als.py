@@ -87,6 +87,60 @@ class ArmClass:
     mu: tuple[float, ...] = ()  # per-instance membership (hubert arm only)
 
 
+def clone_verdict(
+    y: np.ndarray, anchor: tuple[float, float], other: tuple[float, float]
+) -> dict:
+    """Deterministic lineage verdict for one instance pair via the null test
+    (looptrace selfsim audit-v3 verifier + the codec-aware fused rule from
+    fibers/NOTES.md): CLONE = same rendered audio (sample xcorr residual
+    <= -12 dB, or r/mag-r >= .9 with ~zero timing drift — AAC caps a true
+    clone's residual around -10.6 dB); KEYLOCK = phase-vocoder copy (magnitude
+    identical, phase unrecoverable). A CLONE/KEYLOCK pair needs no human
+    audition, and within-clone decode picks are provably free."""
+    from workspaces.alignment_prototype.looptrace.selfsim import (
+        RepeatPair,
+        residual_db,
+        verify_pair,
+        verify_pair_spectral,
+    )
+
+    (a0, a1), (b0, _b1) = anchor, other
+    dur = min(a1 - a0, 25.0)
+    p = RepeatPair(a0=a0, a1=a0 + dur, lag_s=b0 - a0, diag_sim=0.0)
+    r, _lag = verify_pair(y, p)
+    mag_r, drift_ms, _rw = verify_pair_spectral(y, a0, a0 + dur, b0 - a0)
+    res = residual_db(r)
+    if res <= -12.0 or (r >= 0.9 and mag_r >= 0.9 and drift_ms < 5.0):
+        verdict = "CLONE"
+    elif mag_r >= 0.9 and drift_ms < 5.0:
+        verdict = "KEYLOCK"
+    else:
+        verdict = "distinct"
+    return {
+        "r": round(r, 3),
+        "residual_db": round(res, 1),
+        "mag_r": round(mag_r, 3),
+        "drift_ms": round(drift_ms, 1),
+        "verdict": verdict,
+    }
+
+
+def _clone_tier(
+    audio: Path, classes: list[ArmClass]
+) -> dict[tuple[str, int, int], dict]:
+    """(arm, label, instance_idx) -> verdict vs the class's first instance."""
+    from workspaces.alignment_prototype.looptrace.selfsim import load_audio
+
+    pairs = [(c, j) for c in classes for j in range(1, len(c.instances))]
+    if not pairs:
+        return {}
+    y = load_audio(str(audio))
+    return {
+        (c.arm, c.label, j): clone_verdict(y, c.instances[0], c.instances[j])
+        for c, j in pairs
+    }
+
+
 def _runs(
     labels: np.ndarray, hz: float, min_len_s: float = 3.0
 ) -> dict[int, list[tuple[float, float]]]:
@@ -145,6 +199,7 @@ def render(
     assert template or DEFAULT_TEMPLATE
     dur, sr = ffprobe_audio(audio)
     classes = detect_arms(audio, arms)
+    clones = _clone_tier(audio, classes)
     n_clips = sum(len(c.instances) for c in classes) + 1
 
     root = load_als_xml(template)
@@ -194,6 +249,9 @@ def render(
         )
         for j, (s, e) in enumerate(c.instances):
             mu_tag = f" mu={c.mu[j]:.2f}" if c.mu else ""
+            cv = clones.get((c.arm, c.label, j), {}).get("verdict")
+            if cv in ("CLONE", "KEYLOCK"):  # certified: no audition needed
+                mu_tag += f" {cv}"
             next_id += 1
             # one track per clip keeps the proven deep-copy + renumber path
             # (clip clones within a track collide ids -> Live crash); Live
@@ -247,15 +305,22 @@ def render(
     )
 
     # sidecar: the machine proposals, for import-time P/R against determined GT
+    from workspaces.alignment_prototype.fibers.detect import FIBER_VERSION
+
     sidecar = {
         "audio": str(audio),
         "duration_s": dur,
         "arms": arms,
+        "fiber_version": FIBER_VERSION,
         "classes": [
             {
                 "arm": c.arm,
                 "label": c.label,
                 "instances": [list(i) for i in c.instances],
+                "clone_tier": [
+                    clones.get((c.arm, c.label, j), {}).get("verdict", "anchor")
+                    for j in range(len(c.instances))
+                ],
             }
             for c in classes
         ],
@@ -336,13 +401,32 @@ def import_als(als_path: Path, gt_out: Path | None) -> int:
         if sidecar
         else max(e for c in classes.values() for _, e in c)
     )
+    # clone tier on the DETERMINED classes: certified pairs are P=1 anchors
+    # for mu calibration and provably-free decode credit
+    tiers: dict[str, list[str]] = {}
+    n_cert = 0
+    if audio and Path(audio).is_file():
+        from workspaces.alignment_prototype.looptrace.selfsim import load_audio
+
+        y = load_audio(str(audio))
+        for k, v in classes.items():
+            verdicts = ["anchor"] + [
+                clone_verdict(y, v[0], v[j])["verdict"] for j in range(1, len(v))
+            ]
+            tiers[k] = verdicts
+            n_cert += sum(1 for t in verdicts if t in ("CLONE", "KEYLOCK"))
+
     gt = {
         "audio": audio,
         "duration_s": dur,
         "determined": date.today().isoformat(),
         "source_als": str(als_path),
         "classes": [
-            {"name": k, "instances": [list(i) for i in v]}
+            {
+                "name": k,
+                "instances": [list(i) for i in v],
+                "clone_tier": tiers.get(k),
+            }
             for k, v in sorted(classes.items())
         ],
         "rejected": [list(i) for i in sorted(rejected)],
@@ -355,7 +439,8 @@ def import_als(als_path: Path, gt_out: Path | None) -> int:
     n_inst = sum(len(v) for v in classes.values())
     print(
         f"wrote {out}: {len(classes)} classes, {n_inst} instances, "
-        f"{len(rejected)} rejected, {len(unreviewed)} unreviewed"
+        f"{len(rejected)} rejected, {len(unreviewed)} unreviewed, "
+        f"{n_cert} clone-certified"
     )
 
     if sidecar:

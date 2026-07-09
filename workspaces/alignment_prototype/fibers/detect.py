@@ -34,10 +34,29 @@ computing fibers on the chroma decode feature instead blobs to one fiber (fake
 from __future__ import annotations
 
 import warnings
+from dataclasses import dataclass
 
 import numpy as np
 
 from workspaces.alignment_prototype.refine_ref_offsets import HOP, SR
+
+# Bump on ANY behavior-changing edit to the detector — artifact caches and GT
+# sidecars key on this so stale fibers fail loudly instead of silently mixing.
+FIBER_VERSION = "v4-per-run-gate-2026-07-09"
+
+
+@dataclass(frozen=True)
+class FiberParams:
+    """The detector's tunables, one frozen record (Phase A3 of the fiber
+    program). These were previously five scattered keyword defaults; a cache
+    key is (audio hash × FIBER_VERSION × FiberParams)."""
+
+    ds_hz: float = 8.0
+    min_repeat_s: float = 6.0
+    repeat_thresh: float = 0.5
+    verify_thresh: float = 0.5
+    silence_ratio: float = 0.35
+    min_voiced_frac: float = 0.4
 
 
 def _long_repeats(g, g_hz, nonsil, min_repeat_s, thresh, min_voiced_frac=0.4):
