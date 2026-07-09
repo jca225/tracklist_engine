@@ -31,19 +31,28 @@ def viterbi_segments(
     lam: float = 4.0,
     back_ratio: float = 3.0,
     null_margin: float = 0.0,
-) -> list[tuple[float, float, float]]:
+    return_score: bool = False,
+) -> list[tuple[float, float, float]] | tuple[list[tuple[float, float, float]], float]:
     """(Tm, Tr+1) logits -> segment triples via offset-state Viterbi.
 
     States are clip-start offsets r0 = ref_bin - mix_frame (the diagonal
     index): staying on one diagonal is free, a forward jump costs `lam`, a
     backward jump (loop/replay) costs `lam * back_ratio` — the monotonic
     prior from path_decode, applied to learned emissions.
+
+    With ``return_score=True`` also returns a scalar DECODE CONFIDENCE: the mean
+    per-frame margin of the decoded path over the frame's average ref emission
+    (``on_path - row_mean``), restricted to non-NULL frames. High = the model
+    decisively prefers this diagonal over the alternatives; near zero = the grid
+    is flat and the path is a coin-flip. It is the gate signal for the ml driver
+    (trust learned segments only where the model is sure). Logit-scaled, so the
+    threshold is per-checkpoint and swept, not absolute.
     """
     g = logits[:, :-1].detach().cpu().numpy().astype(np.float64)  # (Tm, Tr)
     null = logits[:, -1].detach().cpu().numpy().astype(np.float64)  # (Tm,)
     tm, tr = g.shape
     if tm == 0 or tr == 0:
-        return []
+        return ([], 0.0) if return_score else []
     # reward[t, r0] = g[t, r0 + t]; diagonals that run off the ref are dead
     reward = np.full((tm, tr), _NEG)
     for t in range(tm):
@@ -55,4 +64,13 @@ def viterbi_segments(
     ref_bin = np.clip(ref_bin, 0, tr - 1)
     on_path = g[np.arange(tm), ref_bin]
     null_mask = null > (on_path + null_margin)
-    return frames_to_segments(ref_bin, null_mask, bin_s)
+    segs = frames_to_segments(ref_bin, null_mask, bin_s)
+    if not return_score:
+        return segs
+    live = ~null_mask
+    if live.any():
+        margin = on_path[live] - g[live].mean(axis=1)
+        score = float(np.mean(margin))
+    else:
+        score = 0.0
+    return segs, score

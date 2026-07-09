@@ -81,6 +81,7 @@ def run(
     fibers: bool = False,
     lam: float = 16.0,
     source_set: str | None = None,
+    ml_gate: float | None = None,
 ) -> dict[tuple[str, str], dict]:
     reuse_base = reuse_base or {}
     board: dict[tuple[str, str], dict] = {}
@@ -106,7 +107,9 @@ def run(
             if name == "agentic":
                 produced[name] = AgenticDriver(base, live=live).align_set(ctx)
             elif name == "ml":
-                produced[name] = HybridMlDriver(base, lam=lam).align_set(ctx)
+                produced[name] = HybridMlDriver(
+                    base, lam=lam, gate_margin=ml_gate
+                ).align_set(ctx)
             else:
                 raise SystemExit(f"unknown driver {name!r}")
 
@@ -162,6 +165,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--lam", type=float, default=16.0, help="ml Viterbi jump cost")
     p.add_argument(
+        "--ml-gate",
+        type=float,
+        default=None,
+        help="ml confidence gate: keep classical segments unless the learned "
+        "decode margin clears this (per-checkpoint scale; sweep it)",
+    )
+    p.add_argument(
         "--source-set",
         default=None,
         help="cross-set supervision source (default: the other complete GT set)",
@@ -176,6 +186,7 @@ def main(argv: list[str] | None = None) -> int:
         fibers=args.fibers,
         lam=args.lam,
         source_set=args.source_set,
+        ml_gate=args.ml_gate,
     )
     return 0
 

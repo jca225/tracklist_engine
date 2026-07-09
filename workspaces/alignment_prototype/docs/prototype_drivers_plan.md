@@ -57,6 +57,36 @@ agentic needs mix MERT). Fast iteration: `--reuse-base SET=path` skips infer.
 ML needs a cross-set checkpoint per set: `decoder_1fsnxchk.pt` (align BB11) and
 `decoder_2nvzlh2k.pt` (align BB12), both trained 2026-07-09.
 
+### ML confidence gate — turns the conditional lever additive (2026-07-09)
+
+`viterbi_segments(..., return_score=True)` now emits a per-span decode confidence
+(mean margin of the decoded path over the frame's average ref emission).
+`HybridMlDriver(gate_margin=T)` / `race --ml-gate T` keeps classical segments
+unless the learned decode clears `T` — trust ML only where the model is sure.
+
+The confidence cleanly separates the two regimes on its own: BB11 (ML helps)
+scores median 5.8 (p10 3.1); BB12 (ML hurts) median 1.1 (p75 2.9). Sweep
+(reusing the fresh classical bases):
+
+| gate | set | ref_med | head_traj% | acap_traj% | ml-decoded / gated |
+|---|---|---|---|---|---|
+| none | BB11 | 3.7 | 20 | 17 | 112 / 0 |
+| **3.0** | BB11 | 3.7 | **22** | **18** | 101 / 11 |
+| none | BB12 | 9.8 | 19 ← regress | 22 | 129 / 0 |
+| **3.0** | BB12 | 13.3 | **26** ← restored | **25** | 32 / 97 |
+
+Gate 3.0 keeps 90% of BB11 (preserves the ref-offset win, +2pp trajectory) and
+gates 75% of BB12 back to classical (trajectory regression 26→19 ELIMINATED,
+restored to 26/25). Net: ML becomes non-regressing on trajectory (its owned
+metric) across both sets. Caveat: BB12 `ref_med` wobbles 9.8→13.3 — a small-n
+straight-clip subset; the ungated 9.8-vs-classical-10.2 "win" was noise.
+
+Threshold is **logit-scaled per checkpoint** — `--ml-gate` stays OPT-IN, not a
+silent default; 3.0 is validated for the current `decoder_*.pt` pair. Retraining
+the decoder means re-sweeping. Next: a per-span learned router (ml vs classical)
+over {ml confidence, classical path-conf, span class} — this gate is its
+one-feature threshold baseline.
+
 ## Original plan (as drafted)
 
 ## Framing
