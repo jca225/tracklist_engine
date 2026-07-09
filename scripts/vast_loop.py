@@ -226,9 +226,23 @@ def push_track_rows(track_audio_id: int) -> None:
     for t in tables:
         sql_lines.append(f"DELETE FROM {t} WHERE track_audio_id={track_audio_id};")
 
-    # Build the INSERT dump
+    # Build the INSERT dump. Surrogate AUTOINCREMENT PKs (track_stem_id, ...)
+    # must ship as NULL — scratch ids collide with canonical's (the Mac/pi
+    # autoincrement class, a9199d1; hit again 2026-07-09 on track_stems).
+    # track_audio_id-keyed tables keep their key.
+    _conn = _sqlite3.connect(SCRATCH_DB)
+    selects: dict[str, str] = {}
+    for t in tables:
+        info = list(_conn.execute(f"PRAGMA table_info({t})"))
+        pk_cols = [r[1] for r in info if r[5]]
+        drop_pk = len(pk_cols) == 1 and pk_cols[0] != "track_audio_id"
+        selects[t] = ", ".join(
+            "NULL" if (drop_pk and r[1] == pk_cols[0]) else r[1] for r in info
+        )
+    _conn.close()
     dump_script = "\n".join(
-        f".mode insert {t}\nSELECT * FROM {t} WHERE track_audio_id={track_audio_id};"
+        f".mode insert {t}\nSELECT {selects[t]} FROM {t} "
+        f"WHERE track_audio_id={track_audio_id};"
         for t in tables
     )
     dumped = subprocess.check_output(
