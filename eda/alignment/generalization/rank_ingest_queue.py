@@ -30,15 +30,42 @@ from __future__ import annotations
 import argparse
 import csv
 import math
+import re
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 
 OUT_DIR = Path(__file__).resolve().parent / "out"
 PI_HOST = "pi-storage"
 PI_DB = "/mnt/storage/data/db/music_database.db"
 
-WHITELIST = ("two friends", "john summit", "disco lines", "murph")
+# Curated-DJ whitelist (objective-doc four + John's picks 2026-07-09).
+# Match on diacritic-FOLDED titles (RÜFÜS → RUFUS) with word boundaries —
+# bare LIKE substrings mis-fire ("fisher" ⊂ "fisherman").
+WHITELIST_RES = tuple(
+    re.compile(rf"\b{p}\b", re.IGNORECASE)
+    for p in (
+        "two friends",
+        "john summit",
+        "disco lines",
+        "murph",
+        "galantis",
+        "rufus du sol",
+        "diplo",
+        "fisher",
+        "kygo",
+        "chris lake",
+    )
+)
+
+
+def _fold(s: str) -> str:
+    """Strip diacritics for whitelist matching (RÜFÜS DU SOL → RUFUS DU SOL)."""
+    return "".join(
+        c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c)
+    )
+
 
 # One aggregated row per candidate set (no raw-table dumps):
 #   set_id, title, views, likes, ided, total, n_slots, n_resolved,
@@ -114,7 +141,7 @@ def _score(row: list[str]) -> dict:
     id_rate = ided / total if total else n_resolved / n_slots
     coverage = n_with_audio / n_slots
     link = 1.0 if int(has_sc) else 0.5  # SC preferred; YT-only still fine
-    wl = 1.0 if any(w in title.lower() for w in WHITELIST) else 0.0
+    wl = 1.0 if any(rx.search(_fold(title)) for rx in WHITELIST_RES) else 0.0
 
     # weights: popularity is the user-stated first-order signal; quality and
     # runnability keep the queue honest; whitelist rides on top per the
