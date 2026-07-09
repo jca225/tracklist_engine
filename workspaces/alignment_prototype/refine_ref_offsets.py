@@ -160,12 +160,22 @@ def find_aligning_dir(set_id: str) -> Path:
 _STEM_FILE = {"acappella": "vocals", "instrumental": "instrumental"}
 
 
-def ref_audio_for(span: dict, track: dict) -> Path | None:
+def ref_audio_for(span: dict, track: dict, set_dir: Path | None = None) -> Path | None:
     stem_key = _STEM_FILE.get(span.get("claimed_stem") or "regular")
     if stem_key:
         p = (track.get("stems") or {}).get(stem_key)
         if p and Path(p).is_file():
             return Path(p)
+        # The manifest stems field is stale for ~2/3 of the stems on disk (pull
+        # writes it once; later re-stems/annotator-tagged dirs never sync). Fall
+        # back to the on-disk slot dirs — disk is truth. Backward-compatible:
+        # callers that don't pass set_dir keep the old field-only behavior.
+        if set_dir is not None:
+            from workspaces.alignment_prototype.stem_resolve import resolve_stem
+
+            hit = resolve_stem(set_dir, span.get("slot_label"), track, stem_key)
+            if hit is not None:
+                return hit
     p = Path(track["local_path"])
     return p if p.is_file() else None
 
