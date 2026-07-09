@@ -3,7 +3,10 @@
 **The substrate rule: `core/` imports nothing upward.** It depends on no chain
 module (scrape / ingest / analysis / labeling / alignment) and no analysis- or
 scrape-domain types. Every other stage may import `core`; `core` imports only
-the stdlib and itself. If you find yourself wanting to import a stage type into
+the stdlib, itself, and one sanctioned substrate dep: `msgspec`
+(`core/contracts/` serialization — pinned in requirements-audio/-ci) is
+imported only inside `core.contracts`, so stages that skip that subpackage
+don't need it. If you find yourself wanting to import a stage type into
 `core`, the code belongs in that stage instead (see the
 `persistence.py` vs `core/db.py` boundary in
 [analysis/CLAUDE.md](../analysis/CLAUDE.md)).
@@ -26,4 +29,10 @@ Modules:
   the file on insert failure; `_ensure_recording()` upserts `work`+`recording`
   before `track_audio` insert. Domain code never imports `sqlite3` directly.
   Analysis-domain writers live in `analysis/persistence.py`, not here.
+- **`contracts/`** — typed records for cross-stage artifacts
+  (`PredictedTimeline` + `load_timeline`), id NewTypes (`SetId`,
+  `RecordingId`, `TlpId`, `TrackAudioId`), `normalize_slot_label` (the ONE
+  slot normal form), and `join_guard` (cross-set joins raise). Inventory +
+  laws: [contracts/README.md](contracts/README.md); rationale:
+  [docs/entropy_reduction_plan.md](../docs/entropy_reduction_plan.md).
 - **`errors.py`** — shared error types (`DbError`, …).
