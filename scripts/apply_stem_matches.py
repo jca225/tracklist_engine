@@ -56,11 +56,18 @@ def row_action(
     hubert_floor: float,
     chroma_floor: float,
 ) -> str:
-    """'apply' | 'review' | 'skip' for one CSV row."""
+    """'apply' | 'review' | 'skip' for one CSV row.
+
+    In --auto mode, 'review' collects the whole human queue: rows the matcher
+    itself banded as review, plus accept-band rows lacking audio confirmation
+    (the legacy verified-CSV shape whose decision ignored audio).
+    """
     decision = (row.get("decision") or "").lower()
     if auto:
         if decision == "auto_accept":
             return "apply"
+        if decision == "review":
+            return "review"
         if decision == accept.lower():
             return (
                 "apply"

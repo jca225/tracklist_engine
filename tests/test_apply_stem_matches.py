@@ -35,6 +35,12 @@ class TestRowAction:
     def test_abstain_is_skipped(self) -> None:
         assert _action({"decision": "abstain", "stem": "acappella"}) == "skip"
 
+    def test_matcher_review_band_joins_the_queue(self) -> None:
+        # new-format CSVs: the matcher's own review band is part of the
+        # human queue, regardless of audio score
+        row = {"decision": "review", "stem": "acappella", "audio_score": "0.91"}
+        assert _action(row) == "review"
+
     def test_manual_mode_ignores_audio(self) -> None:
         # a human-reviewed CSV is trusted as-is
         row = {"decision": "accept", "stem": "acappella", "audio_score": ""}
