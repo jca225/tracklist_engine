@@ -60,10 +60,24 @@ headF% gap.
    That's not cocktail-party masking; suspect decode/placement bug. Added to
    the worst-spans listening list (it's already rank-high there).
 
-**Verdict: INCONCLUSIVE-leaning-alive.** One iteration (fp-based residual
-re-identification) decides close-vs-Phase-1. Probe script:
-session scratchpad `sic_phase0.py`; audition wavs:
-`~/aligning/_review/_sic/finale_{mix,residual,residual_soft}.wav`.
+**FINAL VERDICT (2026-07-10, fp-landmark deciding probe): CLOSED.**
+The premise dissolved under measurement. fp votes mix→residual: flat/noise
+for every missed layer. Decomposition of the med≥4 failures:
+1. **fp-visible layers mis-placed by DECISION LOGIC** — Honest SAVI/Virtu
+   carry 1,427/2,769 votes in the RAW mix (massively identifiable, zero
+   masking) yet land 42 s/123 s off. Cancellation is irrelevant; the bug is
+   in how placement consumes fp evidence on these spans. TOP bug lead for
+   the worst-spans listening pass.
+2. **fp-INVISIBLE layers stay invisible after cancellation** — keylock
+   warping breaks landmark geometry itself (control: Macy Gray, 43% of the
+   block's energy, only 9 votes in the raw mix). The lever for these is
+   warp/pitch-tolerant hashing (Panako-triplet/Qfp-quad ratio-invariant
+   hashes — already noted in looptrace/NOTES.md), NOT separation.
+Between those two classes, SIC adds nothing measurable. Spectral
+cancellation itself works (physics gate passed) and remains available as an
+operator (clone tier, cancel.py); it is the *SIC-for-identification* loop
+that is closed. Probe preserved: `attic/sic_phase0_probe.py`; wavs in
+`~/aligning/_review/_sic/`.
 
 ## Prior art in-repo (why this isn't a re-run of closed threads)
 
