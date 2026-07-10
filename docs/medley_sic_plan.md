@@ -87,3 +87,15 @@ that is closed. Probe preserved: `attic/sic_phase0_probe.py`; wavs in
   exposed the unreleased reworks — SIC's identity step, already observed.
 - CLOSED and different: vocal-enhance (enhancement-for-ASR), overlay-pop
   (energy detection) — neither used reference-informed cancellation.
+
+## Postscript — the bug lead, confirmed (2026-07-10 windowed fp diagnostic)
+
+Honest (Virtu): fp holds a dead-correct diagonal at mix 3605s (**499 votes,
+sharpness 33:1, offset error 0.1s**) yet the span sits 123s early, parked at
+the Honest BED's start. Mechanism: MERT's prior fails in the 5-deep pileup
+(sibling-variant confusion), and `--fp-placement-gate-s 90` forbids fp from
+moving a span further than 90s from that prior — the correct answer was
+voted, sharp, and inadmissible. Queued fix (next session): vote/sharpness-
+conditional gate override (votes>=~100 AND sharpness>=~5 breaks the gate;
+noise floor here is ~5 votes / 1.2 sharpness). Validate: infer re-run +
+scorecard; guard p90.
