@@ -53,4 +53,4 @@ duration clamps, DTW corridor, stretch grids, looptrace search bounds.
 
 | date | gate | change | board before → after |
 |---|---|---|---|
-| (pending) | fp_placement_gate_s | vote/sharpness override | BB12 21/45, BB11 20/40 → ? |
+| 2026-07-10 | fp_placement_gate_s (A#1) | strength override (votes≥100 ∧ sharp≥1.2 breaks the leash) + LOUD `placement_gated` span flags | BB12: place med 4.8→**4.4s**, <15s 68→**75%**, p90 **44s** (guard passed; gate-era bar 61s), ref med 15.6→13.0s, headline 45→44 (noise). 2/2 predicted prisoners freed, 0 collateral: Honest Virtu 123s→**2.1s**. Calibration note: sharpness metric = best-vs-second CANDIDATE (decode_placements), not window-histogram — first attempt at 3.0 fired zero; the loud flags diagnosed it in one read. sharp<1.0 = monotonic-decode override (genuine ambiguity, keep gated). |

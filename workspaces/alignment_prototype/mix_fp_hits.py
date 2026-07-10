@@ -273,6 +273,7 @@ def decode_placements(
     tol: int = 1,
     min_step: int = 0,
     with_offset: bool = False,
+    with_strength: bool = False,
 ) -> list[tuple[float, ...] | None]:
     """Set-level fingerprint placement: per-span top-K diagonal candidates ->
     monotonic decode over tracklist order. ``ref_fps`` are LandmarkFingerprints
@@ -311,5 +312,16 @@ def decode_placements(
     for r, i in enumerate(keep):
         ss_pred = float(starts[r]) * dt
         best = min(cand_lists[i], key=lambda c: abs(c[0] - ss_pred))
-        out[i] = (best[0], best[1], best[3]) if with_offset else (best[0], best[1])
+        if with_strength:
+            # evidence strength for downstream gates (opinion-audit #1): the
+            # chosen diagonal's votes + sharpness vs the strongest OTHER
+            # candidate, so a gate can tell an overwhelming diagonal from a
+            # coin-flip instead of discarding both.
+            others = [c[2] for c in cand_lists[i] if c is not best]
+            sharp = float(best[2]) / float(max(others)) if others else float(best[2])
+            out[i] = (best[0], best[1], best[3], int(best[2]), sharp)
+        elif with_offset:
+            out[i] = (best[0], best[1], best[3])
+        else:
+            out[i] = (best[0], best[1])
     return out
