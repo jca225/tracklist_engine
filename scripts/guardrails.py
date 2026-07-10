@@ -21,8 +21,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # Vendored third-party trees (own LICENSE, upstream-authored) are not ours to
 # police — cue-detr (DETR cue model), msst_webui (MSST-WebUI separation trainer).
+# .claude holds agent worktrees (full repo copies) — scanning them double-counts
+# every ratchet baseline.
 SKIP_DIR_NAMES = frozenset(
-    {"venvs", "cue-detr", "msst_webui", "data", "__pycache__", ".git"}
+    {"venvs", "cue-detr", "msst_webui", "data", "__pycache__", ".git", ".claude"}
 )
 
 # Intentional uses of legacy strings (DB source labels, etc.)
