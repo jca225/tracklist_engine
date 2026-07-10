@@ -123,3 +123,22 @@ Costs to name: verifier is per-pair O(n log n) xcorr (fine at fiber counts;
 not a corpus-wide detector), thresholds are codec/lane-dependent (needs the
 per-lane calibration above), and low clone-rate on vocal takes means the tier
 mostly pays off on instrumental beds + BV stacks.
+
+## Medley SIC — successive cancellation for the pileup sections (John, 2026-07-10; NOTE ONLY, sensor phase closed)
+
+The cocktail-party sections (median-concurrency ≥4, now stratified in the
+scorer; where identity whiffs concentrate) are NOT a blind-separation
+problem. Classic ICA is mathematically out — it needs ≥ as many channels as
+sources and we have a stereo fold of 5+ layers; the field's answer to blind
+underdetermined separation is learned models, which we already run
+(Roformer, ~−10 dB floor). But our case is INFORMED: we know the candidate
+songs and align them to ~seconds (fp to ~0.2 s). So: identify the loudest
+layer → align → adaptive-null it out of the mix (NLMS through the EQ, the
+same machinery as the clone tier) → identify the next voice in the residual
+→ repeat. Successive interference cancellation, reusing references we own.
+In-repo priors that say it works: `cancel.py` (mix − acappella), the Disco
+Lines live-set result (fingerprint residual after removing known tracks
+exposed the unreleased reworks). Distinct from the CLOSED vocal-enhance and
+overlay-pop dead ends (those were enhancement-for-ASR / energy detection,
+not reference-informed cancellation). When opened: evaluate on the med≥4
+bucket only — that's the failure mass it targets.
