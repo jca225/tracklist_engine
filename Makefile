@@ -14,9 +14,10 @@ REPO         := ~/tracklist_engine
 PIP          := $(REPO)/venvs/web_crawler/bin/pip
 DB           := /mnt/storage/data/db/music_database.db
 
-.PHONY: help check check-inventory audit-gt scorecard race deploy deploy-storage deploy-worker \
+.PHONY: help check check-corpus check-inventory audit-gt scorecard race deploy deploy-storage deploy-worker \
         restart-jobqueue start-scraper stop-scraper restart-retry \
         install-taste-scrape restart-taste-scrape logs-taste-scrape \
+        install-corpus-integrity logs-corpus-integrity \
         status logs-jobqueue logs-scraper logs-retry queue ssh-storage ssh-worker
 
 help:
@@ -158,6 +159,18 @@ restart-taste-scrape:
 
 logs-taste-scrape:
 	ssh $(PI_WORKER) 'sudo journalctl -u tracklist-taste-scrape.service -f --no-hostname'
+
+# Install the daily corpus-integrity watcher on pi-storage (a failed run =
+# an ERROR-severity structural violation; it stays failed until the next clean
+# run). Requires the code to already be deployed (make deploy).
+install-corpus-integrity:
+	scp deploy/corpus-integrity.service $(PI_STORAGE):/tmp/corpus-integrity.service
+	scp deploy/corpus-integrity.timer $(PI_STORAGE):/tmp/corpus-integrity.timer
+	ssh $(PI_STORAGE) 'sudo mv /tmp/corpus-integrity.service /etc/systemd/system/tracklist-corpus-integrity.service && sudo mv /tmp/corpus-integrity.timer /etc/systemd/system/tracklist-corpus-integrity.timer && sudo systemctl daemon-reload && sudo systemctl enable --now tracklist-corpus-integrity.timer && sudo systemctl start tracklist-corpus-integrity.service'
+	@ssh $(PI_STORAGE) 'systemctl status tracklist-corpus-integrity.service --no-pager | head -12'
+
+logs-corpus-integrity:
+	ssh $(PI_STORAGE) 'sudo journalctl -u tracklist-corpus-integrity.service --no-pager | tail -40'
 
 # ---------- shells ----------------------------------------------------------
 
