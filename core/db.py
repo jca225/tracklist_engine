@@ -196,6 +196,29 @@ def load_set_play_time(db_path: Path, set_id: str) -> Result[str | None, DbError
     return Ok(row["play_time"] if row and row["play_time"] else None)
 
 
+def load_track_listed_duration(
+    db_path: Path, track_id: str
+) -> Result[int | None, DbError]:
+    """The scraped per-slot duration (seconds) for a track, for download
+    sanity checks against the preview-clip / truncated-edit class.
+
+    Takes the MAX across every slot that plays this track: a song has one
+    canonical length, so a 46s teaser falls far below it, while a bad/short
+    single slot value cannot drag the reference length down. Returns None when
+    nothing was scraped (nothing to contradict -> the guard passes).
+    """
+    try:
+        with _connect(db_path) as conn:
+            row = conn.execute(
+                "SELECT MAX(duration_seconds) AS d FROM set_track_slots "
+                "WHERE track_id = ? OR recording_id = ?",
+                (track_id, track_id),
+            ).fetchone()
+    except sqlite3.DatabaseError as e:
+        return Err(DbError(kind="query_failed", detail=str(e)))
+    return Ok(int(row["d"]) if row and row["d"] else None)
+
+
 def insert_set_audio(db_path: Path, asset: SetAudioAsset) -> Result[int, DbError]:
     try:
         with _connect(db_path) as conn:
