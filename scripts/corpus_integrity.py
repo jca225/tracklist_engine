@@ -168,6 +168,13 @@ def _scalar(conn: sqlite3.Connection, sql: str) -> int:
     return int(conn.execute(sql).fetchone()[0])
 
 
+def evaluate(conn: sqlite3.Connection) -> list[tuple[Invariant, int]]:
+    """Count violations of every invariant against an open connection.
+    Separated from `run` so the checker is unit-testable against a crafted
+    in-memory DB (a checker that can silently rot is worse than no checker)."""
+    return [(inv, _scalar(conn, inv.count_sql)) for inv in INVARIANTS]
+
+
 def run(db_path: str, *, show_samples: bool) -> int:
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     errors = 0
@@ -176,8 +183,7 @@ def run(db_path: str, *, show_samples: bool) -> int:
     print(f"{'sev':<6}{'count':>8}  invariant")
     print("-" * 72)
     failed_samples: list[tuple[Invariant, list]] = []
-    for inv in INVARIANTS:
-        n = _scalar(conn, inv.count_sql)
+    for inv, n in evaluate(conn):
         if n:
             if inv.severity == "ERROR":
                 errors += 1
