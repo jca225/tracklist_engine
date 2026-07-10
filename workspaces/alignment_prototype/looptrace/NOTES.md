@@ -582,3 +582,41 @@ silence or `candidate_vocal_gate`-style HuBERT check. `set_track_slots.
 layer_role` exists in the DB and is consumed nowhere in the prototype;
 `harness/axes.py` is the natural home. Numbers: eda/alignment/
 failure_analysis/FINDINGS.md §C2.
+
+## Bar-lattice placement prior (idea, 2026-07-10 — UNWIRED, sensor-phase freeze)
+
+GT evidence (eda/alignment/placement_structure/FINDINGS.md, BB11+BB12, 315
+usable spans): placement is lattice-structured. Bed/regular entries snap to
+the mix beat grid (beat-R .35–.41, p<5e-3); **loop-jump points are the most
+grid-quantized events in the GT** (beat-R .29–.42, pooled p≈1e-10); acappella
+ENTRY times are phase-uniform (R=.08, n=192 — vocal pickup/anacrusis), but
+the warped GRID is what locks (phase-transfer: instrumentals R=.72, 67%
+within 0.1 beat; acap n=11 inconclusive). Phrase lattice acap-vs-bed mod-4
+residue 0 at 37% vs 25% uniform — a mode, not a spike: WHICH lattice point
+stays a ranking problem.
+
+Candidate wiring (post-freeze, as a SCALE not a guillotine, consistent with
+opinion-audit #1):
+
+- **infer.py placement rescoring** — after fp/HuBERT/lyrics propose
+  set_start candidates, add a soft log-prior on distance-to-beat of the
+  candidate against the repaired mix bar grid (grids: set_analysis /
+  data/analysis/<set_id>_measure_times.json; repair via analysis/grid_repair
+  — WIRED 8f4bc1a, backfill pending on pi). Apply to bed/regular/cut
+  hypotheses only; for acappellas score GRID-PHASE alignment (mix-phase −
+  warped-ref-phase) instead of entry snap — entry-time snapping actively
+  HURTS acaps (pickup). Never a hard snap: off-grid + 499-vote fp diagonal
+  must still win.
+- **Preferred landing zone (lane 2, sanctioned):** trajectory decoder input
+  features — per-candidate {dist-to-beat, dist-to-bar, bar-phase-transfer
+  delta, bar-index-mod-{4,8} vs concurrent bed} — let the learned actor
+  weigh the lattice instead of hand-tuning a prior strength. Same features
+  belong in the agentic loop's belief state.
+- Joint decode (path_decode / looptrace): loop-jump candidates could carry a
+  beat-phase consistency term — jumps land on beats (p≈1e-10); an off-beat
+  jump hypothesis is almost surely a decode artifact.
+
+Expected effect bound: placement ≈ 31% of GT-seconds lost; lattice prior
+attacks the coarse-error tail (wrong bar / wrong phrase), not the "which
+chorus" decode-residual wall (45%). Validate before/after on `make
+scorecard` (BB11 41% headline guard, both sets).
