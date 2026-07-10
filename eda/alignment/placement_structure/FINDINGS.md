@@ -222,3 +222,26 @@ adversarial pass. Key sources: arXiv:2407.06823 (CUE-DETR), Zehren et al. CMJ
 arXiv:2103.14208 (Huang, learned stem compatibility), rekordbox ANLZ format
 (crate-digger/pyrekordbox), madmom DBN docs, arXiv:2407.21658 (DJ-mix corpus
 statistics). Full claim dump: deep-research workflow `wf_879bcfae-545`.
+
+---
+
+## Addendum (2026-07-10): the anatomy of one BB mashup, in bars
+
+`arrangement_anatomy.py` — the arrangement grammar generation would compose
+in (each acappella attached to one primary bed; 121 beds / 192 vocals):
+
+| Stat | Value |
+|---|---|
+| bed length | median 36 bars (IQR 27–48), on the 4-bar lattice |
+| acappellas per bed | 0: 18% · 1: 36% · **2+: 46%** (up to 6) |
+| vocal stay | median 16 bars; modal lengths exactly **8** and **16** |
+| vocal entry after bed start | median ~17 bars (bed establishes first) |
+| vocal exit before bed end | median ~5 bars (bed rides out); p25 ≈ 0 = rides through the swap |
+| gap between sequential vocals | median 7 bars |
+| vocal coverage of bed | median 60% |
+
+Generation reading: the mashup is a bed-section container with vocal SLOTS
+defined on chapter (phrase/section) boundaries — lengths and start times are
+lattice choices in bar units, never seconds; multiple acappellas per bed is
+the norm. Cues/sections pick the doors on both sides (bed slot + ref-side
+hook slice); warping (pins/pickup/semitones) fills each slot.
