@@ -28,6 +28,7 @@ import json
 import logging
 import os
 import shutil
+import shlex
 import subprocess
 import sys
 import threading
@@ -162,7 +163,12 @@ def fetch_asset(track_audio_id: int, local_audio_path: Path) -> AudioAsset:
 
 def rsync_in(remote: str, local: Path) -> None:
     local.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.check_call(["rsync", "-q", f"{PI_HOST}:{remote}", str(local)])
+    # shlex.quote: the remote side of an rsync path goes through the remote
+    # shell — unquoted spaces/parens in filenames abort with exit 2
+    # (hit 2026-07-10 on "… (Official Karaoke Instrumental) ｜ SongJam.wav").
+    subprocess.check_call(
+        ["rsync", "-q", f"{PI_HOST}:{shlex.quote(remote)}", str(local)]
+    )
 
 
 def rsync_stems_out(local_dir: Path, track_audio_id: int) -> None:

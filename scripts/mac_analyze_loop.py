@@ -19,11 +19,13 @@ Run via:
 sleep would kill the process). Energy Saver "Prevent computer sleep
 when display is off" achieves the same.
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -60,22 +62,27 @@ LOCAL_STEMS = SCRATCH_DIR / "stems"
 SCRATCH_DB = SCRATCH_DIR / "scratch.db"
 
 BB_SETS = (
-    "w1mgcjt", "2nvzlh2k", "1fsnxchk", "qj4v0wt", "1yl70ql1", "237tdqmk",
+    "w1mgcjt",
+    "2nvzlh2k",
+    "1fsnxchk",
+    "qj4v0wt",
+    "1yl70ql1",
+    "237tdqmk",
 )
 
 # MPS = Apple Silicon GPU. analyze_track uses this for Demucs / MERT /
 # cue-detr. beat_this is CPU-light. Essentia runs in its own venv subprocess.
 DEVICE = "mps"
 
-logging.basicConfig(level=logging.INFO,
-                    format="%(asctime)s %(levelname)s %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("mac_analyze")
 
 
 def ssh_pi(sql: str) -> str:
     full = f'sqlite3 -separator "|" {CANONICAL_DB} "{sql}"'
-    r = subprocess.run(["ssh", PI_HOST, full],
-                       capture_output=True, text=True, check=True)
+    r = subprocess.run(
+        ["ssh", PI_HOST, full], capture_output=True, text=True, check=True
+    )
     return r.stdout.strip()
 
 
@@ -145,7 +152,12 @@ def fetch_asset(track_audio_id: int, local_audio_path: Path) -> AudioAsset:
 
 def rsync_in(remote: str, local: Path) -> None:
     local.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.check_call(["rsync", "-q", f"{PI_HOST}:{remote}", str(local)])
+    # shlex.quote: the remote side of an rsync path goes through the remote
+    # shell — unquoted spaces/parens in filenames abort with exit 2
+    # (hit 2026-07-10 on "… (Official Karaoke Instrumental) ｜ SongJam.wav").
+    subprocess.check_call(
+        ["rsync", "-q", f"{PI_HOST}:{shlex.quote(remote)}", str(local)]
+    )
 
 
 def rsync_stems_out(local_dir: Path, track_audio_id: int) -> None:
@@ -164,7 +176,8 @@ def init_scratch_db() -> None:
     if SCRATCH_DB.exists():
         return
     schema = subprocess.check_output(
-        ["ssh", PI_HOST, f"sqlite3 {CANONICAL_DB} '.schema'"], text=True,
+        ["ssh", PI_HOST, f"sqlite3 {CANONICAL_DB} '.schema'"],
+        text=True,
     )
     cleaned = []
     skip = False
@@ -178,6 +191,7 @@ def init_scratch_db() -> None:
             continue
         cleaned.append(line)
     import sqlite3
+
     conn = sqlite3.connect(SCRATCH_DB)
     conn.executescript("\n".join(cleaned))
     conn.close()
@@ -189,10 +203,10 @@ def push_track_rows(track_audio_id: int) -> None:
     # (Same fix as vast_loop's commit 97a89cb — persist_analysis records
     # whatever the demucs adapter wrote to, which is local.)
     import sqlite3 as _sqlite3
+
     _conn = _sqlite3.connect(SCRATCH_DB)
     _conn.execute(
-        "UPDATE track_stems SET path = REPLACE(path, ?, ?) "
-        "WHERE track_audio_id = ?",
+        "UPDATE track_stems SET path = REPLACE(path, ?, ?) WHERE track_audio_id = ?",
         (f"{LOCAL_STEMS}/", f"{PI_STEMS_ROOT}/", track_audio_id),
     )
     _conn.commit()
@@ -227,7 +241,7 @@ def push_track_rows(track_audio_id: int) -> None:
 
     stems_inserts = "\n".join(
         "INSERT INTO track_stems (track_audio_id, stem_name, path, codec, created_at) "
-        f"VALUES ({', '.join(_sql_lit(r[c]) for c in ('track_audio_id','stem_name','path','codec','created_at'))});"
+        f"VALUES ({', '.join(_sql_lit(r[c]) for c in ('track_audio_id', 'stem_name', 'path', 'codec', 'created_at'))});"
         for r in stems_rows
     )
 
@@ -245,13 +259,19 @@ def push_track_rows(track_audio_id: int) -> None:
         for t in tables_keyed
     )
     dumped = subprocess.check_output(
-        ["sqlite3", str(SCRATCH_DB)], input=dump_script, text=True,
+        ["sqlite3", str(SCRATCH_DB)],
+        input=dump_script,
+        text=True,
     )
     sql_lines.append(dumped)
     sql_lines.append("COMMIT;")
     full_sql = "\n".join(sql_lines)
-    subprocess.run(["ssh", PI_HOST, f"sqlite3 {CANONICAL_DB}"],
-                   input=full_sql, text=True, check=True)
+    subprocess.run(
+        ["ssh", PI_HOST, f"sqlite3 {CANONICAL_DB}"],
+        input=full_sql,
+        text=True,
+        check=True,
+    )
     tables = ("track_stems",) + tables_keyed
     # Clear scratch rows for this track
     conn = _sqlite3.connect(SCRATCH_DB)
@@ -263,11 +283,20 @@ def push_track_rows(track_audio_id: int) -> None:
 
 def main() -> int:
     import argparse
+
     p = argparse.ArgumentParser()
-    p.add_argument("--max-tracks", type=int, default=None,
-                   help="Stop after N successful tracks (smoke testing).")
-    p.add_argument("--separator", choices=["demucs", "uvr", "roformer"], default="demucs",
-                   help="Stem-separation backend (default: demucs).")
+    p.add_argument(
+        "--max-tracks",
+        type=int,
+        default=None,
+        help="Stop after N successful tracks (smoke testing).",
+    )
+    p.add_argument(
+        "--separator",
+        choices=["demucs", "uvr", "roformer"],
+        default="demucs",
+        help="Stem-separation backend (default: demucs).",
+    )
     p.add_argument(
         "--set-ids",
         default=None,
@@ -288,7 +317,11 @@ def main() -> int:
     log.info(
         "starting analyze loop on Mac (device=%s, separator=%s, max_tracks=%s, "
         "set_ids=%s, only_reference=%s)",
-        DEVICE, args.separator, args.max_tracks, set_ids or BB_SETS, args.only_reference,
+        DEVICE,
+        args.separator,
+        args.max_tracks,
+        set_ids or BB_SETS,
+        args.only_reference,
     )
     init_scratch_db()
 
@@ -299,8 +332,9 @@ def main() -> int:
         log.error("load_analyzers failed: %s", ar.error)
         return 1
     a = ar.value
-    log.info("analyzers ready in %.1fs (with_essentia=%s)",
-             time.time() - t0, a.with_essentia)
+    log.info(
+        "analyzers ready in %.1fs (with_essentia=%s)", time.time() - t0, a.with_essentia
+    )
 
     LOCAL_AUDIO.mkdir(parents=True, exist_ok=True)
     LOCAL_STEMS.mkdir(parents=True, exist_ok=True)
@@ -361,8 +395,12 @@ def main() -> int:
             t1 = time.time()
             r = analyze_track(a, asset, stems_dir=LOCAL_STEMS)
             if not r.is_ok():
-                log.warning("[%d] analyze_track failed: %s — %s",
-                            tid, r.error.kind, r.error.detail)
+                log.warning(
+                    "[%d] analyze_track failed: %s — %s",
+                    tid,
+                    r.error.kind,
+                    r.error.detail,
+                )
                 n_failed += 1
                 failed_tids.add(tid)
                 continue
@@ -377,13 +415,14 @@ def main() -> int:
 
             stem_local = LOCAL_STEMS / str(tid)
             bg = threading.Thread(
-                target=_persist_in_bg, args=(tid, stem_local), daemon=False,
+                target=_persist_in_bg,
+                args=(tid, stem_local),
+                daemon=False,
             )
             bg.start()
             handed_off = True
             n_done += 1
-            log.info("[%d] handed off (n_done=%d, n_failed=%d)",
-                     tid, n_done, n_failed)
+            log.info("[%d] handed off (n_done=%d, n_failed=%d)", tid, n_done, n_failed)
             if args.max_tracks is not None and n_done >= args.max_tracks:
                 if bg is not None:
                     bg.join()
