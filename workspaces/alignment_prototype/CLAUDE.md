@@ -50,7 +50,9 @@ segment-trajectory decoder), `neuro/` (probe-precision fusion), `synthetic_mix/`
 also the external-corpus runners `eval_bench`+`nmf_baseline` (André-2024
 benchmark) and `pretrain` (UnmixDB)), `review/` (human-review loop:
 `review_server`/`fiber_server`/`fiber_ui`/`discern_server`,
-`render_review_snippets`, `seed_als_from_timeline`), `evals/` (internal evals:
+`render_review_snippets`, `seed_als_from_timeline`, `seed_worst_spans_als`,
+`seed_stem_review_als` — the last renders a stem-match review queue as a
+CAND/CAT A/B Live set with `--harvest` verdict write-back), `evals/` (internal evals:
 `fiber_ab`, `lyrics_ref_decode`, `verify_vocal`), `harness/`, `agentic/`,
 `attic/` (closed experiments, see ledger).
 

@@ -40,7 +40,7 @@ the taxonomy lives in this index. Two subdirectories hold the rest:
 - `fetch_candidate_stems.py` — pull candidate acappella/instrumental files into `~/aligning/.../candidates/` for audition.
 - `candidate_vocal_gate.py` — HuBERT-L9 gate picking the best acappella candidate per slot (0.6 floor; can flip `claimed_stem`).
 - `ingest_candidate_winners.py` — `stems/*/candidates/WINNER.txt` → canonical ingest (re-run-safe; `--force` re-ingests).
-- `apply_stem_matches.py` — Discord `proposed_matches.csv` → `ingest_stem_url`; `--auto` applies metadata∧audio double-confirms unreviewed, `--review-out` = the human queue (re-run-safe; `--force` re-ingests).
+- `apply_stem_matches.py` — Discord `proposed_matches.csv` → `ingest_stem_url`; `--auto` applies metadata∧audio double-confirms unreviewed, `--review-out` = the human queue (re-run-safe; `--force` re-ingests). Adjudicate the queue by ear in Ableton via `workspaces/alignment_prototype/review/seed_stem_review_als.py` (seed CAND/CAT pairs, rename `ACC`/`REJ`, `--harvest` writes decisions back).
 - `match_stem_library.py` — map staged stem-library files (Discord corpus) → recordings; `--verify` = HuBERT/chromaprint audio verify (GPU: `vast_stem_verify.sh`); decision bands `auto_accept`/`accept`/`review`/`abstain` (audio folds into the band).
 - `discord_scrape.py` / `discord_grab.sh` — Discord stem-corpus retrieval (staging on pi; ToS-risk acknowledged in-file).
 - `promote_identity_overrides.py` — `labeling/identity_overrides/<set>.yaml` → `set_track_slots.recording_id`.
