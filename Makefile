@@ -54,6 +54,12 @@ check:
 typecheck:
 	bash scripts/typecheck.sh
 
+# Corpus data-integrity: identity/reference invariants over the CANONICAL DB
+# (the data analogue of `make check`, which polices the source tree). ERROR
+# rows must be 0; WARN rows are acquisition/routing backlogs.
+check-corpus:
+	ssh $(PI_STORAGE) 'cd $(REPO) && venvs/audio/bin/python scripts/corpus_integrity.py --db $(DB)'
+
 check-inventory:
 	@test -n "$(SET)" || (echo "Usage: make check-inventory SET=<set_id>" && exit 1)
 	venvs/audio/bin/python labeling/pull_set_for_alignment.py $(SET) --check
