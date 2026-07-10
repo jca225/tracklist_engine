@@ -52,6 +52,17 @@ of Mac compute. If a scorer/fusion clears the bar → wire it as the tie-break
 behind the gate and into the D3 auto-accept bands + acquisition-case records.
 If nothing clears → Q2 is mandatory, Q0 scorers become features not deciders.
 
+> **Q1 VERDICT (2026-07-09, n=83 evaluable slots): NOTHING CLEARS — decisive.**
+> Every scorer landed far *below* the 67% cand1 prior: singmos 42%, CU 41%,
+> PQ 39%, rolloff95 34%, CE/hf16k 31%, PC 17%. Best 2–3-way rank-sum fusion
+> (CU+singmos+rolloff95) = 44%. Scorers are ≈ random over ~3 cands/slot
+> (33–40%) — uninformative, not anti-correlated; the human winner tracks
+> *search rank* (official/first uploads), which no aesthetics net sees.
+> Consequence: **Q2 is mandatory**; Q0 scorers are features for Q3, never
+> deciders. Ran on Vast A4000 (~$0.40); scores cached in
+> `workspaces/separation_qa/out/q1_candidate_scores.jsonl` (audiobox
+> PQ/CE/CU/PC + singmos + bandwidth, all 257 multi-cand files).
+
 **Q2 — the data step the closed experiment demanded.**
 Collect **within-class** labels with the already-built rich UI
 (`review/review_server.py`, port 8800: clean/keep/diff, ⇄ interchangeable,

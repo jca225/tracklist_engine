@@ -133,7 +133,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     cached = _load_cached()
-    metrics = ["PQ", "CE", "CU", "PC", "rolloff95_hz", "hf16k_ratio_db"]
+    # singmos rows come from the Vast leg (remote_score.py) via cache merge
+    metrics = ["PQ", "CE", "CU", "PC", "singmos", "rolloff95_hz", "hf16k_ratio_db"]
     agree: dict[str, list[int]] = defaultdict(list)
     cand1_prior: list[int] = []
     n_eval = 0
