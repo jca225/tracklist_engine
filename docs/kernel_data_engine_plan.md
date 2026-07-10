@@ -107,6 +107,12 @@ zero flags; two runs identical; flag-count ratchet live.
 **Exit:** fusion v2 ≥ `source_priority` on both sets held-out AND calibrated
 (stated confidence matches empirical accuracy); board shows calibration.
 
+*Candidate successor (proposed, unscheduled): a **learned** span-level critic
+trained on GT positives + perturbation negatives + synthetic renders, racing
+fusion v2 at the same 0.75-AUC bar — see
+[learned_critic_plan.md](learned_critic_plan.md). Also touches W4 (audit
+tiers) and W5 (auto-accept gate, verification labeling).*
+
 ### W3 — page cache + provenance [K] — week 2, parallel with W2
 
 `core/artifacts.py`: content-hash keys (audio hash × extractor version ×
