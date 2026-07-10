@@ -19,23 +19,73 @@ Two terms that look alike but must not be conflated:
 
 ```
 tracklist_engine/
-├── core/             ← shared db, models, identity (3-axis), result types
-├── web_crawler/      ← scrape tracklists; FastAPI jobqueue + workers
-├── ingest/           ← audio download topology + version/variant/stem QA
-├── analysis/         ← per-track audio analysis pipeline + adapters
-├── labeling/         ← manual Ableton ground-truth production (+ .als codec)
-├── tokenizer/        ← scrape rows → track_metadata + set_track_slots
-├── personalization/  ← SoundCloud cohorts + taste priors (off-DAG)
-├── cue-detr/         ← vendored DETR cue-point model
-├── eda/              ← cross-cutting analysis notebooks + corpus empirics
-├── workspaces/       ← experimental forks (the aligner incubates here)
-│   └── alignment_prototype/  ← harness, drivers, fibers, looptrace, agentic
-├── scripts/          ← Mac/Pi ops, migrations, batch jobs, guardrails
-├── deploy/           ← systemd service units
-├── tests/            ← pytest suite
-├── docs/             ← design plans, alignment objective, handoffs
-├── config.yaml       ← paths + generator/scrape config
-└── Makefile          ← cluster ops + alignment entrypoints
+├── core/                        ← shared substrate; imports nothing upward
+│   ├── identity.py              ← RecordingAxes: the 3-axis identity key
+│   ├── db.py                    ← SQLite access layer
+│   ├── models.py                ← frozen-dataclass record types
+│   ├── result.py                ← Result type (errors-as-values in library code)
+│   ├── slot_inventory.py        ← derived layer_role (bed/payload/constituent/solo)
+│   └── acquisition_case.py      ← acquisition decisions logged as cases
+├── web_crawler/                 ← the scrape stage (pending rename to scrape/)
+│   ├── main.py                  ← scraper entry point
+│   ├── scraper.py               ← + browser.py, captcha_solver.py, workers.py
+│   ├── jobqueue/                ← FastAPI jobqueue (serves the cluster on pi-storage)
+│   └── database/schema.sql      ← THE schema (~25 tables, both table groups)
+├── ingest/                      ← audio acquisition + QA gates
+│   ├── main.py                  ← yt-dlp main download loop
+│   ├── main_retry.py            ← spotdl retry / YT-Music rescue paths
+│   ├── preflight.py             ← yt-dlp bot-detection + JS-runtime recovery
+│   ├── identity_gate.py         ← + guards.py: wrong-version + duration gates
+│   ├── stem_cascade.py          ← official acappella/instrumental discovery
+│   └── corrections.py           ← replace/add ledger (track_audio_correction)
+├── analysis/                    ← per-track/set MIR
+│   ├── pipeline.py              ← analyze_track: the core composition
+│   ├── adapters/                ← Roformer, MERT, beat_this, cue-detr, Essentia
+│   ├── persistence.py           ← analysis-side DB writes (vs core/db.py)
+│   ├── vast_worker.py           ← GPU loop on rented Vast.ai boxes
+│   └── canonical_cues.py        ← cue-detr on stem='regular' refs only
+├── labeling/                    ← manual Ableton ground-truth production
+│   ├── pull_set_for_alignment.py← mix+refs+stems → ~/aligning/<set>/
+│   ├── als/                     ← bidirectional .als codec (parse ∘ print = id)
+│   ├── export_als_to_gt.py      ← session → set_ground_truth write-back
+│   ├── gt_review_ui.py          ← ground-truth review interface
+│   └── ground_truth/            ← + gt_review/, identity_overrides/, fixtures/
+├── tokenizer/                   ← scrape rows → track_metadata + set_track_slots
+│   ├── materialize.py           ← the writer (run after schema migrations)
+│   ├── identity_axes.py         ← authoring home for version/stem/variant parsing
+│   └── tokenizer.py             ← + track/text/suggestion tokenizers
+├── personalization/             ← SoundCloud cohorts + taste priors (off-DAG)
+│   ├── main.py                  ← taste-prior scrape loop CLI
+│   ├── cohort_driver.py         ← listener-cohort construction
+│   ├── prior_mert.py            ← per-user taste priors over MERT space
+│   └── findings.md              ← layer-local findings ledger
+├── cue-detr/                    ← vendored DETR cue-point model
+├── eda/                         ← cross-cutting exploratory analysis
+│   ├── corpus_empirics/         ← bb_*.py analyses + findings.md + aux.db
+│   ├── alignment/               ← aligner-side EDA (generalization, etc.)
+│   └── queries/                 ← reusable SQL
+├── workspaces/                  ← experimental forks; promote out when stable
+│   └── alignment_prototype/     ← THE aligner incubator
+│       ├── harness/             ← driver-agnostic eval: probes (fp/HuBERT/chroma/
+│       │                          continuity/path-decode) + merge + contract
+│       ├── drivers/             ← 3 e2e drivers (agentic/classical/ml) + race.py
+│       ├── agentic/             ← belief/events/actions/policy loop, DSP probes
+│       ├── looptrace/           ← acappella loop-tracing decode
+│       ├── fibers/              ← self-repeat structure (gates + evidence)
+│       ├── trajectory/          ← trajectory decoder (+ neuro/: precision fusion)
+│       ├── evals/               ← eval fixtures + scoring
+│       └── attic/EXPERIMENTS.md ← closed-experiments ledger; READ BEFORE RE-TESTING
+├── scripts/                     ← ops, migrations, batch jobs
+│   ├── guardrails.py            ← mechanical checks (make check)
+│   ├── corpus_integrity.py      ← data invariants (make check-corpus)
+│   ├── mac_analyze_loop.py      ← Mac MPS analysis worker
+│   ├── vast_loop.py             ← Vast.ai rent-run-terminate driver
+│   └── migrations/              ← schema migration SQL
+├── deploy/                      ← systemd service units
+├── tests/                       ← pytest suite (run from repo root)
+├── docs/                        ← design plans, north stars, agent handoffs
+├── config.yaml                  ← paths + generator/scrape config
+└── Makefile                     ← cluster ops + alignment entrypoints
 ```
 
 New features land inside one of the chain modules; new top-level folders need explicit justification. Each module carries its own `CLAUDE.md` with stage-specific detail.
