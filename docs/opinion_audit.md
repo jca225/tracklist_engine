@@ -34,6 +34,18 @@ tail — the known <4s regression), Viterbi lam/lam_back, curve weights, monoton
 min_step, fiber min_voiced_frac 0.4, lyrics MIN_DISTINCT. Class C (benign):
 duration clamps, DTW corridor, stretch grids, looptrace search bounds.
 
+## Scope note — audit #2 (fp hit floors), for the next session
+
+`scan_band`'s three floors gate EMISSION into the hit cache
+(`set_fingerprint_hits` via scripts/cache_set_fingerprint_hits.py) — consumers
+(agentic fp probe, fused vote gate) never see suppressed evidence. The graded
+fix therefore touches: (a) scan_band emits down to a noise floor (~votes≥8,
+sharp≥1.0, z≥0.5) with scores attached; (b) a `strong_hits()` helper filters
+at the OLD thresholds so every existing consumer keeps byte-identical behavior
+by default; (c) cache regeneration per set; (d) validation = agentic live run
+(the fp probe is the main consumer) + race board. One session's work; do NOT
+bolt it onto the tail of another.
+
 ## Priority (evidence-strength × silence × known victims)
 
 1. **fp gate 90s → strength-conditional override** (votes≥~100 AND sharpness≥~5
