@@ -6,6 +6,21 @@ hand-built critic this would race), W4 (offboard labeler audit), and W5 (the
 auto-accept gate). Nothing here blocks those; this is a candidate upgrade to
 the gate, not a new lane.
 
+## In baby terms
+
+Writing an essay is hard; grading one is easy. Our aligner has to *write the
+essay* — figure out from scratch which song is playing, where, and how it's
+been warped. That's the hard search problem we keep hitting walls on. But
+*checking* a proposed answer — "is THIS song really playing HERE, warped like
+THIS?" — is way easier, and we already have several dumb checkers that are
+good at it. The idea: train a model to be the **grader**, not the writer.
+Then the cheap writers we already have scribble lots of guesses, the grader
+keeps the good ones, and John only has to double-check the borderline pile
+instead of hand-writing every label. Labeling gets ~10x faster — but the
+grader can't replace John, because the guesses it confidently passes are
+exactly the easy ones, and the hard ones (repeated choruses, buried vocals)
+still need his ears.
+
 ## The idea
 
 The actor (end-to-end aligner) is hard: it must *search* — which recording,
