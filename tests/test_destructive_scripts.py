@@ -2,6 +2,7 @@
 
 Uses real schema.sql fixtures on tmp paths — no pi-storage, no network.
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -16,7 +17,9 @@ from scripts import reconcile_orphans as ro
 from scripts import replace_track_audio as rta
 
 
-_SCHEMA_PATH = Path(__file__).resolve().parent.parent / "web_crawler" / "database" / "schema.sql"
+_SCHEMA_PATH = (
+    Path(__file__).resolve().parent.parent / "web_crawler" / "database" / "schema.sql"
+)
 
 
 @pytest.fixture
@@ -54,7 +57,10 @@ def _insert_track(
     content: bytes = b"registered-audio",
 ) -> tuple[int, Path]:
     path = _write_object(
-        audio_root, track_id, f"{track_id}__{platform}__{player_id}.m4a", content,
+        audio_root,
+        track_id,
+        f"{track_id}__{platform}__{player_id}.m4a",
+        content,
     )
     asset = AudioAsset(
         track_audio_id=None,
@@ -114,11 +120,16 @@ def test_classify_intermediate_is_delete(canonical_env: tuple[Path, Path]) -> No
     assert hit[0].disposition == "DELETE"
 
 
-def test_classify_coexist_extra_final_is_review(canonical_env: tuple[Path, Path]) -> None:
+def test_classify_coexist_extra_final_is_review(
+    canonical_env: tuple[Path, Path],
+) -> None:
     db, audio_root = canonical_env
     _insert_track(db, audio_root, "COEX01", player_id="refvid")
     extra = _write_object(
-        audio_root, "COEX01", "COEX01__youtube__other.m4a", b"different-bytes",
+        audio_root,
+        "COEX01",
+        "COEX01__youtube__other.m4a",
+        b"different-bytes",
     )
 
     orphans, _, _ = ro.classify(db, audio_root / "objects")
@@ -131,7 +142,8 @@ def test_classify_coexist_extra_final_is_review(canonical_env: tuple[Path, Path]
 
 
 def test_reconcile_dry_run_leaves_db_and_disk_unchanged(
-    canonical_env: tuple[Path, Path], tmp_path: Path,
+    canonical_env: tuple[Path, Path],
+    tmp_path: Path,
 ) -> None:
     db, audio_root = canonical_env
     _insert_track(db, audio_root, "REG01")
@@ -142,11 +154,16 @@ def test_reconcile_dry_run_leaves_db_and_disk_unchanged(
     before_files = _paths_on_disk(audio_root)
     review_tsv = tmp_path / "review.tsv"
 
-    rc = ro.main([
-        "--db", str(db),
-        "--audio-root", str(audio_root),
-        "--review-tsv", str(review_tsv),
-    ])
+    rc = ro.main(
+        [
+            "--db",
+            str(db),
+            "--audio-root",
+            str(audio_root),
+            "--review-tsv",
+            str(review_tsv),
+        ]
+    )
     assert rc == 0
     assert _count_track_audio(db) == before_rows
     assert _paths_on_disk(audio_root) == before_files
@@ -154,10 +171,15 @@ def test_reconcile_dry_run_leaves_db_and_disk_unchanged(
     assert junk.exists()
 
 
-def test_reconcile_apply_registers_pure_orphan(canonical_env: tuple[Path, Path]) -> None:
+def test_reconcile_apply_registers_pure_orphan(
+    canonical_env: tuple[Path, Path],
+) -> None:
     db, audio_root = canonical_env
     orphan_path = _write_object(
-        audio_root, "PURE03", "PURE03__youtube__regme.m4a", b"only-copy",
+        audio_root,
+        "PURE03",
+        "PURE03__youtube__regme.m4a",
+        b"only-copy",
     )
     assert _count_track_audio(db) == 0
 
@@ -192,20 +214,28 @@ def test_reconcile_apply_deletes_intermediate_only(
 
 
 def test_reconcile_apply_does_not_promote_without_flag(
-    canonical_env: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch,
+    canonical_env: tuple[Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """PROMOTE dispositions are skipped unless --apply-promotions is passed."""
     db, audio_root = canonical_env
     _insert_track(db, audio_root, "PROM01", player_id="short", content=b"short-ref")
     long_orphan = _write_object(
-        audio_root, "PROM01", "PROM01__youtube__long.m4a", b"long-orphan-audio",
+        audio_root,
+        "PROM01",
+        "PROM01__youtube__long.m4a",
+        b"long-orphan-audio",
     )
 
     # Force PROMOTE classification without relying on ffprobe/acappella heuristics.
     fake = ro.Orphan(
-        path=long_orphan, track_id="PROM01", ext=".m4a",
-        platform="youtube", player_id="long",
-        disposition="PROMOTE", reason="test",
+        path=long_orphan,
+        track_id="PROM01",
+        ext=".m4a",
+        platform="youtube",
+        player_id="long",
+        disposition="PROMOTE",
+        reason="test",
     )
     monkeypatch.setattr(ro, "classify", lambda _db, _root: ([fake], set(), {}))
 
@@ -219,7 +249,8 @@ def test_reconcile_apply_does_not_promote_without_flag(
 
 
 def test_replace_via_file_replaces_row_and_cascades_analysis(
-    canonical_env: tuple[Path, Path], tmp_path: Path,
+    canonical_env: tuple[Path, Path],
+    tmp_path: Path,
 ) -> None:
     db, audio_root = canonical_env
     old_taid, old_path = _insert_track(db, audio_root, "REP01", player_id="old")
@@ -235,8 +266,14 @@ def test_replace_via_file_replaces_row_and_cascades_analysis(
     new_src.write_bytes(b"new-studio-master")
 
     rc = rta._replace_via_file(
-        db, audio_root, "REP01", new_src, "manual_v2", old_taid,
-        promote_reference=True, purge_siblings=False,
+        db,
+        audio_root,
+        "REP01",
+        new_src,
+        "manual_v2",
+        old_taid,
+        promote_reference=True,
+        purge_siblings=False,
     )
     assert rc == 0
     assert not old_path.exists()
@@ -259,7 +296,8 @@ def test_replace_via_file_replaces_row_and_cascades_analysis(
 
 
 def test_replace_via_file_respects_no_promote(
-    canonical_env: tuple[Path, Path], tmp_path: Path,
+    canonical_env: tuple[Path, Path],
+    tmp_path: Path,
 ) -> None:
     db, audio_root = canonical_env
     old_taid, _ = _insert_track(db, audio_root, "REP02", player_id="old")
@@ -268,8 +306,14 @@ def test_replace_via_file_respects_no_promote(
     new_src.write_bytes(b"alternate")
 
     rc = rta._replace_via_file(
-        db, audio_root, "REP02", new_src, "manual_v3", old_taid,
-        promote_reference=False, purge_siblings=False,
+        db,
+        audio_root,
+        "REP02",
+        new_src,
+        "manual_v3",
+        old_taid,
+        promote_reference=False,
+        purge_siblings=False,
     )
     assert rc == 0
 
@@ -286,3 +330,55 @@ def test_delete_old_row_if_exists_is_noop_when_missing(
     db, audio_root = canonical_env
     rta._delete_old_row_if_exists(db, audio_root, 99999)
     assert _count_track_audio(db) == 0
+
+
+def test_insert_failure_preserves_old_row(
+    canonical_env: tuple[Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Insert-before-delete invariant: a failed insert must NOT delete the
+    existing row (the delete-before-insert bug that ate ~23 references,
+    e.g. DJ Kool - Let Me Clear My Throat's full original)."""
+    from core.result import Err
+    from core.errors import DbError
+
+    db, audio_root = canonical_env
+    old_taid, old_path = _insert_track(db, audio_root, "REP99", player_id="old")
+
+    monkeypatch.setattr(
+        rta.db_adapter,
+        "insert_audio_or_reap",
+        lambda *a, **k: Err(DbError(kind="insert_failed", detail="simulated")),
+    )
+    new_asset = AudioAsset(
+        track_audio_id=None,
+        track_id="REP99",
+        platform="manual",
+        source_url="file:///x",
+        player_id="new",
+        path=str(audio_root / "new.m4a"),
+        sha256="z",
+        duration_s=None,
+        sample_rate=None,
+        codec="m4a",
+        bitrate_kbps=None,
+        stem="regular",
+        variant="regular",
+    )
+    rc = rta._insert_and_report(
+        db,
+        audio_root,
+        new_asset,
+        promote_reference=True,
+        purge_siblings=False,
+        old_track_audio_id=old_taid,
+    )
+    assert rc == 1
+    # old row and its file survive
+    assert _count_track_audio(db) == 1
+    assert old_path.exists()
+    with sqlite3.connect(db) as conn:
+        surviving = conn.execute(
+            "SELECT track_audio_id FROM track_audio WHERE track_id='REP99'"
+        ).fetchone()[0]
+    assert surviving == old_taid

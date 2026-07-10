@@ -218,10 +218,16 @@ def _delete_old_row_if_exists(
     db_path: Path,
     audio_root: Path,
     track_audio_id: int,
+    keep_path: str | None = None,
 ) -> None:
     """Delete the existing track_audio row + cascade-delete its analysis,
     stems, features, MERT measures. Also unlink the on-disk audio file
-    and the stems dir (they belong to the old track_audio_id)."""
+    and the stems dir (they belong to the old track_audio_id).
+
+    `keep_path` guards the file unlink: if the old row's path equals the
+    freshly-inserted asset's path (same track_id/platform/player_id
+    collision), the file on disk now belongs to the NEW row — never
+    delete it."""
     with connect(db_path) as conn:
         row = conn.execute(
             "SELECT path FROM track_audio WHERE track_audio_id = ?",
@@ -234,7 +240,7 @@ def _delete_old_row_if_exists(
             "DELETE FROM track_audio WHERE track_audio_id = ?", (track_audio_id,)
         )
         conn.commit()
-    if old_path:
+    if old_path and old_path != keep_path:
         p = Path(old_path)
         if p.is_file():
             p.unlink()
@@ -398,14 +404,13 @@ def _replace_via_soundcloud(
         case Ok(asset):
             pass
     asset = replace(asset, stem=stem, variant=variant)
-    if track_audio_id is not None:
-        _delete_old_row_if_exists(db_path, audio_root, track_audio_id)
     return _insert_and_report(
         db_path,
         audio_root,
         asset,
         promote_reference=promote_reference,
         purge_siblings=purge_siblings,
+        old_track_audio_id=track_audio_id,
     )
 
 
@@ -440,14 +445,13 @@ def _replace_via_spotdl(
         case Ok(asset):
             pass
     asset = replace(asset, stem=stem, variant=variant)
-    if track_audio_id is not None:
-        _delete_old_row_if_exists(db_path, audio_root, track_audio_id)
     return _insert_and_report(
         db_path,
         audio_root,
         asset,
         promote_reference=promote_reference,
         purge_siblings=purge_siblings,
+        old_track_audio_id=track_audio_id,
     )
 
 
@@ -496,14 +500,13 @@ def _replace_via_ytdlp(
         stem=stem,
         variant=variant,
     )
-    if track_audio_id is not None:
-        _delete_old_row_if_exists(db_path, audio_root, track_audio_id)
     return _insert_and_report(
         db_path,
         audio_root,
         asset,
         promote_reference=promote_reference,
         purge_siblings=purge_siblings,
+        old_track_audio_id=track_audio_id,
     )
 
 
@@ -545,14 +548,13 @@ def _replace_via_file(
         stem=stem,
         variant=variant,
     )
-    if track_audio_id is not None:
-        _delete_old_row_if_exists(db_path, audio_root, track_audio_id)
     return _insert_and_report(
         db_path,
         audio_root,
         asset,
         promote_reference=promote_reference,
         purge_siblings=purge_siblings,
+        old_track_audio_id=track_audio_id,
     )
 
 
@@ -563,16 +565,25 @@ def _insert_and_report(
     *,
     promote_reference: bool,
     purge_siblings: bool,
+    old_track_audio_id: int | None = None,
 ) -> int:
+    # INSERT BEFORE DELETE: the old row is removed only after the new row is
+    # committed. A failed/interrupted download or insert therefore leaves the
+    # existing audio intact (the delete-before-insert ordering silently ate
+    # ~23 references — e.g. DJ Kool - Let Me Clear My Throat's full original).
     r = db_adapter.insert_audio_or_reap(db_path, asset)
     match r:
         case Err(e):
-            _log.error("insert_audio failed: %s", e.detail)
+            _log.error("insert_audio failed: %s — old row preserved", e.detail)
             return 1
         case Ok(new_taid):
             _log.info(
                 "inserted new track_audio row taid=%d  path=%s", new_taid, asset.path
             )
+            if old_track_audio_id is not None and old_track_audio_id != new_taid:
+                _delete_old_row_if_exists(
+                    db_path, audio_root, old_track_audio_id, keep_path=asset.path
+                )
             if promote_reference:
                 _promote_reference(db_path, asset.track_id, new_taid)
             if purge_siblings:
