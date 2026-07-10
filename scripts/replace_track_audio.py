@@ -72,6 +72,7 @@ from core import db as db_adapter
 from ingest.adapters import spotdl_adapter, ytmusic_adapter
 from ingest.adapters.downloader import DownloadConfig, download_one
 from ingest.errors import DownloadError
+from ingest.guards import duration_sane
 from core.models import AudioAsset, MediaSource, soundcloud_api_url
 from core.result import Err, Ok
 from core.identity import DEFAULT_STEM, normalize_stem
@@ -317,6 +318,7 @@ def _replace_via_url(
     *,
     promote_reference: bool = True,
     purge_siblings: bool = False,
+    check_duration: bool = True,
 ) -> int:
     """Acquire by URL and insert. Returns the new track_audio_id."""
     kind = _detect_url_kind(url)
@@ -383,6 +385,7 @@ def _replace_via_soundcloud(
     *,
     promote_reference: bool = True,
     purge_siblings: bool = False,
+    check_duration: bool = True,
 ) -> int:
     """Download via yt-dlp from api.soundcloud.com/tracks/<id>."""
     objects_root = audio_root / "objects"
@@ -411,6 +414,7 @@ def _replace_via_soundcloud(
         promote_reference=promote_reference,
         purge_siblings=purge_siblings,
         old_track_audio_id=track_audio_id,
+        check_duration=check_duration,
     )
 
 
@@ -425,6 +429,7 @@ def _replace_via_spotdl(
     *,
     promote_reference: bool = True,
     purge_siblings: bool = False,
+    check_duration: bool = True,
 ) -> int:
     objects_root = audio_root / "objects"
     out_dir = objects_root / track_id
@@ -452,6 +457,7 @@ def _replace_via_spotdl(
         promote_reference=promote_reference,
         purge_siblings=purge_siblings,
         old_track_audio_id=track_audio_id,
+        check_duration=check_duration,
     )
 
 
@@ -466,6 +472,7 @@ def _replace_via_ytdlp(
     *,
     promote_reference: bool = True,
     purge_siblings: bool = False,
+    check_duration: bool = True,
 ) -> int:
     objects_root = audio_root / "objects"
     out_dir = objects_root / track_id
@@ -507,6 +514,7 @@ def _replace_via_ytdlp(
         promote_reference=promote_reference,
         purge_siblings=purge_siblings,
         old_track_audio_id=track_audio_id,
+        check_duration=check_duration,
     )
 
 
@@ -522,6 +530,7 @@ def _replace_via_file(
     *,
     promote_reference: bool = True,
     purge_siblings: bool = False,
+    check_duration: bool = True,
 ) -> int:
     if not file_path.is_file():
         _log.error("file does not exist: %s", file_path)
@@ -555,7 +564,56 @@ def _replace_via_file(
         promote_reference=promote_reference,
         purge_siblings=purge_siblings,
         old_track_audio_id=track_audio_id,
+        check_duration=check_duration,
     )
+
+
+def _probe_duration_s(path: str) -> float | None:
+    """Measured duration of an audio file via ffprobe, or None if unavailable.
+    Replace assets often carry duration_s=None (unlike the main downloader),
+    so the duration gate has to measure the file itself."""
+    ffprobe = shutil.which("ffprobe")
+    if not ffprobe:
+        return None
+    try:
+        out = subprocess.run(
+            [
+                ffprobe,
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=nw=1:nk=1",
+                path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return float(out.stdout.strip()) if out.stdout.strip() else None
+    except (subprocess.SubprocessError, ValueError):
+        return None
+
+
+def _duration_gate(db_path: Path, asset: AudioAsset) -> str | None:
+    """Reject the preview-clip / truncated-edit class for REGULAR full tracks
+    only. Acappella/instrumental stems and extended variants have different
+    length semantics (a vocal stab is legitimately short — the DJ Kool 8.5s
+    case), so they are never gated here. Relative to the scraped song length,
+    never an absolute floor. Returns a rejection detail, or None to allow."""
+    if asset.stem != "regular" or asset.variant != "regular":
+        return None
+    listed_r = db_adapter.load_track_listed_duration(db_path, asset.track_id)
+    listed = listed_r.value if isinstance(listed_r, Ok) else None
+    actual = (
+        asset.duration_s
+        if asset.duration_s is not None
+        else _probe_duration_s(asset.path)
+    )
+    if duration_sane(actual, listed):
+        return None
+    return f"got {actual or 0:.0f}s vs listed {listed}s"
 
 
 def _insert_and_report(
@@ -566,7 +624,21 @@ def _insert_and_report(
     promote_reference: bool,
     purge_siblings: bool,
     old_track_audio_id: int | None = None,
+    check_duration: bool = True,
 ) -> int:
+    # Duration gate BEFORE any insert/delete: a suspect regular track never
+    # becomes canonical audio and never triggers the old-row delete. Skipped
+    # for stems/extended and overridable with --no-duration-check.
+    if check_duration:
+        suspect = _duration_gate(db_path, asset)
+        if suspect is not None:
+            _log.error(
+                "duration_suspect: %s - refusing (use --no-duration-check to "
+                "override); old row untouched",
+                suspect,
+            )
+            Path(asset.path).unlink(missing_ok=True)
+            return 1
     # INSERT BEFORE DELETE: the old row is removed only after the new row is
     # committed. A failed/interrupted download or insert therefore leaves the
     # existing audio intact (the delete-before-insert ordering silently ate
@@ -698,6 +770,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Delete all other track_audio rows for this track_id "
         "(and their on-disk files/stems).",
     )
+    p.add_argument(
+        "--no-duration-check",
+        action="store_true",
+        help="Skip the regular-track duration gate (preview-clip / truncated "
+        "-edit guard). Only applies to stem=regular, variant=regular anyway.",
+    )
 
     p.add_argument(
         "--log-level", default="INFO", choices=("DEBUG", "INFO", "WARNING", "ERROR")
@@ -768,6 +846,7 @@ def _run(args: argparse.Namespace) -> int:
             variant=args.edit,
             promote_reference=promote,
             purge_siblings=args.purge_siblings,
+            check_duration=not args.no_duration_check,
         )
     else:  # File mode
         pid = args.player_id or args.file.stem
@@ -782,6 +861,7 @@ def _run(args: argparse.Namespace) -> int:
             variant=args.edit,
             promote_reference=promote,
             purge_siblings=args.purge_siblings,
+            check_duration=not args.no_duration_check,
         )
 
     if rc == 0 and not args.no_log:

@@ -6,6 +6,7 @@ Uses real schema.sql fixtures on tmp paths — no pi-storage, no network.
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -330,6 +331,62 @@ def test_delete_old_row_if_exists_is_noop_when_missing(
     db, audio_root = canonical_env
     rta._delete_old_row_if_exists(db, audio_root, 99999)
     assert _count_track_audio(db) == 0
+
+
+def _set_listed_duration(db: Path, track_id: str, seconds: int) -> None:
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            "INSERT INTO set_track_slots (set_id, row_index, track_id, "
+            "duration_seconds) VALUES (?, 0, ?, ?)",
+            (f"set_{track_id}", track_id, seconds),
+        )
+        conn.commit()
+
+
+def _regular_asset(track_id: str, path: str, dur: float | None) -> AudioAsset:
+    return AudioAsset(
+        track_audio_id=None,
+        track_id=track_id,
+        platform="manual",
+        source_url="file:///x",
+        player_id="p",
+        path=path,
+        sha256="z",
+        duration_s=dur,
+        sample_rate=None,
+        codec="m4a",
+        bitrate_kbps=None,
+        stem="regular",
+        variant="regular",
+    )
+
+
+def test_duration_gate_rejects_short_regular(
+    canonical_env: tuple[Path, Path],
+) -> None:
+    # a 40s file for a song the tracklist lists at 240s = preview-clip class
+    db, _ = canonical_env
+    _set_listed_duration(db, "DGATE1", 240)
+    assert rta._duration_gate(db, _regular_asset("DGATE1", "/x.m4a", 40.0)) is not None
+    # a full-length file passes
+    assert rta._duration_gate(db, _regular_asset("DGATE1", "/x.m4a", 235.0)) is None
+
+
+def test_duration_gate_never_gates_stems(canonical_env: tuple[Path, Path]) -> None:
+    # a legitimately-short acappella stab (DJ Kool 8.5s) must NOT be gated,
+    # even against a long listed length
+    db, _ = canonical_env
+    _set_listed_duration(db, "DGATE2", 240)
+    stab = replace(_regular_asset("DGATE2", "/x.m4a", 8.5), stem="acappella")
+    assert rta._duration_gate(db, stab) is None
+
+
+def test_duration_gate_allows_when_nothing_listed(
+    canonical_env: tuple[Path, Path],
+) -> None:
+    # no scraped length -> nothing to contradict -> allow
+    db, _ = canonical_env
+    assert rta._duration_gate(db, _regular_asset("NOPE", "/x.m4a", 5.0)) is None
 
 
 def test_insert_failure_preserves_old_row(

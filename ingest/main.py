@@ -391,6 +391,34 @@ def _process_track(
                 )
                 continue
             case Ok(asset):
+                # Track-level duration gate: reject the preview-clip / truncated
+                # -edit class before it becomes canonical audio. `_process_track`
+                # only fetches regular full tracks, so comparing against the
+                # scraped song length is sound (acappella stabs, which are
+                # legitimately short, come through the candidate-stem path, not
+                # here). Relative, not an absolute floor.
+                listed_dur_r = db_adapter.load_track_listed_duration(
+                    db_path, track.track_id
+                )
+                listed_dur = (
+                    listed_dur_r.value if isinstance(listed_dur_r, Ok) else None
+                )
+                if not duration_sane(asset.duration_s, listed_dur):
+                    Path(asset.path).unlink(missing_ok=True)
+                    last_err = DownloadError(
+                        kind="duration_suspect",
+                        url=source.url,
+                        detail=(
+                            f"got {asset.duration_s or 0:.0f}s vs listed {listed_dur}s"
+                        ),
+                    )
+                    _log.debug(
+                        "        try %s duration_suspect: %ss vs %ss - falling back",
+                        source.platform,
+                        f"{asset.duration_s or 0:.0f}",
+                        listed_dur,
+                    )
+                    continue
                 ins_r = db_adapter.insert_audio_or_reap(db_path, asset)
                 match ins_r:
                     case Err(e):
