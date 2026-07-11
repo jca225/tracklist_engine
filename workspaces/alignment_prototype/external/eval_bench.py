@@ -179,11 +179,40 @@ def method_fused(sample: Sample) -> dict[int, Pred]:
     return _fused_impl(sample, 0.0)
 
 
+def method_dtw(sample: Sample) -> dict[int, Pred]:
+    """André's DTW baseline, feature space: subsequence-DTW each candidate track
+    against the mix; set_start = mix time at path start, tempo = path slope
+    (mix-frames per track-frame). Works on synthetic + UnmixDB."""
+    import librosa
+
+    out: dict[int, Pred] = {}
+    M = sample.mix_feat
+    for idx, tf in sample.track_feats.items():
+        if tf.shape[1] < 8 or M.shape[1] <= tf.shape[1]:
+            out[idx] = Pred(float("nan"), float("nan"), -1.0)
+            continue
+        # cost = 1 - cosine similarity between track frames (rows) and mix frames (cols)
+        tfn = tf / (np.linalg.norm(tf, axis=0, keepdims=True) + 1e-8)
+        Mn = M / (np.linalg.norm(M, axis=0, keepdims=True) + 1e-8)
+        C = 1.0 - (tfn.T @ Mn)  # (Tk, Tm)
+        _, wp = librosa.sequence.dtw(C=C, subseq=True, backtrack=True)
+        wp = wp[::-1]  # ascending
+        track_f = wp[:, 0]
+        mix_f = wp[:, 1]
+        set_start = float(mix_f[0]) * HOP / SR
+        span_track = max(1, track_f[-1] - track_f[0])
+        span_mix = mix_f[-1] - mix_f[0]
+        tempo = float(span_mix) / float(span_track)  # mix frames per track frame
+        out[idx] = Pred(max(0.0, set_start), tempo, 1.0 - float(C.min()))
+    return out
+
+
 METHODS: dict[str, Method] = {
     "grid_mf": method_grid_mf,
     "no_warp": method_grid_locked,
     "nmf": method_nmf,
     "fused": method_fused,
+    "dtw": method_dtw,
 }
 
 

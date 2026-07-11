@@ -94,3 +94,29 @@ def test_summary_by_stratum_groups_and_reports_abstain():
     assert none.set_start_MAE_s == 1.0  # committed-only mean
     allrow = out[(out.method == "fused") & (out.warp == "ALL")].iloc[0]
     assert allrow.n == 3
+
+
+from workspaces.alignment_prototype.external.eval_bench import method_dtw, HOP, SR
+
+
+def test_method_dtw_recovers_planted_offset():
+    rng = np.random.default_rng(0)
+    D, tlen = 12, 120
+    tf = rng.random((D, tlen)).astype(np.float32)
+    Tm = 800
+    mix = rng.random((D, Tm)).astype(np.float32) * 0.05
+    start_f = 300
+    mix[:, start_f : start_f + tlen] += tf  # planted, tempo 1.0, no stretch
+    s = Sample("synthDTW", mix, {0: tf}, [GTSpan(0, start_f * HOP / SR, 1.0)])
+    preds = method_dtw(s)
+    assert 0 in preds
+    # within ~1s of the planted start
+    assert abs(preds[0].set_start_s - start_f * HOP / SR) < 1.0
+    assert abs(preds[0].tempo_ratio - 1.0) < 0.15
+
+
+def test_method_dtw_abstains_on_tiny_track():
+    mix = np.zeros((12, 400), dtype=np.float32)
+    s = Sample("m", mix, {0: np.zeros((12, 4), np.float32)}, [GTSpan(0, 1.0, 1.0)])
+    preds = method_dtw(s)
+    assert math.isnan(preds[0].set_start_s)
