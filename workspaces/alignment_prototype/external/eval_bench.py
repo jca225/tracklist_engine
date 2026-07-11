@@ -208,12 +208,34 @@ def method_dtw(sample: Sample) -> dict[int, Pred]:
     return out
 
 
+def method_fused_resample(sample: Sample) -> dict[int, Pred]:
+    """Placement via the resample-ratio fp search (for the resample transform:
+    pitch+tempo coupled). tempo_ratio = the recovered resample ratio. Audio only."""
+    if sample.mix_path is None or not sample.track_paths:
+        return {}
+    import librosa
+    from workspaces.alignment_prototype.landmark_fp import fp_offset_resample
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        my, _ = librosa.load(str(sample.mix_path), sr=SR, mono=True)
+    out: dict[int, Pred] = {}
+    for k, tp in sample.track_paths.items():
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            ty, _ = librosa.load(str(tp), sr=SR, mono=True)
+        set_start_s, votes, ratio, _sharp = fp_offset_resample(my, ty)
+        out[k] = Pred(max(0.0, set_start_s), ratio, float(votes))
+    return out
+
+
 METHODS: dict[str, Method] = {
     "grid_mf": method_grid_mf,
     "no_warp": method_grid_locked,
     "nmf": method_nmf,
     "fused": method_fused,
     "dtw": method_dtw,
+    "fused_resample": method_fused_resample,
 }
 
 

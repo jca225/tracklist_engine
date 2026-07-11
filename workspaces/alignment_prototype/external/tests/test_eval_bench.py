@@ -136,6 +136,14 @@ def test_method_dtw_score_is_path_average_not_best_cell():
     assert preds[0].score < 0.9  # best-cell (~1.0) would fail this
 
 
+def test_method_fused_resample_returns_empty_without_audio():
+    from workspaces.alignment_prototype.external.eval_bench import method_fused_resample
+
+    mix = np.zeros((12, 400), dtype=np.float32)
+    s = Sample("m", mix, {0: np.zeros((12, 40), np.float32)}, [GTSpan(0, 1.0, 1.0)])
+    assert method_fused_resample(s) == {}  # no mix_path -> audio method no-ops
+
+
 def test_identity_excludes_abstained_spans():
     # one committed correct span + one abstained span. With distractors that
     # out-score the abstained pred, identity should be 1.0 (1/1 committed), not
