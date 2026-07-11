@@ -29,7 +29,11 @@ track audios, set audio}` → an Ableton-round-trippable structure, trained on m
 Ableton GT. Stem discovery and version/variant QA are **ingest**, *not* the aligner.
 Full spec: [docs/alignment_objective.md](docs/alignment_objective.md); architecture
 map + Point A→B phases: [docs/architecture_north_star.md](docs/architecture_north_star.md)
-(kernel entrypoint: `make align SET=<id>`).
+(kernel entrypoint: `make align SET=<id>`). **Current alignment status + every
+headline number: [docs/alignment_status.md](docs/alignment_status.md)** (the single
+source of truth — regenerated from the scorers, dated+SHA stamped). Status metrics
+belong ONLY there; do not hand-type alignment numbers into other docs or memory —
+cite the canonical doc. Set ids: BB11 = `2nvzlh2k`, BB12 = `1fsnxchk`.
 
 Everything outside this chain is one of:
 - A vendored dependency: `cue-detr/` (DETR-based cue-point detection model,

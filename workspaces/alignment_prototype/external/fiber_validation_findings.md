@@ -1,5 +1,10 @@
 # External fiber validation — HuBERT fibers vs SALAMI human structure
 
+> **Headline numbers: [docs/alignment_status.md](../../../docs/alignment_status.md)** (canonical).
+> This doc owns the SALAMI validation detail (P .88 / R .06, per-arm P/R). The
+> canonical doc frames the +20pp fiber-aware lift as a contribution and cites
+> this file for the precision proof.
+
 **Question.** Do this repo's self-repeat classes (`ref_fibers.compute_fibers`,
 HuBERT-L9 + silence-gate) actually recover *human-annotated section repeats* —
 independent of our tiny Big Bootie GT? The fiber-aware trajectory metric and the

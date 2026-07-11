@@ -74,11 +74,15 @@ class-1 inventory gaps the scrape never marked, so GT stays authoritative
 where it exists; pre-re-materialize timelines still carry stale values).
 `score_timeline_vs_gt` does this now.
 
-State (2026-07-08, corrected routing, BB11+BB12): identity 84/83%, set_start
-median 6.3/7.9 s, acappella trajectory 21% (up from 11% mis-routed), 81% of
-GT-seconds still lost. Loss attribution: decode-residual 45% (the "which
-chorus" repeat-instance wall) > placement ~31% > identity 6%. Acappella is 51%
-of mix-seconds and the worst axis. Full numbers + prioritized levers:
+**Headline numbers live in [docs/alignment_status.md](../../docs/alignment_status.md)**
+(canonical, dated+SHA stamped, regenerated from the scorers). Do not hand-type
+status metrics here — cite the canonical doc. Current shape (regenerated
+2026-07-11, `_lt`): identity 84/83% (BB12/BB11), set_start median 6.3/7.9 s,
+acappella trajectory **10–12% strict / 30–33% fiber-aware** (the old "21%"
+conflated the binary success-rate with the mean traj-acc — see corrections C3),
+85% of GT-seconds lost. Loss attribution: decode-residual **38% ≈ placement 37%**
+(co-equal walls; the old "45% > ~31%" drifted) > mis-route 9% > identity 6%.
+Acappella is 51% of mix-seconds and the worst axis. Full taxonomy + levers:
 [failure_analysis/FINDINGS.md](../../eda/alignment/failure_analysis/FINDINGS.md).
 
 ## Design decisions (load-bearing — do not relearn these)

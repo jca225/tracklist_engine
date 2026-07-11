@@ -1,5 +1,10 @@
 # Alignment failure analysis — BB11 + BB12
 
+> **Headline numbers: [docs/alignment_status.md](../../../docs/alignment_status.md)** (canonical).
+> This doc owns the *detail* taxonomy; canonical owns the current headline totals
+> and wins on any disagreement (it is regenerated from the scorers). BB11 =
+> `2nvzlh2k`, BB12 = `1fsnxchk`.
+
 Where the aligner falls short, *why* (impact-weighted, single binding cause per
 span), and what to do about it. Reproduce:
 

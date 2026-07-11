@@ -1,5 +1,9 @@
 # Multi-set co-train + LOSO — first cross-set result (2026-07-11)
 
+> **Headline numbers: [docs/alignment_status.md](../../docs/alignment_status.md)** (canonical).
+> This doc owns the LOSO detail; the "identity transfers 100% / placement does
+> not" result is folded into canonical §6. BB11 = `2nvzlh2k`, BB12 = `1fsnxchk`.
+
 **Gear:** `cotrain.py` (`SetStores`, `cotrain`, `run_loso`) + `train.py --loso`.
 Co-train works because the head trains on set-agnostic materialized examples
 (`build_examples`), so we concat per-set examples and train one head; LOSO wraps

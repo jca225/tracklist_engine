@@ -1,5 +1,11 @@
 # looptrace — NOTES
 
+> **Headline numbers: [docs/alignment_status.md](../../../docs/alignment_status.md)** (canonical).
+> Note the open item recorded there (corrections C4): looptrace `_lt` is the
+> scorecard source-of-truth timeline but does **not** uniformly beat base
+> classical on the fiber-aware headline (it regresses BB12 45→38). Flagged, not
+> yet resolved.
+
 Running log for the acappella loop-tracing effort (non-monotonic alignment of DJ-mix
 vocals). Plan of record: the phased brief (Phase 0 recon → Phase 1 ill-posedness audit
 → Phase 2 loop-collapse → Phase 3 landmark Hough + segment-cover DP → Phases 4–5
