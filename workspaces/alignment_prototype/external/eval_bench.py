@@ -259,11 +259,13 @@ def score_sample(sample: Sample, preds: dict[int, Pred]) -> tuple[list[dict], fl
             if df.shape[1] >= 8 and sample.mix_feat.shape[1] > df.shape[1]:
                 dist_peaks.append(detect_offset(df, sample.mix_feat)[1])
         best_dist = max(dist_peaks) if dist_peaks else -2.0
-        hits = sum(
-            int((p := preds.get(sp.track_idx)) is not None and p.score > best_dist)
+        committed_gt = [
+            sp
             for sp in sample.gt
-        )
-        id_ok = hits / max(1, len(sample.gt))
+            if (p := preds.get(sp.track_idx)) is not None and not is_abstain(p)
+        ]
+        hits = sum(int(preds[sp.track_idx].score > best_dist) for sp in committed_gt)
+        id_ok = hits / max(1, len(committed_gt))
     return rows, id_ok
 
 

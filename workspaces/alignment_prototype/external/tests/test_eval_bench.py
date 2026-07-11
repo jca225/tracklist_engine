@@ -134,3 +134,30 @@ def test_method_dtw_score_is_path_average_not_best_cell():
     preds = method_dtw(s)
     assert not math.isnan(preds[0].score)
     assert preds[0].score < 0.9  # best-cell (~1.0) would fail this
+
+
+def test_identity_excludes_abstained_spans():
+    # one committed correct span + one abstained span. With distractors that
+    # out-score the abstained pred, identity should be 1.0 (1/1 committed), not
+    # 0.5 (1/2 counting the abstention as a miss).
+    # Key: track 1 is abstained (NaN set_start), so it should NOT be counted in
+    # either hits or denominator.
+    mix = np.ones((12, 400), dtype=np.float32)
+    tfa = np.ones((12, 40), dtype=np.float32)
+    tfb = np.ones((12, 40), dtype=np.float32)
+    distractor = np.full((12, 40), 0.5, dtype=np.float32)
+    s = Sample(
+        "m",
+        mix,
+        {0: tfa, 1: tfb},
+        [GTSpan(0, 1.0, 1.0), GTSpan(1, 2.0, 1.0)],
+        distractor_feats={"d0": distractor},
+    )
+    preds = {
+        0: Pred(1.0, 1.0, 100.0),  # committed, out-scores distractor (~1.0)
+        1: Pred(float("nan"), float("nan"), 0.5),  # abstained, loses to distractor
+    }
+    _, id_ok = score_sample(s, preds)
+    # Old code: hits = (100.0 > 1.0) + (0.5 > 1.0) = 1 + 0 = 1, id_ok = 1/2 = 0.5
+    # New code: committed_gt = [GTSpan(0, ...)], hits = 1, id_ok = 1/1 = 1.0
+    assert id_ok == 1.0
