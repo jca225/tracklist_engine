@@ -51,7 +51,9 @@ labeling seeder.** Retrain half already exists (`export_als_to_gt` + `cotrain`).
   (escalated spans have no GT — that's the point).
 - **Retrain half (exists, out of scope here):** `labeling/export_als_to_gt.py`,
   `cotrain.py` / `train.py --loso`.
-- **Set ids:** bb11 = `1fsnxchk`, bb12 = `2nvzlh2k`. Run from repo root with
+- **Set ids:** bb11 = `2nvzlh2k`, bb12 = `1fsnxchk` (corrected 2026-07-11 — the
+  original handoff had these swapped; see `docs/alignment_status_corrections_20260711.md` C6).
+  Run from repo root with
   `venvs/audio/bin/python`.
 
 ## Things I INFERRED in the spec — VERIFY before coding
@@ -81,8 +83,8 @@ labeling seeder.** Retrain half already exists (`export_als_to_gt` + `cotrain`).
 
 ## Definition of done
 
-`make flywheel-seed SET=1fsnxchk TOP=15` produces a labeling `.als` of bb11's
-top-15 escalated spans (no GT dependency), ready to hand-correct in Ableton →
+`make flywheel-seed SET=1fsnxchk TOP=15` produces a labeling `.als` of bb12's
+(`1fsnxchk`) top-15 escalated spans (no GT dependency), ready to hand-correct in Ableton →
 `export_als_to_gt` → `cotrain` retrain. That closes the flywheel's front half.
 
 ## Session context (already merged to main this session)

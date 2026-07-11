@@ -14,8 +14,8 @@ that head around the held-out set with a scraped-cue placement anchor
 
 | held-out | trained on | spans | identity_acc | set_start MAE |
 |---|---|---|---|---|
-| bb11 (1fsnxchk) | bb12 | 150 | **100%** | **18.6 s** |
-| bb12 (2nvzlh2k) | bb11 | 166 | **100%** | **1436 s** |
+| bb11 (2nvzlh2k) | bb12 | 150 | **100%** | **18.6 s** |
+| bb12 (1fsnxchk) | bb11 | 166 | **100%** | **1436 s** |
 
 ## The finding (the honest read)
 
