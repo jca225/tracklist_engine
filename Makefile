@@ -89,6 +89,9 @@ race:
 	venvs/audio/bin/python -m workspaces.alignment_prototype.drivers.race \
 		--sets $(SETS) --drivers $(DRIVERS) $(EXTRA)
 
+align-ablate:
+	venvs/audio/bin/python -m workspaces.alignment_prototype.experiments.cli $(EXTRA)
+
 # The kernel entrypoint (P1, docs/architecture_north_star.md): align ONE set
 # with the current-best default composition and score it. No flags needed.
 # The default driver flips to ml when it wins the race board (P3).
