@@ -86,10 +86,19 @@ additive changes to existing units:
 
 | Gap | Change | Unit | Cost |
 |---|---|---|---|
-| **gain metric** | add `gain` to `GTSpan`/`Pred`; score gain MAE in `score_sample`; report in `summary`. `nmf_baseline` already emits the envelope. | `eval_bench` | small |
-| **tempo slope for our fp method** | `method_fused` reports the fp diagonal's *slope* (tempo ratio), not just offset. | `eval_bench` / `mix_fp_hits` | small |
-| **abstain vs no-abstain modes** | a mode flag: André-mode forces best-candidate commit and reports 0 abstentions; open-mode keeps the confidence floor and reports abstain rate as a first-class column. | `eval_bench` | small |
-| **per-condition stratification in the MAE table** | port the warp×effect stratification from `unmixdb_eval` into `eval_bench.summary` so the reduction table matches André's Fig. 4 axes. | `eval_bench` | small |
+| **abstain vs no-abstain modes** | a mode flag: André-mode forces best-candidate commit and reports 0 abstentions; open-mode keeps the confidence floor and reports **abstain rate as a first-class column** (a capability, not a penalty). | `eval_bench` | small |
+| **per-condition stratification in the MAE table** | parse the warp×effect stratum from `mix_id` (`set<NNN>mix3-<warp>-<effect>-<NN>`); `summary` groups by stratum so the reduction table matches André's Fig. 4 axes. | `eval_bench` | small |
+| **DTW baseline** | add `method_dtw` (chroma/feature DTW, mix-window vs ref) — André's *warp-error winner*, so the reduction bar isn't understated by NMF alone. | `eval_bench` | medium |
+
+**Gain — deferred, and honestly scoped.** UnmixDB *has* gain GT (fadein/fadeout
+trapezoids in the labels), but (a) `UnmixTrackSpan` doesn't expose the envelope,
+(b) `NmfPred` surfaces only a scalar `gain_peak` in un-normalized activation
+units, and (c) **our fp/fused methods emit no gain at all** — only the absorbed
+NMF does. A dense gain-MAE column would therefore score the NMF component alone,
+noisily. Gain is a **named limitation on-thesis** (the NMF *mode* models gain;
+our front-end does not) and gets a separate later task that extends
+`UnmixTrackSpan` with a `gain_envelope` and `NmfPred` with the curve. It is NOT
+in the Phase 0 spine.
 
 ### Data flow
 
@@ -177,9 +186,23 @@ opinion-audit methodology · the André-absorption reduction · named costs.
 4. **"Absorb" overclaim guard** — the paper states explicitly where the specialist
    wins. Subsumption = contains-as-special-case, not dominates-everywhere.
 
-## Open questions for the plan
+## Resolved decisions (2026-07-11)
 
-- Phase 2 method: pitch-search grid over `landmark_fp` (cheaper, hackier) vs a
-  CQT-domain constellation (cleaner, more work). Decide in writing-plans.
-- Whether to also cite/reproduce André's DTW baseline (their warp-error winner)
-  or only the NMF method. NMF is already reproduced; DTW is additional work.
+- **Phase 2 method → pitch-search grid over `landmark_fp`, CQT as a documented
+  fallback only if the grid plateaus.** A pitch shift is a log-frequency
+  translation; the grid exploits the same structure the CQT would make invariant,
+  but *reuses the proven constellation matcher* instead of reimplementing landmark
+  extraction + hashing (the one component that currently works perfectly). Grid:
+  ~±6 semitones at half-semitone steps (~24 bins) covers UnmixDB's 0.75–1.32 warp
+  range; find the pitch bin, then local-refine for sub-bin offset precision.
+  Embarrassingly parallel (`multiprocessing.Pool`). CQT only if the grid's
+  discretization proves insufficient — unlikely given 0.02 s offset precision once
+  in the right bin.
+- **Language → Python.** Hot loops are already native (scipy FFT, numpy/BLAS NMF
+  and correlation). This is offline benchmark code (240 mixes, a few runs);
+  correctness and dev velocity dominate runtime. Escape hatch for a profiled
+  bottleneck: numpy-vectorize → `numba` → `cython` → single-function `pyo3`, never
+  a wholesale rewrite. No C++/Rust adoption for this program.
+- **DTW baseline → include it.** André's DTW baseline is his *warp-error winner*;
+  reproducing only NMF would understate the bar. Add `method_dtw` (chroma/feature
+  DTW between mix window and ref) alongside `method_nmf` in the reduction table.
