@@ -222,7 +222,34 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Warm-start MertAlignHead from UnmixDB pretrain (see pretrain.py)",
     )
+    p.add_argument(
+        "--loso",
+        action="store_true",
+        help="Leave-one-set-out co-train eval over --sets",
+    )
+    p.add_argument(
+        "--sets",
+        default="bb11,bb12",
+        help="comma-separated fixture stems in labeling/fixtures/",
+    )
     args = p.parse_args(argv)
+
+    if args.loso:
+        from workspaces.alignment_prototype.cotrain import run_loso
+        from workspaces.alignment_prototype.mert_model import TrainConfig
+
+        fixtures = _REPO / "labeling/fixtures"
+        yamls = {s: fixtures / f"{s}_ground_truth.yaml" for s in args.sets.split(",")}
+        rep = run_loso(
+            yamls,
+            cfg=TrainConfig(epochs=40, search_margin_s=90.0),
+            device=_torch_device(),
+        )
+        for sid, r in rep.items():
+            print(f"\n=== LOSO held-out {sid} (anchor={r['anchor']}) ===")
+            for line in r["lines"]:
+                print(f"  {line}")
+        return 0
 
     match load_set(args.yaml):
         case Err(msg):
