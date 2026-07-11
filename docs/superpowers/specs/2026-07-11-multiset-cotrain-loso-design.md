@@ -53,7 +53,12 @@ placement signal and the DP collapses to the front of the mix** (documented at
 `anchor_sigma_s` (scraped-cue anchoring), not None** — otherwise the held-out
 number is a floor artifact, not a real generalization measurement.
 
-## Architecture — four changes
+## Architecture — three changes
+
+The materializer is **already separated**: `build_aligner` calls
+`build_examples(train_targets, mix, refs, slot_pools, search_margin_s=...) ->
+tuple[MertSpanExample, ...]` then `train_ensemble`. So co-train reuses
+`build_examples` per set — no extraction refactor needed.
 
 ### 1. `SpanTarget += set_id` (`records.py`, `dataset.py`)
 Add `set_id: str` to the `SpanTarget` frozen dataclass. Populate it in
@@ -61,22 +66,14 @@ Add `set_id: str` to the `SpanTarget` frozen dataclass. Populate it in
 `gt.set_id` through `load_set`'s `track_to_target` calls. Behavior-preserving for
 existing single-set paths (the field is additive; nothing reads it yet).
 
-### 2. Extract example-materialization from `build_aligner` (`mert_model.py`)
-`build_aligner` currently couples: materialize examples (from train spans + one
-set's `mix`/`refs`/`slot_pools`) → `train_ensemble` → wrap `MertLearnedAligner`.
-Split out a pure `examples_for_set(train_spans, mix, refs, slot_pools, *, cfg) ->
-tuple[MertSpanExample, ...]` (the materialization block, verbatim), and rewrite
-`build_aligner` to call it then `train_ensemble`. Single-set behavior must be
-**identical** (a golden test on bb12 examples count + first example tensor shape).
-
-### 3. Multi-set co-train (`mert_model.py` or a new `cotrain.py`)
+### 2. Multi-set co-train (`cotrain.py`, new)
 `cotrain(train_sets: list[SetStores], *, cfg, device, init=None) ->
 MertAlignHead | MertAlignEnsemble` where `SetStores` bundles
-`(set_id, train_spans, mix, refs, slot_pools)`. Materialize examples per set via
-`examples_for_set`, concatenate, `train_ensemble(all_examples)`. Returns the head
-only (not wrapped — the caller wraps per held-out set).
+`(set_id, train_spans, mix, refs, slot_pools)`. For each set call the existing
+`build_examples(...)`, concatenate all examples, `train_ensemble(all_examples)`.
+Returns the head only (not wrapped — the caller wraps per held-out set).
 
-### 4. LOSO driver + `train.py --loso`
+### 3. LOSO driver + `train.py --loso`
 `run_loso(set_ids: list[str], yamls: dict[str, Path], *, cfg, device) ->
 LosoReport`: for each held-out `s`, load stores for all sets, `cotrain` on the rest,
 wrap the head around `s`'s stores with `anchor_sigma_s` set, `predict_sequence` on
@@ -102,12 +99,15 @@ bb12.yaml ─load_set─> (gt, targets[set_id=bb12]) ─┤
 
 - **Unit — set_id threading:** `load_set(bb12.yaml)` yields targets all with
   `set_id == "<bb12 set_id>"`; `SpanTarget` still frozen/hashable.
-- **Golden — refactor is behavior-preserving:** `examples_for_set` on bb12 returns
-  the same count and first-example tensor shapes as the pre-refactor `build_aligner`
-  did (guards the extraction).
-- **Unit — cotrain concatenation:** `cotrain` on two tiny fake `SetStores` trains a
-  head and the example count equals the sum of per-set counts (mock/monkeypatch
-  `train_ensemble` to capture the concatenated length — no GPU needed).
+- **Unit — cotrain concatenation:** `cotrain` on two tiny fake `SetStores` calls
+  `build_examples` per set and passes the concatenated list to `train_ensemble`;
+  monkeypatch both (`build_examples` → per-set stub lists, `train_ensemble` →
+  capture its input length) and assert the captured length equals the sum of
+  per-set counts. No GPU / no real stores needed.
+- **Unit — single-set cotrain ≡ build_aligner examples:** `cotrain` with one
+  `SetStores` feeds `train_ensemble` exactly the `build_examples(...)` list that
+  `build_aligner` would (same monkeypatch capture), guarding parity with the
+  shipped single-set path.
 - **Integration (offline, real MERT cache) — the deliverable:** `train.py --loso
   --sets bb11,bb12` runs end-to-end, printing held-out set_start median for each
   direction. This is the honest generalization number; it needs both sets' MERT
