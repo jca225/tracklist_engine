@@ -139,3 +139,87 @@ standalone critic. Before investing in the full ranker, run two cheap experiment
 
 If the cleaner experiment lifts AUC >= 0.60, build the ranker. If it stays at
 0.57, lean on the verb-log preference model instead and archive this lane.
+
+---
+
+# P0 v2: Clean-bed + Tempo-aligned confirmatory experiments
+
+*Run date: 2026-07-11. Script: `eda/information_dynamics/bb_mashup_surprise_p0_v2.py`.*
+*Metrics persisted to `data/analysis/aux.db :: analysis_results / bb_mashup_surprise_p0_v2`.*
+
+## Headline
+
+**NULL-ish — the cleaner measurement did NOT lift the signal; it slightly LOWERED it.**
+
+Replacing the noisy Roformer `mix_instrumental` bed proxy with each co-occurring
+track's ISOLATED instrumental stem, and separately adding tempo-ratio alignment,
+both moved the AUC *down*, not up. The v1 "weak GO" (0.576) does not survive a
+cleaner, more correct measurement — it was likely inflated by incidental
+correlations in the mix-separated bed (crosstalk, other layers bleeding in).
+
+## AUC Table (v2 vs v1 vs baseline)
+
+| Variant | best feature | best-feat AUC | multi-LR AUC | key baseline |
+|---|---|---|---|---|
+| v1 (mix_instrumental bed) | mean_kl | 0.576 | 0.565 | 0.498 |
+| **v2-A clean bed** | mean_kl | **0.550** | 0.533 | 0.500 |
+| **v2-B clean bed + tempo-align** | mean_kl | **0.551** | 0.508 | 0.500 |
+
+Evaluation: leave-one-set-out (BB11/BB12). n_pos=169, n_neg=504 (both variants);
+12 pairs failed audio load. Clean positives built from 172 acappella spans with a
+co-occurring bed whose isolated instrumental stem exists on disk (85 BB11 + 87
+BB12); 111 total clean bed tracks in the negative pool.
+
+## Per-feature (v2, clean bed)
+
+| feature | clean_bed AUC | clean_bed_tempo AUC |
+|---|---|---|
+| mean_kl | 0.550 | 0.551 |
+| var_kl | 0.539 | 0.543 |
+| max_kl | 0.534 | 0.537 |
+| invU_coeff | 0.537 | 0.520 |
+| skew_kl | 0.531 | 0.518 |
+| kl_drop_spike | 0.486 | 0.471 |
+| multi_lr | 0.533 | 0.508 |
+
+`mean_kl` remains the single best feature in both variants (0.550 / 0.551), and
+the sign is unchanged (real mashups = slightly higher harmonic tension). But the
+effect size is smaller than v1 and the multi-feature LR is barely above chance
+(0.533 / 0.508) — the classifier overfits the 6 correlated features on n=2 sets.
+The inverted-U feature (`invU_coeff`) and entry-spike (`kl_drop_spike`) remain
+non-diagnostic.
+
+## Why cleaner made it worse (interpretation)
+
+- The isolated-track instrumental stem is a *fairer* bed: it isolates the harmonic
+  question (does the vocal clash with THIS song's instrumental) from the confound
+  of "what else was playing in the mix." Removing that confound removed signal —
+  meaning v1's signal was partly the confound, not harmonic surprise per se.
+- Tempo alignment (v2-B) did not help and slightly hurt the multi-LR, indicating
+  frame-misalignment was not the bottleneck; the chroma pitch-class comparison
+  itself is too coarse to capture mashup quality.
+
+## Coverage / caveats
+
+- Same 2-set, single-artist (Two Friends) limitation as v1. 95% CI half-width
+  ≈ ±0.038 at n=673. The v2 AUCs (0.55) are ~1.3 CI half-widths above chance —
+  suggestive of a weak real effect but not a shippable separator.
+- Clean-stem coverage: 89/92 (BB11) and ~87/100 (BB12) acappellas had a
+  co-occurring bed with an isolated instrumental stem — good coverage, not a
+  data-availability failure.
+
+## Decision
+
+**NULL-ish → lean on the verb-log preference model.** The clean-bed AUC is 0.550,
+well below the ≥0.60 GO threshold, and the cleaner measurement REDUCED rather than
+lifted the signal. Chroma-space information dynamics does not carry enough
+mashup-quality signal to justify building a standalone arrangement critic.
+
+Concrete recommendation:
+- **Do NOT build the chroma surprise ranker.** `mean_kl` becomes at most a weak
+  auxiliary feature for the Stage-1 decision model, not a headline critic.
+- **Prefer the verb-log preference model** for the arrangement-quality lane.
+- If information-dynamics is revisited, the next space to try is a *learned*
+  predictive model (per the plan's own hedge that "MERT is probably wrong and
+  chroma is the cheapest, not the ceiling") — but only after the verb-log model
+  is shown insufficient. Chroma is closed as a headline lever.
