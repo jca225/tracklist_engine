@@ -20,6 +20,7 @@ harness smoke-tests before UnmixDB finishes downloading.
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 import warnings
 from dataclasses import dataclass, field
@@ -73,6 +74,26 @@ class Pred:
 Method = Callable[[Sample], dict[int, Pred]]
 
 
+_WARPS = {"none", "resample", "stretch"}
+_EFFECTS = {"none", "bass", "compressor", "distortion"}
+
+
+def stratum(mix_id: str) -> tuple[str, str]:
+    """(warp, effect) from an UnmixDB mix id `set<NNN>mix3-<warp>-<effect>-<NN>`.
+    Unparseable -> ('unknown','unknown')."""
+    parts = mix_id.split("-")
+    if len(parts) < 4:
+        return ("unknown", "unknown")
+    warp, effect = parts[1], parts[2]
+    if warp not in _WARPS or effect not in _EFFECTS:
+        return ("unknown", "unknown")
+    return (warp, effect)
+
+
+def is_abstain(p: Pred) -> bool:
+    return math.isnan(p.set_start_s)
+
+
 # ----------------------------------------------------------------------------- methods
 def method_grid_mf(
     sample: Sample, stretches: tuple[float, ...] = STRETCHES
@@ -109,13 +130,7 @@ def method_nmf(sample: Sample) -> dict[int, Pred]:
     }
 
 
-def method_fused(sample: Sample) -> dict[int, Pred]:
-    """Fused pipeline (plays each backbone to its strength, from the diagnostics):
-      - placement  = fingerprint offset histogram (set_start ≈ -offset; lands
-        within ~1-3s even under tempo-stretch, no heavy tail)
-      - identity   = fingerprint vote count (SOTA-band, see --identity)
-      - tempo/warp = matched-filter stretch search (fingerprint's warp grid is coarse)
-    Needs audio (UnmixDB)."""
+def _fused_impl(sample: Sample, min_votes: float) -> dict[int, Pred]:
     if sample.mix_path is None or not sample.track_paths:
         return {}
     import librosa
@@ -132,7 +147,10 @@ def method_fused(sample: Sample) -> dict[int, Pred]:
         off, votes, fp_st, _sharp = fp_offset(
             my, ty, stretches=(0.9, 0.95, 1.0, 1.05, 1.1)
         )
-        fp_start = max(0.0, -off)  # fingerprint placement (robust, no heavy tail)
+        if min_votes > 0.0 and float(votes) < min_votes:
+            out[k] = Pred(float("nan"), float("nan"), float(votes))  # abstain
+            continue
+        fp_start = max(0.0, -off)
         tf = sample.track_feats.get(k)
         if (
             tf is not None
@@ -142,11 +160,50 @@ def method_fused(sample: Sample) -> dict[int, Pred]:
             mf_start, _, mf_tempo = detect_offset(tf, sample.mix_feat)
         else:
             mf_start, mf_tempo = fp_start, fp_st
-        # agreement gate: take the matched filter's PRECISION when it agrees with
-        # the fingerprint; fall back to the fingerprint's ROBUSTNESS when the
-        # matched filter wandered to a spurious far peak (its heavy tail).
         set_start = mf_start if abs(mf_start - fp_start) <= 8.0 else fp_start
         out[k] = Pred(set_start, mf_tempo, float(votes))
+    return out
+
+
+def make_fused(min_votes: float = 0.0) -> Method:
+    """André-mode (min_votes=0, always commit) or open-mode (min_votes>0, abstain
+    on weak fp votes)."""
+
+    def method(sample: Sample) -> dict[int, Pred]:
+        return _fused_impl(sample, min_votes)
+
+    return method
+
+
+def method_fused(sample: Sample) -> dict[int, Pred]:
+    return _fused_impl(sample, 0.0)
+
+
+def method_dtw(sample: Sample) -> dict[int, Pred]:
+    """André's DTW baseline, feature space: subsequence-DTW each candidate track
+    against the mix; set_start = mix time at path start, tempo = path slope
+    (mix-frames per track-frame). Works on synthetic + UnmixDB."""
+    import librosa
+
+    out: dict[int, Pred] = {}
+    M = sample.mix_feat
+    for idx, tf in sample.track_feats.items():
+        if tf.shape[1] < 8 or M.shape[1] <= tf.shape[1]:
+            out[idx] = Pred(float("nan"), float("nan"), -1.0)
+            continue
+        # cost = 1 - cosine similarity between track frames (rows) and mix frames (cols)
+        tfn = tf / (np.linalg.norm(tf, axis=0, keepdims=True) + 1e-8)
+        Mn = M / (np.linalg.norm(M, axis=0, keepdims=True) + 1e-8)
+        C = 1.0 - (tfn.T @ Mn)  # (Tk, Tm)
+        _, wp = librosa.sequence.dtw(C=C, subseq=True, backtrack=True)
+        wp = wp[::-1]  # ascending
+        track_f = wp[:, 0]
+        mix_f = wp[:, 1]
+        set_start = float(mix_f[0]) * HOP / SR
+        span_track = max(1, track_f[-1] - track_f[0])
+        span_mix = mix_f[-1] - mix_f[0]
+        tempo = float(span_mix) / float(span_track)  # mix frames per track frame
+        out[idx] = Pred(max(0.0, set_start), tempo, 1.0 - float(C.min()))
     return out
 
 
@@ -155,6 +212,7 @@ METHODS: dict[str, Method] = {
     "no_warp": method_grid_locked,
     "nmf": method_nmf,
     "fused": method_fused,
+    "dtw": method_dtw,
 }
 
 
@@ -164,6 +222,19 @@ def score_sample(sample: Sample, preds: dict[int, Pred]) -> tuple[list[dict], fl
     for sp in sample.gt:
         p = preds.get(sp.track_idx)
         if p is None:
+            continue
+        if is_abstain(p):
+            rows.append(
+                dict(
+                    mix_id=sample.mix_id,
+                    track=sp.track_idx,
+                    set_start_err=float("nan"),
+                    tempo_err=float("nan"),
+                    tempo_pct=float("nan"),
+                    peak=p.score,
+                    abstained=True,
+                )
+            )
             continue
         rows.append(
             dict(
@@ -175,6 +246,7 @@ def score_sample(sample: Sample, preds: dict[int, Pred]) -> tuple[list[dict], fl
                 / max(1e-6, sp.tempo_ratio)
                 * 100.0,
                 peak=p.score,
+                abstained=False,
             )
         )
     # identity: the true track must out-score every distractor — scored the SAME
@@ -213,18 +285,58 @@ def summary(dfs: dict[str, pd.DataFrame]) -> pd.DataFrame:
         if len(df) == 0:
             out.append(dict(method=label, n=0))
             continue
+        committed = df[~df.abstained] if "abstained" in df else df
         out.append(
             dict(
                 method=label,
                 n=len(df),
-                set_start_MAE_s=round(df.set_start_err.mean(), 2),
-                set_start_med_s=round(df.set_start_err.median(), 2),
-                set_start_exact2s_pct=round(100 * (df.set_start_err < 2).mean(), 0),
-                tempo_MAE=round(df.tempo_err.mean(), 4),
-                tempo_pct=round(df.tempo_pct.median(), 2),
+                abstain_pct=round(100 * df.abstained.mean(), 1)
+                if "abstained" in df
+                else 0.0,
+                set_start_MAE_s=round(committed.set_start_err.mean(), 2),
+                set_start_med_s=round(committed.set_start_err.median(), 2),
+                set_start_exact2s_pct=round(
+                    100 * (committed.set_start_err < 2).mean(), 0
+                ),
+                tempo_MAE=round(committed.tempo_err.mean(), 4),
+                tempo_pct=round(committed.tempo_pct.median(), 2),
                 identity_acc=round(df.attrs.get("identity_acc", float("nan")), 3),
             )
         )
+    return pd.DataFrame(out)
+
+
+def _grp_row(method: str, warp: str, effect: str, g: pd.DataFrame) -> dict:
+    committed = g[~g.abstained]
+    return dict(
+        method=method,
+        warp=warp,
+        effect=effect,
+        n=len(g),
+        abstain_pct=round(100 * g.abstained.mean(), 1),
+        set_start_MAE_s=round(committed.set_start_err.mean(), 2)
+        if len(committed)
+        else float("nan"),
+        set_start_med_s=round(committed.set_start_err.median(), 2)
+        if len(committed)
+        else float("nan"),
+        tempo_MAE=round(committed.tempo_err.mean(), 4)
+        if len(committed)
+        else float("nan"),
+    )
+
+
+def summary_by_stratum(dfs: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    out = []
+    for method, df in dfs.items():
+        if len(df) == 0:
+            out.append(dict(method=method, warp="ALL", effect="ALL", n=0))
+            continue
+        strat = df.mix_id.map(stratum)
+        df = df.assign(warp=[s[0] for s in strat], effect=[s[1] for s in strat])
+        for (w, e), g in df.groupby(["warp", "effect"], sort=True):
+            out.append(_grp_row(method, w, e, g))
+        out.append(_grp_row(method, "ALL", "ALL", df))
     return pd.DataFrame(out)
 
 
@@ -428,6 +540,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="also run the chroma-vs-fingerprint identity benchmark",
     )
+    p.add_argument(
+        "--stratified",
+        action="store_true",
+        help="print the warp×effect stratified table",
+    )
+    p.add_argument(
+        "--min-votes",
+        type=float,
+        default=0.0,
+        help="open-mode fp abstain floor for 'fused' (0 = André-mode)",
+    )
     args = p.parse_args(argv)
 
     if args.synthetic:
@@ -455,6 +578,9 @@ def main(argv: list[str] | None = None) -> int:
     dfs = {}
     for name in args.methods.split(","):
         name = name.strip()
+        if name == "fused" and args.min_votes > 0.0:
+            dfs[name] = run(samples, make_fused(args.min_votes), name)
+            continue
         if name not in METHODS:
             print(f"unknown method {name}")
             continue
@@ -462,6 +588,10 @@ def main(argv: list[str] | None = None) -> int:
 
     print("\n=== eval_bench (placement / warp) ===")
     print(summary(dfs).to_string(index=False))
+
+    if args.stratified:
+        print("\n=== stratified (warp × effect) ===")
+        print(summary_by_stratum(dfs).to_string(index=False))
 
     if args.identity:
         print("\n=== identity (rank@1: true track out-scores all distractors) ===")
