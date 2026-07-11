@@ -93,6 +93,20 @@ _DUR_MIN_S = 15.0
 _DUR_MAX_S = 180.0
 _DUR_FALLBACK_S = 45.0
 
+# Opinion-audit #1 (docs/opinion_audit.md): the 90s fp gate is GT-validated
+# GLOBALLY but fails in the medley regime — MERT's prior collapses in 4-5-deep
+# pileups and the gate then discards dead-correct diagonals. Overwhelming
+# evidence breaks the leash. Calibration (BB12 gated-span table, 2026-07-10;
+# sharpness here = chosen candidate's votes / strongest OTHER candidate from
+# decode_placements, NOT a window histogram ratio): prisoners with GT-correct
+# fp separate cleanly — Honest Virtu 2632 votes/1.92 (fp 2.1s from GT, prior
+# 123s off), Outside 490/1.41 (fp 2.2s from GT) — vs junk at <=36 votes and
+# decode-overridden ambiguity at sharp<1.0 (e.g. 120 votes/0.19, correctly
+# kept gated). Floors sit in the gap: votes 3x above junk, sharp above the
+# ambiguity band.
+_FP_GATE_OVERRIDE_VOTES = 100
+_FP_GATE_OVERRIDE_SHARP = 1.2
+
 
 def _ssh_sql(sql: str) -> str:
     r = subprocess.run(
@@ -270,15 +284,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--stem-placement-guard-s", type=float, default=8.0)
     p.add_argument(
         "--instr-stem-placement",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help="place INSTRUMENTAL spans by fingerprinting the instrumental stem on "
         "both sides (mix_instrumental.flac <-fp-> ref Demucs instrumental stem). The "
         "full-mix fp/chroma fail on instrumental (vocal-carrying mix vs vocal-less "
         "ref); stem-vs-stem fp recovers regular-level placement (probe: BB11 5.0s "
         "set_start). Sets set_start AND ref_start (=set_start+offset), gated to the "
-        "prior like --fp-placement. Default OFF (opt-in). NOTE: infer's DB "
-        "claimed_stem is stale (~2 instrumentals/set vs ~25 real, row-text drop bug) "
-        "— pass --instr-stem-gt-yaml to route the real instrumental spans.",
+        "prior like --fp-placement. Default ON since the 2026-07-09 pi "
+        "re-materialize: DB claimed_stem now carries ~19/25 real instrumentals per "
+        "set (residual ~6 are class-1 inventory gaps, GT-only). "
+        "--instr-stem-gt-yaml still tops up routing where GT exists (scoring runs).",
     )
     p.add_argument(
         "--instr-stem-gt-yaml",
@@ -386,6 +402,8 @@ def main(argv: list[str] | None = None) -> int:
     # overwritten at each override site, so engagement is auditable from the
     # timeline artifact itself, not the run log.
     start_source: dict[int, str] = {i: "mert" for i in range(len(preds))}
+    # opinion-audit loudness: every gate firing (or override) lands on the span
+    gate_events: dict[int, dict] = {}
     # Every probe's raw proposal, kept even when another probe wins — the
     # agentic replay needs the losing candidates to measure cross-probe
     # agreement (without them, single-source beliefs underestimate quality).
@@ -436,15 +454,16 @@ def main(argv: list[str] | None = None) -> int:
                 topk=args.fp_placement_topk,
                 gap_s=args.fp_placement_gap_s,
                 with_offset=True,
+                with_strength=True,
             )
             new_preds = list(preds)
-            n_placed = n_gated = 0
+            n_placed = n_gated = n_override = 0
             gate = args.fp_placement_gate_s
             for r, i in enumerate(keep):
                 pl = placements[r]
                 if pl is None:
                     continue
-                ss, se, off = pl
+                ss, se, off, votes, sharp = pl
                 mert_start = preds[i].set_start_s
                 mert_starts[i] = mert_start
                 probe_proposals[i]["fp"] = ss
@@ -453,10 +472,24 @@ def main(argv: list[str] | None = None) -> int:
                 # MERT is coarse but anchored (cue prior + monotonic decode, p90
                 # ~78s). Trust fp only as a local refinement of MERT; when it
                 # wildly disagrees, the anchored prior is safer. Validated on BB12
-                # (band 90s: p90 340->61s, median 9.2->6.6s).
+                # (band 90s: p90 340->61s, median 9.2->6.6s). EXCEPT: overwhelming
+                # evidence breaks the leash (opinion-audit #1) — and every gate
+                # firing is recorded on the span, never silent.
                 if gate > 0 and abs(ss - mert_start) > gate:
-                    n_gated += 1
-                    continue  # keep MERT placement untouched
+                    strength = {
+                        "fp_votes": int(votes),
+                        "fp_sharpness": round(float(sharp), 2),
+                        "fp_delta_s": round(abs(ss - mert_start), 1),
+                    }
+                    if not (
+                        votes >= _FP_GATE_OVERRIDE_VOTES
+                        and sharp >= _FP_GATE_OVERRIDE_SHARP
+                    ):
+                        n_gated += 1
+                        gate_events[i] = {"rule": f"fp-gate-{gate:.0f}s", **strength}
+                        continue  # keep MERT placement untouched
+                    n_override += 1
+                    gate_events[i] = {"rule": "fp-gate-OVERRIDE", **strength}
                 new_preds[i] = dataclasses.replace(
                     preds[i],
                     set_start_s=ss,
@@ -470,6 +503,7 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 f"fp placement: {n_placed}/{len(preds)} spans placed "
                 f"({n_gated} gated to MERT |fp-mert|>{gate:.0f}s, "
+                f"{n_override} gate OVERRIDES on strong evidence, "
                 f"{len(preds) - n_placed - n_gated} kept MERT — no fp / no diagonal)"
             )
 
@@ -636,9 +670,10 @@ def main(argv: list[str] | None = None) -> int:
     # on BOTH sides (mix_instrumental.flac <-fp-> ref Demucs instrumental) and it
     # recovers regular-level placement (probe: BB11 88% id / 5.0s median). Same
     # decode primitive + gate as --fp-placement; ref_start = set_start + offset.
-    # Default OFF. STALE-STEM guard: DB claimed_stem marks ~2 instrumentals/set
-    # vs ~25 real, so without --instr-stem-gt-yaml the channel barely fires —
-    # we log the shortfall loudly rather than silently no-op.
+    # Default ON (W1 kernel default; A/B: BB12 +0.5 / BB11 +8.7, no linear
+    # penalty). DB claimed_stem re-materialized 2026-07-09 (19/25 real
+    # instrumentals visible per set); --instr-stem-gt-yaml tops up the ~6
+    # GT-only spans where GT exists.
     if args.instr_stem_placement:
         import dataclasses
 
@@ -771,6 +806,7 @@ def main(argv: list[str] | None = None) -> int:
                 "name": t.label,
                 "start_source": start_source.get(i, "mert"),
                 "probe_proposals": probe_proposals.get(i, {}),
+                **({"placement_gated": gate_events[i]} if i in gate_events else {}),
                 **(
                     {"mert_set_start_s": mert_starts.get(i)}
                     if args.fp_placement_compare

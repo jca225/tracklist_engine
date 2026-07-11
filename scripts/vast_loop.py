@@ -21,12 +21,14 @@ Run on Vast in tmux:
 Log progress at /workspace/vast_loop.log. tmux session 'analyze' lets
 the loop survive Mac SSH disconnects.
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import os
 import shutil
+import shlex
 import subprocess
 import sys
 import threading
@@ -47,7 +49,7 @@ from analysis.pipeline import load_analyzers, analyze_track
 from analysis import persistence
 from core.models import AudioAsset
 
-PI_HOST = "pi-storage"             # ~/.ssh/config alias on Vast (Tailscale SOCKS5 proxy)
+PI_HOST = "pi-storage"  # ~/.ssh/config alias on Vast (Tailscale SOCKS5 proxy)
 PI_USER = "johncabrahams"
 CANONICAL_DB = "/mnt/storage/data/db/music_database.db"
 PI_STEMS_ROOT = "/mnt/storage/stems"
@@ -58,16 +60,16 @@ SCRATCH_DB = Path("/workspace/scratch.db")
 
 BB_SETS = ("w1mgcjt", "2nvzlh2k", "1fsnxchk", "qj4v0wt", "1yl70ql1", "237tdqmk")
 
-logging.basicConfig(level=logging.INFO,
-                    format="%(asctime)s %(levelname)s %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("vast_loop")
 
 
 def ssh_pi(sql: str) -> str:
     """Run a sqlite3 query on pi-storage via SSH; return stdout text."""
     full = f'sqlite3 -separator "|" {CANONICAL_DB} "{sql}"'
-    r = subprocess.run(["ssh", PI_HOST, full],
-                       capture_output=True, text=True, check=True)
+    r = subprocess.run(
+        ["ssh", PI_HOST, full], capture_output=True, text=True, check=True
+    )
     return r.stdout.strip()
 
 
@@ -116,7 +118,13 @@ def next_task(
         "AND track_id IS NOT NULL) "
         f"{skip_clause}"
         f"{shard_clause}"
-        "ORDER BY ta.track_audio_id LIMIT 1"
+        # stem-missing REFERENCE rows first: they gate downstream consumers
+        # (aligner re-runs); never-analyzed aux rows follow (62 of them sat
+        # ahead of BB11's 6 refs by id order, 2026-07-09)
+        "ORDER BY (CASE WHEN ta.is_reference=1 AND NOT EXISTS "
+        "(SELECT 1 FROM track_stems ts2 WHERE ts2.track_audio_id=ta.track_audio_id "
+        "AND ts2.stem_name='vocals') THEN 0 ELSE 1 END), "
+        "ta.track_audio_id LIMIT 1"
     )
     out = ssh_pi(sql)
     if not out:
@@ -155,14 +163,21 @@ def fetch_asset(track_audio_id: int, local_audio_path: Path) -> AudioAsset:
 
 def rsync_in(remote: str, local: Path) -> None:
     local.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.check_call(["rsync", "-q", f"{PI_HOST}:{remote}", str(local)])
+    # shlex.quote: the remote side of an rsync path goes through the remote
+    # shell — unquoted spaces/parens in filenames abort with exit 2
+    # (hit 2026-07-10 on "… (Official Karaoke Instrumental) ｜ SongJam.wav").
+    subprocess.check_call(
+        ["rsync", "-q", f"{PI_HOST}:{shlex.quote(remote)}", str(local)]
+    )
 
 
 def rsync_stems_out(local_dir: Path, track_audio_id: int) -> None:
     """Push <local>/<tid>/ to pi-storage:/mnt/storage/stems/<tid>/."""
     src = f"{local_dir}/"
     dst = f"{PI_HOST}:{PI_STEMS_ROOT}/{track_audio_id}/"
-    subprocess.check_call(["ssh", PI_HOST, f"mkdir -p {PI_STEMS_ROOT}/{track_audio_id}"])
+    subprocess.check_call(
+        ["ssh", PI_HOST, f"mkdir -p {PI_STEMS_ROOT}/{track_audio_id}"]
+    )
     subprocess.check_call(["rsync", "-aq", src, dst])
 
 
@@ -190,6 +205,7 @@ def init_scratch_db() -> None:
             continue
         cleaned.append(line)
     import sqlite3
+
     conn = sqlite3.connect(SCRATCH_DB)
     conn.executescript("\n".join(cleaned))
     conn.close()
@@ -206,10 +222,10 @@ def push_track_rows(track_audio_id: int) -> None:
     # row we ship to canonical needs the canonical path. Rewrite in scratch
     # before the dump so the .mode insert output already has it baked in.
     import sqlite3 as _sqlite3
+
     _conn = _sqlite3.connect(SCRATCH_DB)
     _conn.execute(
-        "UPDATE track_stems SET path = REPLACE(path, ?, ?) "
-        "WHERE track_audio_id = ?",
+        "UPDATE track_stems SET path = REPLACE(path, ?, ?) WHERE track_audio_id = ?",
         (f"{LOCAL_STEMS}/", f"{PI_STEMS_ROOT}/", track_audio_id),
     )
     _conn.commit()
@@ -221,18 +237,37 @@ def push_track_rows(track_audio_id: int) -> None:
         "track_audio_features",
         "track_mert_measures",
     )
-    # Generate INSERT statements via .mode insert per table
-    sql_lines = ["BEGIN;"]
+    # Generate INSERT statements via .mode insert per table.
+    # busy_timeout + BEGIN IMMEDIATE: concurrent pushers (sharded boxes) and
+    # pi services share this DB — without a timeout a second writer dies with
+    # "database is locked (5)" mid-transaction (hit 2026-07-09, 2-box fleet).
+    sql_lines = ["PRAGMA busy_timeout=120000;", "BEGIN IMMEDIATE;"]
     for t in tables:
         sql_lines.append(f"DELETE FROM {t} WHERE track_audio_id={track_audio_id};")
 
-    # Build the INSERT dump
+    # Build the INSERT dump. Surrogate AUTOINCREMENT PKs (track_stem_id, ...)
+    # must ship as NULL — scratch ids collide with canonical's (the Mac/pi
+    # autoincrement class, a9199d1; hit again 2026-07-09 on track_stems).
+    # track_audio_id-keyed tables keep their key.
+    _conn = _sqlite3.connect(SCRATCH_DB)
+    selects: dict[str, str] = {}
+    for t in tables:
+        info = list(_conn.execute(f"PRAGMA table_info({t})"))
+        pk_cols = [r[1] for r in info if r[5]]
+        drop_pk = len(pk_cols) == 1 and pk_cols[0] != "track_audio_id"
+        selects[t] = ", ".join(
+            "NULL" if (drop_pk and r[1] == pk_cols[0]) else r[1] for r in info
+        )
+    _conn.close()
     dump_script = "\n".join(
-        f".mode insert {t}\nSELECT * FROM {t} WHERE track_audio_id={track_audio_id};"
+        f".mode insert {t}\nSELECT {selects[t]} FROM {t} "
+        f"WHERE track_audio_id={track_audio_id};"
         for t in tables
     )
     dumped = subprocess.check_output(
-        ["sqlite3", str(SCRATCH_DB)], input=dump_script, text=True,
+        ["sqlite3", str(SCRATCH_DB)],
+        input=dump_script,
+        text=True,
     )
     sql_lines.append(dumped)
     sql_lines.append("COMMIT;")
@@ -240,11 +275,14 @@ def push_track_rows(track_audio_id: int) -> None:
 
     subprocess.run(
         ["ssh", PI_HOST, f"sqlite3 {CANONICAL_DB}"],
-        input=full_sql, text=True, check=True,
+        input=full_sql,
+        text=True,
+        check=True,
     )
 
     # Clear scratch rows for this track so scratch doesn't grow unbounded
     import sqlite3
+
     conn = sqlite3.connect(SCRATCH_DB)
     for t in tables:
         conn.execute(f"DELETE FROM {t} WHERE track_audio_id={track_audio_id}")
@@ -254,15 +292,26 @@ def push_track_rows(track_audio_id: int) -> None:
 
 def main() -> int:
     import argparse
+
     p = argparse.ArgumentParser()
-    p.add_argument("--separator", choices=["demucs", "uvr", "roformer"], default="demucs",
-                   help="Stem-separation backend (default: demucs).")
-    p.add_argument("--set-ids", default=None,
-                   help="Comma-separated set_ids to scope the loop to "
-                        "(default: the 6 BB10-15 sets).")
-    p.add_argument("--shard", default=None,
-                   help="i/N (e.g. 0/2): work only track_audio_id %% N == i, "
-                        "so N boxes can split one set without racing.")
+    p.add_argument(
+        "--separator",
+        choices=["demucs", "uvr", "roformer"],
+        default="demucs",
+        help="Stem-separation backend (default: demucs).",
+    )
+    p.add_argument(
+        "--set-ids",
+        default=None,
+        help="Comma-separated set_ids to scope the loop to "
+        "(default: the 6 BB10-15 sets).",
+    )
+    p.add_argument(
+        "--shard",
+        default=None,
+        help="i/N (e.g. 0/2): work only track_audio_id %% N == i, "
+        "so N boxes can split one set without racing.",
+    )
     args = p.parse_args()
     shard: tuple[int, int] | None = None
     if args.shard:
@@ -271,11 +320,15 @@ def main() -> int:
         assert 0 <= shard[0] < shard[1], "--shard must be i/N with 0 <= i < N"
     active_sets: tuple[str, ...] = (
         tuple(s.strip() for s in args.set_ids.split(",") if s.strip())
-        if args.set_ids else BB_SETS
+        if args.set_ids
+        else BB_SETS
     )
 
-    log.info("starting analyze loop on Vast (separator=%s, sets=%s)",
-             args.separator, ",".join(active_sets))
+    log.info(
+        "starting analyze loop on Vast (separator=%s, sets=%s)",
+        args.separator,
+        ",".join(active_sets),
+    )
     init_scratch_db()
 
     log.info("loading analyzers (cuda, %s)…", args.separator)
@@ -285,7 +338,9 @@ def main() -> int:
         log.error("load_analyzers failed: %s", ar.error)
         return 1
     a = ar.value
-    log.info("analyzers ready in %.1fs (with_essentia=%s)", time.time() - t0, a.with_essentia)
+    log.info(
+        "analyzers ready in %.1fs (with_essentia=%s)", time.time() - t0, a.with_essentia
+    )
 
     LOCAL_AUDIO.mkdir(parents=True, exist_ok=True)
     LOCAL_STEMS.mkdir(parents=True, exist_ok=True)
@@ -364,7 +419,12 @@ def main() -> int:
             t1 = time.time()
             r = analyze_track(a, asset, stems_dir=LOCAL_STEMS)
             if not r.is_ok():
-                log.warning("[%d] analyze_track failed: %s — %s", tid, r.error.kind, r.error.detail)
+                log.warning(
+                    "[%d] analyze_track failed: %s — %s",
+                    tid,
+                    r.error.kind,
+                    r.error.detail,
+                )
                 n_failed += 1
                 failed_tids.add(tid)
                 continue
@@ -381,7 +441,9 @@ def main() -> int:
             # immediately starts the next track's audio rsync + GPU work.
             stem_local = LOCAL_STEMS / str(tid)
             bg = threading.Thread(
-                target=_persist_in_bg, args=(tid, stem_local), daemon=False,
+                target=_persist_in_bg,
+                args=(tid, stem_local),
+                daemon=False,
             )
             bg.start()
             handed_off = True

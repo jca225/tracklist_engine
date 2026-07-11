@@ -23,19 +23,69 @@ Two scoping decisions locked (see §Decisions).
 - `drivers/race.py` + `make race` (SETS=/DRIVERS=/EXTRA=) — runs each driver,
   scores every timeline through the SAME `score_timeline_vs_gt`, prints the board.
 
-Validated on BB11 (`2nvzlh2k`, base = existing `_lt_v2` timeline, agentic replay):
+**Clean board — fresh per-set infer base + LIVE agentic** (both confounds removed;
+`make race`, 2026-07-09; ~44 min, two full infer passes):
 
-| driver | id% | place_med | ref_med | head_traj% | acap_traj% |
+| set | driver | id% | place_med | ref_med | head_traj% | acap_traj% |
+|---|---|---|---|---|---|---|
+| BB11 | classical | 84 | 7.3 | 25.8 | 20 | 14 |
+| BB11 | agentic | 84 | **2.5** | 24.3 | 20 | 14 |
+| BB11 | ml | 84 | 7.3 | **3.7** | 20 | **17** |
+| BB12 | classical | 84 | 4.8 | 10.2 | 26 | 25 |
+| BB12 | agentic | 84 | **3.1** | 10.2 | 26 | 25 |
+| BB12 | ml | 84 | 4.8 | 9.8 | 19 | 22 |
+
+Verdict (de-confounded):
+- **Identity holds 84% everywhere.** The earlier 81/75 id dips were a
+  reuse-base + replay artifact (identity is time-overlap-matched; moving
+  set_start reshuffles overlaps). Recording_id is never changed.
+- **Agentic (live) = clean placement win on BOTH sets** (BB11 7.3→2.5, BB12
+  4.8→3.1), no identity/trajectory cost. The earlier BB12 placement regression
+  (4.5→9.4) was **replay**, not the real driver. Ship as the placement refiner.
+- **ML is a CONDITIONAL lever, not a uniform upgrade.** Big win where classical
+  ref-decode is weak (BB11 25.8→3.7s) → wash/regression where it's already strong
+  (BB12 10.2→9.8s, **traj 26→19 head**). Cross-set decoder (held-out ~0.37) can't
+  beat a tuned in-domain looptrace. Next: gate learned segments on low classical
+  path-conf per span — the race board makes that measurable.
+
+An earlier reuse-base + agentic-replay board (BB11 only) showed agentic
+placement 2.9s and ml ref 3.3s but spurious id/placement regressions on BB12 —
+kept only in git history as the record of why the fresh+live run was necessary.
+
+Reproduce: `make race` (needs pi-storage + warm MERT/aligning audio; live
+agentic needs mix MERT). Fast iteration: `--reuse-base SET=path` skips infer.
+ML needs a cross-set checkpoint per set: `decoder_1fsnxchk.pt` (align BB11) and
+`decoder_2nvzlh2k.pt` (align BB12), both trained 2026-07-09.
+
+### ML confidence gate — turns the conditional lever additive (2026-07-09)
+
+`viterbi_segments(..., return_score=True)` now emits a per-span decode confidence
+(mean margin of the decoded path over the frame's average ref emission).
+`HybridMlDriver(gate_margin=T)` / `race --ml-gate T` keeps classical segments
+unless the learned decode clears `T` — trust ML only where the model is sure.
+
+The confidence cleanly separates the two regimes on its own: BB11 (ML helps)
+scores median 5.8 (p10 3.1); BB12 (ML hurts) median 1.1 (p75 2.9). Sweep
+(reusing the fresh classical bases):
+
+| gate | set | ref_med | head_traj% | acap_traj% | ml-decoded / gated |
 |---|---|---|---|---|---|
-| classical | 84 | 7.1 | 25.8 | 20 | 14 |
-| agentic   | 81 | **2.9** | 24.4 | 20 | 14 |
-| ml        | 84 | 7.1 | **3.3** | **22** | **17** |
+| none | BB11 | 3.7 | 20 | 17 | 112 / 0 |
+| **3.0** | BB11 | 3.7 | **22** | **18** | 101 / 11 |
+| none | BB12 | 9.8 | 19 ← regress | 22 | 129 / 0 |
+| **3.0** | BB12 | 13.3 | **26** ← restored | **25** | 32 / 97 |
 
-Each driver wins the stage it owns: agentic → placement (7.1→2.9s), ml →
-ref-offset (25.8→3.3s) + trajectory. Agentic's id dip is a scorer artifact
-(identity is time-overlap-matched, so moving set_start reshuffles a few overlaps;
-recording_id is never changed). Full fresh run (no `--reuse-base`): `make race` —
-needs pi-storage reachable + warm MERT/aligning audio; live agentic needs mix MERT.
+Gate 3.0 keeps 90% of BB11 (preserves the ref-offset win, +2pp trajectory) and
+gates 75% of BB12 back to classical (trajectory regression 26→19 ELIMINATED,
+restored to 26/25). Net: ML becomes non-regressing on trajectory (its owned
+metric) across both sets. Caveat: BB12 `ref_med` wobbles 9.8→13.3 — a small-n
+straight-clip subset; the ungated 9.8-vs-classical-10.2 "win" was noise.
+
+Threshold is **logit-scaled per checkpoint** — `--ml-gate` stays OPT-IN, not a
+silent default; 3.0 is validated for the current `decoder_*.pt` pair. Retraining
+the decoder means re-sweeping. Next: a per-span learned router (ml vs classical)
+over {ml confidence, classical path-conf, span class} — this gate is its
+one-feature threshold baseline.
 
 ## Original plan (as drafted)
 

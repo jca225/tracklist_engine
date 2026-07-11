@@ -109,7 +109,12 @@ def _load_gt(gt_path: Path, set_id: str) -> tuple[list[dict], dict]:
 
 
 def _load_audit(set_id: str) -> dict[str, dict]:
-    """{norm_slot -> audit span dict} (frac_clone/frac_distinct/frac_unique)."""
+    """{norm_slot -> audit span dict} (frac_clone/frac_distinct/frac_unique).
+
+    Keyed by BOTH the normalized slot and the audit row's track_id: BB12's GT
+    uses plain numeric slot labels ('012') where the timeline spine has
+    w-layers ('12w1'), so a slot-only join comes back empty (measured 0/83);
+    the track_id key survives the namespace mismatch."""
     p = _ALN / "looptrace" / "out" / f"audit_{set_id}.json"
     if not p.is_file():
         return {}
@@ -117,6 +122,8 @@ def _load_audit(set_id: str) -> dict[str, dict]:
     out: dict[str, dict] = {}
     for a in au.get("spans", []):
         out[norm_slot(a["slot_label"])] = a
+        if a.get("track_id"):
+            out.setdefault(str(a["track_id"]), a)
     return out
 
 
@@ -187,7 +194,7 @@ def _rows_for_set(set_id: str, label: str, gt_path: Path, suffix: str) -> list[d
             expected = float(g["ref_start_s"]) + (s["set_start_s"] - gset) * ratio
             ref_err = abs(float(s["ref_start_s"]) - expected)
 
-        a = audit.get(slot, {})
+        a = audit.get(slot) or audit.get(str(s["recording_id"]), {})
         gt_segs = g.get("ref_segments")
         gt_stem = g.get("claimed_stem") or "regular"  # None == host/regular track
         out.append(
@@ -211,7 +218,14 @@ def _rows_for_set(set_id: str, label: str, gt_path: Path, suffix: str) -> list[d
                 "audible_frac": g.get("audible_frac"),
                 "frac_clone": a.get("frac_clone"),
                 "frac_distinct": a.get("frac_distinct"),
-                "frac_unique": a.get("frac_unique"),
+                # audit rows carry clone/distinct/unique SECONDS + frac_clone/
+                # frac_distinct; frac_unique is the remainder
+                "frac_unique": (
+                    round(1.0 - a["frac_clone"] - a["frac_distinct"], 4)
+                    if a.get("frac_clone") is not None
+                    and a.get("frac_distinct") is not None
+                    else None
+                ),
                 "pred_set_start_s": round(float(s["set_start_s"]), 2),
                 "pred_ref_start_s": round(float(s["ref_start_s"]), 2),
                 "pred_n_segments": len(s["ref_segments"])

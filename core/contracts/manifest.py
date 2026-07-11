@@ -79,6 +79,11 @@ class Manifest(msgspec.Struct, frozen=True):
 
 _DECODER = msgspec.json.Decoder(Manifest)
 
+#: The one canonical filename inside a pulled `~/aligning/<set>/` dir. Callers
+#: build paths from this constant instead of repeating the literal (the
+#: raw_manifest_read ratchet counts stray literals outside contracts).
+MANIFEST_FILENAME = "manifest.json"
+
 
 def load_manifest(path: Path | str) -> Manifest:
     """Load + validate a pull manifest; raises with field detail on mismatch."""

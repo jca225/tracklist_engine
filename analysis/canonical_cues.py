@@ -12,6 +12,7 @@ Run:
     venvs/audio/bin/python -m analysis.canonical_cues \\
         --set-id 2nvzlh2k
 """
+
 from __future__ import annotations
 
 import argparse
@@ -24,6 +25,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from analysis import grid_repair
 from core.db import connect
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -42,6 +44,7 @@ CUE_DETR_SENSITIVITY: float = 0.5
 @dataclass(frozen=True)
 class OriginalSpec:
     """A canonical track for which we need an 'original' variant."""
+
     track_id: str
     artist: str
     title: str
@@ -51,23 +54,33 @@ class OriginalSpec:
 # table should be derived automatically from tracklist metadata (strip
 # version-tag suffixes like '(Acappella)' / '(Instrumental)').
 BB11_ORIGINALS: tuple[OriginalSpec, ...] = (
-    OriginalSpec("g8gtgdx",  "Bastille",           "Good Grief Don Diablo Remix"),
-    OriginalSpec("26b4gz6f", "The Fray",           "How to Save a Life"),
-    OriginalSpec("4gy6y1p",  "Carly Rae Jepsen",   "Call Me Maybe"),
-    OriginalSpec("2m5wh0t5", "Gnash",              "I Hate U I Love U Olivia O'Brien"),
+    OriginalSpec("g8gtgdx", "Bastille", "Good Grief Don Diablo Remix"),
+    OriginalSpec("26b4gz6f", "The Fray", "How to Save a Life"),
+    OriginalSpec("4gy6y1p", "Carly Rae Jepsen", "Call Me Maybe"),
+    OriginalSpec("2m5wh0t5", "Gnash", "I Hate U I Love U Olivia O'Brien"),
     # ntm7wqx (Antoine Delvig & Paul Vinx - Blondies) already has an original variant.
 )
 
 
 # ---- yt-dlp search + download --------------------------------------------
 
+
 def _resolve_search(query: str) -> tuple[str, str] | None:
     """Returns (youtube_id, canonical_url) for the top match of `query`."""
     try:
         proc = subprocess.run(
-            ["venvs/audio/bin/yt-dlp", "--print", "%(id)s\t%(webpage_url)s",
-             "--no-download", f"ytsearch1:{query}"],
-            cwd=_REPO_ROOT, check=True, capture_output=True, text=True, timeout=60,
+            [
+                "venvs/audio/bin/yt-dlp",
+                "--print",
+                "%(id)s\t%(webpage_url)s",
+                "--no-download",
+                f"ytsearch1:{query}",
+            ],
+            cwd=_REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
         print(f"  ! search failed for {query!r}: {e}", file=sys.stderr)
@@ -86,12 +99,22 @@ def _download(query: str, out_path: Path) -> bool:
     tmpl = str(out_path.with_suffix(".%(ext)s"))
     try:
         subprocess.run(
-            ["venvs/audio/bin/yt-dlp",
-             "-f", "bestaudio[ext=m4a]/bestaudio",
-             "-x", "--audio-format", "m4a",
-             "-o", tmpl, "--no-warnings", "--quiet",
-             f"ytsearch1:{query}"],
-            cwd=_REPO_ROOT, check=True, timeout=300,
+            [
+                "venvs/audio/bin/yt-dlp",
+                "-f",
+                "bestaudio[ext=m4a]/bestaudio",
+                "-x",
+                "--audio-format",
+                "m4a",
+                "-o",
+                tmpl,
+                "--no-warnings",
+                "--quiet",
+                f"ytsearch1:{query}",
+            ],
+            cwd=_REPO_ROOT,
+            check=True,
+            timeout=300,
         )
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
         print(f"  ! download failed: {e}", file=sys.stderr)
@@ -101,7 +124,10 @@ def _download(query: str, out_path: Path) -> bool:
 
 # ---- DB helpers -----------------------------------------------------------
 
-def _find_original_audio(conn: sqlite3.Connection, track_id: str) -> tuple[int, str] | None:
+
+def _find_original_audio(
+    conn: sqlite3.Connection, track_id: str
+) -> tuple[int, str] | None:
     r = conn.execute(
         "SELECT track_audio_id, path FROM track_audio WHERE recording_id=? AND stem='regular'",
         (track_id,),
@@ -110,7 +136,12 @@ def _find_original_audio(conn: sqlite3.Connection, track_id: str) -> tuple[int, 
 
 
 def _insert_original_audio(
-    conn: sqlite3.Connection, *, track_id: str, path: str, yt_id: str, yt_url: str,
+    conn: sqlite3.Connection,
+    *,
+    track_id: str,
+    path: str,
+    yt_id: str,
+    yt_url: str,
 ) -> int:
     """Insert a new track_audio row with stem='regular'. Returns
     the track_audio_id. If the row already exists (same platform/player_id)
@@ -139,10 +170,33 @@ def _has_canonical_cues(conn: sqlite3.Connection, track_id: str) -> bool:
     return r is not None
 
 
+def _downbeat_grid(conn: sqlite3.Connection, track_audio_id: int) -> list[float]:
+    """Repaired downbeat grid for a track_audio row, [] if not analyzed yet."""
+    r = conn.execute(
+        "SELECT downbeat_times_json FROM track_analysis WHERE track_audio_id=?",
+        (track_audio_id,),
+    ).fetchone()
+    if r is None or not r["downbeat_times_json"]:
+        return []
+    raw = json.loads(r["downbeat_times_json"])
+    return list(grid_repair.repair_beat_grid(raw).times)
+
+
 def _write_canonical_cues(
-    conn: sqlite3.Connection, *, track_id: str, cues: list[float],
-    source_track_audio_id: int, source_stem: str, sensitivity: float,
+    conn: sqlite3.Connection,
+    *,
+    track_id: str,
+    cues: list[float],
+    source_track_audio_id: int,
+    source_stem: str,
+    sensitivity: float,
 ) -> None:
+    # DJ-usable cues are downbeat events; cue-detr's peak-picking never snaps
+    # (34% of raw cues sit off-grid). Snap when the source audio has a beat
+    # grid; pass through untouched when it doesn't.
+    grid = _downbeat_grid(conn, source_track_audio_id)
+    if grid:
+        cues = list(grid_repair.snap_to_grid(cues, grid))
     conn.execute(
         """
         INSERT OR REPLACE INTO canonical_track_cue_points
@@ -156,6 +210,7 @@ def _write_canonical_cues(
 
 
 # ---- cue-detr -------------------------------------------------------------
+
 
 def _run_cue_detr(audio_path: Path, sensitivity: float) -> list[float]:
     """Run cue-detr on a single audio file, return sorted cue points in seconds.
@@ -195,6 +250,7 @@ def _run_cue_detr(audio_path: Path, sensitivity: float) -> list[float]:
 
 # ---- main flow ------------------------------------------------------------
 
+
 def process(spec: OriginalSpec, conn: sqlite3.Connection) -> None:
     print(f"\n[{spec.track_id}] {spec.artist} — {spec.title}")
 
@@ -214,8 +270,11 @@ def process(spec: OriginalSpec, conn: sqlite3.Connection) -> None:
                 print("  SKIP: download failed")
                 return
         ta_id = _insert_original_audio(
-            conn, track_id=spec.track_id, path=str(out_path),
-            yt_id=yt_id, yt_url=yt_url,
+            conn,
+            track_id=spec.track_id,
+            path=str(out_path),
+            yt_id=yt_id,
+            yt_url=yt_url,
         )
         print(f"  inserted track_audio_id={ta_id}")
     else:
@@ -227,14 +286,20 @@ def process(spec: OriginalSpec, conn: sqlite3.Connection) -> None:
         return
 
     ta_path = conn.execute(
-        "SELECT path FROM track_audio WHERE track_audio_id=?", (ta_id,),
+        "SELECT path FROM track_audio WHERE track_audio_id=?",
+        (ta_id,),
     ).fetchone()["path"]
     print(f"  running cue-detr (sens={CUE_DETR_SENSITIVITY}) on {Path(ta_path).name}")
     cues = _run_cue_detr(Path(ta_path), CUE_DETR_SENSITIVITY)
-    print(f"  → {len(cues)} cues: {[round(c, 1) for c in cues[:8]]}{'…' if len(cues) > 8 else ''}")
+    print(
+        f"  → {len(cues)} cues: {[round(c, 1) for c in cues[:8]]}{'…' if len(cues) > 8 else ''}"
+    )
     _write_canonical_cues(
-        conn, track_id=spec.track_id, cues=cues,
-        source_track_audio_id=ta_id, source_stem="regular",
+        conn,
+        track_id=spec.track_id,
+        cues=cues,
+        source_track_audio_id=ta_id,
+        source_stem="regular",
         sensitivity=CUE_DETR_SENSITIVITY,
     )
     print("  stored canonical_track_cue_points")
@@ -264,13 +329,18 @@ def backfill_existing_originals(conn: sqlite3.Connection) -> None:
             continue
         prior = r["stored_sensitivity"]
         action = "re-running" if prior is not None else "running"
-        print(f"  {action} cue-detr (sens={CUE_DETR_SENSITIVITY}) on {r['track_id']}"
-              + (f" [was sens={prior}]" if prior is not None else ""))
+        print(
+            f"  {action} cue-detr (sens={CUE_DETR_SENSITIVITY}) on {r['track_id']}"
+            + (f" [was sens={prior}]" if prior is not None else "")
+        )
         cues = _run_cue_detr(audio_path, CUE_DETR_SENSITIVITY)
         _write_canonical_cues(
-            conn, track_id=r["track_id"], cues=cues,
+            conn,
+            track_id=r["track_id"],
+            cues=cues,
             source_track_audio_id=r["track_audio_id"],
-            source_stem="regular", sensitivity=CUE_DETR_SENSITIVITY,
+            source_stem="regular",
+            sensitivity=CUE_DETR_SENSITIVITY,
         )
         print(f"  → {len(cues)} cues stored")
 
@@ -282,8 +352,10 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.set_id != "2nvzlh2k":
-        print("Only BB11 is pre-curated right now. Add an OriginalSpec "
-              "table for other sets or automate variant detection.")
+        print(
+            "Only BB11 is pre-curated right now. Add an OriginalSpec "
+            "table for other sets or automate variant detection."
+        )
         return 1
 
     with connect(args.db) as conn:

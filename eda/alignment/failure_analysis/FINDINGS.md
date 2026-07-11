@@ -233,3 +233,251 @@ headline multiseg+loop 30%, regular traj 49%. Two per-axis stories:
 - `out/span_table.csv` — 303 rows, one per predicted span (both sets); the reusable dataset.
 - `out/analysis_report.txt` — full stratification / attribution / diagnostics dump.
 - `build_span_table.py` / `analyze.py` — reproducers (read-only; import harness scoring).
+
+---
+
+# EDA 2026-07-09 — failure correlates (north-star framing) + generalization profile
+
+Per-span correlate study on the **post-fix** timelines (`build_span_table
+--suffix _postfix_lt` → `out/span_table_postfix.csv`, n=283 matched spans;
+cross-checks harness exactly: identity 84/84%, set_start 5.0/7.1 s), scored
+against the north-star laws (docs/architecture_north_star.md). Reproducer:
+`failure_correlates.py` → `out/failure_correlates.txt`. Corpus numbers from
+read-only pi-storage queries (2026-07-09).
+
+## A. Why we fail — new span-level findings
+
+### A1. The largest un-attributed acappella bucket is a SILENT looptrace-empty fallback
+`ref_decoder` is set only when looptrace emits segments. On acappella:
+
+| set | looptrace decoded | traj | silently fell back | traj |
+|---|---|---|---|---|
+| BB12 | 63 | **0.31** | 20 | 0.08 |
+| BB11 | 47 | **0.21** | 44 | **0.03** |
+
+Attribution via the run's own `~/aligning` manifest (§6b of the report):
+**46/64 fallback spans had the local vocals stem present — looptrace ran and
+returned EMPTY** (~1,885 GT-sec ≈ 24% of all acappella GT-seconds); 14 lacked a
+local vocals stem; 4 were manifest misses. The span then silently degrades to
+the legacy matched filter and scores ~0. This is a *decode-coverage* loss that
+prior attribution filed under decode-residual/placement. Levers: (i) emit
+looptrace-emptiness as a `Diagnostic` + abstention (north-star laws 5/7), (ii)
+investigate why `decode_span` returns empty on stems that exist (quiet/sparse
+separated vocals? landmark threshold?), (iii) BB11 refresh: 23 spine vocal
+stems landed on pi **2026-07-09, after the Jul-8 run** — re-pull + re-infer
+BB11 is cheap and directly feeds the 14 no-local-stem spans.
+
+### A2. `confidence` is anti-calibrated; `start_source` is the real abstention signal
+spearman(confidence, traj) = **−0.24 ALL / −0.31 acappella** — dropping the
+lowest-confidence spans makes the kept set *worse* (0.20 → 0.15 GTsec-weighted
+at 50% abstention). Law 3 ("abstain, never lie") cannot be built on this field.
+But the probe that placed the span stratifies cleanly:
+
+| axis · start_source | n | traj | ss_med |
+|---|---|---|---|
+| acappella · lyrics | 114 | **0.26** | 2.8 s |
+| acappella · mert | 32 | **0.04** | 15.1 s |
+| acappella · fp | 19 | 0.09 | 6.7 s |
+| regular · fp | 57 | 0.30 | 4.1 s |
+| regular · mert | 9 | 0.08 | 40.0 s |
+
+**MERT-fallback placement ≈ span lost** (41 spans, all axes). A rule as dumb as
+"abstain when start_source==mert" is a calibrated, shippable abstention channel
+today, and `start_source` should flow into the Timeline's abstention fields.
+
+### A3. North-star B1 (warp) is a first-order failure dimension; B2 (key) is handled
+60% of GT spans are tempo-stretched >2%, **31% >10%**; traj decays
+monotonically with |ratio−1| (0.28 → 0.11 from <2% to >12%), rho −0.33 on
+acappella — the strongest continuous correlate we have. The warp axis, not
+crosstalk, is where decode difficulty concentrates. Conversely re-pitched
+acappellas decode *no worse* than unpitched (traj 0.21 vs 0.18, ref-offset
+median 16.9 s vs 28.5 s) — the HuBERT key-invariant routing is doing its job.
+
+### A4. Refuted / bounded
+- **Crosstalk (GT layer depth) does NOT predict span failure** (rho +0.15
+  acappella — mildly *positive*; identity holds 83–92% even at depth ≥3).
+- **Long spans are a placement catastrophe:** >90 s spans (n=34, all axes)
+  place at ss_med 31–44 s vs ~4–7 s otherwise — the p90 placement tail is
+  substantially a long-span problem.
+- **Position in set, audibility: no signal** (audible_frac coverage is thin).
+- **Stale instance-ambiguity audits:** BB12's `looptrace/out/audit_*.json`
+  uses pre-w-layer slot keys → 0/83 join to current slots. Regenerate before
+  any learned instance-selection work; frac_clone/distinct is currently
+  unusable as a feature.
+
+## B. Generalization — the corpus vs the north-star 20k target
+
+Canonical-DB profile (pi-storage, 2026-07-09; columns audited in the query log):
+
+- **The runnable corpus today is 547 sets, not ~20k.** dj_sets = 41,492;
+  **561 have set audio** (the hard input-contract requirement) — and where set
+  audio exists, per-set track-audio coverage is already ~93% median. The
+  binding constraint on generalization is **set-audio ingest**, not track
+  audio and not the aligner.
+- **Reference wiring exists only for BB spines:** `is_reference=1` on 425
+  track_audio rows corpus-wide; fingerprints 422 recordings; Roformer vocal
+  stems 562 (2.9% of track_audio). P5 scale-out needs pick-reference →
+  separation → fingerprint backfill over ~19k rows as preflight stages;
+  no data blocker, pure compute.
+- **The acappella wall is BB-specific, not corpus-relevant first-order:**
+  corpus slots are 94.4% regular / 5.0% acappella / 0.6% instrumental;
+  per-set acappella share median **3.1%** vs BB11/BB12 at **43/51% (~p98)** —
+  BB is an outlier even within Two Friends (their average set: 10.5%). The
+  median corpus set lives almost entirely on the *regular* axis, where the
+  stack is strongest (traj 51% BB12, fp placement 4 s). BB-trained transfer
+  numbers therefore likely **understate** typical-set performance — but our GT
+  measures almost nothing about the median set's failure modes; the next GT
+  sets should include at least one low-acappella "normal" set.
+- BB set length is typical (~p50 ≈ 62 min); stale memory correction: the
+  "69/147 BB11 vocals stems" hole is closed in the DB (147/149 as of
+  2026-07-09; the *local* pull is what the Jul-8 run was missing).
+
+Companion study: `eda/alignment/low_rank/` (set×track SVD, per-DJ bases,
+metadata/ML probes — low-rank worldview test).
+
+---
+
+# Fix round 2026-07-09 (same day) — intervention results & corrections
+
+Findings A1's causal reading was tested by intervention the same day. Two
+corrections and one new finding; scripts unchanged, timelines
+`out/2nvzlh2k_predicted_timeline_postfix_lt_diskfix.json`.
+
+## C1. CORRECTION: the silent-fallback bucket was confounded — coverage alone lifts ~nothing
+`joint_ref_decode` now resolves stem-routed ref audio through
+`stem_resolve.resolve_stem` (disk-truth; the manifest hint bit it exactly as
+`0960565` documented) and emits `ref_decode_status` per span
+(`looptrace | looptrace-empty | skip-no-ref-audio | skip-manifest-miss |
+skip-too-short | legacy`) instead of silently degrading. BB11 A/B
+(identical scorer, non-fibered): looptrace coverage **47 → 73 spans, zero
+un-diagnosed fallbacks** (only `skip-too-short: 12` remains) — but headline
+**flat** (21→20%), acappella traj flat (14%), with real small wins:
+oddratio traj 5→9%, instrumental ref-offset median 7.8→3.9 s. So A1's
+0.03-vs-0.21 gap was **selection bias** (decodable spans were also the
+well-placed ones), not a causal coverage loss — consistent with the
+oracle↔e2e decomposition: placement gates decode. The fix stands on
+robustness/diagnostics grounds (the stale-manifest class can no longer
+silently eat spans), not as a headline lever.
+
+## C2. NEW: the REAL residual axis problem — 40 GT-acappella spans still routed `regular`
+The claimed_stem fix (solution 1) left a residual 5× bigger than the "~6/set
+class-1 gaps" estimate: **BB11 29/92 + BB12 11/83 GT-acappella spans are
+mis-axed as `regular` in the post-fix timelines** (traj 0.03/0.06 vs
+0.19/0.28 correctly-axed). Verified upstream: the pi slot rows genuinely say
+`regular` with no `(Acappella)` row-text — the scrape never knew, so **no
+parser can fix these**; routing must come from structure or audio at
+inference. Pooled ceiling if routed correctly: ~+3–5 pp acappella traj per
+set, plus the (larger) placement-channel effect — mis-axed spans never get
+HuBERT/lyrics placement, and lyrics-placed spans run at ss_med 2.8 s.
+
+**Quantified structural prior (unwired — sensor-phase freeze, filed in
+looptrace/NOTES.md):** across both sets, **P(acappella | w-layer slot) =
+82%** (175/213), **100% of GT acappellas are w-layers** (0 in main slots),
+and main slots are 54% instrumental / 46% regular. Slot position is a strong
+axis prior the pipeline currently ignores; `set_track_slots.layer_role`
+(bed/payload/…) exists in the DB and is consumed nowhere in the prototype.
+
+## C2b. Round 3 (same day) — three more problems, two verdicts
+
+- **Long weaves are 40% of ALL loss.** Spans with GT duration >90 s are 34
+  spans (12%) but 5,543 GT-sec (36% of corpus-seconds) and **40% of all
+  GT-seconds lost** (sec-weighted traj 0.12 vs 0.24 for ≤90 s). Not a pairing
+  artifact — single-appearance long spans still place at ss_med 31.6 s. These
+  are finale-style in-and-out weaves (BB12 slot 42: an 839 s GT span placed
+  895 s off); one `set_start` + a ±45 s decode band structurally cannot cover
+  them even though `ref_segments` could represent them. The lever is
+  multi-anchor placement (fp diagonal votes already produce multiple
+  candidates) / windowing per slot-appearance — kernel-lane, and now the
+  single largest quantified bucket.
+- **Synthetic slot rows: CORRECTED — cost is ~1–2 spans, not 5 pp identity.**
+  7 BB11 spans predict raw `tlp*` recording ids (`source='synthetic'`, the
+  Rvmor sided-row gap). Initial read (29% of identity misses) was wrong:
+  the GT yaml inherited the same tlp ids from the spine, the pull fetched
+  audio for them, so **5/7 identity-HIT and decode normally** (traj up to
+  0.97). Real damage: slots 001/027 have no GT anchor (2 spans), plus the
+  namespace pollution itself — tlp recordings can't join `track_metadata` /
+  fingerprints / canonical features corpus-wide, and title-only name-match
+  is UNSAFE for reconciling them (Gazzo "Nothing To Lose" ≠ VASSY "Nothing
+  To Lose"; several have no canonical recording at all, e.g. The Scrantones,
+  Rent). Verdict: upstream artist+title reconcile is hygiene + a preflight
+  check for new GT sets, **not an aligner lever on BB11**.
+- **REFUTED: BB12's fingerprint-coverage gap is not a placement lever.** BB12
+  has fingerprints for only 74/139 matched spans' recordings, but no-fp spans
+  place *no worse* (ss_med 5.9 vs 4.4 s, traj 0.27 vs 0.25) — w-layer
+  acappellas ride lyrics/HuBERT placement, not fp. Backfilling BB12
+  fingerprints is hygiene, not a lever.
+- **BB12 diskfix A/B: flat**, mirroring BB11 (headline 25→24%, coverage
+  cells slightly up: multiseg ≥80%covered 14→16, acappella 14→17). Both sets
+  now confirm: decode-coverage repairs don't move the board; placement and
+  the long-weave window do.
+
+## C2c. Fix measurements (2026-07-09 evening) — routing floor + long-weave oracle
+
+**Routing fix floor (GT-axis relabel on postfix timelines → re-decode only,
+placement held; `_postfix_gtstem_lt` timelines).** Fixing the 40 mis-axed
+spans' decode routing alone is worth, vs the identically-scored baseline:
+
+| set | acappella | instrumental | oddratio | headline |
+|---|---|---|---|---|
+| BB11 | 14→17% | 33→**41%** | 9→16% | 20→22% |
+| BB12 | 25→25% | 20→**28%** | 18→16% | 25→25% |
+
+This is the floor — the earlier full re-run (Re-measure 2) showed the larger
+gain arrives when the corrected axis also drives *placement* (HuBERT/lyrics
+channels) in `infer`. Verdict: **wire the axis fix (w-layer prior or
+audio-gate) ahead of infer, not just decode** — decode-only captures the
+instrumental win but little acappella.
+
+**Long-weave oracle-window bound (`_longoracle_lt` timelines: >90 s spans get
+GT window + GT axis, decode otherwise unchanged).** Sec-weighted traj on the
+long spans: **BB12 0.10→0.21, BB11 0.14→0.42**; pooled long bucket
+0.12→0.29. Structure of the win:
+
+- **90–300 s spans (3,865 GT-sec) go 0.17→0.41** — many near-perfect
+  (0.02→1.00, 0.05→0.91): for this class the *window is the wall*, decode is
+  already good enough.
+- The two **839 s mega-weaves stay dead** (0.01→0.03) even with oracle
+  windows — decode-hard, exclude from the windowing fix; abstain them.
+- **4 regressions** (e.g. 0.49→0.02) where the larger window admits rival
+  content — any wiring needs an accept-guard (keep the wider decode only if
+  path inlier evidence beats the tight decode's, the same comparison the
+  slope competition already runs).
+
+**Pooled value if wired: ~+6 pp corpus-wide trajectory** (+5.9 pp from the
+90–300 s class alone) — the largest measured unbuilt lever, not BB10-gated.
+
+**Per-axis decomposition of the 90–300 s oracle gain (changes the wiring):**
+
+| true axis | GT-sec | base → oracle | pooled value |
+|---|---|---|---|
+| instrumental | 1,609 | 0.21 → **0.58** | **+3.9 pp** |
+| regular | 1,110 | 0.20 → **0.51** | **+2.2 pp** |
+| acappella | 1,146 | 0.08 → 0.06 | **≈ 0** |
+
+**Acappella gets NOTHING from a correct window** — its long-weave wall is
+decode-under-repeats, same as its short spans. So do NOT build acappella
+window growth. Wiring: (1) instrumental is looptrace-routed → an
+evidence-gated window-growth ladder inside `joint_ref_decode` (pads
+45/120/240 s; grow while `ev_out_frac` ≥ gate AND the rung's evidence_rate
+holds ≥ 0.8× the previous rung — within-span guard, since absolute
+evidence-rate floors failed to transfer twice) captures the +3.9 pp lane —
+**implemented and A/B'd 2026-07-09 evening (KEPT)**; (2) regular is
+legacy-path → needs the `infer`-side multi-appearance anchors from the fp
+vote clusters (kernel lane, +2.2 pp).
+
+**Weave-ladder A/B (`_weave_lt` vs `_diskfix` baselines, identical scorer):**
+BB12 instrumental traj **20→28%**, headline **24→26%**, from 3 growth events
+— span-level: slot 2 (97 s) 0.04→**0.63 (= its oracle bound)**, slot 6 (53 s)
+0.00→0.87, slot 30 (61 s) 0.07→0.34 (it also rescues mis-windowed 50–90 s
+spans below the "long" cutoff). BB11: 1 growth, +1 pp instrumental.
+**Zero regressions on any axis in either set** — acappella/regular
+byte-identical; the rate-margin guard held. Remaining long-weave upside:
+regular (+2.2 pp, infer-side) and the instrumental spans whose first-rung
+`ev_out_frac` never trips the gate.
+BB12's GT yaml uses plain numeric slots (`002`) where timelines carry
+w-layers (`2w1`); BB11's GT has w-layers. The audit was faithful to GT all
+along — the slot-keyed join was the bug. `build_span_table` now joins audits
+by `track_id` too (coverage 15→42 spans, BB12 audit regenerated alongside).
+With the fixed join: **instance-ambiguity fractions do NOT meaningfully
+predict span outcome** (|spearman| ≤ 0.15, n=34) — frac_clone/frac_distinct
+are weak span-level features for the learned selector at current n.

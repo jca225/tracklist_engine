@@ -50,12 +50,20 @@ class HybridMlDriver:
         lam: float = 16.0,
         back_ratio: float = 3.0,
         device: str = "auto",
+        gate_margin: float | None = None,
     ) -> None:
         self.base = Path(base_timeline)
         self.checkpoint = checkpoint
         self.lam = lam
         self.back_ratio = back_ratio
         self.device = device
+        # Per-span confidence gate: keep classical segments unless the learned
+        # decode's margin clears this bar. None = replace unconditionally (the
+        # ungated driver). The clean board showed ml wins where classical decode
+        # is weak (BB11) but regresses where it is already strong (BB12); gating
+        # on ml confidence lets the learned segments through only where the model
+        # is sure, so it can add without subtracting.
+        self.gate_margin = gate_margin
 
     def align_set(self, ctx: SetContext) -> Path:
         import torch
@@ -80,7 +88,12 @@ class HybridMlDriver:
         aligning = find_aligning_dir(ctx.set_id)
         if aligning is None:
             raise FileNotFoundError(f"no ~/aligning folder for {ctx.set_id}")
-        manifest = json.loads((aligning / "manifest.json").read_text())
+        import msgspec
+
+        from core.contracts import load_manifest
+        from core.contracts.manifest import MANIFEST_FILENAME
+
+        manifest = msgspec.to_builtins(load_manifest(aligning / MANIFEST_FILENAME))
         # by track_id AND recording_id — timeline spans carry canonical
         # recording_id, the manifest keys on scrape track_id (mirrors
         # joint_ref_decode's bridge).
@@ -92,7 +105,7 @@ class HybridMlDriver:
         mix_full = Path(manifest.get("mix_local_path") or (aligning / "mix.m4a"))
         bank = FeatureBank(BIN_S)
 
-        out_spans, n_decoded, skips = [], 0, []
+        out_spans, n_decoded, n_gated, skips = [], 0, 0, []
         for s in timeline["spans"]:
             stem = gt_stems.get(norm_slot(s["slot_label"])) or (
                 s.get("claimed_stem") or "regular"
@@ -120,12 +133,28 @@ class HybridMlDriver:
                 fk = torch.tensor([FEAT_KIND[audio.match_feature]], device=device)
                 rv = torch.ones(1, tr, dtype=torch.bool, device=device)
                 logits = model(sim_t, fk, rv)[0]  # (Tm, Tr+1)
-            segs = viterbi_segments(
-                logits, BIN_S, lam=self.lam, back_ratio=self.back_ratio
+            segs, score = viterbi_segments(
+                logits,
+                BIN_S,
+                lam=self.lam,
+                back_ratio=self.back_ratio,
+                return_score=True,
             )
             if not segs:
                 skips.append((s["slot_label"], "decoder returned no segments"))
                 out_spans.append(s)
+                continue
+            # confidence gate: below the bar, the model isn't sure enough to
+            # override a (possibly already-good) classical decode — keep classical.
+            if self.gate_margin is not None and score < self.gate_margin:
+                skips.append(
+                    (
+                        s["slot_label"],
+                        f"gated: ml conf {score:.3f} < {self.gate_margin}",
+                    )
+                )
+                out_spans.append({**s, "ml_decode_score": round(score, 4)})
+                n_gated += 1
                 continue
 
             s0 = float(s["set_start_s"])
@@ -145,13 +174,19 @@ class HybridMlDriver:
                     "ref_start_s": ref_segments[0]["ref_start_s"],
                     "ref_end_s": ref_segments[-1]["ref_end_s"],
                     "ref_decoder": "trajectory",
+                    "ml_decode_score": round(score, 4),
                 }
             )
             n_decoded += 1
 
+        gate_note = (
+            f", {n_gated} gated (conf < {self.gate_margin})"
+            if self.gate_margin is not None
+            else ""
+        )
         print(
             f"  ml: {n_decoded} spans decoded by TrajectoryDecoder, "
-            f"{len(skips)} kept classical segments"
+            f"{len(skips)} kept classical segments{gate_note}"
         )
         for slot, reason in skips[:8]:
             print(f"      keep-classical {slot}: {reason}")
@@ -159,7 +194,7 @@ class HybridMlDriver:
             **timeline,
             "spans": out_spans,
             "ref_decode": "trajectory decoder (learned) + classical placement",
-            "driver": "hybrid-ml",
+            "driver": f"hybrid-ml{f' gate>={self.gate_margin}' if self.gate_margin is not None else ''}",
         }
         return finalize(payload, ctx.timeline_path(self.name))
 

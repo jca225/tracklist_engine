@@ -4,6 +4,7 @@
 per cue-delimited section, and returns a `TrackAnalysisResult` holding
 everything the DB adapter needs to persist.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -14,12 +15,19 @@ import numpy as np
 import logging
 
 from .adapters import (
-    audio_io, beat_this_adapter, cue_detr_adapter, demucs_adapter,
-    essentia_adapter, loudness, roformer_chain_adapter, uvr_chain_adapter,
+    audio_io,
+    beat_this_adapter,
+    cue_detr_adapter,
+    demucs_adapter,
+    essentia_adapter,
+    loudness,
+    roformer_chain_adapter,
+    uvr_chain_adapter,
 )
 
 from core.models import AudioAsset
 from core.result import Err, Ok, Result
+from . import grid_repair
 from .adapters import mert_adapter
 from .errors import AnalysisError, StemError
 from .models import (
@@ -49,13 +57,14 @@ class Analyzers:
     but **`roformer` is the current backend of choice** — demucs is stale/legacy.
     Pass `separator="roformer"` on new runs (see analysis/CLAUDE.md).
     """
+
     beats: beat_this_adapter.BeatThisHandle
     cues: cue_detr_adapter.CueDetrHandle
     mert: mert_adapter.MertHandle
-    demucs: demucs_adapter.DemucsHandle | None = None   # ⚠️ stale/legacy backend
+    demucs: demucs_adapter.DemucsHandle | None = None  # ⚠️ stale/legacy backend
     uvr: uvr_chain_adapter.UvrChainHandle | None = None
     roformer: roformer_chain_adapter.RoformerChainHandle | None = None
-    separator: str = "demucs"   # legacy default; prefer "roformer" on new runs
+    separator: str = "demucs"  # legacy default; prefer "roformer" on new runs
     with_essentia: bool = False
 
     @property
@@ -106,11 +115,18 @@ def load_analyzers(
             return d
         demucs_h = d.value
 
-    return Ok(Analyzers(
-        beats=b.value, cues=c.value, mert=m.value,
-        demucs=demucs_h, uvr=uvr_h, roformer=roformer_h, separator=separator,
-        with_essentia=essentia_adapter.is_available(),
-    ))
+    return Ok(
+        Analyzers(
+            beats=b.value,
+            cues=c.value,
+            mert=m.value,
+            demucs=demucs_h,
+            uvr=uvr_h,
+            roformer=roformer_h,
+            separator=separator,
+            with_essentia=essentia_adapter.is_available(),
+        )
+    )
 
 
 def run_separation(
@@ -124,8 +140,12 @@ def run_separation(
         return uvr_chain_adapter.separate(a.uvr, audio_path, out_dir, audio_id)
     if a.separator == "roformer":
         if a.roformer is None:
-            return Err(StemError(kind="model_load", detail="roformer backend not loaded"))
-        return roformer_chain_adapter.separate(a.roformer, audio_path, out_dir, audio_id)
+            return Err(
+                StemError(kind="model_load", detail="roformer backend not loaded")
+            )
+        return roformer_chain_adapter.separate(
+            a.roformer, audio_path, out_dir, audio_id
+        )
     if a.demucs is None:
         return Err(StemError(kind="model_load", detail="demucs backend not loaded"))
     return demucs_adapter.separate(a.demucs, audio_path, out_dir, audio_id)
@@ -142,7 +162,9 @@ def _section_bounds(
     if not cue_times:
         return ((0.0, total_duration_s),)
     cuts = sorted({0.0, *cue_times, total_duration_s})
-    return tuple((cuts[i], cuts[i + 1]) for i in range(len(cuts) - 1) if cuts[i + 1] > cuts[i])
+    return tuple(
+        (cuts[i], cuts[i + 1]) for i in range(len(cuts) - 1) if cuts[i + 1] > cuts[i]
+    )
 
 
 def _slice(samples: np.ndarray, sr: int, start_s: float, end_s: float) -> np.ndarray:
@@ -163,8 +185,12 @@ def analyze_track(
     asset.path — never the demucs-separated vocal/instrumental stems.
     Stems are produced as a side output for downstream alignment use only.
     """
-    assert asset.track_audio_id is not None, "AudioAsset must be persisted before analysis"
-    audio_path = Path(asset.path)   # original full audio — single source of truth for all analysis
+    assert asset.track_audio_id is not None, (
+        "AudioAsset must be persisted before analysis"
+    )
+    audio_path = Path(
+        asset.path
+    )  # original full audio — single source of truth for all analysis
 
     # The stem backend (demucs or uvr) writes stems to disk; its output is not
     # fed back into the analyzers below.
@@ -176,15 +202,32 @@ def analyze_track(
     beats_r = beat_this_adapter.predict(a.beats, audio_path)
     if not beats_r.is_ok():
         return beats_r
-    beat_times, downbeat_times = beats_r.value
+    raw_beats, raw_downbeats = beats_r.value
+    # Repair tracker flips (doubled/missed beats) before anything bar-indexed
+    # is derived — 29% of raw grids carry >5% flipped intervals (see
+    # eda/alignment/placement_structure/FINDINGS.md §2).
+    beats_rep = grid_repair.repair_beat_grid(raw_beats)
+    downbeats_rep = grid_repair.repair_beat_grid(raw_downbeats)
+    if beats_rep.changed or downbeats_rep.changed:
+        _log.info(
+            "grid repair track_audio_id=%s: beats -%d/+%d, downbeats -%d/+%d",
+            asset.track_audio_id,
+            beats_rep.n_removed,
+            beats_rep.n_inserted,
+            downbeats_rep.n_removed,
+            downbeats_rep.n_inserted,
+        )
+    beat_times, downbeat_times = beats_rep.times, downbeats_rep.times
     bpm = beat_this_adapter.estimate_bpm(beat_times)
     measure_times = beat_this_adapter.measure_times(downbeat_times)
 
-    # cue-detr on the original audio.
+    # cue-detr on the original audio; snap cues to the repaired downbeat grid
+    # (DJ-usable cues are downbeat events — 34% of raw cues sit off-grid only
+    # because cue-detr's peak-picking never snaps).
     cues_r = cue_detr_adapter.predict(a.cues, audio_path)
     if not cues_r.is_ok():
         return cues_r
-    cue_times = cues_r.value
+    cue_times = grid_repair.snap_to_grid(cues_r.value, downbeat_times)
 
     # Load audio as mono@24k once for loudness + MERT.
     wf_r = audio_io.load_mono(audio_path, target_sr=mert_adapter.MERT_SR)
@@ -201,17 +244,21 @@ def analyze_track(
     # The BPE cue-point optimizer (Phase 8b) re-aggregates these into
     # post-BPE section embeddings without rerunning MERT.
     measures_r = mert_adapter.embed_track_per_measure(
-        a.mert, wf.samples, asset.track_audio_id, measure_times,
+        a.mert,
+        wf.samples,
+        asset.track_audio_id,
+        measure_times,
     )
     if not measures_r.is_ok():
         return measures_r
     measure_embeddings = measures_r.value
 
     versions = {
-        a.separator: a.stems_version,   # keyed by backend so demucs/uvr runs are self-describing
+        a.separator: a.stems_version,  # keyed by backend so demucs/uvr runs are self-describing
         "beat_this": a.beats.version,
         "cue_detr": a.cues.checkpoint,
         "mert": a.mert.version,
+        "grid_repair": grid_repair.GRID_REPAIR_VERSION,
     }
 
     # Essentia: best-effort enrichment. The sandbox lives in venvs/essentia/
@@ -230,29 +277,33 @@ def analyze_track(
             case Err(err):
                 _log.warning(
                     "essentia worker failed for track_audio_id=%s: %s — %s",
-                    asset.track_audio_id, err.kind, err.detail,
+                    asset.track_audio_id,
+                    err.kind,
+                    err.detail,
                 )
 
-    return Ok(TrackAnalysisResult(
-        track_audio_id=asset.track_audio_id,
-        stems=stems_r.value,
-        beats=BeatGrid(
+    return Ok(
+        TrackAnalysisResult(
             track_audio_id=asset.track_audio_id,
-            beat_times=beat_times,
-            downbeat_times=downbeat_times,
-            measure_times=measure_times,
-            bpm=bpm,
-        ),
-        cues=CuePoints(
-            track_audio_id=asset.track_audio_id,
-            cue_times=cue_times,
-            model_version=a.cues.checkpoint,
-        ),
-        loudness=LoudnessReading(
-            track_audio_id=asset.track_audio_id,
-            integrated_lufs=lufs_r.value,
-        ),
-        measures=measure_embeddings,
-        analyzer_versions=versions,
-        essentia=essentia_features,
-    ))
+            stems=stems_r.value,
+            beats=BeatGrid(
+                track_audio_id=asset.track_audio_id,
+                beat_times=beat_times,
+                downbeat_times=downbeat_times,
+                measure_times=measure_times,
+                bpm=bpm,
+            ),
+            cues=CuePoints(
+                track_audio_id=asset.track_audio_id,
+                cue_times=cue_times,
+                model_version=a.cues.checkpoint,
+            ),
+            loudness=LoudnessReading(
+                track_audio_id=asset.track_audio_id,
+                integrated_lufs=lufs_r.value,
+            ),
+            measures=measure_embeddings,
+            analyzer_versions=versions,
+            essentia=essentia_features,
+        )
+    )

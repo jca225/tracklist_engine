@@ -12,6 +12,7 @@ Usage:
     ./venvs/audio/bin/python labeling/tag_aligning_folder.py \\
         ~/aligning/1fsnxchk__Two\\ Friends\\ -\\ Big\\ Bootie\\ Mix\\ Volume\\ 12
 """
+
 from __future__ import annotations
 
 import argparse
@@ -26,8 +27,34 @@ PI_HOST = "pi-storage"
 PI_DB = "/mnt/storage/data/db/music_database.db"
 
 # Camelot wheel: pitch class (0..11) + mode → Camelot string
-KEY_PC_TO_CAMELOT_MAJOR = ["8B","3B","10B","5B","12B","7B","2B","9B","4B","11B","6B","1B"]
-KEY_PC_TO_CAMELOT_MINOR = ["5A","12A","7A","2A","9A","4A","11A","6A","1A","8A","3A","10A"]
+KEY_PC_TO_CAMELOT_MAJOR = [
+    "8B",
+    "3B",
+    "10B",
+    "5B",
+    "12B",
+    "7B",
+    "2B",
+    "9B",
+    "4B",
+    "11B",
+    "6B",
+    "1B",
+]
+KEY_PC_TO_CAMELOT_MINOR = [
+    "5A",
+    "12A",
+    "7A",
+    "2A",
+    "9A",
+    "4A",
+    "11A",
+    "6A",
+    "1A",
+    "8A",
+    "3A",
+    "10A",
+]
 
 
 def to_camelot(pc: int | None, mode: str | None) -> str | None:
@@ -67,14 +94,16 @@ def fetch_features(audio_ids: list[int]) -> dict[int, dict]:
         entry = out.setdefault(taid, {})
         src = r["source"]
         if src == "essentia_v2":
-            entry.update({
-                "bpm": r.get("bpm"),
-                "key_camelot": to_camelot(r.get("key_pc"), r.get("key_mode")),
-                "energy": r.get("energy"),
-                "danceability": r.get("danceability"),
-                "valence": r.get("valence"),
-                "lufs": r.get("lufs"),  # may be None — fallback fills
-            })
+            entry.update(
+                {
+                    "bpm": r.get("bpm"),
+                    "key_camelot": to_camelot(r.get("key_pc"), r.get("key_mode")),
+                    "energy": r.get("energy"),
+                    "danceability": r.get("danceability"),
+                    "valence": r.get("valence"),
+                    "lufs": r.get("lufs"),  # may be None — fallback fills
+                }
+            )
         else:  # audio_pipeline_v1
             # Only use as fallback for fields essentia didn't fill
             entry.setdefault("bpm", r.get("bpm"))
@@ -121,7 +150,9 @@ def tag_one(local_path: Path, features: dict) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("folder", help="Path to an aligning folder containing manifest.json")
+    ap.add_argument(
+        "folder", help="Path to an aligning folder containing manifest.json"
+    )
     ap.add_argument("--dry-run", action="store_true", help="Show what would be written")
     args = ap.parse_args()
 
@@ -132,7 +163,9 @@ def main() -> int:
         return 1
     manifest = json.loads(manifest_path.read_text())
 
-    audio_ids = [t["track_audio_id"] for t in manifest["tracks"] if t.get("track_audio_id")]
+    audio_ids = [
+        t["track_audio_id"] for t in manifest["tracks"] if t.get("track_audio_id")
+    ]
     print(f"Querying features for {len(audio_ids)} tracks...")
     features_by_id = fetch_features(audio_ids)
     print(f"Found features for {len(features_by_id)} tracks.\n")
@@ -141,6 +174,11 @@ def main() -> int:
     skipped = 0
     missing = 0
     for t in manifest["tracks"]:
+        if t.get("local_path") is None:
+            # audio-less unresolved-slot stub (satisfaction: "unresolved")
+            print(f"  [skip] unresolved stub: {t.get('slot_label', '?')}")
+            skipped += 1
+            continue
         local = Path(t.get("local_path", ""))
         taid = t.get("track_audio_id")
         if not local.is_file():

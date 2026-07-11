@@ -27,7 +27,9 @@ with `eda/` a cross-cutting consumer that reads from multiple stages.
 **Alignment north star (target Aug 1):** the aligner consumes `{tokenized tracklist,
 track audios, set audio}` → an Ableton-round-trippable structure, trained on manual
 Ableton GT. Stem discovery and version/variant QA are **ingest**, *not* the aligner.
-Full spec: [docs/alignment_objective.md](docs/alignment_objective.md).
+Full spec: [docs/alignment_objective.md](docs/alignment_objective.md); architecture
+map + Point A→B phases: [docs/architecture_north_star.md](docs/architecture_north_star.md)
+(kernel entrypoint: `make align SET=<id>`).
 
 Everything outside this chain is one of:
 - A vendored dependency: `cue-detr/` (DETR-based cue-point detection model,

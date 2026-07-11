@@ -80,13 +80,38 @@ scorecard:
 	venvs/audio/bin/python -m eda.alignment.failure_analysis.analyze
 
 # Race the three end-to-end aligner drivers (classical / agentic / ml) on one
-# scorecard board. Override SETS/DRIVERS/EXTRA (e.g. make race SETS=2nvzlh2k
-# EXTRA="--fibers --reuse-base 2nvzlh2k=out/2nvzlh2k_predicted_timeline_lt_v2.json").
+# scorecard board (strict AND fiber-aware always shown). Override SETS/DRIVERS/
+# EXTRA (e.g. make race SETS=2nvzlh2k
+# EXTRA="--reuse-base 2nvzlh2k=out/2nvzlh2k_predicted_timeline_lt_v2.json").
 SETS ?= 1fsnxchk,2nvzlh2k
 DRIVERS ?= classical,agentic,ml
 race:
 	venvs/audio/bin/python -m workspaces.alignment_prototype.drivers.race \
 		--sets $(SETS) --drivers $(DRIVERS) $(EXTRA)
+
+# The kernel entrypoint (P1, docs/architecture_north_star.md): align ONE set
+# with the current-best default composition and score it. No flags needed.
+# The default driver flips to ml when it wins the race board (P3).
+align:
+	@test -n "$(SET)" || { echo "usage: make align SET=<set_id>"; exit 1; }
+	venvs/audio/bin/python -m workspaces.alignment_prototype.drivers.race \
+		--sets $(SET) --drivers classical $(EXTRA)
+
+# W1 determinism check (kernel_data_engine_plan): run the kernel twice, diff.
+# Expensive (two full aligns) — nightly-grade, not pre-commit. Byte-identity
+# is the bar; if MPS nondeterminism ever breaks it, the span diff below says
+# exactly where, and the plan's stated fallback is tolerance-based equality.
+PROTO_OUT := workspaces/alignment_prototype/out
+determinism:
+	@test -n "$(SET)" || { echo "usage: make determinism SET=<set_id>"; exit 1; }
+	$(MAKE) align SET=$(SET)
+	cp $(PROTO_OUT)/$(SET)_classical_timeline.json $(PROTO_OUT)/$(SET)_determinism_run1.json
+	$(MAKE) align SET=$(SET)
+	@cmp -s $(PROTO_OUT)/$(SET)_determinism_run1.json $(PROTO_OUT)/$(SET)_classical_timeline.json \
+		&& echo "DETERMINISM OK — two runs byte-identical" \
+		|| { echo "DETERMINISM FAILED — span-level diff:"; \
+		     diff <(venvs/audio/bin/python -m json.tool $(PROTO_OUT)/$(SET)_determinism_run1.json) \
+		          <(venvs/audio/bin/python -m json.tool $(PROTO_OUT)/$(SET)_classical_timeline.json) | head -40; exit 1; }
 
 # ---------- deploy ----------------------------------------------------------
 

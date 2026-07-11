@@ -61,13 +61,21 @@ median 3.9 s, <2 s 50%), acappella 19% — i.e. consistent with the committed
 BB12 lt_v2 leg was valid all along (default GT happened to be BB12's):
 identity 84%, placement median 4.5 s / <15 s 74%.
 
-## IN-FLIGHT — DO NOT COLLIDE
-**BB11 ref separation is RUNNING NOW on MPS** (other session, task `bmo144bfr`,
-started ~07:05): `mac_analyze_loop --set-ids 2nvzlh2k --separator roformer
---only-reference` for the ~15 missing refs, 3 h timeout. **MPS is NOT free** — do
-not start GPU work (infer re-runs, synthetic A/B, another mac_analyze_loop) until
-it exits. After it lands: delta-refresh the BB11 pull, re-run BB11 infer →
-looptrace decode → score (the first full-coverage acappella test).
+## IN-FLIGHT — DO NOT COLLIDE (updated 2026-07-09 ~11:05)
+**Vast RTX 4090 (contract `44320363`, label `bb-separation-fable-20260709`,
+~$0.39/hr) is running `scripts/vast_loop.py`** in tmux `analyze`: BB11 refs
+first (5/6 done), then chained onto **all of BB10** (~120 tracks, full
+analysis, done ~15:00). MPS on the Mac is FREE again (mac loop killed;
+superseded). Do NOT rent a second box without checking `--shard`; do NOT
+destroy this one — it is mine and gets torn down (plus the pi authorized_keys
+line removed) when BB10 drains. An armed chain on the Mac fires
+pull-refresh → infer → looptrace → fibered score into
+`out/2nvzlh2k_predicted_timeline_lt_v3.json` the moment BB11's separable
+refs hit zero.
+
+**Known data bug found en route (encoding class):** `track_audio` 23070
+(DJ Kool acappella) has a double-encoded DB path (`IvÃ¡n…`) vs proper UTF-8 on
+disk → rsync fails. One-line path UPDATE needed on pi (agent-blocked).
 
 ## Manifest audit 2026-07-09 (all 5 ~/aligning sets)
 All 488 distinct `pi_path`s exist on pi; local_path + stem paths verified on disk for
@@ -91,7 +99,15 @@ flip below is reverted, or the pull will fetch the instrumental as the slot's ma
    `<4s` over-override regression), and improve full-mix acappella placement. Touches
    `stem_placement.py` / `infer.py` — coordinate with the parallel agent (they own this
    path right now).
-3. **[BB11-specific cheap win, IN PROGRESS] Vocals-stem backfill.** Corrected scope:
+3. **[RESOLVED NEGATIVE 2026-07-09 11:33] Vocals-stem backfill — coverage was NOT the wall.**
+   Full-coverage re-run (all separable BB11 refs stemmed via Vast 4090; chain
+   pull→infer→looptrace→score, `out/2nvzlh2k_predicted_timeline_lt_v3.json`):
+   acappella trajectory **19%**, identical to pre-backfill (18–19%); identity 84%,
+   placement 6.8 s, headline 31%, instrumental 46% — all flat. Both the coverage
+   theory AND the regular-sibling routing theory are falsified as binding
+   constraints. Remaining acappella levers are therefore #2 (placement) and #4
+   (instance selection, BB10-gated) — as the oracle decomposition predicted.
+   ~~ORIGINAL:~~ **Vocals-stem backfill.** Corrected scope:
    pi already has 132/147; delta refresh done; only ~15 refs need separation and that
    job is **queued** (see in-flight). After it lands: verify stems on pi
    (`track_stems` rows + files), delta-refresh the pull once more, then a **second BB11
@@ -133,3 +149,76 @@ flip below is reverted, or the pull will fetch the instrumental as the slot's ma
   fetch (cand1, now canonical). Ref file content verified = Don Diablo Remix (Radio
   Edit), matching its player_id; what exactly sounded "wrong version" still needs
   John's ear (full-length remix vs radio edit is the leading theory).
+
+## EDA-lane session note (2026-07-09 afternoon, Fable agent — failure correlates + fixes)
+
+Full numbers in FINDINGS.md ("EDA 2026-07-09" + "Fix round" sections). For whoever
+owns `infer.py`/`stem_placement.py` and the abstention contract:
+
+- **`joint_ref_decode` now uses `stem_resolve.resolve_stem`** (disk-truth) and
+  emits per-span **`ref_decode_status`** (`looptrace|looptrace-empty|skip-*|legacy`).
+  BB11 A/B flat on headline (coverage 47→73 spans; oddratio +4 pp, instr
+  ref-offset 7.8→3.9 s) — a robustness/diagnostics fix, not a lever. Namespaced
+  output `out/2nvzlh2k_predicted_timeline_postfix_lt_diskfix.json`; canonical
+  timelines untouched (your lt_v3 chain unaffected).
+- **Abstention: do NOT use span `confidence`** — anti-calibrated (spearman −0.24
+  vs traj; abstaining on it makes the kept set worse). **`start_source` is the
+  calibrated signal**: mert-fallback-placed spans ≈ lost (traj 0.04–0.08,
+  ss_med 15–40 s, n=41); lyrics-placed acappellas 0.26/2.8 s. When you wire the
+  abstention field, route it off start_source (+ ref_decode_status).
+- **40 GT-acappella spans are still mis-axed `regular`** (class-1 inventory gaps,
+  no row-text to parse). w-layer prior quantified in looptrace/NOTES.md
+  (P(acap|w-layer)=82%; 100% of acappellas are w-layers) — filed unwired per the
+  freeze; `layer_role` in set_track_slots is consumed nowhere in the prototype.
+- BB12 audit regenerated (`looptrace/out/audit_1fsnxchk.json`, backup
+  `.pre_wlayer_regen`); BB12 GT uses plain-numeric slots so audit joins must key
+  by track_id (build_span_table does now). Instance-ambiguity fracs are weak
+  span-level predictors (|rho|≤.15, n=34) — temper expectations for them as
+  selector features.
+
+## EDA-lane addendum (2026-07-09 evening) — two wire-ready levers, measured
+
+Full numbers: FINDINGS.md §C2c. For the kernel lane, in priority order:
+
+1. **Long-weave windowing = ~+6 pp corpus-wide trajectory at oracle quality**
+   (the largest measured unbuilt lever; not BB10-gated). >90 s GT spans are 40%
+   of all loss; oracle windows take them 0.12→0.29 sec-weighted (90–300 s class:
+   0.17→0.41, many spans → ~1.0). Two-step wiring in FINDINGS: evidence-gated
+   window-growth retry in joint_ref_decode (accept-guard REQUIRED — 4 spans
+   regress when the window admits rivals), then multi-appearance anchors from
+   the fp vote clusters in infer. The two 839 s mega-weaves stay dead even at
+   oracle — abstain (`ref_decode_status='weave-too-long'`), don't chase.
+2. **Axis fix ahead of infer** (w-layer prior / audio gate, NOTES.md): GT-axis
+   decode-only floor measured at BB11 instr 33→41% / acap 14→17% / headline
+   20→22%; BB12 linear 29→34% / instr 20→28%. Placement-side gain on top per
+   Re-measure 2.
+3. Synthetic tlp rows: DOWNGRADED to hygiene (5/7 spans actually identity-hit;
+   GT inherited the tlp ids and audio exists). Preflight check for new GT sets;
+   title-only reconcile is unsafe (artist+title required).
+
+## Kernel-lane session note (2026-07-09, Fable agent — W0/W1 of docs/kernel_data_engine_plan.md)
+
+For the model-lane agent; none of this touches your interfaces:
+
+- **`--instr-stem-placement` is now default ON** (81ac097) — your armed BB11
+  chain passes it explicitly, which is now a harmless no-op. Verified the pi
+  re-materialize you rely on: BB12 19 instr / BB11 19 visible (GT-only
+  residual ~6/set = class-1 inventory gaps).
+- **`SetContext.for_set` now runs a boot preflight** (validates the manifest
+  via `core.contracts.load_manifest`, checks pull completeness). Escape
+  hatch: `for_set(..., preflight=False)` if you construct contexts for sets
+  without a local pull.
+- **New scoped ratchet `kernel_flags` = 39** (add_argument on infer /
+  joint_ref_decode / drivers). Adding a kernel CLI flag now fails `make
+  check` — add to the plan's burn-in table instead, or raise with
+  justification.
+- **A guarded `make determinism SET=1fsnxchk` is queued in background**
+  (waits for GPU idle ×2). It will regenerate
+  `out/1fsnxchk_predicted_timeline.json` + `1fsnxchk_classical_timeline.json`
+  — with instr placement ON, so BB12 classical numbers may shift (expected:
+  instr axis improves). Re-run `make race` before quoting the old board.
+- Both pis deployed to `b2b2edd` (the branch merge landed on main).
+- Plans landed: docs/architecture_north_star.md (OS map, P0–P6) +
+  docs/kernel_data_engine_plan.md (estimation contracts W2 = the factor/
+  posterior records; I'll hand off the `ProbeFactor` shape here before
+  touching `harness/contract.py`).

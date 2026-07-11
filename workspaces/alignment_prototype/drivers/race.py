@@ -7,7 +7,7 @@ driver runs first per set (it is the base the agentic/ml drivers refine); pass
 existing timeline.
 
     venvs/audio/bin/python -m workspaces.alignment_prototype.drivers.race \
-        --sets 1fsnxchk,2nvzlh2k --drivers classical,agentic,ml [--fibers]
+        --sets 1fsnxchk,2nvzlh2k --drivers classical,agentic,ml
 
     # iterate fast on the board using an existing classical timeline as base:
     venvs/audio/bin/python -m workspaces.alignment_prototype.drivers.race \
@@ -33,12 +33,14 @@ _METRICS = {
     "place_med": re.compile(r"set placement \|pred-gt\|:\s+median=([\d.]+)s"),
     "ref_med": re.compile(r"ref offset \|pred-gt\|.*?median=([\d.]+)s"),
     "traj_head": re.compile(r"HEADLINE multiseg\+loop n=\s*\d+ traj-acc=(\d+)%"),
+    "traj_nopile": re.compile(
+        r"HEADLINE \(pileups excluded\) n=\s*\d+ traj-acc=(\d+)%"
+    ),
     "traj_acap": re.compile(r"stem\s+acappella\s+n=\s*\d+ traj-acc=(\d+)%"),
 }
 
 
-def score_timeline(set_id: str, timeline: Path, *, fibers: bool = False) -> dict:
-    """Run the canonical scorer on a timeline; parse its board metrics."""
+def _run_scorer(set_id: str, timeline: Path, *, fibers: bool) -> str:
     argv = [
         sys.executable,
         "-m",
@@ -55,10 +57,38 @@ def score_timeline(set_id: str, timeline: Path, *, fibers: bool = False) -> dict
     if proc.returncode != 0:
         print(out)
         raise RuntimeError(f"scorer failed for {set_id} / {timeline.name}")
-    scores = {"_raw": out}
+    return out
+
+
+def score_timeline(set_id: str, timeline: Path) -> dict:
+    """Run the canonical scorer twice (strict + fiber-aware); parse both.
+
+    The board shows both rulers side by side: strict = exact-instance
+    coordinates; fiber-aware = repeat-equivalent credit (a within-fiber pick
+    plays the same audio — the honest product metric). `abstain` counts spans
+    whose fiber_ambiguity flags the instance as content-undecidable."""
+    strict = _run_scorer(set_id, timeline, fibers=False)
+    fib = _run_scorer(set_id, timeline, fibers=True)
+    scores = {"_raw": fib}
     for key, rx in _METRICS.items():
-        m = rx.search(out)
+        m = rx.search(strict)
         scores[key] = m.group(1) if m else None
+        m = rx.search(fib)
+        scores[f"{key}_fib"] = m.group(1) if m else None
+    try:
+        import json
+
+        spans = json.loads(timeline.read_text())["spans"]
+        decoded = [s for s in spans if s.get("ref_segments")]
+        amb = sum(
+            1
+            for s in decoded
+            if isinstance(s.get("fiber_ambiguity"), dict)
+            and s["fiber_ambiguity"].get("ambiguous")
+        )
+        scores["abstain"] = f"{amb}/{len(decoded)}" if decoded else None
+    except Exception:
+        scores["abstain"] = None
     return scores
 
 
@@ -78,9 +108,9 @@ def run(
     *,
     reuse_base: dict[str, Path] | None = None,
     live: bool = True,
-    fibers: bool = False,
     lam: float = 16.0,
     source_set: str | None = None,
+    ml_gate: float | None = None,
 ) -> dict[tuple[str, str], dict]:
     reuse_base = reuse_base or {}
     board: dict[tuple[str, str], dict] = {}
@@ -106,38 +136,58 @@ def run(
             if name == "agentic":
                 produced[name] = AgenticDriver(base, live=live).align_set(ctx)
             elif name == "ml":
-                produced[name] = HybridMlDriver(base, lam=lam).align_set(ctx)
+                produced[name] = HybridMlDriver(
+                    base, lam=lam, gate_margin=ml_gate
+                ).align_set(ctx)
             else:
                 raise SystemExit(f"unknown driver {name!r}")
 
         for name in drivers:
             path = produced[name]
             print(f"[score] {set_id} / {name}")
-            board[(set_id, name)] = score_timeline(set_id, path, fibers=fibers)
+            board[(set_id, name)] = score_timeline(set_id, path)
 
-    _print_board(board, sets, drivers, fibers=fibers)
+    _print_board(board, sets, drivers)
     return board
 
 
-def _print_board(board, sets, drivers, *, fibers: bool) -> None:
-    traj_label = "traj(fib)%" if fibers else "traj%"
-    cols = ["id%", "place_med", "ref_med", f"head_{traj_label}", f"acap_{traj_label}"]
-    keys = ["identity", "place_med", "ref_med", "traj_head", "traj_acap"]
-    print("\n" + "=" * 78)
-    print("SCORECARD — end-to-end driver race")
-    print("=" * 78)
-    header = f"{'set':10} {'driver':10} " + " ".join(f"{c:>12}" for c in cols)
+def _print_board(board, sets, drivers) -> None:
+    cols = [
+        "id%",
+        "place_med",
+        "ref_med",
+        "head%",
+        "headF%",
+        "noPileF%",
+        "acapF%",
+        "abstain",
+    ]
+    keys = [
+        "identity",
+        "place_med",
+        "ref_med",
+        "traj_head",
+        "traj_head_fib",
+        "traj_nopile_fib",
+        "traj_acap_fib",
+        "abstain",
+    ]
+    print("\n" + "=" * 100)
+    print("SCORECARD — end-to-end driver race (strict AND fiber-aware)")
+    print("=" * 100)
+    header = f"{'set':10} {'driver':10} " + " ".join(f"{c:>9}" for c in cols)
     print(header)
     print("-" * len(header))
     for set_id in sets:
         for name in drivers:
             s = board.get((set_id, name), {})
-            cells = " ".join(f"{(s.get(k) or '–'):>12}" for k in keys)
+            cells = " ".join(f"{(s.get(k) or '–'):>9}" for k in keys)
             print(f"{set_id:10} {name:10} {cells}")
-    print("=" * 78)
+    print("=" * 100)
     print(
-        "id%=identity  place_med/ref_med=median |pred-gt| seconds  "
-        f"head=multiseg+loop {traj_label}  acap=acappella {traj_label}"
+        "id%=identity  place/ref_med=median |pred-gt| s  head%=multiseg+loop strict  "
+        "headF%=fiber-aware  noPileF%=fiber-aware excl. medley pileups  "
+        "acapF%=acappella fiber-aware  abstain=instance-ambiguous/decoded spans"
     )
 
 
@@ -157,10 +207,14 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="agentic driver uses replay runners (no audio) instead of live probes",
     )
-    p.add_argument(
-        "--fibers", action="store_true", help="fiber-aware trajectory scoring"
-    )
     p.add_argument("--lam", type=float, default=16.0, help="ml Viterbi jump cost")
+    p.add_argument(
+        "--ml-gate",
+        type=float,
+        default=None,
+        help="ml confidence gate: keep classical segments unless the learned "
+        "decode margin clears this (per-checkpoint scale; sweep it)",
+    )
     p.add_argument(
         "--source-set",
         default=None,
@@ -173,9 +227,9 @@ def main(argv: list[str] | None = None) -> int:
         drivers=[d for d in args.drivers.split(",") if d],
         reuse_base=_parse_reuse(args.reuse_base),
         live=not args.replay,
-        fibers=args.fibers,
         lam=args.lam,
         source_set=args.source_set,
+        ml_gate=args.ml_gate,
     )
     return 0
 

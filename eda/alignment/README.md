@@ -16,6 +16,7 @@ This is the **data-analysis phase** described in
 | `artifacts.py` | `.npz` cache format for per-bar mix MERT |
 | `mix_structure_probe.py` | CLI entry point |
 | `warp_analysis/` | GT warp ↔ BPM/stem structure; emits `warp_prior.json` for synthetic-mashup generation (see its [README](warp_analysis/README.md)) |
+| `placement_structure/` | Placement objectivity (GT vs bar/phrase lattice), tempo drift vs tracker instability, cue-detr empirical utility (see its [FINDINGS](placement_structure/FINDINGS.md)) |
 
 ## Phase 0 — build a mix MERT artifact
 

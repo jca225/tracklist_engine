@@ -52,7 +52,10 @@ from labeling.als import (
     resolve_identity,
 )
 
-OUT_DIR = Path(__file__).resolve().parent / "out"
+# prototype-level out/ (NOT review/out/): this script moved into review/ in
+# the 2026-07-09 taxonomy reorg and `parent / "out"` silently pointed one
+# level too deep — timelines live at alignment_prototype/out/.
+OUT_DIR = _REPO / "workspaces" / "alignment_prototype" / "out"
 ALIGNING_ROOT = Path.home() / "aligning"
 # Friendly display names for output filenames (fallback: the set_id itself).
 _SET_DISPLAY = {
