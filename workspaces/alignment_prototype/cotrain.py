@@ -6,16 +6,8 @@ set (see train.py --loso)."""
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from pathlib import Path
-
-
-def _pad_slot(label: str) -> str:
-    """Zero-pad a slot label's leading numeric base to 3 digits, preserving any
-    suffix ('38' -> '038', '26w1' -> '026w1'), to match GT slot_label format."""
-    m = re.match(r"^(\d+)(.*)$", label)
-    return f"{int(m.group(1)):03d}{m.group(2)}" if m else label
 
 
 from workspaces.alignment_prototype.eval import evaluate
@@ -106,10 +98,11 @@ def _cue_anchor(set_id: str) -> dict:
             # fetch_slot_rows emits the cue under key "cue_s" (not "cue_seconds").
             cue = r.get("cue_s") if isinstance(r, dict) else None
             if cue not in (None, ""):
-                # GT spans zero-pad the numeric slot base to 3 digits ("038",
-                # "026w1"); scraped cues are unpadded ("38", "26w1"). Normalize
-                # or the anchor lookup misses every span (0 overlap -> garbage).
-                out[_pad_slot(str(r["slot_label"]))] = float(cue)
+                # Key on the label as fetch_slot_rows provides it (already passed
+                # through normalize_slot). The anchor lookup normalizes GT labels
+                # the same way, so these exact-match; do NOT re-pad (that forces
+                # the coarser interpolation fallback and degrades placement).
+                out[r["slot_label"]] = float(cue)
         return out
     except Exception:  # noqa: BLE001
         return {}

@@ -8,24 +8,31 @@ that head around the held-out set with a scraped-cue placement anchor
 
 ## Run: `train.py --loso --sets bb11,bb12` (MPS, ~4 min)
 
-| held-out | trained on | spans | identity_acc | set_start MAE | cue-anchor coverage |
-|---|---|---|---|---|---|
-| bb11 (1fsnxchk) | bb12 | 150 | **100%** | **32.7 s** | 116/143 (81%) |
-| bb12 (2nvzlh2k) | bb11 | 166 | **100%** | **1416 s** | 39/155 (25%) |
+| held-out | trained on | spans | identity_acc | set_start MAE |
+|---|---|---|---|---|
+| bb11 (1fsnxchk) | bb12 | 150 | **100%** | **18.6 s** |
+| bb12 (2nvzlh2k) | bb11 | 166 | **100%** | **1436 s** |
 
 ## The finding (the honest read)
 
 - **Identity transfers cross-set — 100% both directions.** The co-trained head
-  correctly names which song plays on a set it never trained on. This result is
+  correctly names which song plays on a set it never trained on. This is
   anchor-independent (identity does not use the placement anchor) and is the
   robust, trustworthy signal here.
-- **Placement does NOT transfer.** set_start MAE tracks *anchor coverage*, not
-  training: well-anchored bb11 (81%) → 33 s; poorly-anchored bb12 (25%) → 1416 s,
-  because its 75% unanchored spans have no placement signal on an unseen set and
-  collapse toward front-of-mix. This confirms, at the model level, the documented
-  behavior (`mert_model.py:239-246`): "on an unseen set the curves carry no
-  placement signal and the DP collapses to the front of the mix." The learned MERT
-  head **memorizes placement per-set**; it does not learn transferable placement.
+- **Placement does NOT transfer, and is wildly unstable across the two
+  directions — bb11 18.6 s vs bb12 1436 s (>75×).** The learned MERT head carries
+  no dependable cross-set placement signal; on an unseen set placement leans
+  entirely on the scraped-cue anchor, which rescues bb11 but not bb12. This is
+  consistent with the documented behavior (`mert_model.py:239-246`): on an unseen
+  set the curves carry no placement signal and the decode collapses toward
+  front-of-mix. **The head memorizes placement per-set; it does not learn
+  transferable placement.**
+- **What drives the bb11/bb12 asymmetry is NOT resolved (and it is NOT anchor
+  coverage — bb12 has *more* real cues, 149 nonzero vs bb11's 41, yet places far
+  worse).** Candidate causes: bb12's scraped cues may be in a different frame /
+  less correct, or its decode is harder — n=2 cannot disambiguate. Do not
+  over-explain this; the defensible claim is only "identity transfers, placement
+  does not, unstably."
 
 ## Why it matters (north star: SOTA GT-closeness on all 1001tl data)
 
@@ -36,22 +43,26 @@ flywheel's value is exactly this: each newly labeled set now (i) trains the head
 (identity already generalizes; more sets should sharpen it) and (ii) is measurable
 held-out via `--loso`, so we see transfer improve set by set.
 
-## Bugs the LOSO harness surfaced (all fixed)
+## Bugs the LOSO harness surfaced
 
-Two stacked wiring bugs corrupted the *placement* numbers before this run (the
-identity number was always valid — it ignores the anchor):
-1. `_cue_anchor` read cue key `cue_seconds`; `fetch_slot_rows` emits `cue_s`
-   → empty anchor → floor mode (commit e84877b).
-2. GT slot labels are 3-digit zero-padded (`038`, `026w1`); scraped cues are
-   unpadded (`38`, `26w1`) → **0 anchor overlap** → the "anchored" numbers were
-   garbage until `_pad_slot` normalized them (commit 3dedf87).
+The identity number was always valid (it ignores the anchor). One real wiring bug
+corrupted the *placement* number:
+- **`_cue_anchor` read cue key `cue_seconds`; `fetch_slot_rows` emits `cue_s`** →
+  empty anchor → floor mode (fixed, commit e84877b). This was the actual unblocker.
+
+A second "fix" I made was a **wrong turn, reverted**: I added `_pad_slot` to
+zero-pad cue labels, believing GT/cue labels mismatched. They don't in the real
+lookup — `normalize_slot` strips padding on *both* sides, so unpadded cue keys
+already exact-match. `_pad_slot` re-padded them and *forced the coarser
+interpolation fallback*, degrading bb11 (18.6 s → 32.7 s). The final-review caught
+this; `_pad_slot` was removed and bb11's 18.6 s restored. Lesson: the "0 overlap"
+I measured was an artifact of comparing raw labels instead of normalized ones.
 
 ## Caveats
 
 - **n = 2.** One number per direction — directional, not a benchmark. Its value is
-  proving the gear + revealing identity-transfers / placement-doesn't, and
-  estimating that a 3rd labeled set is worth training on.
-- bb12's low cue coverage (25%) inflates its MAE; even fully anchored it would
-  show placement *rescued by cues*, not placement *transferred* — the finding holds.
+  proving the gear + the robust identity-transfers/placement-doesn't split, and
+  estimating that a 3rd labeled set is worth training on. The bb11/bb12 placement
+  asymmetry is a lead to investigate, not a measured law.
 - Requires bb11+bb12 MERT stores (local cache / pi). Cross-set anchor uses scraped
-  cues (`fetch_slot_rows`), never held-out GT.
+  cues (`fetch_slot_rows`), never held-out GT — leakage-free (final-review confirmed).
