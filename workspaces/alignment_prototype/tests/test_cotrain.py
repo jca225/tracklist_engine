@@ -42,3 +42,41 @@ def test_cotrain_concatenates_examples_across_sets(monkeypatch):
     head = cotrain([s1, s2], device="cpu")
     assert head == "HEAD"
     assert calls["n"] == 5  # 2 + 3 concatenated
+
+
+def test_run_loso_holds_each_set_out(monkeypatch):
+    import workspaces.alignment_prototype.cotrain as ctmod
+
+    # two fake sets; capture which set is held out on each cotrain call
+    held_train_ids = []
+
+    def fake_load_stores(set_id):  # returns a SetStores-like per set
+        return SetStores(set_id, (f"{set_id}span",), object(), {}, {"s": ()})
+
+    def fake_cotrain(train_sets, **kw):
+        held_train_ids.append(tuple(s.set_id for s in train_sets))
+        return "HEAD"
+
+    class FakeAligner:
+        def __init__(self, **kw):
+            pass
+
+        def predict_sequence(self, spans):
+            return ("pred",)
+
+    def fake_eval(preds, spans):
+        class R:  # minimal report stub
+            def lines(self):
+                return ["median=1.0s"]
+
+        return R()
+
+    monkeypatch.setattr(ctmod, "_load_set_stores", fake_load_stores, raising=False)
+    monkeypatch.setattr(ctmod, "cotrain", fake_cotrain)
+    monkeypatch.setattr(ctmod, "MertLearnedAligner", FakeAligner, raising=False)
+    monkeypatch.setattr(ctmod, "evaluate", fake_eval, raising=False)
+
+    rep = ctmod.run_loso({"a": "a.yaml", "b": "b.yaml"}, device="cpu")
+    # each set held out once; the OTHER set is the training set
+    assert set(rep.keys()) == {"a", "b"}
+    assert ("b",) in held_train_ids and ("a",) in held_train_ids

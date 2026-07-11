@@ -7,10 +7,14 @@ set (see train.py --loso)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
+from workspaces.alignment_prototype.eval import evaluate
 from workspaces.alignment_prototype.mert_model import (
+    MertLearnedAligner,
     TrainConfig,
     build_examples,
+    median_duration_by_slot,
     train_ensemble,
 )
 from workspaces.alignment_prototype.records import SpanTarget
@@ -41,3 +45,101 @@ def cotrain(
             )
         )
     return train_ensemble(tuple(all_examples), cfg=cfg, device=device, init=init)
+
+
+def _load_set_stores(set_id_or_yaml) -> "SetStores":
+    """Load a set's (targets, mix, refs, slot_pools) into SetStores.
+
+    Accepts either:
+    - a yaml Path / path-like (passed through to load_set directly), or
+    - a bare set_id string (e.g. "bb11") — resolved to
+      labeling/fixtures/<set_id>_ground_truth.yaml relative to the repo root.
+
+    SSHes pi-storage for MERT (result is cached locally).
+    """
+    from core.result import Err, Ok
+    from workspaces.alignment_prototype.dataset import (
+        load_set,
+        slot_candidates_from_targets,
+    )
+    from workspaces.alignment_prototype.mert_store import load_bb12_mert
+
+    p = Path(set_id_or_yaml)
+    if not p.suffix:
+        # Bare set_id — resolve to canonical fixture path.
+        # workspaces/alignment_prototype/cotrain.py → repo root (avoid parents[N])
+        _repo = Path(__file__).resolve().parent.parent.parent
+        p = _repo / "labeling" / "fixtures" / f"{set_id_or_yaml}_ground_truth.yaml"
+
+    match load_set(p):
+        case Err(msg):
+            raise RuntimeError(f"load_set failed: {msg}")
+        case Ok((gt, targets)):
+            pass
+    match load_bb12_mert(gt.set_id):
+        case Err(msg):
+            raise RuntimeError(f"MERT load failed for {gt.set_id}: {msg}")
+        case Ok((_sid, mix, refs)):
+            pass
+    pools = slot_candidates_from_targets(targets)
+    return SetStores(gt.set_id, targets, mix, refs, pools)
+
+
+def _cue_anchor(set_id: str) -> dict:
+    """{slot_label: cue_seconds} from scraped tracklist cues (aligner INPUT, not
+    GT). Returns {} if unavailable."""
+    try:
+        from workspaces.alignment_prototype.infer import fetch_slot_rows
+
+        rows = fetch_slot_rows(set_id)
+        out = {}
+        for r in rows:
+            cue = r.get("cue_seconds") if isinstance(r, dict) else None
+            if cue not in (None, ""):
+                out[r["slot_label"]] = float(cue)
+        return out
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def run_loso(
+    set_yamls: dict,
+    *,
+    cfg: TrainConfig | None = None,
+    device: str = "cpu",
+    anchor_from_cues: bool = True,
+) -> dict:
+    """Leave-one-set-out co-train eval.
+
+    For each held-out set: cotrain on the others, wrap the head around the
+    held-out stores with the scraped-cue anchor, predict_sequence on the
+    held-out spans, evaluate. Returns a per-held-out-set report dict.
+    """
+    stores: dict[str, SetStores] = {sid: _load_set_stores(sid) for sid in set_yamls}
+    report = {}
+    for held in stores:
+        train_sets = [s for sid, s in stores.items() if sid != held]
+        head = cotrain(train_sets, cfg=cfg, device=device)
+        h = stores[held]
+        cue_anchor = _cue_anchor(held) if anchor_from_cues else {}
+        try:
+            slot_medians = median_duration_by_slot(h.train_spans)
+        except AttributeError:
+            slot_medians = {}
+        aligner = MertLearnedAligner(
+            head=head,
+            mix=h.mix,
+            refs=h.refs,
+            slot_medians=slot_medians,
+            slot_pools=h.slot_pools,
+            train_medians=(cue_anchor or {}),
+            anchor_sigma_s=(30.0 if cue_anchor else None),
+            device=device,
+        )
+        preds = aligner.predict_sequence(h.train_spans)
+        rep = evaluate(preds, h.train_spans)
+        report[held] = {
+            "anchor": "cues" if cue_anchor else "none (floor)",
+            "lines": list(rep.lines()),
+        }
+    return report
