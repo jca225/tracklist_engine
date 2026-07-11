@@ -18,6 +18,7 @@ import argparse
 import json
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -43,6 +44,20 @@ from workspaces.alignment_prototype.refine_ref_offsets import (
 )
 
 OUT_DIR = Path(__file__).resolve().parent / "out"
+
+
+@dataclass(frozen=True)
+class SpanScore:
+    slot: str
+    recording_id: str
+    stem: str | None  # matched-GT claimed_stem (axis), None if no same-rec GT
+    span_class: str | None  # linear/multiseg/loop/oddratio, None if no same-rec GT
+    id_correct: bool | None  # None if no overlapping GT row
+    place_err_s: float | None
+    strict: float | None
+    fiber: float | None
+    ref_err_s: float | None  # straight clips only
+    density: int | None
 
 
 def norm_slot(s: str) -> str:
@@ -134,6 +149,174 @@ def _resolve_ref_audio(
     return p if p and Path(p).is_file() else None
 
 
+def score_spans(
+    set_id: str,
+    timeline_path: Path,
+    *,
+    fibers: bool = False,
+    hubert_layer: int = 9,
+    gt_path: Path | None = None,
+) -> list[SpanScore]:
+    """Score every span in *timeline_path* against GT; return one SpanScore per span.
+
+    Spans with no same-recording GT row are emitted with stem/span_class/
+    place_err_s/strict/fiber/ref_err_s/density=None.  id_correct is set from
+    the overlapping-GT block when present, else None.
+    """
+    # --- GT resolution (mirrors main() setup) ---
+    if gt_path is None:
+        fixtures = sorted((_REPO / "labeling" / "fixtures").glob("*_ground_truth.yaml"))
+        matches = [
+            f for f in fixtures if yaml.safe_load(f.read_text()).get("set_id") == set_id
+        ]
+        if len(matches) != 1:
+            raise ValueError(
+                f"--gt not given and {len(matches)} GT fixtures match "
+                f"set_id={set_id} (looked in labeling/fixtures/)"
+            )
+        gt_path = matches[0]
+
+    tl_record = load_timeline(timeline_path)
+    join_guard(tl_record.sid, set_id, context="timeline vs set_id")
+    timeline = json.loads(Path(timeline_path).read_text())
+
+    # manifest by track_id — only needed for fiber ref-audio resolution
+    by_tid: dict[str, dict] = {}
+    if fibers:
+        set_dir = find_aligning_dir(set_id)
+        manifest = load_manifest(set_dir / "manifest.json")
+        join_guard(manifest.sid, tl_record.sid, context="manifest vs timeline")
+        by_tid = {
+            k: {"track_id": r.track_id, "stems": r.stems, "local_path": r.local_path}
+            for k, r in manifest.by_track_id().items()
+        }
+
+    gt_doc = yaml.safe_load(gt_path.read_text())
+    join_guard(tl_record.sid, gt_doc.get("set_id") or "", context="timeline vs GT yaml")
+    gt_rows = [r for r in gt_doc["tracks"] if str(r.get("slot_label")) != "mix"]
+
+    id_map_path = _REPO / "labeling" / "fixtures" / "id_maps" / f"{set_id}.json"
+    id_map: dict[str, str] = (
+        json.loads(id_map_path.read_text()) if id_map_path.exists() else {}
+    )
+    if id_map:
+        for r in gt_rows:
+            tid = str(r.get("track_id") or "")
+            if tid in id_map and id_map[tid] != tid:
+                r["track_id"] = id_map[tid]
+
+    gt_by_tid: dict[str, list[dict]] = {}
+    for r in gt_rows:
+        if r.get("track_id"):
+            gt_by_tid.setdefault(str(r["track_id"]), []).append(r)
+
+    fiber_cache: dict[str, tuple] = {}
+
+    def _fibers_for(ref_audio: str | None):
+        if not fibers or ref_audio is None:
+            return None
+        if ref_audio not in fiber_cache:
+            from workspaces.alignment_prototype.path_decode import _ensure_feat
+            from workspaces.alignment_prototype.ref_fibers import compute_fibers
+
+            hf = np.load(_ensure_feat(ref_audio, ref_audio, "hubert", hubert_layer))
+            fiber_cache[ref_audio] = compute_fibers(hf, FPS, audio_path=ref_audio)
+        return fiber_cache[ref_audio]
+
+    # --- per-span loop ---
+    results: list[SpanScore] = []
+    for s in timeline["spans"]:
+        slot = norm_slot(s["slot_label"])
+        recording_id: str = s["recording_id"]
+
+        # identity: any GT row overlapping the predicted span in time?
+        overlapping = [
+            r
+            for r in gt_rows
+            if r.get("track_id")
+            and float(r["set_start_s"]) < s["set_end_s"] + 5
+            and float(r["set_end_s"]) > s["set_start_s"] - 5
+        ]
+        if overlapping:
+            id_correct: bool | None = any(
+                str(r["track_id"]) == recording_id for r in overlapping
+            )
+        else:
+            id_correct = None
+
+        # placement + ref: nearest same-recording GT row
+        rows = gt_by_tid.get(recording_id)
+        if not rows:
+            results.append(
+                SpanScore(
+                    slot=slot,
+                    recording_id=recording_id,
+                    stem=None,
+                    span_class=None,
+                    id_correct=id_correct,
+                    place_err_s=None,
+                    strict=None,
+                    fiber=None,
+                    ref_err_s=None,
+                    density=None,
+                )
+            )
+            continue
+
+        g = min(rows, key=lambda r: abs(float(r["set_start_s"]) - s["set_start_s"]))
+        gstem = g.get("claimed_stem") or s.get("claimed_stem") or "regular"
+        place_err_s = abs(float(g["set_start_s"]) - s["set_start_s"])
+
+        fib = _fibers_for(_resolve_ref_audio(s, by_tid.get(recording_id), stem=gstem))
+        strict, _npred, facc = trajectory_acc(
+            _pred_segs_from_span(s, anchor_s=float(g["set_start_s"])), g, fiber=fib
+        )
+        fiber_val = facc if fibers else strict
+
+        # overlay density
+        g0, g1 = float(g["set_start_s"]), float(g["set_end_s"])
+        density = int(
+            np.median(
+                [
+                    sum(
+                        1
+                        for r in gt_rows
+                        if float(r["set_start_s"]) <= t < float(r["set_end_s"])
+                    )
+                    for t in np.linspace(g0, max(g0 + 0.1, g1 - 0.1), 15)
+                ]
+            )
+        )
+
+        # ref_err_s: straight clips only (same exclusion logic as main())
+        ref_err_s: float | None = None
+        if not (g.get("is_loop") or g.get("ref_segments")):
+            ratio = float(g.get("tempo_ratio") or 1.0)
+            if 0.9 <= ratio <= 1.15:
+                expected = (
+                    float(g["ref_start_s"])
+                    + (s["set_start_s"] - float(g["set_start_s"])) * ratio
+                )
+                ref_err_s = abs(s["ref_start_s"] - expected)
+
+        results.append(
+            SpanScore(
+                slot=slot,
+                recording_id=recording_id,
+                stem=gstem,
+                span_class=_span_class(g),
+                id_correct=id_correct,
+                place_err_s=place_err_s,
+                strict=strict,
+                fiber=fiber_val,
+                ref_err_s=ref_err_s,
+                density=density,
+            )
+        )
+
+    return results
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--set-id", required=True)
@@ -183,171 +366,147 @@ def main(argv: list[str] | None = None) -> int:
         print(f"(gt: {args.gt.name})")
 
     tl_path = args.timeline or (OUT_DIR / f"{args.set_id}_predicted_timeline.json")
-    # contracts boundary: validate the consumed span fields + prove all three
-    # inputs (timeline, --set-id, GT yaml) describe the SAME set before any
-    # join — the 2026-07-09 BB11-scored-against-BB12-GT class.
-    tl_record = load_timeline(tl_path)
-    join_guard(tl_record.sid, args.set_id, context="timeline vs --set-id")
-    timeline = json.loads(Path(tl_path).read_text())
-    # manifest by track_id — only needed for fiber ref-audio resolution
-    by_tid: dict[str, dict] = {}
-    if args.fibers:
-        set_dir = find_aligning_dir(args.set_id)
-        manifest = load_manifest(set_dir / "manifest.json")
-        join_guard(manifest.sid, tl_record.sid, context="manifest vs timeline")
-        by_tid = {
-            k: {"track_id": r.track_id, "stems": r.stems, "local_path": r.local_path}
-            for k, r in manifest.by_track_id().items()
-        }
-    gt_doc = yaml.safe_load(args.gt.read_text())
-    join_guard(tl_record.sid, gt_doc.get("set_id") or "", context="timeline vs GT yaml")
-    gt_rows = [r for r in gt_doc["tracks"] if str(r.get("slot_label")) != "mix"]
-    # Identity is scored in the CANONICAL recording_id namespace. GT rows that
-    # path-matched the pull manifest carry scrape-namespace tlp* ids; map them
-    # through labeling/fixtures/id_maps/<set>.json (tlp_id -> recording_id,
-    # from set_track_slots) so namespace mismatch can't masquerade as an
-    # identity miss.
+
+    # Print id-map normalization count before score_spans (mirrors old behaviour).
     id_map_path = _REPO / "labeling" / "fixtures" / "id_maps" / f"{args.set_id}.json"
-    id_map: dict[str, str] = (
-        json.loads(id_map_path.read_text()) if id_map_path.exists() else {}
+    if id_map_path.exists():
+        id_map: dict[str, str] = json.loads(id_map_path.read_text())
+        gt_doc_pre = yaml.safe_load(args.gt.read_text())
+        gt_rows_pre = [
+            r for r in gt_doc_pre["tracks"] if str(r.get("slot_label")) != "mix"
+        ]
+        mapped = sum(
+            1
+            for r in gt_rows_pre
+            if (tid := str(r.get("track_id") or ""))
+            and tid in id_map
+            and id_map[tid] != tid
+        )
+        if mapped or id_map:
+            print(f"(id map: {mapped} GT ids normalized via {id_map_path.name})")
+
+    span_scores = score_spans(
+        args.set_id,
+        tl_path,
+        fibers=args.fibers,
+        hubert_layer=args.hubert_layer,
+        gt_path=args.gt,
     )
-    if id_map:
-        mapped = 0
+
+    # Reconstruct aggregates from span_scores + raw timeline (display only).
+    timeline = json.loads(Path(tl_path).read_text())
+    spans = timeline["spans"]
+
+    # Reload GT rows (with id-map applied) for decompose + identity-miss display.
+    gt_doc = yaml.safe_load(args.gt.read_text())
+    gt_rows = [r for r in gt_doc["tracks"] if str(r.get("slot_label")) != "mix"]
+    if id_map_path.exists():
+        id_map2: dict[str, str] = json.loads(id_map_path.read_text())
         for r in gt_rows:
             tid = str(r.get("track_id") or "")
-            if tid in id_map and id_map[tid] != tid:
-                r["track_id"] = id_map[tid]
-                mapped += 1
-        print(f"(id map: {mapped} GT ids normalized via {id_map_path.name})")
-    # GT slot labels are the HUMAN's section numbering (002-155 on BB12),
-    # not the tracklist's slot space — match by recording + time, never by
-    # slot label.
-    gt_by_tid: dict[str, list[dict]] = {}
+            if tid in id_map2 and id_map2[tid] != tid:
+                r["track_id"] = id_map2[tid]
+    gt_by_tid2: dict[str, list[dict]] = {}
     for r in gt_rows:
         if r.get("track_id"):
-            gt_by_tid.setdefault(str(r["track_id"]), []).append(r)
+            gt_by_tid2.setdefault(str(r["track_id"]), []).append(r)
 
-    fiber_cache: dict[str, tuple] = {}
+    # Identity aggregates
+    id_ok = sum(1 for sc in span_scores if sc.id_correct is True)
+    id_bad = []
+    for sc, s in zip(span_scores, spans):
+        if sc.id_correct is False:
+            overlapping_tids = sorted(
+                {
+                    str(r["track_id"])
+                    for r in gt_rows
+                    if r.get("track_id")
+                    and float(r["set_start_s"]) < s["set_end_s"] + 5
+                    and float(r["set_end_s"]) > s["set_start_s"] - 5
+                }
+            )[:3]
+            id_bad.append((sc.slot, sc.recording_id, overlapping_tids, s["name"][:36]))
+    no_gt = sum(1 for sc in span_scores if sc.place_err_s is None)
 
-    def fibers_for(ref_audio: str | None):
-        if not args.fibers or ref_audio is None:
-            return None
-        if ref_audio not in fiber_cache:
-            from workspaces.alignment_prototype.path_decode import _ensure_feat
-            from workspaces.alignment_prototype.ref_fibers import compute_fibers
-
-            hf = np.load(
-                _ensure_feat(ref_audio, ref_audio, "hubert", args.hubert_layer)
-            )
-            fiber_cache[ref_audio] = compute_fibers(hf, FPS, audio_path=ref_audio)
-        return fiber_cache[ref_audio]
-
-    id_ok, id_bad, no_gt = 0, [], 0
-    decomp: list[tuple] = []
-    place_errs, ref_rows, traj = [], [], []
+    # Placement + ref aggregates (for stats and worst lists)
+    place_errs = []
+    ref_rows = []
     loops_hit = 0
-    for s in timeline["spans"]:
-        slot = norm_slot(s["slot_label"])
-        # identity: any GT row overlapping the predicted span in time whose
-        # track matches? (GT rows without track_id can't vote)
-        overlapping = [
-            r
-            for r in gt_rows
-            if r.get("track_id")
-            and float(r["set_start_s"]) < s["set_end_s"] + 5
-            and float(r["set_end_s"]) > s["set_start_s"] - 5
-        ]
-        if overlapping:
-            if any(str(r["track_id"]) == s["recording_id"] for r in overlapping):
-                id_ok += 1
-            else:
-                id_bad.append(
-                    (
-                        slot,
-                        s["recording_id"],
-                        sorted({str(r["track_id"]) for r in overlapping})[:3],
-                        s["name"][:36],
-                    )
-                )
-        # placement + ref: nearest same-recording GT row
-        rows = gt_by_tid.get(s["recording_id"])
-        if not rows:
-            no_gt += 1
+    for sc, s in zip(span_scores, spans):
+        if sc.place_err_s is None:
             continue
-        g = min(rows, key=lambda r: abs(float(r["set_start_s"]) - s["set_start_s"]))
-        # Axis from the matched GT row, NEVER the timeline span: the span's
-        # claimed_stem is the materialized set_track_slots value, corrupted by
-        # the row-text drop bug on pre-888aca timelines (BB12 showed 2
-        # instrumentals vs 25 in GT) — see eda/alignment/failure_analysis.
-        gstem = g.get("claimed_stem") or s.get("claimed_stem") or "regular"
         place_errs.append(
             (
-                abs(float(g["set_start_s"]) - s["set_start_s"]),
-                slot,
+                sc.place_err_s,
+                sc.slot,
+                s["set_start_s"],
+                s["set_start_s"] - sc.place_err_s
+                if s["set_start_s"] >= sc.place_err_s
+                else s["set_start_s"] + sc.place_err_s,
+                s["name"][:36],
+            )
+        )
+        # Recover the actual GT set_start for worst-placement display
+        rows = gt_by_tid2.get(sc.recording_id)
+        if rows:
+            g = min(rows, key=lambda r: abs(float(r["set_start_s"]) - s["set_start_s"]))
+            place_errs[-1] = (
+                sc.place_err_s,
+                sc.slot,
                 s["set_start_s"],
                 float(g["set_start_s"]),
                 s["name"][:36],
             )
-        )
-        # trajectory accuracy: scores ref(mix_t) coverage for EVERY span class
-        # (linear / multiseg / loop / oddratio), the metric that was previously
-        # excluded for loops/segments. strict = fraction of mix-time within 2s of
-        # GT ref; fiber-aware credits a content-identical repeat.
-        fib = fibers_for(
-            _resolve_ref_audio(s, by_tid.get(s["recording_id"]), stem=gstem)
-        )
-        strict, _npred, facc = trajectory_acc(
-            _pred_segs_from_span(s, anchor_s=float(g["set_start_s"])), g, fiber=fib
-        )
-        # overlay density: MEDIAN concurrent GT rows over this span's interval
-        # (max counts every crossfade; median finds SUSTAINED pileups). Medley
-        # blocks stack 4-6 layers over a bed — recreating any one layer there
-        # is partly ill-posed (John, 2026-07-09) and those spans dominate the
-        # worst-error tables (BB12 finale, slots 140-153). Stratify, never
-        # drop; the cut (>=4) is empirical: BB12 median-concurrency is 2-3 on
-        # normal transitions, 4-5 only in the medleys.
-        g0, g1 = float(g["set_start_s"]), float(g["set_end_s"])
-        dens = int(
-            np.median(
-                [
-                    sum(
-                        1
-                        for r in gt_rows
-                        if float(r["set_start_s"]) <= t < float(r["set_end_s"])
+            if sc.ref_err_s is None:
+                # loop/segment or out-of-ratio → count as loops_hit
+                if g.get("is_loop") or g.get("ref_segments"):
+                    loops_hit += 1
+                else:
+                    ratio = float(g.get("tempo_ratio") or 1.0)
+                    if not (0.9 <= ratio <= 1.15):
+                        loops_hit += 1
+            else:
+                # straight clip — reconstruct display tuple
+                ratio = float(g.get("tempo_ratio") or 1.0)
+                expected = (
+                    float(g["ref_start_s"])
+                    + (s["set_start_s"] - float(g["set_start_s"])) * ratio
+                )
+                ref_rows.append(
+                    (
+                        sc.ref_err_s,
+                        sc.slot,
+                        sc.stem,
+                        s["ref_start_s"],
+                        expected,
+                        s["name"][:36],
                     )
-                    for t in np.linspace(g0, max(g0 + 0.1, g1 - 0.1), 15)
-                ]
-            )
-        )
-        traj.append((_span_class(g), gstem, strict, facc, dens))
-        if args.decompose:
+                )
+
+    # Trajectory list: (span_class, stem, strict, facc, density) for spans with GT
+    traj = [
+        (sc.span_class, sc.stem, sc.strict, sc.fiber, sc.density)
+        for sc in span_scores
+        if sc.strict is not None
+    ]
+
+    # Decompose pass (separate from scoring; uses raw span + GT data)
+    decomp: list[tuple] = []
+    if args.decompose:
+        for sc, s in zip(span_scores, spans):
+            if sc.strict is None:
+                continue
+            rows = gt_by_tid2.get(sc.recording_id)
+            if not rows:
+                continue
+            g = min(rows, key=lambda r: abs(float(r["set_start_s"]) - s["set_start_s"]))
             nt, no, nk = _decompose_span(
                 _pred_segs_from_span(s, anchor_s=float(g["set_start_s"])), g
             )
-            decomp.append((gstem, nt, no, nk, strict))
-        if g.get("is_loop") or g.get("ref_segments"):
-            loops_hit += 1
-            continue
-        ratio = float(g.get("tempo_ratio") or 1.0)
-        if not (0.9 <= ratio <= 1.15):
-            loops_hit += 1
-            continue
-        expected = (
-            float(g["ref_start_s"])
-            + (s["set_start_s"] - float(g["set_start_s"])) * ratio
-        )
-        ref_rows.append(
-            (
-                abs(s["ref_start_s"] - expected),
-                slot,
-                gstem,
-                s["ref_start_s"],
-                expected,
-                s["name"][:36],
-            )
-        )
+            decomp.append((sc.stem, nt, no, nk, sc.strict))
 
-    n = len(timeline["spans"])
+    # --- Print section (identical to old main) ---
+    n = len(spans)
     print(f"=== end-to-end pipeline vs GT ({args.set_id}, {n} predicted spans) ===")
     nid = id_ok + len(id_bad)
     print(
@@ -431,7 +590,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"(xcheck strict-per-span {100 * per_span:.0f}% vs metric {100 * metric:.0f}%)"
             )
         # GT-side: acappella rows never matched by any timeline span
-        matched_tids = {s2["recording_id"] for s2 in timeline["spans"]}
+        matched_tids = {s2["recording_id"] for s2 in spans}
         gt_aca = [
             r
             for r in gt_rows
