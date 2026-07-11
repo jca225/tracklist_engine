@@ -1,4 +1,21 @@
-from workspaces.alignment_prototype.external.eval_bench import stratum
+import math
+
+import numpy as np
+import pandas as pd
+
+from workspaces.alignment_prototype.external.eval_bench import (
+    HOP,
+    SR,
+    GTSpan,
+    Pred,
+    Sample,
+    is_abstain,
+    make_fused,
+    method_dtw,
+    score_sample,
+    stratum,
+    summary_by_stratum,
+)
 
 
 def test_stratum_parses_warp_and_effect():
@@ -10,18 +27,6 @@ def test_stratum_parses_warp_and_effect():
 def test_stratum_unknown_on_garbage():
     assert stratum("not-a-real-id") == ("unknown", "unknown")
     assert stratum("set042mix3-warpX-effectY-01") == ("unknown", "unknown")
-
-
-import math
-import numpy as np
-from workspaces.alignment_prototype.external.eval_bench import (
-    GTSpan,
-    Pred,
-    Sample,
-    is_abstain,
-    make_fused,
-    score_sample,
-)
 
 
 def test_is_abstain():
@@ -46,10 +51,6 @@ def test_make_fused_is_a_method_factory():
     mix = np.zeros((12, 400), dtype=np.float32)
     s = Sample("m", mix, {0: np.zeros((12, 40), np.float32)}, [GTSpan(0, 1.0, 1.0)])
     assert m0(s) == {} and m1(s) == {}
-
-
-import pandas as pd
-from workspaces.alignment_prototype.external.eval_bench import summary_by_stratum
 
 
 def test_summary_by_stratum_groups_and_reports_abstain():
@@ -94,9 +95,6 @@ def test_summary_by_stratum_groups_and_reports_abstain():
     assert none.set_start_MAE_s == 1.0  # committed-only mean
     allrow = out[(out.method == "fused") & (out.warp == "ALL")].iloc[0]
     assert allrow.n == 3
-
-
-from workspaces.alignment_prototype.external.eval_bench import method_dtw, HOP, SR
 
 
 def test_method_dtw_recovers_planted_offset():
