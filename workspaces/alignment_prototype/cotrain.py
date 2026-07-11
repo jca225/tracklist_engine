@@ -94,7 +94,8 @@ def _cue_anchor(set_id: str) -> dict:
         rows = fetch_slot_rows(set_id)
         out = {}
         for r in rows:
-            cue = r.get("cue_seconds") if isinstance(r, dict) else None
+            # fetch_slot_rows emits the cue under key "cue_s" (not "cue_seconds").
+            cue = r.get("cue_s") if isinstance(r, dict) else None
             if cue not in (None, ""):
                 out[r["slot_label"]] = float(cue)
         return out
