@@ -1,6 +1,7 @@
 # Alignment — canonical status (single source of truth)
 
-> **Numbers regenerated 2026-07-11 at commit `bd44417`** via the command block in
+> **Numbers regenerated 2026-07-11 at commit `eb21a5e`** (§1–§3 re-run and verified
+> unchanged from the initial `bd44417` regeneration) via the command block in
 > §Regeneration below. **This doc owns every current alignment headline number.**
 > Other docs cite it; they do not re-state numbers. If a number here is stale,
 > re-run §Regeneration — do not hand-edit. Drift found while building this doc is

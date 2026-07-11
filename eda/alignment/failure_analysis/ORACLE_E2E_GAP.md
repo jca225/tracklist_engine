@@ -1,5 +1,11 @@
 # Oracle ↔ e2e acappella trajectory gap — decomposition
 
+> **Headline numbers: [docs/alignment_status.md](../../../docs/alignment_status.md)**
+> (canonical, regenerated from the scorers). This doc owns the *gap decomposition*
+> detail (oracle↔e2e = placement/windowing, not decode); the canonical doc owns
+> the headline oracle ceiling and e2e trajectory numbers. Set ids: BB11 =
+> `2nvzlh2k`, BB12 = `1fsnxchk`.
+
 Reproduce:
 
 ```bash
