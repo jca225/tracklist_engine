@@ -73,7 +73,11 @@ from <file>, not regenerated` so the staleness is visible, not hidden.
 ## 3. Phase 0 — Build the number-truth
 
 Run the actual scorers and capture raw output to the scratchpad. Repo root, use
-`venvs/audio/bin/python`. Set ids: **BB11 = `1fsnxchk`**, **BB12 = `2nvzlh2k`**.
+`venvs/audio/bin/python`. Set ids: **BB11 = `2nvzlh2k`** (Episode 11), **BB12 =
+`1fsnxchk`** (Volume 12). *(Corrected 2026-07-11 by executing agent — the original
+handoff had these swapped; verified against `dj_sets.title`, the `~/aligning/`
+dir names, and the `set_id:` inside `labeling/fixtures/bb1{1,2}_ground_truth.yaml`.
+See the corrections ledger.)*
 
 ```bash
 # Corpus failure attribution + per-span table (BB11+BB12)
@@ -206,6 +210,13 @@ Lightweight, no big build:
 ---
 
 ## 8. Known drift to seed the work (from this session)
+
+> ⚠ **BB labels below predate the set-id swap correction (§3).** The original
+> author wrote these believing BB11=`1fsnxchk`; the true mapping is
+> BB11=`2nvzlh2k`, BB12=`1fsnxchk`. Treat every BB11/BB12 label in this section
+> as **unverified** and re-derive from Phase 0 regeneration before writing it
+> anywhere. The *magnitudes* (a ~+20pp fiber-aware lift; a small clone-cert pair
+> count) are likely real; the *which-set attribution* is not trusted.
 
 Start the corrections ledger with these, already established:
 
