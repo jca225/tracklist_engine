@@ -228,7 +228,8 @@ mixes failed to load), seed-0 stratified, `--feature chroma`.
 - **Our v0 NMF underperforms** (19 s placement MAE). This is the fixed-W v0, not
   André's published multi-pass NMF — do **not** read this as "we beat the paper's
   NMF." Against André's *reported* ~1 s clean-condition warp median, our `fused`
-  clean-strata set_start medians (~2.2 s) are the comparable quantity; competitive,
+  clean-strata set_start medians (~2.3 s; 2.1–2.5 s across strata) are the
+  comparable quantity; competitive,
   same order, on the sub-task the paper delegates to fingerprinting.
 
 **Open mode (remove the always-commit restriction — `fused --min-votes 20`):**
@@ -244,10 +245,13 @@ mixes failed to load), seed-0 stratified, `--feature chroma`.
 - **The abstention localizes to the exact structural wall we predicted.** By
   stratum, `fused` open-mode abstains **47–61% on `resample`** (pitch+tempo shift,
   which moves spectral peaks off our pitch-preserving constellation) but **0% on
-  `none`** and only 2–4% on most `stretch`. Where it *does* commit on resample,
-  placement is now tight (MAE ~0.9–1.7 s, med <1 s). The model knows where it is
-  blind and declines there — the "abstain-not-lie" posture, quantified. Closing
-  the resample abstention is exactly the Phase 2 pitch-search arm.
+  `none`** and 1.8–4.4% on three of four `stretch` strata — with one outlier,
+  **`stretch/distortion` at 37%**, where distortion appears to confound the
+  constellation the way pitch-shift does (an open question worth naming, not
+  smoothing over). Where it *does* commit on resample, placement is now tight
+  (MAE ~0.9–1.7 s, med <1 s). The model knows where it is blind and declines
+  there — the "abstain-not-lie" posture, quantified. Closing the resample
+  abstention is exactly the Phase 2 pitch-search arm.
 
 **Honest caveats (must survive into the paper):**
 
