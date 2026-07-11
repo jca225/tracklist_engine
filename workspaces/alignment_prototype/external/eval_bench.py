@@ -73,6 +73,22 @@ class Pred:
 Method = Callable[[Sample], dict[int, Pred]]
 
 
+_WARPS = {"none", "resample", "stretch"}
+_EFFECTS = {"none", "bass", "compressor", "distortion"}
+
+
+def stratum(mix_id: str) -> tuple[str, str]:
+    """(warp, effect) from an UnmixDB mix id `set<NNN>mix3-<warp>-<effect>-<NN>`.
+    Unparseable -> ('unknown','unknown')."""
+    parts = mix_id.split("-")
+    if len(parts) < 4:
+        return ("unknown", "unknown")
+    warp, effect = parts[1], parts[2]
+    if warp not in _WARPS or effect not in _EFFECTS:
+        return ("unknown", "unknown")
+    return (warp, effect)
+
+
 # ----------------------------------------------------------------------------- methods
 def method_grid_mf(
     sample: Sample, stretches: tuple[float, ...] = STRETCHES
