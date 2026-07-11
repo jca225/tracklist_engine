@@ -1,4 +1,5 @@
 """Load exported ground truth into aligner training examples."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -9,7 +10,7 @@ from core.result import Err, Ok, Result
 from .records import SlotCandidate, SpanTarget
 
 
-def track_to_target(t: GroundTruthTrack) -> SpanTarget:
+def track_to_target(t: GroundTruthTrack, set_id: str = "") -> SpanTarget:
     return SpanTarget(
         slot_label=t.slot_label or t.label,
         recording_id=t.track_id,
@@ -21,15 +22,18 @@ def track_to_target(t: GroundTruthTrack) -> SpanTarget:
         tempo_ratio=t.tempo_ratio,
         pitch_shift_semi=t.pitch_shift_semi,
         label=t.label,
+        set_id=set_id,
     )
 
 
-def load_set(yaml_path: Path | str) -> Result[tuple[GroundTruthSet, tuple[SpanTarget, ...]], str]:
+def load_set(
+    yaml_path: Path | str,
+) -> Result[tuple[GroundTruthSet, tuple[SpanTarget, ...]], str]:
     match load(yaml_path):
         case Err(e):
             return Err(e.detail)
         case Ok(gt):
-            targets = tuple(track_to_target(t) for t in gt.tracks)
+            targets = tuple(track_to_target(t, set_id=gt.set_id) for t in gt.tracks)
             return Ok((gt, targets))
 
 
