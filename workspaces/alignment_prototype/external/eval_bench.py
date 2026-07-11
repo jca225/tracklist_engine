@@ -203,7 +203,29 @@ def method_dtw(sample: Sample) -> dict[int, Pred]:
         span_track = max(1, track_f[-1] - track_f[0])
         span_mix = mix_f[-1] - mix_f[0]
         tempo = float(span_mix) / float(span_track)  # mix frames per track frame
-        out[idx] = Pred(max(0.0, set_start), tempo, 1.0 - float(C.min()))
+        path_cost = float(C[wp[:, 0], wp[:, 1]].mean())
+        out[idx] = Pred(max(0.0, set_start), tempo, 1.0 - path_cost)
+    return out
+
+
+def method_fused_resample(sample: Sample) -> dict[int, Pred]:
+    """Placement via the resample-ratio fp search (for the resample transform:
+    pitch+tempo coupled). tempo_ratio = the recovered resample ratio. Audio only."""
+    if sample.mix_path is None or not sample.track_paths:
+        return {}
+    import librosa
+    from workspaces.alignment_prototype.landmark_fp import fp_offset_resample
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        my, _ = librosa.load(str(sample.mix_path), sr=SR, mono=True)
+    out: dict[int, Pred] = {}
+    for k, tp in sample.track_paths.items():
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            ty, _ = librosa.load(str(tp), sr=SR, mono=True)
+        set_start_s, votes, ratio, _sharp = fp_offset_resample(my, ty)
+        out[k] = Pred(max(0.0, set_start_s), ratio, float(votes))
     return out
 
 
@@ -213,6 +235,7 @@ METHODS: dict[str, Method] = {
     "nmf": method_nmf,
     "fused": method_fused,
     "dtw": method_dtw,
+    "fused_resample": method_fused_resample,
 }
 
 
@@ -258,11 +281,13 @@ def score_sample(sample: Sample, preds: dict[int, Pred]) -> tuple[list[dict], fl
             if df.shape[1] >= 8 and sample.mix_feat.shape[1] > df.shape[1]:
                 dist_peaks.append(detect_offset(df, sample.mix_feat)[1])
         best_dist = max(dist_peaks) if dist_peaks else -2.0
-        hits = sum(
-            int((p := preds.get(sp.track_idx)) is not None and p.score > best_dist)
+        committed_gt = [
+            sp
             for sp in sample.gt
-        )
-        id_ok = hits / max(1, len(sample.gt))
+            if (p := preds.get(sp.track_idx)) is not None and not is_abstain(p)
+        ]
+        hits = sum(int(preds[sp.track_idx].score > best_dist) for sp in committed_gt)
+        id_ok = hits / max(1, len(committed_gt))
     return rows, id_ok
 
 

@@ -118,3 +118,54 @@ def test_method_dtw_abstains_on_tiny_track():
     s = Sample("m", mix, {0: np.zeros((12, 4), np.float32)}, [GTSpan(0, 1.0, 1.0)])
     preds = method_dtw(s)
     assert math.isnan(preds[0].set_start_s)
+
+
+def test_method_dtw_score_is_path_average_not_best_cell():
+    # Discriminating test: track is UNRELATED to the mix except ONE perfect cell.
+    # best-cell score (1 - C.min()) -> ~1.0; path-average score (the fix) -> the
+    # background cosine cost, well below 0.9. Asserting < 0.9 FAILS on the old
+    # best-cell formula and PASSES on the path-average formula.
+    rng = np.random.default_rng(9)
+    D, tlen, Tm = 12, 80, 700
+    tf = rng.random((D, tlen)).astype(np.float32)
+    mix = rng.random((D, Tm)).astype(np.float32)  # unrelated background
+    mix[:, 400] = tf[:, 40]  # single perfect cell -> C.min() == 0
+    s = Sample("s", mix, {0: tf}, [GTSpan(0, 400 * HOP / SR, 1.0)])
+    preds = method_dtw(s)
+    assert not math.isnan(preds[0].score)
+    assert preds[0].score < 0.9  # best-cell (~1.0) would fail this
+
+
+def test_method_fused_resample_returns_empty_without_audio():
+    from workspaces.alignment_prototype.external.eval_bench import method_fused_resample
+
+    mix = np.zeros((12, 400), dtype=np.float32)
+    s = Sample("m", mix, {0: np.zeros((12, 40), np.float32)}, [GTSpan(0, 1.0, 1.0)])
+    assert method_fused_resample(s) == {}  # no mix_path -> audio method no-ops
+
+
+def test_identity_excludes_abstained_spans():
+    # one committed correct span + one abstained span. With distractors that
+    # out-score the abstained pred, identity should be 1.0 (1/1 committed), not
+    # 0.5 (1/2 counting the abstention as a miss).
+    # Key: track 1 is abstained (NaN set_start), so it should NOT be counted in
+    # either hits or denominator.
+    mix = np.ones((12, 400), dtype=np.float32)
+    tfa = np.ones((12, 40), dtype=np.float32)
+    tfb = np.ones((12, 40), dtype=np.float32)
+    distractor = np.full((12, 40), 0.5, dtype=np.float32)
+    s = Sample(
+        "m",
+        mix,
+        {0: tfa, 1: tfb},
+        [GTSpan(0, 1.0, 1.0), GTSpan(1, 2.0, 1.0)],
+        distractor_feats={"d0": distractor},
+    )
+    preds = {
+        0: Pred(1.0, 1.0, 100.0),  # committed, out-scores distractor (~1.0)
+        1: Pred(float("nan"), float("nan"), 0.5),  # abstained, loses to distractor
+    }
+    _, id_ok = score_sample(s, preds)
+    # Old code: hits = (100.0 > 1.0) + (0.5 > 1.0) = 1 + 0 = 1, id_ok = 1/2 = 0.5
+    # New code: committed_gt = [GTSpan(0, ...)], hits = 1, id_ok = 1/1 = 1.0
+    assert id_ok == 1.0

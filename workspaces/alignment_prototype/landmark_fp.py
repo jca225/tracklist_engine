@@ -159,3 +159,45 @@ def fp_offset(
         if v > best[1]:
             best = (off * FHOP / SR * st, v, st, sharp)
     return best
+
+
+def fp_offset_resample(
+    mix_y: np.ndarray,
+    ref_y: np.ndarray,
+    *,
+    ratios: tuple[float, ...] = tuple(round(1.0 + 0.02 * k, 3) for k in range(-13, 17)),
+) -> tuple[float, int, float, float]:
+    """Resample-ratio fingerprint offset — for the RESAMPLE transform (pitch AND
+    tempo coupled by one ratio). Unlike `fp_offset` (time-stretch, pitch-preserving),
+    this resamples the ref by each ratio `r` with fast interpolation (not a
+    phase-vocoder), so a pitch-shifted alignment diagonal re-registers.
+
+    Returns (set_start_s, votes, ratio, sharpness). A mix track resampled to speed r
+    has pitch+tempo x r; resampling the ref to target_sr = SR / r reproduces that
+    speed-r playback when read back at SR.
+
+    SIGN CONVENTION (differs from `fp_offset`): the vote offset is `rt - mt`
+    (negative when the ref sits earlier than the mix), so this returns
+    `-off * FHOP / SR * r` = the POSITIVE mix set_start directly. `fp_offset`
+    returns the un-negated value and leaves the negation to its caller
+    (`max(0, -off)`); here the negation is already applied, so a consumer uses
+    `max(0.0, set_start_s)` WITHOUT re-negating.
+    """
+    import librosa
+
+    hm = hashes(*constellation(mix_y))
+    best = (0.0, 0, 1.0, 0.0)
+    for r in ratios:
+        if abs(r - 1.0) < 1e-3:
+            ry = ref_y
+        else:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ry = librosa.resample(ref_y, orig_sr=SR, target_sr=int(round(SR / r)))
+        votes = _vote_histogram(hm, hashes(*constellation(ry)))
+        if not votes:
+            continue
+        off, v = max(votes.items(), key=lambda kv: kv[1])
+        if v > best[1]:
+            best = (-off * FHOP / SR * r, v, r, vote_sharpness(votes))
+    return best

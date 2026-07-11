@@ -266,3 +266,37 @@ mixes failed to load), seed-0 stratified, `--feature chroma`.
   but not identical to André's dense-warp MAE; UnmixDB's GT warp is affine, so the
   gap is small, but the paper must state it.
 - Gain is not scored here (NMF-only, deferred) — named limitation, on-thesis.
+
+### Resample arm (Phase 2) — 2026-07-11
+
+`fp_offset_resample` (landmark_fp) adds a **resample-ratio grid** (~0.74–1.32, fast
+`librosa.resample`, not phase-vocoder) so the fingerprint follows the pitch+tempo-
+coupled `resample` transform that plain `fp_offset` (time-stretch, pitch-preserving)
+is structurally blind to. Wired as `method_fused_resample`. Run: **162 mixes / 486
+spans** (`--max-mixes 180`), `fused` vs `fused_resample`, André-mode (no abstain).
+Numbers from `out/reduction_table.txt`.
+
+Overall: set_start MAE **6.39 → 4.59 s**, tempo MAE **0.064 → 0.033** (halved). By
+resample stratum (set_start MAE, the target axis):
+
+| stratum | fused | fused_resample |
+|---|---:|---:|
+| resample/bass | 7.90 s | **3.72 s** |
+| resample/none | 7.80 s | **3.65 s** |
+| resample/distortion | 8.79 s | **3.28 s** |
+| resample/compressor | 24.16 s | 22.51 s (≈unchanged) |
+
+Read:
+- **Fixes 3 of 4 resample strata** (~8 s → ~3.5 s MAE) and makes tempo essentially
+  exact on resample (the grid recovers the true ratio; tempo MAE ~0.005–0.05 vs
+  0.06–0.11). This narrows the specialist's last advantage — the axis André's NMF
+  handled and our pitch-preserving fp could not.
+- **No regression off-resample.** The ratio grid contains r=1.0, so `none` strata
+  *improve* (2.6–3.0 → 1.7–2.0 s) and their tempo is exact (0.0000). `stretch` is
+  comparable.
+- **`resample/compressor` is the honest residual** (~22–24 s, unchanged at n=486 as
+  at n=33) — compression appears to confound the constellation the way pitch-shift
+  does, on top of the resample; not fixed here. Open question.
+- **Caveat:** UnmixDB resample strata are ~40–45 spans each here — directional, not
+  a large-n benchmark. Sign/offset convention: `fp_offset_resample` returns the
+  positive mix set_start directly (negated internally; see its docstring).
