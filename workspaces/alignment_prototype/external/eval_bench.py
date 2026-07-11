@@ -256,18 +256,58 @@ def summary(dfs: dict[str, pd.DataFrame]) -> pd.DataFrame:
         if len(df) == 0:
             out.append(dict(method=label, n=0))
             continue
+        committed = df[~df.abstained] if "abstained" in df else df
         out.append(
             dict(
                 method=label,
                 n=len(df),
-                set_start_MAE_s=round(df.set_start_err.mean(), 2),
-                set_start_med_s=round(df.set_start_err.median(), 2),
-                set_start_exact2s_pct=round(100 * (df.set_start_err < 2).mean(), 0),
-                tempo_MAE=round(df.tempo_err.mean(), 4),
-                tempo_pct=round(df.tempo_pct.median(), 2),
+                abstain_pct=round(100 * df.abstained.mean(), 1)
+                if "abstained" in df
+                else 0.0,
+                set_start_MAE_s=round(committed.set_start_err.mean(), 2),
+                set_start_med_s=round(committed.set_start_err.median(), 2),
+                set_start_exact2s_pct=round(
+                    100 * (committed.set_start_err < 2).mean(), 0
+                ),
+                tempo_MAE=round(committed.tempo_err.mean(), 4),
+                tempo_pct=round(committed.tempo_pct.median(), 2),
                 identity_acc=round(df.attrs.get("identity_acc", float("nan")), 3),
             )
         )
+    return pd.DataFrame(out)
+
+
+def _grp_row(method: str, warp: str, effect: str, g: pd.DataFrame) -> dict:
+    committed = g[~g.abstained]
+    return dict(
+        method=method,
+        warp=warp,
+        effect=effect,
+        n=len(g),
+        abstain_pct=round(100 * g.abstained.mean(), 1),
+        set_start_MAE_s=round(committed.set_start_err.mean(), 2)
+        if len(committed)
+        else float("nan"),
+        set_start_med_s=round(committed.set_start_err.median(), 2)
+        if len(committed)
+        else float("nan"),
+        tempo_MAE=round(committed.tempo_err.mean(), 4)
+        if len(committed)
+        else float("nan"),
+    )
+
+
+def summary_by_stratum(dfs: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    out = []
+    for method, df in dfs.items():
+        if len(df) == 0:
+            out.append(dict(method=method, warp="ALL", effect="ALL", n=0))
+            continue
+        strat = df.mix_id.map(stratum)
+        df = df.assign(warp=[s[0] for s in strat], effect=[s[1] for s in strat])
+        for (w, e), g in df.groupby(["warp", "effect"], sort=True):
+            out.append(_grp_row(method, w, e, g))
+        out.append(_grp_row(method, "ALL", "ALL", df))
     return pd.DataFrame(out)
 
 
