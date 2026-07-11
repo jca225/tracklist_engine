@@ -121,7 +121,10 @@ def run_loso(
         train_sets = [s for sid, s in stores.items() if sid != held]
         head = cotrain(train_sets, cfg=cfg, device=device)
         h = stores[held]
-        cue_anchor = _cue_anchor(held) if anchor_from_cues else {}
+        # Fetch scraped cues by the REAL gt.set_id (h.set_id), not the dict key
+        # (a fixture stem like "bb11"); the cue DB is keyed on set_id. Using the
+        # stem returns no rows -> empty cues -> silent floor mode.
+        cue_anchor = _cue_anchor(h.set_id) if anchor_from_cues else {}
         try:
             slot_medians = median_duration_by_slot(h.train_spans)
         except AttributeError:
@@ -133,6 +136,8 @@ def run_loso(
             slot_medians=slot_medians,
             slot_pools=h.slot_pools,
             train_medians=(cue_anchor or {}),
+            # 30 s ≈ ±1σ placement prior around each scraped cue; None when cues
+            # absent (unseen-set decode collapses to front-of-mix = honest floor).
             anchor_sigma_s=(30.0 if cue_anchor else None),
             device=device,
         )
