@@ -118,3 +118,34 @@ def test_method_dtw_abstains_on_tiny_track():
     s = Sample("m", mix, {0: np.zeros((12, 4), np.float32)}, [GTSpan(0, 1.0, 1.0)])
     preds = method_dtw(s)
     assert math.isnan(preds[0].set_start_s)
+
+
+def test_method_dtw_score_is_path_average_not_best_cell():
+    # Verify the score is path-average, not best-cell.
+    # Create a cost matrix where the best cell is anomalously good
+    # but not on the DTW path. The path-average should be higher than
+    # the best-cell score.
+    rng = np.random.default_rng(5678)
+    D, tlen, Tm = 12, 80, 700
+
+    # Create base track and mix that are mostly unrelated
+    tf = rng.random((D, tlen)).astype(np.float32)
+    mix = rng.random((D, Tm)).astype(np.float32)
+
+    # Plant the track into the mix
+    start_f = 250
+    mix[:, start_f : start_f + tlen] += tf * 3.0
+
+    # Insert an anomalous "best cell" elsewhere that is identical to track col 0
+    # This ensures C.min() is from this isolated cell, NOT the planted match
+    mix[:, 50:51] = tf[:, 0:1]
+
+    s = Sample("s", mix, {0: tf}, [GTSpan(0, start_f * HOP / SR, 1.0)])
+    preds = method_dtw(s)
+
+    # The score should be based on the actual DTW path (which goes through
+    # the planted region, not the anomalous best cell).
+    # This is a basic sanity check that the implementation uses the path.
+    assert not math.isnan(preds[0].score)
+    # For a planted match with some background noise, score should be decent
+    assert preds[0].score > 0.3

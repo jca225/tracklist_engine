@@ -203,7 +203,8 @@ def method_dtw(sample: Sample) -> dict[int, Pred]:
         span_track = max(1, track_f[-1] - track_f[0])
         span_mix = mix_f[-1] - mix_f[0]
         tempo = float(span_mix) / float(span_track)  # mix frames per track frame
-        out[idx] = Pred(max(0.0, set_start), tempo, 1.0 - float(C.min()))
+        path_cost = float(C[wp[:, 0], wp[:, 1]].mean())
+        out[idx] = Pred(max(0.0, set_start), tempo, 1.0 - path_cost)
     return out
 
 
