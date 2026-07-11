@@ -149,11 +149,17 @@ hand-convention session, varying master tempo, unwarped mix);
 
 ## Not wired yet / scoped
 
-- **Multi-set co-train (SCOPED 2026-07-02, not small):** `train.py --yaml` is
-  single-set (`_run_mert_eval` binds one set's stores by `gt.set_id`;
-  `SpanTarget` has no set tag). Real design: SpanTarget += set_id, per-set store
-  map, batches routed by tag. Gated on a third COMPLETE GT set (BB10/Murph not
-  started). Don't bolt a concat hack.
+- **Multi-set co-train + LOSO — BUILT 2026-07-11** (`cotrain.py`: `SetStores`,
+  `cotrain`, `run_loso`; `train.py --loso --sets bb11,bb12`; `SpanTarget.set_id`).
+  The head trains on set-agnostic `build_examples`, so co-train = concat per-set
+  examples + one `train_ensemble`; LOSO wraps the head around the held-out set
+  with a scraped-cue anchor (leakage-free). **First result (n=2): identity
+  transfers 100% cross-set both directions; placement does NOT (bb11 18.6 s vs
+  bb12 1436 s, unstable) — the MERT head memorizes placement per-set.** Full
+  write-up + caveats: [cotrain_loso_findings.md](cotrain_loso_findings.md). Lever
+  for transferable placement = the `trajectory/` decoder or denser GT, not this
+  head. Next flywheel gears (unbuilt): orchestration driver
+  (predict→seed→correct→retrain) + batch selection.
 - **Acappella ref-offset instance selection** — the biggest modelling prize
   (34% of all loss; six decode-layer threads dead, see looptrace/NOTES.md).
   Live lever: learned selector over {HuBERT diagonal evidence, fiber
