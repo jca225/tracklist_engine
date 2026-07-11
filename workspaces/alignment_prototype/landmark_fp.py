@@ -172,10 +172,16 @@ def fp_offset_resample(
     this resamples the ref by each ratio `r` with fast interpolation (not a
     phase-vocoder), so a pitch-shifted alignment diagonal re-registers.
 
-    Returns (ref_start_s, votes, ratio, sharpness). A mix track resampled to speed r
+    Returns (set_start_s, votes, ratio, sharpness). A mix track resampled to speed r
     has pitch+tempo x r; resampling the ref to target_sr = SR / r reproduces that
-    speed-r playback when read back at SR. Recovered offset scales by r, mirroring
-    `fp_offset`'s stretch-scale convention.
+    speed-r playback when read back at SR.
+
+    SIGN CONVENTION (differs from `fp_offset`): the vote offset is `rt - mt`
+    (negative when the ref sits earlier than the mix), so this returns
+    `-off * FHOP / SR * r` = the POSITIVE mix set_start directly. `fp_offset`
+    returns the un-negated value and leaves the negation to its caller
+    (`max(0, -off)`); here the negation is already applied, so a consumer uses
+    `max(0.0, set_start_s)` WITHOUT re-negating.
     """
     import librosa
 
