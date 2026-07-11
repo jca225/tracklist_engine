@@ -199,3 +199,66 @@ OVERALL (720 spans):
   ISMIR — hal-02010431; dataset Zenodo record 1422385.
 - Schwarz & Fourer (2021), *Methods and Datasets for DJ-Mix Reverse Engineering*
   (the DTW baseline extended).
+
+## Reduction table (André mode) — 2026-07-11
+
+The subsumption exhibit (spec: `docs/superpowers/specs/2026-07-11-andre-absorption-benchmark-design.md`).
+Run our aligner (`fused`) in **André mode** — closed-set, always-commit — on the
+same warp×effect strata, next to the two baselines we reproduced inside this
+repo: `nmf` (`nmf_baseline.py`, a v0 fixed-W KL-NMF reproduction of André 2024)
+and `dtw` (`method_dtw`, a chroma-DTW reproduction of André's DTW baseline). All
+three are interchangeable `Method` callables scored on André's warp-error units —
+that uniformity *is* the subsumption argument in code. Artifact:
+`out/reduction_table.txt`. Sample: **220/240 mixes loaded, 660 GT spans** (20
+mixes failed to load), seed-0 stratified, `--feature chroma`.
+
+**André mode (all methods commit; warp error = set_start MAE + tempo MAE):**
+
+| method | set_start MAE | med | <2 s | tempo MAE | abstain |
+|--------|--------------:|----:|-----:|----------:|--------:|
+| nmf (André NMF, v0 repro) | 19.07 s | 12.35 | 7% | 0.087 | 0% |
+| dtw (André DTW baseline) | 6.66 s | 2.80 | 46% | 0.384 | 0% |
+| **fused (ours)** | **5.79 s** | **2.39** | 43% | **0.065** | 0% |
+
+- **`fused` wins warp error in their own regime.** Best set_start MAE (5.79 vs
+  6.66 vs 19.07) and a tempo MAE (0.065) that *dominates* — 6× tighter than DTW
+  (0.384) and below NMF (0.087). DTW edges `fused` on `<2 s` placement (46 vs 43%)
+  but its tempo is an order of magnitude looser: DTW recovers *where* well and
+  *how fast* poorly.
+- **Our v0 NMF underperforms** (19 s placement MAE). This is the fixed-W v0, not
+  André's published multi-pass NMF — do **not** read this as "we beat the paper's
+  NMF." Against André's *reported* ~1 s clean-condition warp median, our `fused`
+  clean-strata set_start medians (~2.2 s) are the comparable quantity; competitive,
+  same order, on the sub-task the paper delegates to fingerprinting.
+
+**Open mode (remove the always-commit restriction — `fused --min-votes 20`):**
+
+| mode | set_start MAE | med | <2 s | tempo MAE | abstain |
+|------|--------------:|----:|-----:|----------:|--------:|
+| André mode (commit all) | 5.79 s | 2.39 | 43% | 0.065 | 0% |
+| open mode (abstain on weak fp) | **2.35 s** | **1.67** | **54%** | **0.039** | **22.9%** |
+
+- **Abstention is a capability, not a penalty.** Declining 22.9% of spans halves
+  committed placement MAE (5.79 → 2.35 s) and tightens tempo (0.065 → 0.039). The
+  closed NMF *cannot express this* — it commits always.
+- **The abstention localizes to the exact structural wall we predicted.** By
+  stratum, `fused` open-mode abstains **47–61% on `resample`** (pitch+tempo shift,
+  which moves spectral peaks off our pitch-preserving constellation) but **0% on
+  `none`** and only 2–4% on most `stretch`. Where it *does* commit on resample,
+  placement is now tight (MAE ~0.9–1.7 s, med <1 s). The model knows where it is
+  blind and declines there — the "abstain-not-lie" posture, quantified. Closing
+  the resample abstention is exactly the Phase 2 pitch-search arm.
+
+**Honest caveats (must survive into the paper):**
+
+- **Identity was not measured in this run** — no distractors were passed, so
+  `identity_acc = 1.0` (a vacuous default) and the `--identity` block's `0.0%`
+  (empty distractor pool) are both non-measurements. Open-set identification needs
+  a re-run with `--n-distractors > 0`.
+- **`nmf`/`dtw` are our reproductions**, not the authors' code; treat them as
+  in-repo baselines, and anchor the SOTA claim to André's *published* figures
+  separately.
+- **`fused` set_start MAE is a single-anchor affine warp error**, comparable to
+  but not identical to André's dense-warp MAE; UnmixDB's GT warp is affine, so the
+  gap is small, but the paper must state it.
+- Gain is not scored here (NMF-only, deferred) — named limitation, on-thesis.

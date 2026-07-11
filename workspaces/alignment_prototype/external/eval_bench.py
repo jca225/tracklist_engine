@@ -540,6 +540,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="also run the chroma-vs-fingerprint identity benchmark",
     )
+    p.add_argument(
+        "--stratified",
+        action="store_true",
+        help="print the warp×effect stratified table",
+    )
+    p.add_argument(
+        "--min-votes",
+        type=float,
+        default=0.0,
+        help="open-mode fp abstain floor for 'fused' (0 = André-mode)",
+    )
     args = p.parse_args(argv)
 
     if args.synthetic:
@@ -567,6 +578,9 @@ def main(argv: list[str] | None = None) -> int:
     dfs = {}
     for name in args.methods.split(","):
         name = name.strip()
+        if name == "fused" and args.min_votes > 0.0:
+            dfs[name] = run(samples, make_fused(args.min_votes), name)
+            continue
         if name not in METHODS:
             print(f"unknown method {name}")
             continue
@@ -574,6 +588,10 @@ def main(argv: list[str] | None = None) -> int:
 
     print("\n=== eval_bench (placement / warp) ===")
     print(summary(dfs).to_string(index=False))
+
+    if args.stratified:
+        print("\n=== stratified (warp × effect) ===")
+        print(summary_by_stratum(dfs).to_string(index=False))
 
     if args.identity:
         print("\n=== identity (rank@1: true track out-scores all distractors) ===")
