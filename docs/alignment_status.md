@@ -19,6 +19,12 @@ occurrence index differs — see §The strict→fiber gap. Unless noted, all num
 are on the **`_lt` (looptrace) timeline** scored by `make scorecard` /
 `score_timeline_vs_gt`, the module's declared source of truth.
 
+**Interpretive frame:** these numbers are read through the decomposed account in
+[alignment_recharacterization.md](alignment_recharacterization.md) — alignment as
+three near-orthogonal axes (identity / placement / structure) with different
+difficulty on synthetic vs real data and different generalization. Report per-axis,
+strict **and** fiber-aware; never a single scalar.
+
 ---
 
 ## 1. Headline (regenerated on `_lt`, 2026-07-11)

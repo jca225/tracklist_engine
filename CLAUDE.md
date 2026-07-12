@@ -33,7 +33,11 @@ map + Point A→B phases: [docs/architecture_north_star.md](docs/architecture_no
 headline number: [docs/alignment_status.md](docs/alignment_status.md)** (the single
 source of truth — regenerated from the scorers, dated+SHA stamped). Status metrics
 belong ONLY there; do not hand-type alignment numbers into other docs or memory —
-cite the canonical doc. Set ids: BB11 = `2nvzlh2k`, BB12 = `1fsnxchk`.
+cite the canonical doc. Set ids: BB11 = `2nvzlh2k`, BB12 = `1fsnxchk`. **Interpretive
+frame for all alignment work:** [docs/alignment_recharacterization.md](docs/alignment_recharacterization.md)
+— alignment as three near-orthogonal axes (identity / placement / structure) with
+different synthetic-vs-real difficulty and generalization; read progress as three
+curves, never one scalar.
 
 Everything outside this chain is one of:
 - A vendored dependency: `cue-detr/` (DETR-based cue-point detection model,
