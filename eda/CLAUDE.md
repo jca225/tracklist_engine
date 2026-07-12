@@ -41,6 +41,7 @@ Findings, in dependency order:
 5. **Spotify Top 200 confirms the top-10 pattern** — combining Billboard + Spotify top-10 signals lifts R² to 0.44 (apparent ceiling for popularity features alone).
 6. **Union coverage of popularity proxies** — ~61% of acapellas vs ~27% of instrumentals are caught by ≥1 popularity signal. 73% of BB instrumentals are obscure on every metric we have — picked for compatibility, not popularity.
 7. **User-history is for the per-user model, not aggregate** — the remaining ~55% of aggregate-views variance is unmeasured production / viral / algorithmic factors, not individual taste. User-history data belongs in the personalized-inference head, not here.
+8. **Mix pitch offsets are wrong-key rips + a small deliberate-detune tail, NOT varispeed** — a calibrated cents estimator over BB11/BB12 GT clips rejects tempo-pitch coupling (H1: R²=0.005), finds most tracks in tune (median 0.4¢), attributes integer-semitone offsets to wrong-reference rips (Whethan Savage −1 st), and catches one over-dialed label (Coldplay – The Scientist +122¢ dialed vs +66¢ measured). Buried acappellas must be measured on the vocal band or the bass bed fakes a −200¢ detune. Aligner pitch head defaults to 0¢; whole-semitone transpose is an ingest/version signal, not a warp knob.
 
 The `aux.db` holding schema (release years, Last.fm, Billboard, Spotify charts,
 BB-track ↔ chart-entry pairings, set views, headline results) is documented at
