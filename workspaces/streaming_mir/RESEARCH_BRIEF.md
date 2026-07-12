@@ -150,7 +150,11 @@ Then WS1 (cross-track download prefetch in `vast_loop.py`) is the other cheap wi
 
 **Note:** MPS runs bs_roformer at ~18 min/model-pass over a 4-min track — the
 full 3-model ensemble sweep is 6+ hrs on MPS, hence single-model for the first
-read. Definitive numbers belong on a GPU.
+read. Definitive numbers belong on a GPU. **Also:** during this session an
+UnmixDB `eval_bench` was pegging a CPU core (another workstream — don't kill it);
+it's CPU-bound (chroma/nmf/dtw), likely not MPS contention, but it means MPS
+timings here aren't clean. Run the definitive sweep on **Vast** (full ensemble,
+no contention) — trust the MPS run only for the *shape* of the `_bnd` curve.
 
 ---
 
