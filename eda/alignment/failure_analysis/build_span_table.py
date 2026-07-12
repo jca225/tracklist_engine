@@ -37,7 +37,13 @@ _REPO = Path(__file__).resolve().parents[3]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from workspaces.alignment_prototype.path_decode import _span_class, trajectory_acc
+from workspaces.alignment_prototype.path_decode import (
+    _span_class,
+    audible_seconds,
+    gap_hallucination_frac,
+    gt_placement_onset,
+    trajectory_acc,
+)
 from workspaces.alignment_prototype.score_timeline_vs_gt import (
     _pred_segs_from_span,
     norm_slot,
@@ -65,7 +71,8 @@ FIELDS = [
     # GT features
     "gt_set_start_s",
     "gt_ref_start_s",
-    "gt_duration_s",
+    "gt_duration_s",  # envelope: set_end - set_start (spans the silent gaps)
+    "gt_audible_s",  # played mix-seconds (honest recall/loss denominator)
     "tempo_ratio",
     "is_loop",
     "pitch_shift_semi",
@@ -84,6 +91,7 @@ FIELDS = [
     "set_start_err_s",
     "ref_offset_err_s",
     "traj_strict",
+    "gap_halluc",  # frac of silent-gap seconds the prediction fills (precision)
     # ref-offset scorability (straight non-odd clips only, mirrors harness)
     "ref_offset_scored",
 ]
@@ -211,6 +219,7 @@ def _rows_for_set(set_id: str, label: str, gt_path: Path, suffix: str) -> list[d
                 "gt_set_start_s": round(gset, 2),
                 "gt_ref_start_s": round(float(g["ref_start_s"]), 2),
                 "gt_duration_s": round(gdur, 2),
+                "gt_audible_s": round(audible_seconds(g), 2),
                 "tempo_ratio": round(ratio, 4),
                 "is_loop": int(bool(g.get("is_loop"))),
                 "pitch_shift_semi": g.get("pitch_shift_semi") or 0,
@@ -232,9 +241,13 @@ def _rows_for_set(set_id: str, label: str, gt_path: Path, suffix: str) -> list[d
                 if s.get("ref_segments")
                 else 1,
                 "identity_hit": id_hit,
-                "set_start_err_s": round(abs(gset - float(s["set_start_s"])), 2),
+                # placement vs the AUDIBLE entry (audible_start_s), not clip extent
+                "set_start_err_s": round(
+                    abs(gt_placement_onset(g) - float(s["set_start_s"])), 2
+                ),
                 "ref_offset_err_s": round(ref_err, 2) if scored else "",
                 "traj_strict": round(float(strict), 4),
+                "gap_halluc": round(gap_hallucination_frac(segs, g), 4),
                 "ref_offset_scored": int(scored),
             }
         )

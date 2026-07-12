@@ -54,7 +54,14 @@ def main() -> int:
     m = df[df.span_class.notna() & (df.span_class != "")].copy()
     m["identity_hit"] = m["identity_hit"].fillna(1)  # no-GT-overlap: don't penalize
     m["success"] = m.traj_strict >= TRAJ_OK
-    m["seconds"] = m.gt_duration_s
+    # Weight loss by PLAYED seconds, not the envelope (set_end-set_start spans the
+    # silent inter-segment gaps: Slide 839s env / 48s played). Fall back to the
+    # envelope for span-tables predating the gt_audible_s column.
+    m["seconds"] = (
+        m["gt_audible_s"].fillna(m.gt_duration_s)
+        if "gt_audible_s" in m.columns
+        else m.gt_duration_s
+    )
     m["sec_lost"] = m.seconds * (1 - m.traj_strict)
 
     tot_sec = m.seconds.sum()

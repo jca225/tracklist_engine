@@ -328,8 +328,12 @@ def _gt_pieces(row: dict):
         return _pieces(seq, s0, s1, slope)
     return list(
         Trajectory.linear(
-            "mix", "ref", span_start=s0, span_end=s1,
-            dst_start=float(row["ref_start_s"]), slope=slope,
+            "mix",
+            "ref",
+            span_start=s0,
+            span_end=s1,
+            dst_start=float(row["ref_start_s"]),
+            slope=slope,
         ).pieces
     )
 
@@ -338,24 +342,203 @@ def _ref_at(pieces, t: float) -> float:
     return Trajectory("mix", "ref", tuple(pieces)).value_at(t)
 
 
+# --- audible-interval accounting (WS0: recall over played mix, not envelope) ---
+# A multiseg/loop span's [set_start, set_end] ENVELOPE includes the silent gaps
+# between the DJ's segments, and `Trajectory.from_segments` dilutes each pre-gap
+# segment's slope to reach the next one. Both inflate the trajectory denominator
+# and the "GT-seconds lost" weight (Slide: 839 s envelope vs 48 s played). We
+# score recall only over each segment's REAL played mix extent — its ref-span
+# divided by the span tempo — and report gap coverage separately.
+def _seg_played(
+    ms: float, rs: float, re: float, tempo: float, s0: float, s1: float
+) -> tuple[float, float, float, float] | None:
+    """One trajectory piece (mix_lo, mix_hi, ref_at_lo, slope) over a segment's
+    real played mix extent, clipped to [s0, s1]. None when degenerate."""
+    played = abs(re - rs) / tempo if tempo else 0.0
+    lo, hi = max(s0, ms), min(s1, ms + played)
+    if hi <= lo:
+        return None
+    slope = (re - rs) / played if played else tempo
+    return (lo, hi, rs + (lo - ms) * slope, slope)
+
+
+def _merge_intervals(ivals: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    out: list[tuple[float, float]] = []
+    for lo, hi in sorted(ivals):
+        if out and lo <= out[-1][1] + 1e-9:
+            out[-1] = (out[-1][0], max(out[-1][1], hi))
+        else:
+            out.append((lo, hi))
+    return out
+
+
+def _complement(
+    ivals: list[tuple[float, float]], s0: float, s1: float
+) -> list[tuple[float, float]]:
+    gaps: list[tuple[float, float]] = []
+    cur = s0
+    for lo, hi in _merge_intervals(ivals):
+        if lo > cur:
+            gaps.append((cur, lo))
+        cur = max(cur, hi)
+    if cur < s1:
+        gaps.append((cur, s1))
+    return gaps
+
+
+def _overlap_total(a: list[tuple[float, float]], b: list[tuple[float, float]]) -> float:
+    total = 0.0
+    for alo, ahi in a:
+        for blo, bhi in b:
+            total += max(0.0, min(ahi, bhi) - max(alo, blo))
+    return total
+
+
+def _played_pieces(row: dict) -> list[tuple[float, float, float, float]]:
+    """GT trajectory pieces over played mix extents only (gaps excluded)."""
+    s0, s1 = float(row["set_start_s"]), float(row["set_end_s"])
+    tempo = float(row.get("tempo_ratio") or 1.0) or 1.0
+    pieces = []
+    for sg in row.get("ref_segments") or ():
+        p = _seg_played(
+            float(sg["mix_start_s"]),
+            float(sg["ref_start_s"]),
+            float(sg["ref_end_s"]),
+            tempo,
+            s0,
+            s1,
+        )
+        if p:
+            pieces.append(p)
+    return pieces
+
+
+def _pred_played_pieces(
+    pred_segs, tempo: float, s0: float, s1: float
+) -> list[tuple[float, float, float, float]]:
+    pieces = []
+    for ms, rs, re in pred_segs:
+        p = _seg_played(s0 + ms, rs, re, tempo, s0, s1)
+        if p:
+            pieces.append(p)
+    return pieces
+
+
+def gt_placement_onset(row: dict) -> float:
+    """Where a GT span becomes AUDIBLE — its `audible_start_s` (the gain ride's
+    first un-muted moment) when present, else the clip's `set_start_s`. Placement
+    error must be measured against this: a track that fades in under a crossfade
+    is placed silently at `set_start_s` but *enters* at `audible_start_s`, and
+    the aligner rightly locks the audible entry (Galantis "You" BB12: set_start
+    2527.8 s, audible entry 2592.0 s — a 64 s phantom placement error)."""
+    a0 = row.get("audible_start_s")
+    return float(a0) if a0 is not None else float(row["set_start_s"])
+
+
+def _gain_audible_window(row: dict) -> tuple[float, float] | None:
+    """Outer [lo, hi] of a span's fader-audible region from `audible_start_s` /
+    `audible_end_s`, or None when the span carries no gain ride (fully audible).
+    Clips the silent lead-in/tail a fade leaves inside the clip extent; interior
+    dips (rare) are not modeled — outer bounds cover the fade-in/out cases."""
+    a0, a1 = row.get("audible_start_s"), row.get("audible_end_s")
+    if a0 is None and a1 is None:
+        return None
+    lo = float(a0) if a0 is not None else float(row["set_start_s"])
+    hi = float(a1) if a1 is not None else float(row["set_end_s"])
+    return (lo, hi)
+
+
+def _clip_intervals(
+    ivals: list[tuple[float, float]], lo: float, hi: float
+) -> list[tuple[float, float]]:
+    out = []
+    for a, b in ivals:
+        c, d = max(a, lo), min(b, hi)
+        if d > c:
+            out.append((c, d))
+    return out
+
+
+def _audible_intervals(row: dict) -> list[tuple[float, float]]:
+    """Merged mix intervals where a GT span's audio actually plays. Linear spans
+    (no ref_segments) are the whole [set_start, set_end] envelope. A fader ride
+    (`audible_start_s`/`audible_end_s`) further trims the silent lead-in/tail."""
+    s0, s1 = float(row["set_start_s"]), float(row["set_end_s"])
+    if not row.get("ref_segments"):
+        ivals = [(s0, s1)]
+    else:
+        ivals = _merge_intervals([(p[0], p[1]) for p in _played_pieces(row)]) or [
+            (s0, s1)
+        ]
+    win = _gain_audible_window(row)
+    if win is not None:
+        ivals = _clip_intervals(ivals, win[0], win[1])
+    return ivals
+
+
+def audible_seconds(row: dict) -> float:
+    """Played mix-seconds of a GT span — the honest denominator for recall and
+    for GT-seconds-lost weighting (not the gap-inflated envelope)."""
+    return sum(hi - lo for lo, hi in _audible_intervals(row))
+
+
+def _sample(ivals: list[tuple[float, float]], step: float) -> np.ndarray:
+    parts = [np.arange(lo, hi, step) for lo, hi in ivals if hi > lo]
+    return np.concatenate(parts) if parts else np.array([])
+
+
+def gap_hallucination_frac(pred_segs, row: dict) -> float:
+    """Of a span's SILENT gap seconds, the fraction the prediction fills with an
+    active (played) segment — a precision counterpart to recall. 0.0 for linear
+    spans (no gaps) and for predictions that correctly stay silent in the gaps."""
+    s0, s1 = float(row["set_start_s"]), float(row["set_end_s"])
+    if not row.get("ref_segments") or not pred_segs or s1 <= s0:
+        return 0.0
+    gaps = _complement(_audible_intervals(row), s0, s1)
+    gap_total = sum(hi - lo for lo, hi in gaps)
+    if gap_total <= 0:
+        return 0.0
+    tempo = float(row.get("tempo_ratio") or 1.0) or 1.0
+    pred_iv = _merge_intervals(
+        [(p[0], p[1]) for p in _pred_played_pieces(pred_segs, tempo, s0, s1)]
+    )
+    return _overlap_total(pred_iv, gaps) / gap_total
+
+
 def trajectory_acc(
     pred_segs, row: dict, tol: float = 2.0, step: float = 1.0, fiber=None
 ) -> tuple[float, int, float]:
     """(strict_acc, n_pred_segments, fiber_acc).
 
     strict_acc = fraction of sampled mix times whose predicted ref is within
-    `tol` s of GT. fiber_acc additionally credits a sample when predicted and
-    GT ref fall in the SAME self-repeat class (fiber=(labels, label_hz)) — i.e.
-    the decoder picked a different-but-equivalent repeat. With no fiber it
-    equals strict_acc."""
+    `tol` s of GT. For multiseg/loop spans the samples are taken ONLY over the
+    real played mix intervals (see `_audible_intervals`) — the silent inter-
+    segment gaps are neither credited nor penalized, and each segment is scored
+    at its true slope rather than diluted toward the next. Linear spans keep the
+    whole-envelope sampling. fiber_acc additionally credits a sample when
+    predicted and GT ref fall in the SAME self-repeat class (fiber=(labels,
+    label_hz)); with no fiber it equals strict_acc."""
     s0, s1 = float(row["set_start_s"]), float(row["set_end_s"])
     if s1 <= s0 or not pred_segs:
         return 0.0, len(pred_segs), 0.0
-    gt = _gt_pieces(row)
     slope = float(row.get("tempo_ratio") or 1.0)
-    # decode_path returns mix-start RELATIVE to the span, ref times absolute
-    pred = _pieces([(s0 + ms, rs, re) for (ms, rs, re) in pred_segs], s0, s1, slope)
-    ts = np.arange(s0, s1, step)
+    pred_abs = [(s0 + ms, rs, re) for (ms, rs, re) in pred_segs]
+
+    gt_pieces = _played_pieces(row) if row.get("ref_segments") else []
+    if gt_pieces:
+        # recall over played intervals, real per-segment slope for GT and pred
+        pred_pieces = _pred_played_pieces(pred_segs, slope or 1.0, s0, s1) or _pieces(
+            pred_abs, s0, s1, slope
+        )
+        ts = _sample([(p[0], p[1]) for p in gt_pieces], step)
+        gt, pred = gt_pieces, pred_pieces
+    else:
+        # linear span (or degenerate segments): unchanged whole-envelope scoring
+        gt = _gt_pieces(row)
+        pred = _pieces(pred_abs, s0, s1, slope)
+        ts = np.arange(s0, s1, step)
+    if ts.size == 0:
+        return 0.0, len(pred_segs), 0.0
     pr = np.array([_ref_at(pred, t) for t in ts])
     gr = np.array([_ref_at(gt, t) for t in ts])
     near = np.abs(pr - gr) < tol
