@@ -1,8 +1,9 @@
-# Synthetic Structure Benchmark — Design (PROPOSED, pending approval)
+# Synthetic Structure Benchmark — Design (APPROVED 2026-07-12)
 
 **Date:** 2026-07-12
-**Status:** design presented, **not yet approved** — resume by approving/adjusting
-§Open, then → writing-plans → build. Brainstormed with John this session.
+**Status:** **APPROVED by John** (design + scope: all 4 knobs, OFAT, oracle-identity,
+structure-primary metric, validation gate). Resume at **writing-plans → subagent-driven
+build** — do NOT re-litigate the design; go straight to the implementation plan.
 **Context:** the third leg of a 3-legged alignment dataset (UnmixDB + Big Booties +
 this). Grounded in [docs/alignment_recharacterization.md](../../alignment_recharacterization.md).
 
@@ -83,9 +84,11 @@ CIs) + the three-legged spectrum table + a pass/fail validation report. Paper
 claim: *"holding all else fixed, repeats and re-pitch collapse structure while
 entry-point opens the placement tail — the exact dimensions UnmixDB omits."*
 
-## Open (resume here)
+## Resume here
 
-- **Design approval** — John was asked to approve/adjust (knob levels, n=20/stratum,
-  oracle-identity simplification, validation bar) before spec. Not yet given.
-- After approval: write the formal spec → writing-plans → subagent-driven build
-  (mirror the ablation-harness build this session).
+- **Design APPROVED.** Next action: invoke `superpowers:writing-plans` to turn this
+  design into a bite-sized TDD implementation plan, then `superpowers:subagent-driven-development`
+  to build it (mirror the ablation-harness build this session — golden gates, one
+  reviewer per task, span-bootstrap CIs). Reuse `synthetic_mix/` heavily.
+- Self-review (this session): no placeholders; internally consistent; single-benchmark
+  scope; knob levels + n=20/stratum + oracle-identity + validation bar all explicit.

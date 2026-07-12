@@ -41,8 +41,8 @@ that's supporting evidence, not the headline (SOTA claim not defensible; see rec
 
 1. **UnmixDB** — existing synthetic, easy axis (warp/placement). Done.
 2. **Big Booties** (BB11=`2nvzlh2k`, BB12=`1fsnxchk`) — real, all axes, the walls. Done.
-3. **Controllable synthetic** — NEW, isolates the hard dims OFAT. **Design proposed,
-   pending John's approval:**
+3. **Controllable synthetic** — NEW, isolates the hard dims OFAT. **Design APPROVED
+   (2026-07-12) — resume at writing-plans → build:**
    [docs/superpowers/specs/2026-07-12-synthetic-structure-benchmark-design.md](superpowers/specs/2026-07-12-synthetic-structure-benchmark-design.md).
    Knobs (all 4): repeat-count / re-pitch / medley-density / entry-point, OFAT from a
    validated baseline, oracle-identity, scored on structure (score_spans/fiber).
@@ -59,9 +59,10 @@ that's supporting evidence, not the headline (SOTA claim not defensible; see rec
 
 ## Immediate next step
 
-Approve/adjust the synthetic-benchmark design → writing-plans → subagent-driven build
-(mirror the ablation-harness flow). Then draft the 8-page paper on the 3-legged
-evidence. Paper draft was deliberately deferred until numbers are real (John's call).
+Synthetic-benchmark design **APPROVED** → invoke `superpowers:writing-plans` on the
+design doc → `superpowers:subagent-driven-development` to build it (mirror the
+ablation-harness flow). Then draft the 8-page paper on the 3-legged evidence. Paper
+draft was deliberately deferred until numbers are real (John's call).
 
 ## Loose ends
 
