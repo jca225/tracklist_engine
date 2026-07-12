@@ -42,6 +42,9 @@ def build_driver(cell: Cell, base_timeline: Path | None):
 
 
 def _cached_timeline(cell: Cell) -> Path:
+    # NOTE: cell_hash covers Cell fields only (driver/decoder/set_id/…). A
+    # changed upstream base_timeline or model checkpoint does NOT invalidate
+    # this cache. Delete experiments/cache/ to force a full rebuild.
     return _CACHE / f"{cell_hash(cell)}.json"
 
 

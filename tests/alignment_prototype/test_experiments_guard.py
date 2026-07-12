@@ -15,3 +15,6 @@ def test_only_score_spans_supplies_metrics():
             if isinstance(node, ast.ImportFrom):
                 names = {a.name for a in node.names}
                 assert not (names & banned), f"{py.name} imports {names & banned}"
+            elif isinstance(node, ast.Import):
+                names = {a.name.split(".")[-1] for a in node.names}
+                assert not (names & banned), f"{py.name} bare-imports {names & banned}"

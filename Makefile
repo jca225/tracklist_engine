@@ -14,7 +14,7 @@ REPO         := ~/tracklist_engine
 PIP          := $(REPO)/venvs/web_crawler/bin/pip
 DB           := /mnt/storage/data/db/music_database.db
 
-.PHONY: help check check-corpus check-inventory audit-gt scorecard race deploy deploy-storage deploy-worker \
+.PHONY: help check check-corpus check-inventory audit-gt scorecard race align-ablate deploy deploy-storage deploy-worker \
         restart-jobqueue start-scraper stop-scraper restart-retry \
         install-taste-scrape restart-taste-scrape logs-taste-scrape \
         install-corpus-integrity logs-corpus-integrity \
@@ -27,6 +27,7 @@ help:
 	@echo "  make audit-gt SET=<set_id> — audio-verify a labeling .als vs the mix"
 	@echo "  make scorecard        — aligner per-span scorecard + failure attribution"
 	@echo "  make race             — race classical/agentic/ml drivers on one board (SETS=, DRIVERS=)"
+	@echo "  make align-ablate     — run paper ablation matrix → store → print headline + ablation tables"
 	@echo "  make deploy           — git pull + pip install on both Pis"
 	@echo "  make status           — service states + scrape_failures queue depth"
 	@echo "  make queue            — just the scrape_failures count"

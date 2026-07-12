@@ -11,7 +11,6 @@ from pathlib import Path
 from workspaces.alignment_prototype.experiments.matrix import PAPER, Cell
 from workspaces.alignment_prototype.experiments.run import (
     _cached_timeline,
-    build_driver,
     run_cell,
 )
 from workspaces.alignment_prototype.experiments.store import Store

@@ -5,6 +5,7 @@ import workspaces.alignment_prototype.experiments.run as _run_mod
 from workspaces.alignment_prototype.experiments.run import run_cell
 from workspaces.alignment_prototype.experiments.matrix import Cell
 from workspaces.alignment_prototype.experiments.store import Store
+from workspaces.alignment_prototype.drivers.base import SetContext
 
 
 class _StubDriver:
@@ -22,6 +23,9 @@ def test_run_cell_scores_and_caches(tmp_path, monkeypatch):
     # Redirect the module-level cache dir into tmp_path so the test is
     # hermetic and never pollutes the source tree.
     monkeypatch.setattr(_run_mod, "_CACHE", tmp_path / "cache")
+    # Stub out SetContext.for_set so the test never touches ~/aligning on disk.
+    # The stub driver_factory ignores ctx, so a sentinel object suffices.
+    monkeypatch.setattr(SetContext, "for_set", staticmethod(lambda set_id: object()))
     # a minimal timeline JSON with one span that has no same-rec GT → strict None,
     # but score_spans still returns one SpanScore row.
     tl = tmp_path / "tl.json"
