@@ -143,6 +143,26 @@ damage), rising and plateauing by ~5–10s → overlap heals the seam to offline
 quality. Global SDR (`*_glob`) moves little (diluted by the identical bulk) —
 watch the `_bnd` columns.
 
+**FIRST RESULT (2026-07-12, MPS single-model bs_roformer, 90s clip, core 20s):**
+```
+ margin_s  n_blk  voc_glob  inst_glob  voc_bnd  inst_bnd  wall_s
+     0.00      5     31.69      33.82    25.75     26.14     599
+     2.00      5     39.83      41.96    34.56     34.95     663
+     5.00      5     40.39      42.52    41.71     42.11     842
+    10.00      5    173.39     141.06   166.75    167.15     994
+```
+- **CONFIRMED (direction):** boundary-local SDR rises monotonically with overlap
+  (voc 25.8→34.6→41.7 dB over margins 0→2→5s). Hard-cut seam damage is real;
+  overlap heals it. WS2 principle validated.
+- **OPEN QUESTION — margin=10 = ~167 dB (bit-identical).** A 125 dB leap from 5s
+  is either (a) real: overlap exceeded bs_roformer's internal receptive field
+  (~8–12s, matches research) → core computes identically to full-file; or (b) a
+  reassembly artifact (margin 10 = ½ core 20 → tiling coincidence). **Resolve
+  first next session:** rerun with core=30 + a finer, decoupled margin grid
+  (0,1,2,3,5,7,8,10,12) so margin≠½·core, and spot-check that margin=10 blocks
+  aren't degenerate. If the sharp threshold survives with core=30, it's real and
+  ~10s is the answer.
+
 **Next step if plateau confirmed:** small patch to
 `scripts/render_set_stems.py` `split_chunks()` — overlap the 360s chunks by the
 validated margin + crossfade at concat (currently hard-cut, "faint seams").
