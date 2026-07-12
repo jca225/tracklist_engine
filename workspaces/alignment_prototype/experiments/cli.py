@@ -31,16 +31,34 @@ def main(argv: list[str] | None = None) -> int:
 
     cells = _MATRICES[args.matrix]
     store = Store(_RESULTS)
+    # A failed cell (e.g. a transient pi-storage SSH drop mid-infer) must NOT
+    # abort the whole matrix — the store is per-cell, so skip + report + continue;
+    # re-running the CLI cache-hits the survivors and retries only the failures.
+    failed: list[tuple[str, str]] = []
     # ensure a classical/looptrace base per set exists first (reused downstream)
     bases: dict[str, Path] = {}
     for sid in sorted({c.set_id for c in cells}):
         base_cell = Cell("classical", sid, decoder="looptrace")
-        run_cell(base_cell, store, fibers=args.fibers)
-        bases[sid] = _cached_timeline(base_cell)
+        try:
+            run_cell(base_cell, store, fibers=args.fibers)
+            bases[sid] = _cached_timeline(base_cell)
+        except Exception as e:  # noqa: BLE001 — one cell must not sink the matrix
+            failed.append((f"base[{sid}]", str(e).splitlines()[-1][:160]))
+            print(f"[skip] base {sid}: {type(e).__name__}")
 
     for cell in cells:
-        base = bases[cell.set_id] if cell.driver in ("agentic", "ml") else None
-        run_cell(cell, store, fibers=args.fibers, base_timeline=base)
+        needs_base = cell.driver in ("agentic", "ml")
+        if needs_base and cell.set_id not in bases:
+            failed.append((f"{cell.label}[{cell.set_id}]", "base timeline unavailable"))
+            continue
+        base = bases.get(cell.set_id) if needs_base else None
+        try:
+            run_cell(cell, store, fibers=args.fibers, base_timeline=base)
+        except Exception as e:  # noqa: BLE001 — one cell must not sink the matrix
+            failed.append(
+                (f"{cell.label}[{cell.set_id}]", str(e).splitlines()[-1][:160])
+            )
+            print(f"[skip] {cell.set_id} {cell.label}: {type(e).__name__}")
 
     rows = store.fetch()
     print("\n## Headline (baseline classical/looptrace)\n")
@@ -51,6 +69,10 @@ def main(argv: list[str] | None = None) -> int:
     print(report.ablation_table(rows, "decoder", "looptrace", "legacy"))  # C4
     print(report.ablation_table(rows, "driver", "agentic", "classical"))
     print(report.ablation_table(rows, "driver", "ml", "classical"))
+    if failed:
+        print("\n## Cells skipped (re-run to retry — cache-hits the rest):")
+        for label, why in failed:
+            print(f"  - {label}: {why}")
     return 0
 
 
