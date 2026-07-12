@@ -171,10 +171,17 @@ watch the `_bnd` columns.
   (separate model calls differ intrinsically) but inaudibly close (~0.6% RMS).
 
 **WS2 VERDICT: overlap the 360s chunks by ~8–10 s (6 s suffices; 8–10 for
-safety) + crossfade → recovers offline quality. The fix is settled.**
-**Next: patch `render_set_stems.py`** — read each chunk as [core ± ~10 s],
-separate, trim the margins, concat cores (+ short linear crossfade). Then WS1
-(cross-track prefetch in `vast_loop.py`) is the other cheap win.
+safety) → recovers offline quality. The fix is settled.**
+
+**IMPLEMENTED (2026-07-12):** `render_set_stems.py` now separates each core
+chunk with `--overlap-sec` (default 10 s) of two-sided context, trimmed back off
+before concat. `plan_windows()` (pure, unit-tested) + `extract_window` /
+`trim_to_core` (sample-accurate). Geometry verified end-to-end: overlap→trim→
+concat WITHOUT separation reconstructs the mix bit-for-bit (179 dB, 0 sample
+diff). `--overlap-sec 0` = legacy hard-cut. Not a crossfade — pure trim, which
+is what the sweep validated.
+**Remaining:** (1) real before/after on one set (BB11/BB12) on a GPU — confirm
+audible seam gone + SDR; (2) WS1 cross-track prefetch in `vast_loop.py`.
 
 **Next step if plateau confirmed:** small patch to
 `scripts/render_set_stems.py` `split_chunks()` — overlap the 360s chunks by the

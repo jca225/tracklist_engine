@@ -56,11 +56,14 @@ beat_this is a transformer with no internal chunking: a 60-min mix OOMs MPS
 (~26 GiB) before separation even starts. `render_set_stems.py` skips beat_this
 (stems are all the full-set acappella goal needs), slices the mix into
 fixed-length chunks (default 360s), runs the selected backend per chunk, and
-concatenates — so MPS memory stays bounded regardless of mix length. The chunk
-loop is **resumable** (a chunk whose part files exist is skipped) and writes the
+concatenates — so MPS memory stays bounded regardless of mix length. Each core
+chunk is separated with `--overlap-sec` (default 10s) of two-sided context that
+is trimmed back off before concat, so the joins are **seamless** (WS2, validated
+in `workspaces/streaming_mir`: boundary SDR vs full-file plateaus by ~6s overlap;
+`--overlap-sec 0` = legacy hard-cut). The chunk
+loop is **resumable** (a core whose part files exist is skipped) and writes the
 two `set_stems` rows + rsyncs `{vocals,instrumental}.flac` to
-`/mnt/storage/stems/set/<id>/` on completion. Caveats: hard-cut chunk
-boundaries (no crossfade → faint seams at joins); on a Mac, run on **AC power
+`/mnt/storage/stems/set/<id>/` on completion. Caveats: on a Mac, run on **AC power
 with the lid open** — `caffeinate -i` does not stop battery maintenance sleep,
 which suspends the process for hours. (Validated on BB12 `set_audio_id=5`,
 3729s, uvr backend, ~1.5h.)
