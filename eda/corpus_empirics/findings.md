@@ -542,11 +542,11 @@ historical acap-rate predicts vocal-layer density → pre-route probing (high-ac
 stacked vocals, lean on the lyrics grader). For generation/emulation (Job B): a stylistic axis
 of DJ identity. NOT a within-set timing signal.
 
-## Mix pitch offsets are wrong-key rips + a small deliberate-detune tail — NOT varispeed
+## Mix pitch offsets = an acappella pitched to its instrumental's key (harmonic mixing), NOT varispeed
 
-When a set is hand-aligned in Ableton, some reference clips must be pitched to sit in tune with
-the recorded mix. What generates those offsets? Four hypotheses predict different things, so this
-is a discrimination, not a measurement. A calibrated cents estimator
+When a set is hand-aligned in Ableton, some reference clips must be pitched to sit in tune with the
+recorded mix. What generates those offsets? Four hypotheses predict different things, so this is a
+discrimination, not a measurement. A calibrated cents estimator
 ([workspaces/alignment_prototype/pitch_detune.py](../../workspaces/alignment_prototype/pitch_detune.py):
 time-averaged log-frequency spectral cross-correlation, coarse-centred residual, sub-cent via
 parabolic interp; synthetic recovery ±2.5¢ across ±80¢, unit-tested) measures every GT clip's true
@@ -555,30 +555,47 @@ clips → 302 (set, slot, stem) units, **296 reliable** (cross-corr peak ≥ 0.3
 
 | Hypothesis | Prediction | Verdict |
 |---|---|---|
+| **H2 harmonic mixing** | transpose an acappella onto the co-playing track's key | **confirmed, dominant** — transpose flips bed-compatibility 1/56 → 50/56 |
 | **H1 varispeed** (keylock off) | offset == 1200·log2(BPM_local/BPM_native) | **rejected** — R² = 0.005, 2/169 predicted shifts materialize |
-| **H2 harmonic mixing** | sub-semitone nudges in layered sections | small real tail — 7% of layered acappellas > 10¢ |
-| **H3 wrong/altered rip** | near-integer-semitone, constant | **dominant for real integer offsets** — Whethan Savage exactly −1 st (corr .90) |
+| **H3 wrong/altered rip** | near-integer-semitone, constant | minority — Pat Benatar +99¢ uncorrected; overlaps H2 |
 | **H4 artifact** | vanish on clean material | controlled — was faking the *largest* offsets (see below) |
 
-**H1 (varispeed) is decisively rejected — the sharpest test comes back negative.** Regressing
-measured offset on the varispeed prediction gives slope ≈ 0, R² = 0.005. Among the 169 units where
-beatmatching predicts a real (> 15¢) pitch shift, only **2** actually show it — the rest read ~0¢
-regardless of how much the tempo was changed. Pitch is decoupled from tempo: keylock is on. Whatever
-generates these offsets, it is not the turntable.
+**The offset is the acappella being pitched to its instrumental's key — the paired bed is the reason
+(H2).** For every layered acappella, find the track it sits over (the longest-overlapping, reliable,
+in-tune co-track) and ask whether the dialed semitone transpose moves the acappella *toward that bed's
+Camelot key*. It does, overwhelmingly: of 56 coarse-transposed layered acappellas, **only 1 is
+harmonically compatible with its bed before the transpose, but 50 are after** (Camelot distance ≤ 1),
+and **53/56 transposes strictly reduce the distance to the bed**. The bed is a fixed harmonic anchor
+and acappellas from many source keys are all pulled onto it — e.g. five different vocals over the
+*Alan Walker – Faded* instrumental (Camelot 2B) are each transposed +1 semitone from their native 7B
+to land on 2B (7B + 1 st = 2B). This is textbook harmonic mixing, and the *instrumental* determines
+the *acappella*'s transpose. The causation is one-directional: the bed sits at ~0¢ (it defines the
+mix key) and is essentially never adjusted; the vocal moves to it.
 
-**Most tracks need no pitch adjustment.** Median |offset| across all 290 layered units is 0.4¢;
-only 6% exceed 10¢. The phenomenon is a minority tail, concentrated in **layered acappellas**
-(7% > 10¢, median 0.9¢) vs instrumentals (4%, median 0.1¢) and solo material (~0¢). The genuine
-sub-semitone detunes are small (< ½ semitone) and land on vocals sitting over a bed — consistent
-with occasional deliberate harmonic nudging (H2), but they are too small to correspond to a Camelot
-key move, so harmonic mixing *by key change* happens at the whole-semitone level, not here.
+**The sub-semitone fine nudge is a tuning-match to the bed, layered on top of the semitone.** A small
+adjustment (±10–40¢) is applied even when the Camelot keys *already* agree — e.g. Dr. Dre (2A) over
+Madison Mars (2A) still needs +21¢, twenty-one-pilots (10B) over its 10B bed needs −10¢ — because a
+rip's master is rarely at exact concert pitch. Median |offset| across all 290 layered units is still
+0.4¢ (only 6% exceed 10¢): most tracks already sit in tune and need nothing. The detune tail is
+concentrated on **layered acappellas** (7% > 10¢) vs instrumentals (4%) and solo material (~0¢).
 
-**The real integer-semitone offsets are wrong-key rips (H3), not artistic transposes.** 67 units
-sit within 20¢ of a nonzero integer semitone. The clearest: **Whethan – Savage** reads exactly
-−102¢ at corr 0.90 (a rip a clean semitone sharp of the mix), and **Pat Benatar – Hit Me** (BB12)
-reads +99¢ *uncorrected* (labeler dialed nothing) — both flagged as wrong-reference suspects in
-prior work, both confirmed. The wrong rips are **candidate-sourced acappellas** (`cand1__` auto-picked
-downloads), never the curated full-track rips — a usable source signal.
+**When both stems of the *same* song share the offset, it's a master difference, not a pairwise
+decision.** Tove Lo – Cool Girl reads +40¢ on *both* its instrumental (corr .95) and its acappella
+(corr .98): the whole track is +40¢ sharp of our rip, so this is the mix's copy/master differing from
+ours, unrelated to any co-track — distinct from the acappella-vs-bed mechanism above.
+
+**H1 (varispeed) is decisively rejected — the sharpest test comes back negative.** Regressing measured
+offset on the varispeed prediction gives slope ≈ 0, R² = 0.005; among the 169 units where beatmatching
+predicts a real (> 15¢) shift, only **2** show it. Pitch is decoupled from tempo: keylock is on. The
+transposes are harmonic choices, not turntable speed.
+
+**H3 (wrong rips) is a real but minority residual.** A few integer offsets are genuinely bad rips
+rather than harmonic moves: **Pat Benatar – Hit Me** (BB12) reads +99¢ *uncorrected* (labeler dialed
+nothing), a candidate acappella a clean semitone off. At the individual-clip level H2 and H3 are not
+always separable from pitch alone (a −1 st that both fixes a bad rip *and* matches the bed) — but the
+population-level key-convergence (1/56 → 50/56) rules out wrong-rips as the *dominant* generator, since
+independent bad rips would not systematically land on the co-playing bed. Wrong rips are
+candidate-sourced acappellas (`cand__` auto-picks), never curated full-track rips.
 
 **H4 was manufacturing the biggest apparent detunes — a methodological correction.** A full-band
 (80 Hz–8 kHz) estimator reported 13 acappellas as −140 to −294¢ detuned, *all negative* (a genuine
@@ -591,27 +608,31 @@ now measured vocal-band; the genuine offsets (Tove Lo +40¢, Ocho Cinco +22¢) s
 **Ear-vs-machine — the estimator validates the human dials, and catches one mislabel.** On the seven
 clips the labeler dialed a sub-semitone adjustment, machine agrees to within ~14¢ on six
 (Tove Lo dialed +39.5 / machine +39.8; Ocho Cinco +20.5 / +21.8; Set Fire −116 / −118.9). The
-exception is **Coldplay – The Scientist**, dialed **+122¢ (coarse +1, fine +22)** but measured
-**+65.4¢** (corr 0.86, confirmed across bands) — **over-pitched by ~½ semitone**; the correct dial is
-≈ coarse +1, fine −34. (This supersedes the stale `project_micropitch_detune` memory, which recorded
-a since-relabelled session and a spurious "ear undershoots" curve — the current dials show no
-systematic direction, n = 7.)
+exception is **Coldplay – The Scientist** (acappella over the *Faded* 2B bed), dialed **+122¢ (coarse
++1, fine +22)** but measured **+65.4¢** (corr 0.86, confirmed across bands) — **over-pitched by ~½
+semitone**. Its +1-semitone *coarse* is right (7B + 1 st = 2B, matching the Faded bed); the error is
+the **fine**, which should be ≈ −34, not +22. (This supersedes the stale `project_micropitch_detune`
+memory, which recorded a since-relabelled session and a spurious "ear undershoots" curve — the current
+dials show no systematic direction, n = 7.)
 
 **Implication for modeling**: pitch offset is **not** a free axis the aligner should regress
-continuously. It decomposes into (1) an *integer-semitone* term that is overwhelmingly a
-wrong-key/wrong-version **rip-quality** problem → fix in *ingest* (re-acquire the right master), not
-in the aligner's warp; and (2) a *sub-semitone* term that is near-zero for almost every track and, when
-present, is a small deliberate nudge on a layered vocal. So the aligner's pitch head should default to
-0¢, predict a whole-semitone transpose only as an identity/version signal (candidate-acappella rips are
-the high-risk population), and treat any residual > ~40¢ on an acappella as a **measurement-band /
-wrong-rip flag**, not a detune to dial. Buried-vocal pitch must be measured on the vocal band or it
-lies. For the product-grade `.als` exporter: The Scientist's +122¢ dial should be corrected to ~+66¢.
+continuously. It decomposes into (1) an *integer-semitone* term that is a **harmonic-mixing** decision
+— the acappella is transposed onto the *co-playing bed's key* — so the aligner's pitch head should
+predict it *jointly with placement/identity* from the pair (bed Camelot key + acappella native key),
+not as an isolated per-clip regression; and (2) a *sub-semitone* term that is near-zero for almost
+every track and, when present, a small tuning nudge onto the bed's exact pitch. So the head should
+default to 0¢, emit a whole-semitone transpose driven by the **bed relationship**, and treat any
+residual > ~40¢ on a solo/mismatched acappella as a **measurement-band / wrong-rip flag** (a minority,
+`cand__` rips like Pat Benatar), not a detune to dial. Buried-vocal pitch must be measured on the vocal
+band or it lies. For the product-grade `.als` exporter: The Scientist's fine should be corrected from
++22 to ≈ −34 (net +66¢).
 
-**Sample-size caveat** (n = 2 fully-GT'd sets, 296 reliable clip-units, 7 hand-dialed detunes): the
-H1 rejection and the vocal-band artifact are robust (large per-clip n, clean separation); the H2
-"deliberate nudge" tail and the ear-calibration are **directional only** — a handful of clips each.
-No feature-engineered curve is fit. Re-run as Murph (`pwgrrb1`) / Disco Lines (`1rfb0yl9`) land to
-test whether the pattern is Two-Friends-specific.
+**Sample-size caveat** (n = 2 fully-GT'd sets, 296 reliable clip-units): the H1 rejection, the H2
+key-convergence (1/56 → 50/56 is a stark contingency, not a fitted curve), and the vocal-band artifact
+are robust; the ear-calibration (7 hand-dialed clips) and the sub-semitone-nudge claim are
+**directional only**. Camelot keys are Essentia's (parent-song key for acappellas) so individual key
+labels carry error — the population convergence survives it, single-clip attributions do not. Re-run
+as Murph (`pwgrrb1`) / Disco Lines (`1rfb0yl9`) land to test whether the pattern is Two-Friends-specific.
 
 Reproduction: measurement (heavy, reads `~/aligning` + mix audio, Mac-only)
 [workspaces/alignment_prototype/measure_detune.py](../../workspaces/alignment_prototype/measure_detune.py)

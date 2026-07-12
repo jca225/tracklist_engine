@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import csv
 import math
+import re
 import sqlite3
 import sys
 from pathlib import Path
@@ -95,6 +96,50 @@ def fold_ratio(bpm_local: float, bpm_native: float) -> tuple[float, bool]:
     return r, folded
 
 
+def _cam(k):
+    m = re.fullmatch(r"(\d{1,2})([AB])", k or "")
+    return (int(m.group(1)), m.group(2)) if m else None
+
+
+def _cam_dist(a, b):
+    """Camelot-wheel distance: ring steps (mod 12) + 1 if the A/B letter differs.
+    0 = identical; ≤1 = harmonically compatible (relative maj/min or ±1 fifth)."""
+    pa, pb = _cam(a), _cam(b)
+    if not pa or not pb:
+        return None
+    ring = min((pa[0] - pb[0]) % 12, (pb[0] - pa[0]) % 12)
+    return ring + (0 if pa[1] == pb[1] else 1)
+
+
+def _transpose(k, semis):
+    """Camelot key after transposing by ``semis`` semitones (+1 st = +7 hours)."""
+    p = _cam(k)
+    return f"{((p[0] - 1 + 7 * semis) % 12) + 1}{p[1]}" if p else None
+
+
+def _overlap(a, b):
+    return max(
+        0.0,
+        min(a["mix_end_s"], b["mix_end_s"]) - max(a["mix_start_s"], b["mix_start_s"]),
+    )
+
+
+def find_bed(clip, rows):
+    """The instrumental/track a clip is layered over: the longest-overlapping,
+    reliable, in-tune (~0¢), keyed co-track from a different song slot."""
+    cands = [
+        d
+        for d in rows
+        if d["set"] == clip["set"]
+        and d["slot"] != clip["slot"]
+        and d["reliable"]
+        and abs(d["cents_agg"]) < 15
+        and _overlap(clip, d) > 3
+        and _cam(d["camelot"])
+    ]
+    return max(cands, key=lambda d: _overlap(clip, d)) if cands else None
+
+
 def load_rows():
     rows = []
     with open(CSV_PATH) as f:
@@ -108,6 +153,7 @@ def load_rows():
                 "peak_corr",
                 "dur_s",
                 "mix_start_s",
+                "mix_end_s",
             ):
                 r[k] = float(r[k])
             for k in ("bpm_native", "bpm_local"):
@@ -231,6 +277,61 @@ def main() -> int:
                     f"median|residual|={med:4.1f}¢  frac>10¢={frac:.0%}"
                 )
                 add(f"median_abs_resid_{section}", stem, med, "cents", f"n={len(sub)}")
+
+    # --- H2 pairwise: is the transpose a harmonic key-match to the bed? -----
+    # The mechanism behind the integer-semitone offsets: a layered acappella is
+    # pitched to the KEY of the instrumental it sits over. For each coarse-shifted
+    # layered acappella, compare its Camelot distance to the bed before vs after
+    # the transpose. A flip from incompatible→compatible = deliberate harmonic mix.
+    print("\n=== H2 pairwise: acappella transpose vs the instrumental bed's key ===")
+    lay = dedupe_units(
+        [
+            r
+            for r in all_rows
+            if r["reliable"]
+            and r["stem"] == "acappella"
+            and r["section"] == "layered"
+            and _cam(r["camelot"])
+        ]
+    )
+    nc = toward = compat_after = compat_before = 0
+    nudge_matched = 0
+    for r in lay:
+        b = find_bed(r, all_rows)
+        if not b:
+            continue
+        if r["coarse"] != 0:
+            nc += 1
+            d0 = _cam_dist(r["camelot"], b["camelot"])
+            d1 = _cam_dist(_transpose(r["camelot"], r["coarse"]), b["camelot"])
+            toward += d1 < d0
+            compat_after += d1 <= 1
+            compat_before += d0 <= 1
+        elif _cam(r["camelot"]) == _cam(b["camelot"]) and abs(r["residual"]) > 8:
+            nudge_matched += 1  # fine nudge applied even when keys already agree
+    if nc:
+        print(f"  n={nc} coarse-transposed layered acappellas with a reliable bed")
+        print(
+            f"  compatible (Camelot dist≤1) with bed BEFORE transpose: {compat_before}/{nc}"
+        )
+        print(
+            f"  compatible with bed AFTER  transpose:                  {compat_after}/{nc}"
+        )
+        print(f"  transpose moves the acappella TOWARD the bed's key:    {toward}/{nc}")
+        print(
+            f"  + {nudge_matched} sub-semitone nudges applied where key already matched bed"
+        )
+        add("pairwise_n_coarse_acap", "all", nc, "units")
+        add(
+            "pairwise_compat_before_transpose",
+            "all",
+            compat_before,
+            "units",
+            f"of {nc}",
+        )
+        add("pairwise_compat_after_transpose", "all", compat_after, "units", f"of {nc}")
+        add("pairwise_transpose_toward_bed", "all", toward, "units", f"of {nc}")
+        add("pairwise_subsemitone_nudge_matched_key", "all", nudge_matched, "units")
 
     # --- H3 wrong-rip: near-integer-semitone offsets -----------------------
     print("\n=== H3 wrong/altered rip: near-whole-semitone offsets (reliable) ===")
