@@ -388,6 +388,12 @@ def import_als(als_path: Path, gt_out: Path | None) -> int:
     unreviewed: list[tuple[float, float]] = []
     cand_classes: dict[str, list[tuple[float, float]]] = {}
     for c in clips:
+        if c.silence_reason:
+            # Deactivated track / disabled clip / fader-0: the human silenced it,
+            # so it is not a confirmed fiber instance. Mirrors export_als_to_gt,
+            # which drops silenced clips — a deactivated clip is not GT even though
+            # Live keeps it in the arrangement.
+            continue
         iv = (round(c.ref_start_s(), 3), round(c.ref_end_s(), 3))
         # Rejection must be an ACT, not a default: only clips the human moved
         # onto a track named REJ* count as negatives. CAND clips left in place

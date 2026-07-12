@@ -618,6 +618,22 @@ def _reader_drop_count(root) -> int:
     return raw - len(parse_layer_clips(root))
 
 
+# Minimum fraction of exported GT tracks that must resolve a manifest
+# recording_id. resolve_identity fills track_id ONLY on an exact manifest match;
+# a stale .als (clip file-refs not relinked after a slot/tag rename) resolves ~0
+# ids and produces a fixture that joins to nothing downstream (BB12 re-export
+# 2026-07-12 resolved 1/163 and was written silently). A healthy export resolves
+# ~99%; a broken one ~0% — 0.5 cleanly separates them.
+ID_COVERAGE_MIN = 0.5
+
+
+def id_coverage(tracks) -> tuple[int, int, float]:
+    """(resolved, total, fraction) of GT tracks carrying a recording_id."""
+    total = len(tracks)
+    resolved = sum(1 for t in tracks if getattr(t, "track_id", None))
+    return resolved, total, (resolved / total if total else 1.0)
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -692,6 +708,21 @@ def main(argv: list[str] | None = None) -> int:
     print_review(review)
     if args.review:
         return 0
+
+    # Gate: identity coverage. A stale .als whose clip file-refs no longer match
+    # the manifest (e.g. not relinked after a slot/tag rename) resolves almost no
+    # recording_ids; the resulting fixture joins to nothing in the scorer and
+    # would silently corrupt canonical set_ground_truth on write-back. Refuse.
+    resolved, total, coverage = id_coverage(gt.tracks)
+    if total and coverage < ID_COVERAGE_MIN and not args.allow_invalid:
+        print(
+            f"REFUSING to export: only {resolved}/{total} tracks ({coverage:.0%}) "
+            f"resolved a recording_id (min {ID_COVERAGE_MIN:.0%}). The .als clip "
+            "file-refs likely don't match the manifest — stale after a rename; run "
+            "labeling/relink_als_after_tag.py, or pass --allow-invalid to override.",
+            file=sys.stderr,
+        )
+        return 1
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     title = args.set_dir.name
