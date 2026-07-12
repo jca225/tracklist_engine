@@ -103,6 +103,12 @@ class ParsedClip:
     warp: WarpMarkers
     vol_points: tuple[tuple[float, float], ...] = ()
     is_warped: bool = True
+    # Why this clip produces no audio, if any: "track-deactivated" (Track
+    # Activator off), "clip-disabled" (clip deactivated), "track-fader-zero"
+    # (static fader at 0). Empty = audible. The reader stays total — silenced
+    # clips are still returned; the GT exporter drops them (a silent clip is
+    # not ground truth, per the fader-silence lesson).
+    silence_reason: str = ""
 
     @property
     def content_beat_start(self) -> float:

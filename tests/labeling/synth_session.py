@@ -11,11 +11,22 @@ Ableton projects.
 from __future__ import annotations
 
 import gzip
+from dataclasses import dataclass
 
 from lxml import etree
 
 TEMPO_TARGET_ID = "8770"
 VOL_TARGET_ID_BASE = 9000
+
+
+@dataclass(frozen=True)
+class LayerSpec:
+    """One layer track for a synthetic session (see ``layer_specs``)."""
+
+    name: str
+    speaker_on: bool = True
+    volume_manual: float = 1.0
+    clip_disabled: bool = False
 
 
 def _clip_xml(
@@ -25,16 +36,19 @@ def _clip_xml(
     arr_end: float,
     loop_start: float = 0.0,
     warp_points: tuple[tuple[float, float], ...] = ((0.0, 0.0), (64.0, 32.0)),
+    disabled: bool = False,
 ) -> str:
     warps = "".join(
         f'<WarpMarker Id="{i}" SecTime="{s}" BeatTime="{b}"/>'
         for i, (b, s) in enumerate(warp_points)
     )
     loop_end = loop_start + (arr_end - arr_start)
+    disabled_el = f'<Disabled Value="{"true" if disabled else "false"}"/>'
     return f"""
       <AudioClip Id="{idx}" Time="{arr_start}">
         <CurrentStart Value="{arr_start}"/>
         <CurrentEnd Value="{arr_end}"/>
+        {disabled_el}
         <Loop>
           <LoopStart Value="{loop_start}"/>
           <LoopEnd Value="{loop_end}"/>
@@ -59,7 +73,16 @@ def _audio_track_xml(
     clips: str,
     vol_target_id: int,
     vol_events: tuple[tuple[float, float], ...] = (),
+    *,
+    speaker_on: bool = True,
+    volume_manual: float = 1.0,
 ) -> str:
+    """One AudioTrack.
+
+    ``speaker_on=False`` emits the Track-Activator-off state
+    (``Mixer/Speaker/Manual=false``) that Live writes when a track is
+    deactivated; ``volume_manual`` sets the static fader value.
+    """
     envelope = ""
     if vol_events:
         events = "".join(
@@ -75,14 +98,18 @@ def _audio_track_xml(
             </AutomationEnvelope>
           </Envelopes>
         </AutomationEnvelopes>"""
+    speaker = (
+        f'<Speaker><Manual Value="{"true" if speaker_on else "false"}"/></Speaker>'
+    )
     return f"""
     <AudioTrack Id="{track_id}">
       <Name><EffectiveName Value="{name}"/></Name>
       {envelope}
       <DeviceChain>
         <Mixer>
+          {speaker}
           <Volume>
-            <Manual Value="1.0"/>
+            <Manual Value="{volume_manual}"/>
             <AutomationTarget Id="{vol_target_id}"/>
           </Volume>
         </Mixer>
@@ -103,8 +130,15 @@ def session_xml(
     layer_tracks: tuple[str, ...] = ("layer-a",),
     layer_clip_path: str = "/aligning/set/tracks/001__Artist - Title.m4a",
     mix_warp_points: tuple[tuple[float, float], ...] = ((0.0, 0.0), (512.0, 256.0)),
+    layer_specs: tuple[LayerSpec, ...] | None = None,
 ) -> bytes:
-    """Uncompressed XML for a minimal warped-mix session."""
+    """Uncompressed XML for a minimal warped-mix session.
+
+    ``layer_specs`` overrides ``layer_tracks`` when given: each spec becomes one
+    fully-audible layer track (no fade automation) whose activation / fader /
+    clip-disable state is set from the spec — for testing the GT-export silence
+    filter.
+    """
     tempo_fes = "".join(
         f'<FloatEvent Id="{i + 1}" Time="{t}" Value="{v}"/>'
         for i, (t, v) in enumerate(tempo_events)
@@ -112,16 +146,39 @@ def session_xml(
     mix_clip = _clip_xml(
         0, "/aligning/set/mix.wav", 0.0, 512.0, warp_points=mix_warp_points
     )
-    layers = "".join(
-        _audio_track_xml(
-            10 + i,
-            name,
-            _clip_xml(100 + i, layer_clip_path, 16.0 + 8 * i, 48.0 + 8 * i),
-            VOL_TARGET_ID_BASE + i,
-            vol_events=((-63072000.0, 1.0), (16.0 + 8 * i, 1.0), (40.0 + 8 * i, 0.0)),
+    if layer_specs is not None:
+        layers = "".join(
+            _audio_track_xml(
+                10 + i,
+                spec.name,
+                _clip_xml(
+                    100 + i,
+                    f"/aligning/set/tracks/{100 + i:03d}__{spec.name}.m4a",
+                    16.0 + 8 * i,
+                    48.0 + 8 * i,
+                    disabled=spec.clip_disabled,
+                ),
+                VOL_TARGET_ID_BASE + i,
+                speaker_on=spec.speaker_on,
+                volume_manual=spec.volume_manual,
+            )
+            for i, spec in enumerate(layer_specs)
         )
-        for i, name in enumerate(layer_tracks)
-    )
+    else:
+        layers = "".join(
+            _audio_track_xml(
+                10 + i,
+                name,
+                _clip_xml(100 + i, layer_clip_path, 16.0 + 8 * i, 48.0 + 8 * i),
+                VOL_TARGET_ID_BASE + i,
+                vol_events=(
+                    (-63072000.0, 1.0),
+                    (16.0 + 8 * i, 1.0),
+                    (40.0 + 8 * i, 0.0),
+                ),
+            )
+            for i, name in enumerate(layer_tracks)
+        )
     xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Ableton MajorVersion="5" MinorVersion="11.0_11202" Creator="Ableton Live 11.3.13" Revision="synthetic">
   <LiveSet>

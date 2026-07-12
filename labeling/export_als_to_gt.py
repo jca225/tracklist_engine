@@ -464,6 +464,19 @@ def collect_kept_clip_rows(
     raw_rows: list[ClipRow] = []
     review: list[ReviewRow] = []
     for clip in clips:
+        if clip.silence_reason:
+            # Deactivated track / disabled clip / fader at 0 — silent, so not
+            # ground truth even though Live keeps the clip in the arrangement.
+            review.append(
+                ReviewRow(
+                    action="dropped",
+                    reason=clip.silence_reason,
+                    group=clip.group_name,
+                    slot=slot_from_path(clip.path) or "",
+                    track=clip.track_name,
+                )
+            )
+            continue
         for part in split_clip_at_mix_span_edges(clip, mapper):
             row = _clip_row(part, mapper, manifest)
             if row is None:
