@@ -36,6 +36,7 @@ from workspaces.alignment_prototype.path_decode import (
     _pieces,
     _ref_at,
     _span_class,
+    gt_placement_onset,
     trajectory_acc,
 )
 from workspaces.alignment_prototype.refine_ref_offsets import (
@@ -265,7 +266,10 @@ def score_spans(
 
         g = min(rows, key=lambda r: abs(float(r["set_start_s"]) - s["set_start_s"]))
         gstem = g.get("claimed_stem") or s.get("claimed_stem") or "regular"
-        place_err_s = abs(float(g["set_start_s"]) - s["set_start_s"])
+        # Placement is measured against the AUDIBLE entry, not the clip extent: a
+        # track that fades in under a crossfade is placed silently at set_start
+        # but enters at audible_start_s, and the aligner locks the audible entry.
+        place_err_s = abs(gt_placement_onset(g) - s["set_start_s"])
 
         fib = _fibers_for(_resolve_ref_audio(s, by_tid.get(recording_id), stem=gstem))
         strict, _npred, facc = trajectory_acc(

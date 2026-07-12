@@ -129,6 +129,35 @@ Two failure shapes that are really convention/strictness, not placement errors:
 
 **Deliverable:** revised scoring tolerance + a before/after on the affected spans.
 
+### WS3 — fade-in-under-crossfade scoring: DONE for the gain-envelope case (2026-07-12)
+
+Galantis "You" (BB12 slot 112) was the canonical example and it's **fixed**. Root
+cause: the GT clip is placed at `set_start_s=2527.8 s` but the fader ride holds it at 0
+until `audible_start_s=2592.0 s` — a **64 s silent lead-in** (it fades in under the
+outgoing track). The scorer measured placement against clip extent and sampled
+trajectory over the whole envelope, so it charged the machine ~66 s of placement error +
+the silent 64 s of "missed" trajectory for content nobody hears. The GT even carries a
+`ref_segment` over the silent region, so the existing WS0 `_audible_intervals`
+(segment-gap aware, but **not** gain-ride aware) didn't catch it.
+
+**Fix** (completes the WS0 audible accounting): `_audible_intervals` now intersects with
+the gain-ride window (`audible_start_s`/`audible_end_s`) via `_gain_audible_window`, and
+`gt_placement_onset(row)` = `audible_start_s or set_start_s` is used for placement error
+in both scorers (`score_timeline_vs_gt.py`, `build_span_table.py`). Trajectory anchoring
+is unchanged (the `_audible_intervals` clip fixes sampling; the anchor must stay equal to
+`trajectory_acc`'s internal `s0`). Tests: `tests/alignment_prototype/test_audible_recall.py`
+(`TestGainEnvelopeAudibility`, `TestPlacementOnset`).
+
+**Before → after (Galantis "You"):** placement error **65.6 s → 1.4 s**; GT-seconds-lost
+weight **133.1 s → 68.9 s** (the span was half phantom lead-in); audible window
+`[2592.0, 2660.8]`.
+
+**Still open in WS3:** the *tolerance*/pickup-anacrusis cases (Out Of Love ~14 s, Sweet
+Nothing ~15 s) — those are small downbeat-vs-pickup offsets with no fader silence, so
+`audible_start_s` doesn't move; they need the pickup-aware tolerance band. Also: this
+changes the **canonical headline metric** — regenerate `docs/alignment_status.md` only in
+the batched WS1 rescore (with the WS0 write-back), not piecemeal.
+
 ## WS4 — looping-instrumental decode (design + build)
 
 Feel So Close (instrumental) fails TRAJECTORY because it loops, and inside a pure loop
