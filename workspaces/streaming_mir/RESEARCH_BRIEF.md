@@ -154,14 +154,27 @@ watch the `_bnd` columns.
 - **CONFIRMED (direction):** boundary-local SDR rises monotonically with overlap
   (voc 25.8→34.6→41.7 dB over margins 0→2→5s). Hard-cut seam damage is real;
   overlap heals it. WS2 principle validated.
-- **OPEN QUESTION — margin=10 = ~167 dB (bit-identical).** A 125 dB leap from 5s
-  is either (a) real: overlap exceeded bs_roformer's internal receptive field
-  (~8–12s, matches research) → core computes identically to full-file; or (b) a
-  reassembly artifact (margin 10 = ½ core 20 → tiling coincidence). **Resolve
-  first next session:** rerun with core=30 + a finer, decoupled margin grid
-  (0,1,2,3,5,7,8,10,12) so margin≠½·core, and spot-check that margin=10 blocks
-  aren't degenerate. If the sharp threshold survives with core=30, it's real and
-  ~10s is the answer.
+- ~~OPEN QUESTION — margin=10 = ~167 dB (bit-identical).~~ **RESOLVED** by a
+  decoupled-core rerun (core=25 so margin≠½·core; 120s clip):
+```
+ margin_s  voc_bnd  inst_bnd
+     0.00    24.54    27.82   ← hard cut (today's behavior)
+     3.00    38.15    41.43
+     6.00    43.87    47.15   ← PLATEAU
+    10.00    43.92    47.20   (identical to 6s)
+    12.00    43.92    47.20   (identical to 6s)
+```
+  The 167 dB was the **artifact** (only at margin=½·core). The true curve is a
+  clean monotone rise **plateauing at ~6 s overlap** (+~19 dB boundary SDR vs
+  hard cut), flat thereafter — matching the research's context-saturation
+  prediction. Plateau floor ~44 dB (voc) / ~47 dB (inst): NOT bit-identical
+  (separate model calls differ intrinsically) but inaudibly close (~0.6% RMS).
+
+**WS2 VERDICT: overlap the 360s chunks by ~8–10 s (6 s suffices; 8–10 for
+safety) + crossfade → recovers offline quality. The fix is settled.**
+**Next: patch `render_set_stems.py`** — read each chunk as [core ± ~10 s],
+separate, trim the margins, concat cores (+ short linear crossfade). Then WS1
+(cross-track prefetch in `vast_loop.py`) is the other cheap win.
 
 **Next step if plateau confirmed:** small patch to
 `scripts/render_set_stems.py` `split_chunks()` — overlap the 360s chunks by the
