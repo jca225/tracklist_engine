@@ -156,12 +156,24 @@ def _mix_track(root) -> object | None:
     return None
 
 
-def _clip_row(clip: ParsedClip, mapper: ArrangementMapper, manifest) -> ClipRow | None:
+def _clip_row(
+    clip: ParsedClip,
+    mapper: ArrangementMapper,
+    manifest,
+    slot_id_map: dict[str, str] | None = None,
+) -> ClipRow | None:
     set_start = mapper.arr_to_set_sec(clip.arr_start)
     set_end = mapper.arr_to_set_sec(clip.arr_end)
     if set_start is None or set_end is None:
         return None
     recording_id, slot_label, display, claimed_stem = resolve_identity(clip, manifest)
+    if recording_id is None and slot_id_map and slot_label:
+        # Path-based manifest match missed (stale .als after a slot/tag rename).
+        # Fall back to a slot_label -> recording_id bridge exported from the
+        # last known-good GT fixture. slot_label is deterministic from the .als
+        # path and unchanged by a manifest renumber, so this is exact, not a
+        # guess (id_maps built only from slots with a unique recording_id).
+        recording_id = slot_id_map.get(slot_label)
     _, ref_source = classify_path(clip.path)
     ref_start = clip.ref_start_s()
     ref_end = clip.ref_end_s()
@@ -434,6 +446,20 @@ def _to_gt_track(row: ClipRow) -> GroundTruthTrack:
     )
 
 
+def _load_slot_id_map(set_id: str) -> dict[str, str]:
+    """slot_label -> recording_id bridge for a set, if one is checked in.
+
+    Rescues re-export when a stale .als (clip file-refs not relinked after a
+    slot/tag rename) no longer path-matches the manifest. Built only from slots
+    that carry a unique recording_id in the source fixture, so the bridge is
+    exact. Absent file -> empty map (no bridging)."""
+    p = _REPO / "labeling" / "fixtures" / "id_maps" / f"{set_id}_slots.json"
+    if not p.is_file():
+        return {}
+    raw = json.loads(p.read_text())
+    return {str(k): str(v) for k, v in raw.items() if v}
+
+
 def collect_kept_clip_rows(
     als_path: Path,
     set_dir: Path,
@@ -449,6 +475,7 @@ def collect_kept_clip_rows(
     set_id = str(manifest_json.get("set_id") or "").strip()
     if not set_id:
         raise ValueError("manifest.json missing set_id")
+    slot_id_map = _load_slot_id_map(set_id)
     mix_duration_s = float(manifest_json.get("mix_duration_s") or 0.0)
 
     root = load_als_xml(als_path)
@@ -478,7 +505,7 @@ def collect_kept_clip_rows(
             )
             continue
         for part in split_clip_at_mix_span_edges(clip, mapper):
-            row = _clip_row(part, mapper, manifest)
+            row = _clip_row(part, mapper, manifest, slot_id_map)
             if row is None:
                 review.append(
                     ReviewRow(
