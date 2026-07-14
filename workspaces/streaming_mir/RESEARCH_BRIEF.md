@@ -198,6 +198,64 @@ no contention) — trust the MPS run only for the *shape* of the `_bnd` curve.
 
 ---
 
+## WS1 A/B RESULT — cross-track prefetch on Vast (2026-07-14)
+
+Definitive A/B on a rented RTX 4090 (Vast contract 44910031), RoFormer separator,
+28 real corpus tracks from set `1d15br69` (14 baseline `--no-prefetch`, 14
+prefetch), analyzed straight into canonical (not throwaway). Design +
+implementation: `docs/superpowers/specs/2026-07-14-ws1-prefetch-vast-validation-design.md`,
+`.../plans/2026-07-14-ws1-prefetch-vast-validation.md`.
+
+**Metric = per-track overhead** (each track's inter-handoff wall-gap minus its
+own `analyze_s`). This cancels track-length variance, which is large here
+(analyze ranged 78–234 s), so it is the arm-independent, mechanism-true number —
+raw wall/track differs between arms only because they drew different tracks.
+
+| Arm | mean analyze_s | mean pull_s | **mean overhead/track** | GPU duty cycle |
+|---|---|---|---|---|
+| baseline (serial) | 130.4 | 3.0 | **16.3 s** | 130.4 / 146.7 = **89%** |
+| prefetch | 145.2 | 7.0 | **~0.15 s** | 145.2 / 145.4 = **~100%** |
+
+**Verdict: overhead eliminated (16.3 s → ~0.15 s), GPU duty cycle 89% → ~100%,
+≈ 11% wall-clock saved at identical output.** Every prefetch track's gap equals
+its analyze time to within timestamp rounding (several marginally negative — the
+prior track's persist thread is fully overlapped). Note `pull_s` *grew* to ~7 s
+in the prefetch arm (larger later files) yet stayed 100% hidden behind GPU work —
+network latency no longer touches wall-clock, which is the design goal.
+
+This is **~2× the ~5% the brief originally estimated for prefetch** — because the
+pre-WS1 loop also joined its *persist* thread milliseconds after starting it
+(join at loop-top, not before next hand-off), so the documented "~30% rsync
+hiding" never actually happened and the stem-rsync + DB-push tail (~9–21 s) ran
+serially too. The WS1 patch fixed both (input prefetch + persist-join moved), with
+in-flight-tid exclusion keeping `next_task` correct. `--no-prefetch` reproduces
+the legacy serial path (the baseline arm).
+
+### Per-stage GPU-time table (n=28) — the model-batching go/no-go data
+
+| stage | s/track | % of analyze | note |
+|---|---|---|---|
+| **separation (RoFormer)** | 108.9 | **79%** | the dominant cost |
+| essentia | 18.2 | 13% | **CPU** subprocess (x86 sandbox), not GPU |
+| mert | 5.1 | 3.7% | |
+| cues (cue-detr) | 3.8 | 2.7% | |
+| load+lufs | 1.2 | 0.9% | |
+| beats (beat_this) | 0.7 | 0.5% | |
+
+**Batching verdict: GO, but narrowly — only the RoFormer separation forward pass
+is worth batching** (79% of analyze; everything else combined is ~10 s). Two
+follow-on levers, ranked:
+1. **Overlap Essentia (WS1.5, cheap, no model change).** Essentia's 18 s is
+   CPU-bound (subprocess), so it can be hidden behind the *next* track's GPU
+   separation with the same single-slot-thread trick WS1 just validated — a
+   further ~13% analyze-time cut for near-zero risk.
+2. **Batch RoFormer chunks per forward pass (bigger, invasive).** Touches
+   `analysis/adapters/roformer_chain_adapter.py` internals; needs its own
+   identical-output validation. Justified by the 79% share; do it after WS1.5.
+
+**WS1 status: DONE + validated.** Prefetch + persist-overlap landed
+(`400efae`); the corpus analysis loop now runs the GPU at ~100% duty.
+
 ## Research findings — per-task verdicts (2026-07-12, pass 2)
 
 Can a streaming/blockwise estimator converge to offline SOTA, and at what
