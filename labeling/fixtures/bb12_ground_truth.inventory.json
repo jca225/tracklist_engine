@@ -1,0 +1,988 @@
+{
+  "set_id": "1fsnxchk",
+  "tracks": [
+    {
+      "label": "002",
+      "track_id": "281u6p4x",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "003",
+      "track_id": "2uq9800f",
+      "claimed_stem": "instrumental",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "004",
+      "track_id": "728rvg5",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "155",
+      "track_id": "mtck04x",
+      "claimed_stem": "instrumental",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "005",
+      "track_id": "1wvvqwsf",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "006",
+      "track_id": "2q0xyjzp",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "007",
+      "track_id": "y10w66f",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "007",
+      "track_id": "y10w66f",
+      "claimed_stem": "instrumental",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "009",
+      "track_id": "716vt0f",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "010",
+      "track_id": "10w3pxyx",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "012",
+      "track_id": "2p25k23p",
+      "claimed_stem": "acappella",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "instrumental-2",
+      "track_id": null,
+      "claimed_stem": "instrumental",
+      "ref_source": "reference"
+    },
+    {
+      "label": "013",
+      "track_id": "scsk9cx",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "015",
+      "track_id": "28vyhrnp",
+      "claimed_stem": "instrumental",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "014",
+      "track_id": "1b4hd9lp",
+      "claimed_stem": "acappella",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "016",
+      "track_id": "zxuqpkf",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "017",
+      "track_id": "2ktthuwp",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "018",
+      "track_id": "13n64sf5",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "019",
+      "track_id": "1v0zv1s5",
+      "claimed_stem": "acappella",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "020",
+      "track_id": "qn6lhlp",
+      "claimed_stem": "instrumental",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "021",
+      "track_id": "nrtk415",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "006w2",
+      "track_id": "j47669p",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "024",
+      "track_id": "2fj43sgf",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "023",
+      "track_id": "sh4csf5",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "024",
+      "track_id": "2fj43sgf",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "024",
+      "track_id": "2fj43sgf",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "025",
+      "track_id": "1mdpuq6f",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "026",
+      "track_id": "1qbbnpkp",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "027",
+      "track_id": "nupqlv5",
+      "claimed_stem": "instrumental",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "028",
+      "track_id": "2p25k23p",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "029",
+      "track_id": "nsvvu7p",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "030",
+      "track_id": "10ww36y5",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "031",
+      "track_id": "1q8nc02p",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "032",
+      "track_id": "186yndjf",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "033",
+      "track_id": "1knfs11f",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "034",
+      "track_id": "j2dbhzf",
+      "claimed_stem": "instrumental",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "035",
+      "track_id": "5ch4vs5",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "036",
+      "track_id": "xgbll1f",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "037",
+      "track_id": "2cuwzvd5",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "038",
+      "track_id": "8upwr0x",
+      "claimed_stem": "instrumental",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "039",
+      "track_id": "2qy7u05p",
+      "claimed_stem": "acappella",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "040",
+      "track_id": "1znyu24x",
+      "claimed_stem": "acappella",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "041",
+      "track_id": "6xdz8mf",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "042",
+      "track_id": "x730hz5",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "043",
+      "track_id": "2km1b5p5",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "044",
+      "track_id": "2hgr7xjx",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "045",
+      "track_id": "1t3m1kmf",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "046",
+      "track_id": "1zggjhbf",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "047",
+      "track_id": "2uq9800f",
+      "claimed_stem": "acappella",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "048",
+      "track_id": "100hm0dp",
+      "claimed_stem": "instrumental",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "049",
+      "track_id": "1q8nc02p",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "051",
+      "track_id": "ygllqp",
+      "claimed_stem": "acappella",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "052",
+      "track_id": "2ct10nbx",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "053",
+      "track_id": "dgrjwux",
+      "claimed_stem": "acappella",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "054",
+      "track_id": "26n3brqp",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "055",
+      "track_id": "nrmh6yp",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "056",
+      "track_id": "14pm0srf",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "057",
+      "track_id": "244dn6tx",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "058",
+      "track_id": "2m5knd0f",
+      "claimed_stem": "acappella",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "059",
+      "track_id": "2lf3hxvf",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "060",
+      "track_id": "prgr9tp",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "061",
+      "track_id": "62f04m5",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "062",
+      "track_id": "1gv9w2px",
+      "claimed_stem": "acappella",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "mix",
+      "track_id": null,
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "066",
+      "track_id": "22gqmxm5",
+      "claimed_stem": "instrumental",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "067",
+      "track_id": "1hutuwzf",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "066",
+      "track_id": "22gqmxm5",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "068",
+      "track_id": "sjwvyqx",
+      "claimed_stem": "instrumental",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "069",
+      "track_id": "21kvmkk5",
+      "claimed_stem": "acappella",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "070",
+      "track_id": "2j9zlwuf",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "071",
+      "track_id": "jwwcskx",
+      "claimed_stem": "acappella",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "068",
+      "track_id": "sjwvyqx",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "072",
+      "track_id": "2gk2y9yp",
+      "claimed_stem": "instrumental",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "073",
+      "track_id": "252ys8cx",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "074",
+      "track_id": "v67u23p",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "075",
+      "track_id": "189yqtcx",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "076",
+      "track_id": "1r8f4fc5",
+      "claimed_stem": "instrumental",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "077",
+      "track_id": "1wx0v09f",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "078",
+      "track_id": "1j0r992f",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "079",
+      "track_id": "1tubbh5",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "080",
+      "track_id": "1xnqbffp",
+      "claimed_stem": "instrumental",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "003",
+      "track_id": "2uq9800f",
+      "claimed_stem": "acappella",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "081",
+      "track_id": "2l4m5cnp",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "082",
+      "track_id": "2tscznp5",
+      "claimed_stem": "acappella",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "083",
+      "track_id": "2hd7v8rx",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "024w1",
+      "track_id": "tlp2852991",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "024w1",
+      "track_id": "tlp2852991",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "084",
+      "track_id": "26ps3505",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "085",
+      "track_id": "g5wmg7x",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "086",
+      "track_id": "1v0nypb5",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "087",
+      "track_id": "mh1jzf",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "088",
+      "track_id": "ut8vl5",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "089",
+      "track_id": "2nz91yqp",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "026w1",
+      "track_id": "tlp2852999",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "090",
+      "track_id": "1u1nm3lp",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "092",
+      "track_id": "91r659f5",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "091",
+      "track_id": "2dql58gx",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "094",
+      "track_id": "1vs4rjnx",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "093",
+      "track_id": "1hn0wlpx",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "095",
+      "track_id": "1wvndht5",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "096",
+      "track_id": "1xs1zmjp",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "028w1",
+      "track_id": "tlp2853006",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "097",
+      "track_id": "1jz334x5",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "098",
+      "track_id": "2trpj1b5",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "099",
+      "track_id": "pryzw5",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "100",
+      "track_id": "1lnqmw75",
+      "claimed_stem": "instrumental",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "101",
+      "track_id": "4dq3mld5",
+      "claimed_stem": "acappella",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "102",
+      "track_id": "z059fc5",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "103",
+      "track_id": "67z8kmp",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "105",
+      "track_id": "2l4gzr8x",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "104",
+      "track_id": "lvzr9s5",
+      "claimed_stem": "instrumental",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "106",
+      "track_id": "1t4gvsx5",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "107",
+      "track_id": "23b7cvbx",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "112",
+      "track_id": "27w2d10f",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "108",
+      "track_id": "860w28f",
+      "claimed_stem": "instrumental",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "109",
+      "track_id": "nuw31u5",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "111",
+      "track_id": "3x1qh5f",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "110",
+      "track_id": "2ysyh5f",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "mix_instrumental",
+      "track_id": null,
+      "claimed_stem": "instrumental",
+      "ref_source": "reference"
+    },
+    {
+      "label": "113",
+      "track_id": "1b52k3xx",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "114",
+      "track_id": "11w684zx",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "115",
+      "track_id": "z1vw4vf",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "116",
+      "track_id": "ms7blu5",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "117",
+      "track_id": "1lm1yrff",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "118",
+      "track_id": "65usc75",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "119",
+      "track_id": "w2zgk1p",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "121",
+      "track_id": "1q9r2r8x",
+      "claimed_stem": "instrumental",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "122",
+      "track_id": "thz5xjp",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "123",
+      "track_id": "1gufy38f",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "124",
+      "track_id": "13m0ltjp",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "125",
+      "track_id": "1xtcwkpp",
+      "claimed_stem": "instrumental",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "126",
+      "track_id": "1dx4nn2f",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "127",
+      "track_id": "dkg1c995",
+      "claimed_stem": "acappella",
+      "ref_source": "reference"
+    },
+    {
+      "label": "128",
+      "track_id": "1q89rul5",
+      "claimed_stem": "acappella",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "129",
+      "track_id": "nu09jz5",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "130",
+      "track_id": "257v8xqx",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "131",
+      "track_id": "1ynndn1x",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "135",
+      "track_id": "fclk03p",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "132",
+      "track_id": "94tc2y5",
+      "claimed_stem": "instrumental",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "133",
+      "track_id": "lpmk45",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "134",
+      "track_id": "2p248zwf",
+      "claimed_stem": "acappella",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "136",
+      "track_id": "z47gcpf",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "137",
+      "track_id": "68m610x",
+      "claimed_stem": "instrumental",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "138",
+      "track_id": "1q93dn65",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "137",
+      "track_id": "68m610x",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "140w1",
+      "track_id": "tlp2853054",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "140",
+      "track_id": "pr18kmx",
+      "claimed_stem": "instrumental",
+      "ref_source": "reference"
+    },
+    {
+      "label": "141",
+      "track_id": "bkmhtc5",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "143",
+      "track_id": "mxbsn4p",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "142",
+      "track_id": "cj91dsp",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "144",
+      "track_id": "2uq9800f",
+      "claimed_stem": "acappella",
+      "ref_source": "demucs"
+    },
+    {
+      "label": "145",
+      "track_id": "1zpfjwkx",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "146",
+      "track_id": "2n51zgwf",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "147",
+      "track_id": "23f2h1h5",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "148",
+      "track_id": "42wv4vp",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "148w1",
+      "track_id": "tlp2853062",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "149",
+      "track_id": "dgrjwux",
+      "claimed_stem": "instrumental",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "150",
+      "track_id": "lyu6xx5",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "152",
+      "track_id": "h80tgnf",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    },
+    {
+      "label": "151",
+      "track_id": "17pu9hk5",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "120",
+      "track_id": "13ruhr5p",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "153",
+      "track_id": "2fl7wsnx",
+      "claimed_stem": "acappella",
+      "ref_source": "online_candidate"
+    },
+    {
+      "label": "154",
+      "track_id": "2vmxu50p",
+      "claimed_stem": "regular",
+      "ref_source": "reference"
+    }
+  ],
+  "ref_source_counts": {
+    "online_candidate": 87,
+    "demucs": 31,
+    "reference": 45
+  }
+}
