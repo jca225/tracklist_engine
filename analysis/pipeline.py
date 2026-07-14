@@ -7,6 +7,8 @@ everything the DB adapter needs to persist.
 
 from __future__ import annotations
 
+import json
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -192,13 +194,20 @@ def analyze_track(
         asset.path
     )  # original full audio — single source of truth for all analysis
 
+    # Per-stage wall-clock, emitted as one TIMING-STAGES line before return —
+    # log-only (streaming_mir WS1: the model-batching go/no-go data).
+    stage_s: dict[str, float] = {}
+    _t = time.monotonic()
+
     # The stem backend (demucs or uvr) writes stems to disk; its output is not
     # fed back into the analyzers below.
     stems_r = run_separation(a, audio_path, stems_dir, asset.track_audio_id)
+    stage_s["separation"] = time.monotonic() - _t
     if not stems_r.is_ok():
         return stems_r
 
     # beat_this on the original audio.
+    _t = time.monotonic()
     beats_r = beat_this_adapter.predict(a.beats, audio_path)
     if not beats_r.is_ok():
         return beats_r
@@ -220,22 +229,27 @@ def analyze_track(
     beat_times, downbeat_times = beats_rep.times, downbeats_rep.times
     bpm = beat_this_adapter.estimate_bpm(beat_times)
     measure_times = beat_this_adapter.measure_times(downbeat_times)
+    stage_s["beats"] = time.monotonic() - _t
 
     # cue-detr on the original audio; snap cues to the repaired downbeat grid
     # (DJ-usable cues are downbeat events — 34% of raw cues sit off-grid only
     # because cue-detr's peak-picking never snaps).
+    _t = time.monotonic()
     cues_r = cue_detr_adapter.predict(a.cues, audio_path)
     if not cues_r.is_ok():
         return cues_r
     cue_times = grid_repair.snap_to_grid(cues_r.value, downbeat_times)
+    stage_s["cues"] = time.monotonic() - _t
 
     # Load audio as mono@24k once for loudness + MERT.
+    _t = time.monotonic()
     wf_r = audio_io.load_mono(audio_path, target_sr=mert_adapter.MERT_SR)
     if not wf_r.is_ok():
         return wf_r
     wf = wf_r.value
 
     lufs_r = loudness.integrated_lufs(wf.samples, wf.sample_rate)
+    stage_s["load_lufs"] = time.monotonic() - _t
     if not lufs_r.is_ok():
         return lufs_r
 
@@ -243,12 +257,14 @@ def analyze_track(
     # Single forward pass over the full track; mean-pool frames per measure.
     # The BPE cue-point optimizer (Phase 8b) re-aggregates these into
     # post-BPE section embeddings without rerunning MERT.
+    _t = time.monotonic()
     measures_r = mert_adapter.embed_track_per_measure(
         a.mert,
         wf.samples,
         asset.track_audio_id,
         measure_times,
     )
+    stage_s["mert"] = time.monotonic() - _t
     if not measures_r.is_ok():
         return measures_r
     measure_embeddings = measures_r.value
@@ -269,7 +285,9 @@ def analyze_track(
     # Vocals-only / instrumental releases have no meaningful BPM/key — use the
     # parent full song's features (see labeling/CLAUDE.md).
     if a.with_essentia and asset.stem == "regular":
+        _t = time.monotonic()
         ess_r = essentia_adapter.analyze(audio_path, asset.track_audio_id)
+        stage_s["essentia"] = time.monotonic() - _t
         match ess_r:
             case Ok(feat):
                 essentia_features = feat
@@ -281,6 +299,12 @@ def analyze_track(
                     err.kind,
                     err.detail,
                 )
+
+    _log.info(
+        "TIMING-STAGES track_audio_id=%s %s",
+        asset.track_audio_id,
+        json.dumps({k: round(v, 1) for k, v in stage_s.items()}),
+    )
 
     return Ok(
         TrackAnalysisResult(
