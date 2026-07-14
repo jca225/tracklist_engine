@@ -34,7 +34,7 @@ if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
 from workspaces.pws_aligner.hypotheses import Hypothesis, vote_to_hypothesis
-from workspaces.pws_aligner.votes import Vote
+from workspaces.pws_aligner.votes import AbstainReason, Vote
 
 # Default out/ directory (mirrors run_phase1.py)
 _DEFAULT_OUT_DIR = (
@@ -234,6 +234,18 @@ def _load_gt_rows(set_id: str, gt_path: Path | None = None) -> list[dict]:
 
     doc = yaml.safe_load(gt_path.read_text())
     rows = [r for r in doc.get("tracks", []) if str(r.get("slot_label")) != "mix"]
+
+    # Apply the id_maps bridge exactly as score_timeline_vs_gt does: stale GT
+    # track_ids (e.g. BB11's tlp* namespace, 144 remaps) -> current DB ids.
+    # Without this, votes (current ids) never match GT rows and gt_measured is
+    # silently deflated for every probe.
+    id_map_path = _REPO / "labeling" / "fixtures" / "id_maps" / f"{set_id}.json"
+    if id_map_path.exists():
+        id_map: dict[str, str] = json.loads(id_map_path.read_text())
+        for r in rows:
+            tid = str(r.get("track_id") or "")
+            if tid in id_map and id_map[tid] != tid:
+                r["track_id"] = id_map[tid]
     return rows
 
 
@@ -260,6 +272,12 @@ def calibration_report(
       within the same 2s offset bin.
 
     GT hypothesis for a span = GT recording_id + bin(ref_start_s − set_start_s).
+
+    NOTE — end-to-end semantics, not oracle-identity: a vote matches only if
+    BOTH its recording_id and its offset bin agree with GT. An offset-correct
+    vote on the wrong recording counts as incorrect, so probes score zero on
+    identity-missed spans. This is deliberate (it measures the probe as
+    deployed) but understates a probe's isolated offset skill.
 
     Parameters
     ----------
@@ -350,7 +368,6 @@ def calibration_report(
                 continue
 
             # Build Vote-like object to get hypothesis
-            from workspaces.pws_aligner.votes import AbstainReason
 
             vote = Vote(
                 probe=probe_name,
