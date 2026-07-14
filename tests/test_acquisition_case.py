@@ -234,7 +234,11 @@ def test_bb12_status_partition():
 def test_bb12_preference_pairs_are_online_over_demucs():
     cases = _bb12_cases()
     pref = [c for c in cases if c.training.preference_pairs]
-    assert len(pref) == 4
+    # Was 4 pre-2026-07-14. The GT re-export with the fixed interpreter dropped
+    # 3 deactivated-track spans (demucs ref_source 34->31), each of which had
+    # formed a preference pair — so 3 phantom pairs correctly disappear. The
+    # invariant below (online winner beats demucs loser) is what actually matters.
+    assert len(pref) == 1
     for c in pref:
         # winner is the online candidate; loser is the separated stem
         assert c.resolution is not None

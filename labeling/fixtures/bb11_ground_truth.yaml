@@ -136,33 +136,6 @@ tracks:
     ref_start_s: 25.514
     ref_end_s:   61.4994
     tempo_ratio: 1.17503
-  - track:       "Good Charlotte - Girls & Boys (Vocals Only)"
-    slot_label:  "004w1"
-    track_id:    37h72dsx
-    claimed_stem: acappella
-    ref_source:  online_candidate
-    set_start_s: 214.038
-    set_end_s:   419.913
-    ref_start_s: -2.02944e-08
-    ref_end_s:   182.063
-    tempo_ratio: 0.95939
-    ref_segments:
-      - mix_start_s: 214.038
-        ref_start_s: 180.689
-        ref_end_s:   182.063
-      - mix_start_s: 382.857
-        ref_start_s: -2.02944e-08
-        ref_end_s:   14.211
-      - mix_start_s: 397.816
-        ref_start_s: 17.9029
-        ref_end_s:   39.1608
-    gain_curve:
-      - [214.038, 1]
-      - [215.522, 1]
-      - [382.857, 1]
-      - [397.68, 1]
-      - [397.816, 1]
-      - [419.913, 1]
   - track:       "The Chainsmokers - Paris (Acapella-Vocals Only)"
     slot_label:  "002w1"
     track_id:    1wvuyhjf
@@ -265,6 +238,28 @@ tracks:
       - [367.738, 1]
       - [375.476, 1]
       - [383.333, 1]
+  - track:       "Good Charlotte - Girls & Boys (Vocals Only)"
+    slot_label:  "004w1"
+    track_id:    37h72dsx
+    claimed_stem: acappella
+    ref_source:  online_candidate
+    set_start_s: 382.857
+    set_end_s:   419.913
+    ref_start_s: -2.02944e-08
+    ref_end_s:   39.1608
+    tempo_ratio: 0.960713
+    ref_segments:
+      - mix_start_s: 382.857
+        ref_start_s: -2.02944e-08
+        ref_end_s:   14.211
+      - mix_start_s: 397.816
+        ref_start_s: 17.9029
+        ref_end_s:   39.1608
+    gain_curve:
+      - [382.857, 1]
+      - [397.68, 1]
+      - [397.816, 1]
+      - [419.913, 1]
   - track:       "Dzeko & Torres - L'amour Toujours (Tiësto Edit)"
     slot_label:  "004"
     track_id:    270vfcpx
@@ -287,14 +282,6 @@ tracks:
       - [434.105, 1]
       - [434.566, 1]
       - [462.72, 1]
-  - track:       "Dzeko & Torres - L'amour Toujours (Tiësto Edit)"
-    slot_label:  "004"
-    track_id:    270vfcpx
-    set_start_s: 383.408
-    set_end_s:   462.764
-    ref_start_s: 44.3634
-    ref_end_s:   123.719
-    tempo_ratio: 1
   - track:       "Let Me Love You - DJ Snake, Justin Bieber (Acapella - Vocals Only)"
     slot_label:  "004w2"
     track_id:    1jrxl0yx
@@ -443,7 +430,7 @@ tracks:
     ref_segments:
       - mix_start_s: 646.186
         ref_start_s: 0
-        ref_end_s:   12.5806
+        ref_end_s:   14.5161
       - mix_start_s: 658.348
         ref_start_s: 30
         ref_end_s:   43.0645
@@ -452,7 +439,6 @@ tracks:
         ref_end_s:   62.6613
     gain_curve:
       - [646.186, 1]
-      - [656.727, 1]
       - [658.348, 1]
       - [669.294, 1]
       - [672.74, 1]
@@ -539,6 +525,7 @@ tracks:
     ref_start_s: 22.1511
     ref_end_s:   43.7761
     tempo_ratio: 1.42116
+    pitch_shift_semi: -1
     is_loop:     true
     ref_segments:
       - mix_start_s: 788.171
@@ -845,16 +832,6 @@ tracks:
       - [1130.37, 0.3162]
       - [1145.39, 1]
       - [1177.79, 1]
-  - track:       "Calvin Harris - My Way (Acapella)"
-    slot_label:  "011w8"
-    track_id:    1gwls24x
-    claimed_stem: acappella
-    ref_source:  online_candidate
-    set_start_s: 1159.55
-    set_end_s:   1174.76
-    ref_start_s: 16.5938
-    ref_end_s:   32.9903
-    tempo_ratio: 1.07805
   - track:       "Sigala - Sweet Lovin'"
     slot_label:  "012"
     track_id:    yzqsmbf
@@ -1612,22 +1589,10 @@ tracks:
     ref_source:  online_candidate
     set_start_s: 2196.52
     set_end_s:   2219.75
-    ref_start_s: 26.8212
+    ref_start_s: 80.8113
     ref_end_s:   106.118
-    tempo_ratio: 1.08958
+    tempo_ratio: 1.08945
     pitch_shift_semi: 1
-    ref_segments:
-      - mix_start_s: 2196.52
-        ref_start_s: 80.8113
-        ref_end_s:   106.118
-      - mix_start_s: 2196.57
-        ref_start_s: 26.8212
-        ref_end_s:   42.1192
-    gain_curve:
-      - [2196.53, 1]
-      - [2196.57, 1]
-      - [2210.61, 1]
-      - [2219.75, 1]
   - track:       "Two Friends - Out Of Love"
     slot_label:  "023"
     track_id:    2814q10p
@@ -1704,7 +1669,7 @@ tracks:
     set_end_s:   2547.13
     ref_start_s: 2472.18
     ref_end_s:   2547.15
-    tempo_ratio: 1
+    tempo_ratio: 0.999888
     unalignable: true
     source_note: "mix self-reference — too difficult to align ()"
   - track:       "Fall Out Boy-Sugar We're Goin Down(Vocals only)"
@@ -2354,15 +2319,18 @@ tracks:
       - mix_start_s: 3369.04
         ref_start_s: 48.7587
         ref_end_s:   82.9027
-    audible_frac: 0.93
+    audible_frac: 0.92
     audible_start_s: 3352.41
+    audible_end_s: 3404.37
     gain_curve:
       - [3348.43, 0.0003]
       - [3361.07, 0.1585]
       - [3366.7, 1]
       - [3367.16, 1]
       - [3369.04, 1]
-      - [3404.93, 1]
+      - [3399.33, 1]
+      - [3404.66, 0.0003]
+      - [3404.93, 0.0005]
   - track:       "Maroon 5, Future - Cold (Studio Acapella) + DL Link"
     slot_label:  "038w2"
     track_id:    1zptckrx
@@ -2374,16 +2342,6 @@ tracks:
     ref_end_s:   67.27
     tempo_ratio: 1.28
     pitch_shift_semi: 1
-  - track:       "Coldplay - The Scientist (Acapella 100% OFFICIAL) + Download Link! HD"
-    slot_label:  "039w1"
-    track_id:    198ts0x5
-    claimed_stem: acappella
-    ref_source:  online_candidate
-    set_start_s: 3392.24
-    set_end_s:   3432
-    ref_start_s: 1.71
-    ref_end_s:   53.9997
-    tempo_ratio: 1.31529
   - track:       "Alan Walker - Faded (Instrumental Version)"
     slot_label:  "039"
     track_id:    1lnqmw75
@@ -2410,6 +2368,17 @@ tracks:
       - [3496.37, 1]
       - [3579.33, 1]
       - [3579.38, 1]
+  - track:       "Coldplay - The Scientist (Acapella 100% OFFICIAL) + Download Link! HD"
+    slot_label:  "039w1"
+    track_id:    198ts0x5
+    claimed_stem: acappella
+    ref_source:  online_candidate
+    set_start_s: 3410.71
+    set_end_s:   3432
+    ref_start_s: 27.8324
+    ref_end_s:   53.9997
+    tempo_ratio: 1.22899
+    pitch_shift_semi: 1
   - track:       "Rent - Seasons Of Love"
     slot_label:  "039w2"
     track_id:    tlp2594168
