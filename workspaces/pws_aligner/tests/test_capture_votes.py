@@ -570,3 +570,29 @@ def test_manifest_index_keys_recording_id_rows(tmp_path):
     by_rid = cv._load_manifest_by_rid(tmp_path, "someset")
     assert by_rid["recA"]["title"] == "A"  # recording_id-keyed row found
     assert by_rid["recB"]["title"] == "B"  # track_id-keyed row still wins
+
+
+def test_absolute_frame_probes_converted_to_relative(tmp_path, monkeypatch):
+    """chroma/continuity/hubert emit ABSOLUTE ref positions; capture must
+    convert to the votes-file RELATIVE frame (offset = abs − set_start).
+    fp already emits the relative diagonal and must pass through untouched."""
+    import workspaces.pws_aligner.capture_votes as cv
+
+    _skip_audio_resolution(monkeypatch, tmp_path)
+    # span at set_start 100.0; chroma says "ref position 130.0" (absolute),
+    # fp says "+25.0" (already relative)
+    chroma = _FixedProbe("chroma", "r1", 130.0, 0.6)
+    fp = _FixedProbe("fp", "r1", 25.0, 0.8)
+    span = _make_span(set_start_s=100.0, set_end_s=140.0)
+    dummy = tmp_path / "dummy_audio.flac"
+    dummy.write_bytes(b"")
+    doc = cv._capture_span(
+        span,
+        probe_names=("fp", "chroma"),
+        probe_instances={"fp": fp, "chroma": chroma},
+        set_dir=tmp_path,
+        manifest_by_rid={"r1": {"local_path": str(dummy), "stems": {}, "stem": "regular"}},
+    )
+    by = {e["probe"]: e for e in doc["probes"]}
+    assert by["chroma"]["offset_s"] == pytest.approx(30.0)  # 130 − 100
+    assert by["fp"]["offset_s"] == pytest.approx(25.0)      # untouched

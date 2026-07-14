@@ -95,6 +95,18 @@ _STEM_TO_PROBES: dict[str, tuple[str, ...]] = {
     "regular": ("fp", "chroma"),
 }
 
+# Offset frame per probe, verified EMPIRICALLY against BB12 (2026-07-14):
+# chroma/continuity/hubert emit ABSOLUTE ref-time positions in offset_s
+# (contract.py's "primary ref-time placement"); the fp path feeds the landmark
+# DIAGONAL (ref_t − mix_t, i.e. already relative) through the same field name.
+# The votes-file convention is RELATIVE (offset_s = ref_start_s − set_start_s,
+# per run_phase1's schema), so absolute-frame probes are converted at capture:
+#     relative = absolute − span.set_start_s
+# Getting this wrong is catastrophic and self-consistent: the absolute-frame
+# probes agree with EACH OTHER in the wrong frame and outvote fp (observed:
+# DS crowned chroma 0.99 / floored fp 0.01; gt_measured said the opposite).
+_ABSOLUTE_FRAME_PROBES: frozenset[str] = frozenset({"chroma", "continuity", "hubert"})
+
 
 # ---------------------------------------------------------------------------
 # Data types (same schema as export_votes.ProbeEntry / SpanVotesDoc)
@@ -281,6 +293,7 @@ def _run_probe_safe(
     ref_ctx,
     candidate_pool,
     *,
+    span_set_start_s: float = 0.0,
     debug: bool = False,
 ) -> dict:
     """Run one probe and return a ProbeEntry dict; absorb errors as abstain.
@@ -305,10 +318,14 @@ def _run_probe_safe(
         return _abstain_entry(probe_name)
     try:
         result: AlignmentResult = probe_instance.run(mix_ctx, ref_ctx, candidate_pool)
+        # Normalize to the votes-file RELATIVE frame (see _ABSOLUTE_FRAME_PROBES).
+        offset = result.offset_s
+        if not result.abstain and probe_name in _ABSOLUTE_FRAME_PROBES:
+            offset = result.offset_s - span_set_start_s
         return _probe_entry(
             probe=probe_name,
             recording_id=result.recording_id,
-            offset_s=result.offset_s,
+            offset_s=offset,
             confidence=result.confidence,
             abstain=result.abstain,
         )
@@ -429,6 +446,7 @@ def _capture_span(
                 mix_ctx,
                 ref_ctx,
                 candidate_pool,
+                span_set_start_s=set_start_s,
                 debug=debug,
             )
             probe_entries.append(entry)
