@@ -109,20 +109,33 @@ class Window:
     win_end: float
 
 
-def plan_windows(duration: float, core_sec: float, overlap_sec: float) -> list[Window]:
+def plan_windows(
+    duration: float,
+    core_sec: float,
+    overlap_sec: float,
+    grid_offset_sec: float = 0.0,
+) -> list[Window]:
     """Tile [0, duration] into `core_sec` cores, each padded by `overlap_sec` of
     two-sided context (clamped at the mix edges). overlap_sec=0 reproduces the
-    legacy hard-cut behaviour (window == core)."""
-    windows: list[Window] = []
-    t = 0.0
+    legacy hard-cut behaviour (window == core).
+
+    grid_offset_sec > 0 shifts the tiling grid: the first core is a short
+    [0, grid_offset_sec) stub, then regular core_sec tiling. Used by the WS2
+    seam validation to build a pseudo-reference whose chunk *interiors* span
+    another render's join points (a full-file offline reference is
+    VRAM-impossible on a 60-90 min set).
+    """
+    boundaries: list[float] = [0.0]
+    t = grid_offset_sec if grid_offset_sec > 0.0 else core_sec
     while t < duration - 1e-6:
-        core_start = t
-        core_end = min(t + core_sec, duration)
-        win_start = max(0.0, core_start - overlap_sec)
-        win_end = min(duration, core_end + overlap_sec)
-        windows.append(Window(core_start, core_end, win_start, win_end))
+        boundaries.append(t)
         t += core_sec
-    return windows
+    boundaries.append(duration)
+    return [
+        Window(s, e, max(0.0, s - overlap_sec), min(duration, e + overlap_sec))
+        for s, e in zip(boundaries, boundaries[1:])
+        if e > s
+    ]
 
 
 def probe_duration(mix: Path) -> float:
@@ -310,6 +323,20 @@ def main() -> int:
         "before concat — heals hard-cut seams (WS2; plateaus ~6s). 0 = legacy.",
     )
     ap.add_argument(
+        "--grid-offset-sec",
+        type=float,
+        default=0.0,
+        help="shift the chunk grid by this many seconds (first core is a short "
+        "stub). WS2 seam validation only: builds a pseudo-reference whose chunk "
+        "interiors cover another render's joins.",
+    )
+    ap.add_argument(
+        "--out-tag",
+        default="",
+        help="suffix for work+output dirs so multiple renders of one set "
+        "(e.g. overlap A/B + pseudo-ref) don't collide with resume logic",
+    )
+    ap.add_argument(
         "--mix",
         type=Path,
         default=None,
@@ -327,6 +354,8 @@ def main() -> int:
         help="render locally only; don't write to canonical DB/stems",
     )
     args = ap.parse_args()
+    if args.grid_offset_sec > 0 and not args.no_push:
+        ap.error("--grid-offset-sec is a WS2 validation mode; it requires --no-push")
     sid = args.set_audio_id
 
     if args.mix is not None:
@@ -340,14 +369,17 @@ def main() -> int:
         mix = pull_mix(remote_path, sid)
     log.info("set_audio_id=%d set_id=%s duration=%.0fs", sid, set_id, dur)
 
-    work = RENDER_ROOT / str(sid)
+    dir_key = f"{sid}__{args.out_tag}" if args.out_tag else str(sid)
+    work = RENDER_ROOT / dir_key
     chunks_dir = work / "chunks"
     parts_dir = work / "parts"
     parts_dir.mkdir(parents=True, exist_ok=True)
 
     mix_wav = ensure_full_wav(mix, chunks_dir / "full.wav")
     total = probe_duration(mix_wav)
-    windows = plan_windows(total, float(args.chunk_sec), args.overlap_sec)
+    windows = plan_windows(
+        total, float(args.chunk_sec), args.overlap_sec, args.grid_offset_sec
+    )
     log.info(
         "planned %d cores of %ds, %.1fs overlap each side (%.0fs mix)",
         len(windows),
@@ -408,7 +440,7 @@ def main() -> int:
         voc_parts.append(voc_part)
         inst_parts.append(inst_part)
 
-    out_dir = OUT_ROOT / str(sid)
+    out_dir = OUT_ROOT / dir_key
     out_dir.mkdir(parents=True, exist_ok=True)
     log.info("concatenating %d parts → vocals.flac + instrumental.flac", len(voc_parts))
     concat_flac(voc_parts, out_dir / "vocals.flac")

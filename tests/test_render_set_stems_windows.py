@@ -50,3 +50,24 @@ def test_short_mix_single_window() -> None:
     w = plan_windows(duration=12.0, core_sec=360.0, overlap_sec=10.0)
     assert len(w) == 1
     assert w[0] == Window(core_start=0.0, core_end=12.0, win_start=0.0, win_end=12.0)
+
+
+def test_grid_offset_zero_matches_legacy() -> None:
+    legacy = plan_windows(1000.0, 360.0, 10.0)
+    offset0 = plan_windows(1000.0, 360.0, 10.0, grid_offset_sec=0.0)
+    assert offset0 == legacy
+
+
+def test_grid_offset_shifts_interior_boundaries() -> None:
+    ws = plan_windows(1000.0, 360.0, 10.0, grid_offset_sec=180.0)
+    cores = [(w.core_start, w.core_end) for w in ws]
+    # first core is the short offset stub, then regular tiling from 180
+    assert cores == [(0.0, 180.0), (180.0, 540.0), (540.0, 900.0), (900.0, 1000.0)]
+    _cores_tile_exactly(ws, 1000.0)
+
+
+def test_grid_offset_windows_padded_and_clamped() -> None:
+    ws = plan_windows(1000.0, 360.0, 10.0, grid_offset_sec=180.0)
+    assert ws[0].win_start == 0.0  # clamped at mix start
+    assert ws[1].win_start == 170.0 and ws[1].win_end == 550.0
+    assert ws[-1].win_end == 1000.0  # clamped at mix end
