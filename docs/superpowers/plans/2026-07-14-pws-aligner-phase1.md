@@ -12,8 +12,9 @@
 
 - **Home:** all new code under `workspaces/pws_aligner/`. **Import**, never copy, `workspaces/alignment_prototype/` modules. Do not modify `alignment_prototype` until the fork beats it on the scorecard.
 - **Sensor freeze respected:** add NO new probes/channels/priors. This effort touches only aggregation/training (the sanctioned learned-model + driver lanes per `alignment_prototype/CLAUDE.md`).
-- **No new GT authoring.** GT sets are validation only: **BB11 = `2nvzlh2k`, BB12 = `1fsnxchk`**.
-- **Success bar (the falsifiable claim):** the learned label model beats hand-tuned `source_priority` fusion on the BB11+BB12 scorecard (identity + trajectory + set_start), adding zero new GT. Secondary: learned per-probe precisions track the measured `probe_precision_transfer` values (fp's ~0.90→0.53 feature-dependent swing).
+- **No new GT authoring.** GT sets are validation only: **BB11 = `2nvzlh2k`, BB12 = `1fsnxchk`**. The committed baseline is the **corrected GT (`de1ce92`, 2026-07-14 re-export)** — the aligner's ~76% GT-seconds loss against it is *genuine failure concentrated in acappella decode + stem-routing*, not a data artifact. That acappella region is precisely where the label model must move the needle.
+- **BB12 (`1fsnxchk`) is the PRIMARY board; BB11 (`2nvzlh2k`) is confirmatory-only.** BB11 agentic **stalls on the Whisper lyrics probe (MPS)** — run BB11 only with the lyrics probe disabled, else skip it for the gate. Do not block the Task-5 decision on BB11.
+- **Success bar (the falsifiable claim):** the learned label model beats hand-tuned `source_priority` fusion on the **BB12 scorecard** (identity + trajectory + set_start), confirmed on BB11 where runnable, adding zero new GT. Secondary: learned per-probe precisions track the measured `probe_precision_transfer` values (fp's ~0.90→0.53 feature-dependent swing).
 - **Gates:** Snorkel density/modeling-advantage gate before deploying the model over majority-vote; FABLE `Corr(X, LF)` gate before instance-conditioning any probe.
 - **Style:** `from __future__ import annotations`; frozen dataclasses for records; pure functions, I/O at edges; `core/result.py`-style Result in library code, `sys.exit` at CLI edges. Rust-flavoured functional Python.
 - **Tests run from repo root:** `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/... -v`.
@@ -480,16 +481,17 @@ Wire `run_phase1(set_id)`: call the existing `infer` path to get per-span probe 
 - [ ] **Step 6: Run the acceptance gate (records numbers, not an assert)**
 
 ```bash
-# hand-tuned baseline (existing pipeline) for reference:
-venvs/audio/bin/python -m workspaces.alignment_prototype.infer --set-id 2nvzlh2k
-venvs/audio/bin/python -m workspaces.alignment_prototype.score_timeline_vs_gt --set-id 2nvzlh2k --fibers --decompose
+# PRIMARY board = BB12 (1fsnxchk). Hand-tuned baseline (existing pipeline) for reference:
+venvs/audio/bin/python -m workspaces.alignment_prototype.infer --set-id 1fsnxchk
+venvs/audio/bin/python -m workspaces.alignment_prototype.score_timeline_vs_gt --set-id 1fsnxchk --fibers --decompose
 # PWS fork:
-venvs/audio/bin/python -m workspaces.pws_aligner.run_phase1 --set-id 2nvzlh2k
-venvs/audio/bin/python -m workspaces.alignment_prototype.score_timeline_vs_gt --set-id 2nvzlh2k --timeline out/2nvzlh2k_pws_timeline.json --fibers --decompose
-# repeat both for 1fsnxchk (BB12)
+venvs/audio/bin/python -m workspaces.pws_aligner.run_phase1 --set-id 1fsnxchk
+venvs/audio/bin/python -m workspaces.alignment_prototype.score_timeline_vs_gt --set-id 1fsnxchk --timeline out/1fsnxchk_pws_timeline.json --fibers --decompose
+# CONFIRMATORY = BB11 (2nvzlh2k), ONLY with the Whisper lyrics probe disabled (it stalls on MPS);
+# if it hangs, skip BB11 for the gate — the decision rests on BB12.
 ```
 
-**Decision gate:** record identity %, set_start median, trajectory (strict + fiber) for baseline vs PWS on both sets in the commit message. **If PWS does not beat hand-tuned fusion on the aggregate, STOP — do not build FABLE (Task 6).** A null result here is a real finding (per the Snorkel density gate): report it and route to *more/denser LFs* rather than more machinery. `score_timeline_vs_gt` may need a `--timeline <path>` arg; add it to `alignment_prototype` only if absent (smallest possible change, its own commit).
+**Decision gate:** record identity %, set_start median, trajectory (strict + fiber) for baseline vs PWS on **BB12** (and BB11 if it ran) in the commit message. **If PWS does not beat hand-tuned fusion on BB12, STOP — do not build FABLE (Task 6).** A null result here is a real finding (per the Snorkel density gate): report it and route to *more/denser LFs* rather than more machinery. `score_timeline_vs_gt` may need a `--timeline <path>` arg; add it to `alignment_prototype` only if absent (smallest possible change, its own commit).
 
 - [ ] **Step 7: Commit**
 
