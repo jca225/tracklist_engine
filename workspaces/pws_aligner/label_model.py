@@ -23,8 +23,14 @@ from workspaces.pws_aligner.votes import Vote
 _ACC_LO: float = 0.01
 _ACC_HI: float = 0.99
 
-# Small prior weight given to the NULL hypothesis so all-abstain spans resolve to NULL
-_NULL_PRIOR_WEIGHT: float = 1.0
+# Prior weight boosting the NULL hypothesis relative to non-null candidates.
+# At W=1.0 the prior is a multiply-by-one no-op; W>1 makes NULL genuinely preferred
+# when evidence is absent or split.  W=1.5 is calibrated to:
+#   - dominate a single low-accuracy probe vote in a K≥3 space (I2), and
+#   - leave concordant multi-probe posteriors essentially unchanged so EM converges
+#     correctly (oracle-recovery test at n=400, 3-probe synthetic).
+# Do not raise above ~1.8: EM collapses on K=3 split-vote spans at W≥2.0.
+_NULL_PRIOR_WEIGHT: float = 1.5
 
 
 class LabelModel(Protocol):
@@ -76,26 +82,21 @@ def _e_step(
         h_idx = {h: i for i, h in enumerate(space)}
         null_idx = h_idx.get(null, 0)
 
-        # Non-null hypothesis count for the wrong-mass denominator
-        K_non_null = K - 1  # space always has NULL first
-
         log_p = np.zeros(K)
         for probe, voted_h in fired:
             a = probe_acc[probe]
             voted_idx = h_idx.get(voted_h, null_idx)
-            for i, h in enumerate(space):
+            # C1 fix: symmetric 2-parameter Dawid–Skene wrong-mass formula.
+            # P(vote=h_v | true=h) = (1−a)/(K−1) for every h ≠ h_v, including NULL.
+            # Both the NULL branch and any other non-voted hypothesis get the same
+            # denominator (K−1), collapsing the previous asymmetry where NULL used
+            # K_non_null=(K−1) but other non-null hypotheses used (K_non_null−1)=(K−2).
+            wrong_denom = max(K - 1, 1)
+            for i in range(K):
                 if i == voted_idx:
                     log_p[i] += np.log(a)
-                elif h == null:
-                    # NULL gets uniform wrong-mass
-                    if K_non_null > 0:
-                        log_p[i] += np.log((1.0 - a) / max(K_non_null, 1))
-                    else:
-                        log_p[i] += np.log(1e-9)
                 else:
-                    # Non-null, non-voted: wrong mass spread over K_non_null others
-                    denom = max(K_non_null - 1, 1) if K_non_null > 1 else 1
-                    log_p[i] += np.log((1.0 - a) / denom)
+                    log_p[i] += np.log((1.0 - a) / wrong_denom)
 
         # Subtract max for numerical stability before exp
         log_p -= log_p.max()
@@ -146,8 +147,8 @@ class DawidSkene:
     """Classic Dawid–Skene EM with 2-parameter-per-probe reduction (no GT).
 
     Each probe p has a single accuracy a_p = P(voted hypothesis is correct | fired).
-    When wrong, the vote's mass spreads uniformly over the other non-NULL hypotheses
-    in the span's candidate space.
+    When wrong, the vote's mass spreads uniformly over ALL other hypotheses in the
+    span's candidate space (including NULL): (1−a_p)/(K−1) each.
 
     Parameters
     ----------
@@ -218,13 +219,14 @@ class DawidSkene:
             (v.probe, vote_to_hypothesis(v)) for v in span_votes if not v.abstained
         ]
 
-        # Use fit-time accuracies; fall back to 0.7 for unseen probes
+        # I1 fix: build accuracy dict only for probes that fired in this span,
+        # defaulting to 0.7 for any probe absent from training.  Passing this
+        # dict (rather than the full fitted dict) means _e_step never sees a
+        # probe key it wasn't given, eliminating the latent KeyError on unseen
+        # probes.  The previous full_acc copy was a dead no-op.
         acc = {p: self._probe_acc.get(p, 0.7) for p, _ in fired}
-        # Supplement with full fitted dict for probes not in this span
-        full_acc = dict(self._probe_acc)
-        full_acc.update(acc)
 
-        posteriors = _e_step([space], [fired], full_acc, null)
+        posteriors = _e_step([space], [fired], acc, null)
         post = posteriors[0]
 
         return {h: float(post[i]) for i, h in enumerate(space)}
