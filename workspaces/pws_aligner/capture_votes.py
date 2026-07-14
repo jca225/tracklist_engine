@@ -140,6 +140,8 @@ def _build_probes(probe_names: tuple[str, ...]) -> dict[str, object]:
     A ``None`` value means the probe could not be imported (missing dep) — the
     caller should emit an abstain with a stderr warning instead of crashing.
     """
+    # Early import-error guard: if contract.py itself is broken, fail loud here
+    # rather than silently inside the per-probe try/except below.
     from workspaces.alignment_prototype.harness.contract import Probe  # noqa: F401
 
     instances: dict[str, object] = {}
@@ -208,9 +210,14 @@ def _load_manifest_by_rid(set_dir: Path, set_id: str) -> dict[str, dict]:
     rows = json.loads(manifest_path.read_text())["tracks"]
     by_rid: dict[str, dict] = {}
     for row in rows:
+        # Key by track_id (primary) and recording_id (secondary, setdefault so
+        # track_id entries win on collision).
         tid = row.get("track_id", "")
         if tid:
             by_rid[tid] = row
+        rid = row.get("recording_id", "")
+        if rid:
+            by_rid.setdefault(rid, row)
     # apply id_maps bridge
     map_path = _REPO / "labeling" / "fixtures" / "id_maps" / f"{set_id}.json"
     if map_path.is_file():
@@ -249,8 +256,10 @@ def _mix_audio_path(set_dir: Path, claimed_stem: str) -> Path | None:
     """Mix-side audio for the given claimed_stem, mirroring axes.py routing."""
     if claimed_stem == "acappella":
         p = set_dir / "mix_vocals.flac"
+        return p if p.is_file() else None
     elif claimed_stem == "instrumental":
         p = set_dir / "mix_instrumental.flac"
+        return p if p.is_file() else None
     else:
         # regular / fallback
         for name in ("mix.m4a", "mix.flac", "mix.wav", "mix.mp3"):
@@ -258,7 +267,6 @@ def _mix_audio_path(set_dir: Path, claimed_stem: str) -> Path | None:
             if candidate.is_file():
                 return candidate
         return None
-    return p if p.is_file() else None
 
 
 # ---------------------------------------------------------------------------
@@ -272,11 +280,20 @@ def _run_probe_safe(
     mix_ctx,
     ref_ctx,
     candidate_pool,
+    *,
+    debug: bool = False,
 ) -> dict:
     """Run one probe and return a ProbeEntry dict; absorb errors as abstain.
 
     If ``probe_instance`` is None (failed import) or if the probe raises, emits
     an explicit abstain entry with a stderr warning naming the missing artifact.
+
+    Parameters
+    ----------
+    debug:
+        When True, print full tracebacks for probe errors to stderr.
+        Passed through from ``capture_votes(debug=True)``; never reads
+        ``sys.argv`` so programmatic callers can enable tracebacks cleanly.
     """
     from workspaces.alignment_prototype.harness.contract import AlignmentResult
 
@@ -308,7 +325,7 @@ def _run_probe_safe(
             f"WARNING: probe {probe_name!r} raised {type(exc).__name__}: {exc} — abstaining",
             file=sys.stderr,
         )
-        if "--debug" in sys.argv:
+        if debug:
             traceback.print_exc(file=sys.stderr)
         return _abstain_entry(probe_name)
 
@@ -320,6 +337,7 @@ def _capture_span(
     probe_instances: dict[str, object | None],
     set_dir: Path | None,
     manifest_by_rid: dict[str, dict],
+    debug: bool = False,
 ) -> dict:
     """Capture genuine probe votes for one span.
 
@@ -411,6 +429,7 @@ def _capture_span(
                 mix_ctx,
                 ref_ctx,
                 candidate_pool,
+                debug=debug,
             )
             probe_entries.append(entry)
 
@@ -465,6 +484,7 @@ def capture_votes(
     timeline_path: Path | None = None,
     out_path: Path | None = None,
     probe_names: tuple[str, ...] = _ALL_PROBE_NAMES,
+    debug: bool = False,
 ) -> Path:
     """End-to-end: run harness probes per span and write probe_votes.json.
 
@@ -516,6 +536,21 @@ def capture_votes(
         )
     manifest_by_rid = _load_manifest_by_rid(set_dir, set_id) if set_dir else {}
 
+    # Tripwire: if most of the timeline's recording_ids are absent from the
+    # manifest index, the run would silently degrade to all-abstain garbage —
+    # warn loudly up front rather than after hours of probe compute.
+    span_rids = [s.get("recording_id") for s in spans if s.get("recording_id")]
+    if manifest_by_rid and span_rids:
+        missing = sum(1 for r in span_rids if r not in manifest_by_rid)
+        if missing / len(span_rids) > 0.5:
+            print(
+                f"WARNING: {missing}/{len(span_rids)} timeline recording_ids are "
+                "missing from the manifest index — most probes will abstain. "
+                "Check manifest.json track_id/recording_id keys and the "
+                f"id_maps bridge for {set_id}.",
+                file=sys.stderr,
+            )
+
     # Collect all probe names needed across all stems
     all_needed: set[str] = set()
     for pname in probe_names:
@@ -533,6 +568,7 @@ def capture_votes(
             probe_instances=probe_instances,
             set_dir=set_dir,
             manifest_by_rid=manifest_by_rid,
+            debug=debug,
         )
         span_docs.append(doc)
 
@@ -613,6 +649,7 @@ def main(argv: list[str] | None = None) -> int:
         timeline_path=args.timeline_path,
         out_path=args.out_path,
         probe_names=probe_names,
+        debug=args.debug,
     )
     return 0
 

@@ -298,13 +298,18 @@ def test_capture_span_none_instance_becomes_abstain(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_capture_span_different_recording_ids_preserved(tmp_path, monkeypatch):
-    """Two probes voting different recording_ids on one span → both preserved.
+def test_probe_recording_id_not_overwritten_by_span_merged_id(tmp_path, monkeypatch):
+    """Capture must NOT overwrite a probe's returned recording_id.
 
-    This is the CORE genuineness guarantee: each probe's own AlignmentResult
-    carries its own opinion (recording_id from ref.recording_id), not the
-    merged identity decision. Dawid-Skene cannot learn probe biases if all
-    probes are forced to the same recording_id.
+    What this proves: the capture path preserves each AlignmentResult's
+    recording_id verbatim — two fake probes returning DIFFERENT ids both
+    survive to the JSON, so nothing re-injects the span-level merged id.
+
+    What this does NOT prove: real multi-candidate divergence. The current
+    harness probes all receive a single-candidate pool (the predicted
+    recording), so in production every non-abstaining vote carries that
+    candidate's id; genuine cross-candidate identity opinions require the
+    future multi-candidate pool machinery (Task 7+).
     """
     import workspaces.pws_aligner.capture_votes as cv
 
@@ -516,3 +521,52 @@ def test_capture_span_probe_order_is_canonical(tmp_path, monkeypatch):
     probe_order = [e["probe"] for e in doc["probes"]]
     # fp must appear before chroma (canonical order is fp, chroma)
     assert probe_order.index("fp") < probe_order.index("chroma")
+
+
+def test_run_probe_safe_debug_is_parameter_not_argv(monkeypatch):
+    """I1 regression: debug is a real parameter; sys.argv is never consulted."""
+    import sys as _sys
+
+    import workspaces.pws_aligner.capture_votes as cv
+    from workspaces.alignment_prototype.harness.contract import (
+        CandidatePool,
+        MixContext,
+        RefContext,
+    )
+
+    class _Boom:
+        name = "boom"
+
+        def run(self, mix, ref, candidates):  # noqa: ANN001
+            raise RuntimeError("kaboom")
+
+    # Poison argv: if the implementation still reads sys.argv, this would
+    # flip debug on; the assertion below is that the call simply works with
+    # the explicit parameter and returns an abstain entry either way.
+    monkeypatch.setattr(_sys, "argv", ["prog", "--debug"])
+    mix = MixContext(audio_path=Path("/nonexistent/mix.m4a"))
+    ref = RefContext(recording_id="r1", audio_path=Path("/nonexistent/ref.m4a"))
+    entry = cv._run_probe_safe(
+        "boom", _Boom(), mix, ref, CandidatePool(), debug=True
+    )
+    assert entry["abstain"] is True
+    entry2 = cv._run_probe_safe(
+        "boom", _Boom(), mix, ref, CandidatePool(), debug=False
+    )
+    assert entry2["abstain"] is True
+
+
+def test_manifest_index_keys_recording_id_rows(tmp_path):
+    """I2 regression: manifest rows keyed by recording_id (no track_id) resolve."""
+    import workspaces.pws_aligner.capture_votes as cv
+
+    manifest = {
+        "tracks": [
+            {"recording_id": "recA", "title": "A", "local_path": "a.m4a"},
+            {"track_id": "recB", "title": "B", "local_path": "b.m4a"},
+        ]
+    }
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    by_rid = cv._load_manifest_by_rid(tmp_path, "someset")
+    assert by_rid["recA"]["title"] == "A"  # recording_id-keyed row found
+    assert by_rid["recB"]["title"] == "B"  # track_id-keyed row still wins
