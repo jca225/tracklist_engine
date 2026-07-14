@@ -81,6 +81,8 @@ from workspaces.pws_aligner.votes import AbstainReason, Vote, collect_votes
 
 # Default out/ directory relative to the alignment_prototype package (mirrors
 # where infer.py writes predicted_timeline.json).
+# Assumption: pws_aligner/ sits exactly two levels below repo root
+# (repo_root/workspaces/pws_aligner/), so parents[2] == repo root.
 _DEFAULT_OUT_DIR = (
     Path(__file__).resolve().parents[2] / "workspaces" / "alignment_prototype" / "out"
 )
@@ -211,8 +213,13 @@ def run_phase1(
             "set_start_s": float(span_doc.get("set_start_s", 0.0)),
             "set_end_s": float(span_doc.get("set_end_s", 0.0)),
             "name": span_doc.get("name", ""),
-            # PWS placement overwrites these:
-            "recording_id": pl["recording_id"],
+            # PWS placement overwrites these.
+            # Abstain spans use "" as sentinel (TimelineSpan.recording_id is str,
+            # non-optional) so the JSON round-trips through msgspec without
+            # ValidationError and scores as an identity miss.
+            "recording_id": pl["recording_id"]
+            if pl["recording_id"] is not None
+            else "",
             # ref_start_s: offset_s is ref_frame - mix_frame; set_start_s + offset_s
             # recovers the ref start that infer.py would write.  When abstaining,
             # preserve the pass-through ref_start_s from the votes file.
