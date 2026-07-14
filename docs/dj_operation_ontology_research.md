@@ -111,15 +111,28 @@ panel's caveats inline.
   20,765 transitions, gated by match-rate ≥ 0.4 (fraction of diagonal one-beat
   warp-path moves). *Caveat:* cue-point errors are coarse (median ~11–28 s; >80%
   only within 30 s) — validates **scale and gating strategy, not fine placement**.
-- **Quantitative priors for tempo/key LFs** (Kim et al., 24,202 confidently
-  aligned plays): tempo adjustment double-exponentially concentrated near zero —
-  **86.1% < 5%, 94.5% < 10%, 98.6% < 20%**; transposition rare — **2.5% of tracks,
-  94.3% of those exactly one semitone** ⇒ DJs leave Master Tempo on by default.
-  *Caveats for prior-fitting:* survivorship bias (sub-0.4 matches filtered ⇒ extreme
-  warps undercounted); chroma-shift detection blind to sub-semitone drift; 2020 data
-  predates CDJ-3000 key-sync and the stems era; and per our own BB11 GT, **31% of
-  acappella overlays are re-pitched** ([[project_key_change_breaks_chroma]]) — the
-  low-transposition prior applies to full-track plays, **not overlay stems**.
+- **Tempo/key distribution estimates** (Kim et al., 24,202 aligned plays): tempo
+  adjustment double-exponentially concentrated near zero — **86.1% < 5%, 94.5% <
+  10%, 98.6% < 20%**; transposition rare — **2.5% of tracks, 94.3% of those exactly
+  one semitone** ⇒ DJs leave Master Tempo on by default.
+  **Status: weak initialization only — these are detector-limited, selection-biased
+  estimates, not ground truth about DJ behavior** (John, 2026-07-14). Why:
+  (a) *survivorship bias is baked in* — only plays passing the match-rate ≥ 0.4
+  chroma-DTW gate were counted, and heavily warped/transposed plays align worst, so
+  they're filtered before measurement; the figures are "adjustments the detector
+  could confirm," not the population; (b) *the instrument is blind* to sub-semitone
+  repitch (integer chroma shifts) and to fine warp play (~11–28 s median placement);
+  (c) *circularity risk* — baking these in as strong priors biases our aligner
+  toward easy alignments and reproduces their selection effect (the
+  [[project_opinion_audit]] failure mode in prior form); (d) 2020 data predates
+  CDJ-3000 key-sync and the stems era; (e) per our own BB11 GT, **31% of acappella
+  overlays are re-pitched** ([[project_key_change_breaks_chroma]]) — full-track
+  plays only, **never the stem axis**. Use as label-model initialization the model
+  overwrites, never as a gate. Note we already hold a native GT-derived tempo prior
+  (`warp_prior.json`, n=316, beds ≈ N(1, 0.012) — [[project_warp_prior_phase0]]), so
+  Kim et al. is corroboration, not foundation — and **re-estimating these
+  distributions at 40k scale with a stronger instrument is itself a deliverable of
+  our benchmark/paper effort.**
 - **Chen et al. 2022** (ICASSP, [arXiv:2110.06525](https://arxiv.org/pdf/2110.06525)),
   differentiable DJ mixer + GAN — operationalizes the transition as fade curves +
   per-band DDSP EQ ("EQs and faders are two essential components in the DJ-made
@@ -191,7 +204,7 @@ EM-over-per-probe-σ label model. Don't bin offsets to feed a categorical model 
 | # | LF | Signal signature | Detector sketch | Exp. precision | Clusters |
 |---|---|---|---|---|---|
 | E1 | `lf_tempo_step_grid` | Warp ratio on quantized slider steps (0.02/0.05/0.5%) | Ratio-mod-step residual; **soft prior** (sync/jog break it) | low-med | CDJ |
-| E2 | `lf_tempo_prior` | 86.1% of adjustments <5% (double-exponential) | Prior on warp magnitude, per [[project_warp_prior_phase0]] | prior, not detector | all |
+| E2 | `lf_tempo_prior` | Warp magnitude concentrated near 1 | Native GT prior `warp_prior.json` (n=316) primary; Kim2020 figures = weak init only (see §3 status note) | prior, not detector | all |
 | E3 | `lf_keylock_stretch` | Pitch preserved while tempo shifts; stretch artifacts | Pitch-track constancy vs tempo ratio ≠ 1; **don't assume formant preservation** | med-high | all |
 | E4 | `lf_varispeed_linked` | Pitch shift exactly proportional to tempo ratio | log-pitch-shift ≈ log-tempo-ratio test | high | CDJ, UnmixDB-style |
 | E5 | `lf_key_shift_semitone` | Integer-semitone shift; Key Sync capped ±2 st | Chroma circular shift = integer; ±2 window for sync | high | CDJ |
