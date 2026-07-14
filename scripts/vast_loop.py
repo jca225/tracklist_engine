@@ -48,6 +48,7 @@ from core import db as db_adapter
 from analysis.pipeline import load_analyzers, analyze_track
 from analysis import persistence
 from core.models import AudioAsset
+from scripts.loop_prefetch import PrefetchFailure, PrefetchItem, PrefetchSlot
 
 PI_HOST = "pi-storage"  # ~/.ssh/config alias on Vast (Tailscale SOCKS5 proxy)
 PI_USER = "johncabrahams"
@@ -312,6 +313,18 @@ def main() -> int:
         help="i/N (e.g. 0/2): work only track_audio_id %% N == i, "
         "so N boxes can split one set without racing.",
     )
+    p.add_argument(
+        "--no-prefetch",
+        action="store_true",
+        help="disable the WS1 input-prefetch thread (serial legacy path; "
+        "used as the A/B throughput baseline)",
+    )
+    p.add_argument(
+        "--max-tracks",
+        type=int,
+        default=None,
+        help="stop after this many tracks (analyzed+failed); A/B run sizing",
+    )
     args = p.parse_args()
     shard: tuple[int, int] | None = None
     if args.shard:
@@ -367,57 +380,148 @@ def main() -> int:
     # decode error) — generated 496 failures in 18 min before fix landed.
     failed_tids: set[int] = set()
 
-    # Single-slot background thread for the rsync_stems_out + push_track_rows
-    # tail of each track. With a current per-track wall budget of ~135 s and
-    # ~50 s of that in stems-rsync, hiding the rsync behind the next track's
-    # ~80 s analyze step gives us ~30% throughput improvement. We block at
-    # the top of each iteration on the previous bg thread — that's safe
-    # since analyze always > rsync (otherwise wall time degrades to
-    # max(analyze, rsync) which is still fine, just not improved).
+    # --- streaming_mir WS1: two single-slot overlaps around the GPU stage ---
+    # input:  PrefetchSlot pulls track N+1's audio while N analyzes.
+    # output: _persist_in_bg pushes N's stems/rows while N+1 analyzes. (The
+    #         pre-WS1 code started this thread at iteration end and joined it
+    #         at the next iteration's TOP — milliseconds later — so the
+    #         intended rsync-hiding never happened; the join now sits just
+    #         before the next hand-off.)
+    # Correctness: next_task picks from canonical, where an in-progress
+    # track's rows haven't landed, so every prefetch pick skips
+    # failed_tids ∪ {analyzing tid} ∪ {persisting tid}. A track whose PUSH
+    # fails is re-picked once it leaves the in-flight set — same eventual
+    # retry as before, one iteration later.
     bg: threading.Thread | None = None
+    persist_tid: int | None = None
 
     def _persist_in_bg(tid: int, stem_local: Path) -> None:
         """Owns the cleanup of stem_local once handed off."""
         try:
+            t_r = time.monotonic()
             if stem_local.exists():
                 log.info("[%d] (bg) pushing stems", tid)
                 rsync_stems_out(stem_local, tid)
+            rsync_out_s = time.monotonic() - t_r
             log.info("[%d] (bg) pushing DB rows to canonical", tid)
+            t_p = time.monotonic()
             push_track_rows(tid)
+            log.info(
+                "TIMING-BG tid=%d rsync_out_s=%.1f push_s=%.1f",
+                tid,
+                rsync_out_s,
+                time.monotonic() - t_p,
+            )
             log.info("[%d] (bg) DONE", tid)
         except subprocess.CalledProcessError as e:
             # We can't add to failed_tids from here (main thread owns it),
             # but it doesn't matter: canonical never received track_analysis,
-            # so on the NEXT main-thread iteration `next_task` will re-pick
-            # this tid and we'll re-run the GPU work. Annoying, but safe.
+            # so next_task re-picks this tid once it leaves the in-flight
+            # set and we'll re-run the GPU work. Annoying, but safe.
             log.error("[%d] (bg) push failed: %s", tid, e)
         finally:
             if stem_local.exists():
                 shutil.rmtree(stem_local, ignore_errors=True)
 
-    while True:
-        # Block on previous track's tail before starting a new one. If the
-        # bg thread is already done, this returns immediately.
-        if bg is not None:
-            bg.join()
-            bg = None
+    def _pick(skip: frozenset[int]) -> tuple[int, str] | None:
+        return next_task(skip, sets=active_sets, shard=shard)
 
-        nxt = next_task(frozenset(failed_tids), sets=active_sets, shard=shard)
-        if nxt is None:
-            log.info("queue drained — analyzed %d, failed %d", n_done, n_failed)
+    def _pull(tid: int, remote_path: str) -> Path:
+        local = LOCAL_AUDIO / f"{tid}.m4a"
+        rsync_in(remote_path, local)
+        return local
+
+    prefetch = (
+        None
+        if args.no_prefetch
+        else PrefetchSlot(pick=_pick, pull=_pull, hydrate=fetch_asset)
+    )
+
+    def _sync_item(
+        skip: frozenset[int],
+    ) -> PrefetchItem | PrefetchFailure | None:
+        """Serial pick+pull+hydrate for --no-prefetch, the first iteration,
+        and post-failure refills. Same shape as PrefetchSlot.take()."""
+        picked = _pick(skip)
+        if picked is None:
+            return None
+        tid, remote_path = picked
+        try:
+            t0 = time.monotonic()
+            local = _pull(tid, remote_path)
+            pull_s = time.monotonic() - t0
+            asset = fetch_asset(tid, local)
+        except Exception as exc:
+            return PrefetchFailure(tid=tid, detail=str(exc))
+        return PrefetchItem(tid=tid, local_audio=local, asset=asset, pull_s=pull_s)
+
+    while True:
+        if args.max_tracks is not None and n_done + n_failed >= args.max_tracks:
+            log.info(
+                "--max-tracks %d reached — analyzed %d, failed %d",
+                args.max_tracks,
+                n_done,
+                n_failed,
+            )
+            if bg is not None:
+                bg.join()
             return 0
-        tid, remote_path = nxt
-        local_audio = LOCAL_AUDIO / f"{tid}.m4a"
+
+        # ---- obtain this iteration's item ----
+        inflight = frozenset(t for t in (persist_tid,) if t is not None)
+        if prefetch is None:
+            # Legacy serial path (A/B baseline): join the persist tail FIRST,
+            # exactly like the pre-WS1 loop, then pick+pull inline.
+            if bg is not None:
+                bg.join()
+                bg = None
+                persist_tid = None
+            item = _sync_item(frozenset(failed_tids))
+        elif prefetch.pending:
+            item = prefetch.take()
+        else:
+            # First iteration / refill after a failure path.
+            item = _sync_item(frozenset(failed_tids) | inflight)
+
+        if item is None:
+            # Drained *for the current skip set*. A persisting track whose
+            # push failed still needs a re-pick: join the tail, then re-check
+            # once with only failed_tids excluded.
+            if bg is not None:
+                bg.join()
+                bg = None
+                persist_tid = None
+            item = _sync_item(frozenset(failed_tids))
+            if item is None:
+                log.info("queue drained — analyzed %d, failed %d", n_done, n_failed)
+                return 0
+
+        if isinstance(item, PrefetchFailure):
+            log.error("[%d] input pull failed: %s", item.tid, item.detail)
+            n_failed += 1
+            failed_tids.add(item.tid)
+            continue
+
+        tid = item.tid
+        local_audio = item.local_audio
         handed_off = False
 
-        try:
-            log.info("[%d] pulling %s", tid, remote_path)
-            rsync_in(remote_path, local_audio)
+        # Kick off the NEXT prefetch now — it downloads behind this track's
+        # GPU work. Skip set: failures + this tid + the persisting tid.
+        if prefetch is not None:
+            prefetch.start(
+                frozenset(failed_tids)
+                | frozenset({tid})
+                | frozenset(t for t in (persist_tid,) if t is not None)
+            )
 
-            asset = fetch_asset(tid, local_audio)
-            log.info("[%d] analyzing %s (%s)", tid, asset.track_id, asset.platform)
-            t1 = time.time()
-            r = analyze_track(a, asset, stems_dir=LOCAL_STEMS)
+        try:
+            log.info(
+                "[%d] analyzing %s (%s)", tid, item.asset.track_id, item.asset.platform
+            )
+            t1 = time.monotonic()
+            r = analyze_track(a, item.asset, stems_dir=LOCAL_STEMS)
+            analyze_s = time.monotonic() - t1
             if not r.is_ok():
                 log.warning(
                     "[%d] analyze_track failed: %s — %s",
@@ -428,23 +532,33 @@ def main() -> int:
                 n_failed += 1
                 failed_tids.add(tid)
                 continue
-            log.info("[%d] analyzed in %.1fs", tid, time.time() - t1)
+            log.info(
+                "TIMING tid=%d prefetched=%d pull_s=%.1f analyze_s=%.1f",
+                tid,
+                int(prefetch is not None),
+                item.pull_s,
+                analyze_s,
+            )
 
-            p = persistence.persist_analysis(SCRATCH_DB, r.value)
-            if not p.is_ok():
-                log.warning("[%d] persist failed: %s", tid, p.error.detail)
+            p_r = persistence.persist_analysis(SCRATCH_DB, r.value)
+            if not p_r.is_ok():
+                log.warning("[%d] persist failed: %s", tid, p_r.error.detail)
                 n_failed += 1
                 failed_tids.add(tid)
                 continue
 
-            # Hand off rsync + push_track_rows to bg thread. Main loop
-            # immediately starts the next track's audio rsync + GPU work.
+            # Hand off rsync + push_track_rows. Single slot: join the
+            # PREVIOUS persist here (not at loop top) so it overlapped this
+            # track's analyze.
+            if bg is not None:
+                bg.join()
             stem_local = LOCAL_STEMS / str(tid)
             bg = threading.Thread(
                 target=_persist_in_bg,
                 args=(tid, stem_local),
                 daemon=False,
             )
+            persist_tid = tid
             bg.start()
             handed_off = True
             n_done += 1
