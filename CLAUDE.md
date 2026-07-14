@@ -60,8 +60,9 @@ Everything outside this chain is one of:
   **not part of the alignment DAG.** See [lab/CLAUDE.md](lab/CLAUDE.md). Kept lean
   and separate on purpose — do not entangle it with the alignment engine.
 
-**Two-tier north star.** *Operative (now):* a SOTA, rigorous alignment algorithm
-across ~20,000 DJ sets — the gate. *North-north (deferred, in `lab/`):* the
+**Two-tier north star.** *Operative (now):* a SOTA alignment algorithm that
+generalizes across ~40,000 DJ sets with as close to 100% accuracy as humanly
+possible — the gate. *North-north (deferred, in `lab/`):* the
 research lab above. Alignment is the necessary-but-not-sufficient foundation.
 Full stock-take: [docs/alignment_bearings_20260712.md](docs/alignment_bearings_20260712.md).
 
