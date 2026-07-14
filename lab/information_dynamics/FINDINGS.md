@@ -1,6 +1,6 @@
 # P0: Information-Dynamics Mashup Surprise — Findings
 
-*Run date: 2026-07-11. Script: `eda/information_dynamics/bb_mashup_surprise_p0.py`.*
+*Run date: 2026-07-11. Script: `lab/information_dynamics/bb_mashup_surprise_p0.py`.*
 *Metrics persisted to `data/analysis/aux.db :: analysis_results / bb_mashup_surprise_p0_v1`.*
 
 ---
@@ -144,7 +144,7 @@ If the cleaner experiment lifts AUC >= 0.60, build the ranker. If it stays at
 
 # P0 v2: Clean-bed + Tempo-aligned confirmatory experiments
 
-*Run date: 2026-07-11. Script: `eda/information_dynamics/bb_mashup_surprise_p0_v2.py`.*
+*Run date: 2026-07-11. Script: `lab/information_dynamics/bb_mashup_surprise_p0_v2.py`.*
 *Metrics persisted to `data/analysis/aux.db :: analysis_results / bb_mashup_surprise_p0_v2`.*
 
 ## Headline

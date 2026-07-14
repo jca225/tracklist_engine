@@ -37,7 +37,7 @@ import statistics as st
 import sys
 from pathlib import Path
 
-_EDA = Path(__file__).resolve().parents[1]  # eda/ (for the corpus_empirics import)
+_EDA = Path(__file__).resolve().parents[1]  # lab/ (for the corpus_empirics import)
 _REPO = Path(__file__).resolve().parents[2]  # repo root (for data/ paths)
 if str(_EDA) not in sys.path:
     sys.path.insert(0, str(_EDA))

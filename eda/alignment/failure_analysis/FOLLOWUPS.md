@@ -192,7 +192,7 @@ semitone transpose by ear; if it still clashes, re-acquire the correct version (
 > **Detune vs wrong-version — cross-ref (not folded here).** The tool that decides
 > WS5's "is this a genuine detune or a wrong rip?" question is the micro-pitch detune
 > estimator ([project_micropitch_detune]): `workspaces/alignment_prototype/pitch_detune.py`,
-> `measure_detune.py`, corpus arm `eda/corpus_empirics/bb_pitch_detune.py`, write-up in
+> `measure_detune.py`, corpus arm `lab/corpus_empirics/bb_pitch_detune.py`, write-up in
 > `docs/alignment_paper_draft.md`. That work is a separately-owned thread (alignment
 > paper + corpus-empirics, own `aux.db` findings home) and is intentionally **kept
 > separate** from this scorer/aligner brief. WS5 consumes its verdict; it is not a WS6.

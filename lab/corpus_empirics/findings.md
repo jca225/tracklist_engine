@@ -637,5 +637,5 @@ as Murph (`pwgrrb1`) / Disco Lines (`1rfb0yl9`) land to test whether the pattern
 Reproduction: measurement (heavy, reads `~/aligning` + mix audio, Mac-only)
 [workspaces/alignment_prototype/measure_detune.py](../../workspaces/alignment_prototype/measure_detune.py)
 → per-clip CSV `workspaces/alignment_prototype/out/pitch_detune_clips.csv`; analysis
-[eda/corpus_empirics/bb_pitch_detune.py](bb_pitch_detune.py). Results in `aux.analysis_results` under
+[lab/corpus_empirics/bb_pitch_detune.py](bb_pitch_detune.py). Results in `aux.analysis_results` under
 `analysis_name='bb_pitch_detune_v1'`.

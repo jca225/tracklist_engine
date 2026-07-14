@@ -52,6 +52,18 @@ Everything outside this chain is one of:
   boundary. Consumes nothing from the chain; exports a read-only bundle
   ([docs/personalization_export_contract.md](docs/personalization_export_contract.md))
   that the future learning repo trains on. Not part of the alignment DAG.
+- The **research lab**: `lab/` (split out 2026-07-12) — music-understanding work
+  (`corpus_empirics/`, `information_dynamics/`, `audience_prior/`) + product
+  design specs (`lab/specs/`). This is the **north-north star**: a DJ-music
+  research lab (SoundCloud + 1001Tracklists fusion, "why we like music") that
+  activates *once alignment is solved at scale*. Depends only on `labeling` GT;
+  **not part of the alignment DAG.** See [lab/CLAUDE.md](lab/CLAUDE.md). Kept lean
+  and separate on purpose — do not entangle it with the alignment engine.
+
+**Two-tier north star.** *Operative (now):* a SOTA, rigorous alignment algorithm
+across ~20,000 DJ sets — the gate. *North-north (deferred, in `lab/`):* the
+research lab above. Alignment is the necessary-but-not-sufficient foundation.
+Full stock-take: [docs/alignment_bearings_20260712.md](docs/alignment_bearings_20260712.md).
 
 New features land inside one of the chain modules. New top-level folders
 require explicit justification.
@@ -130,9 +142,14 @@ subtree — keep stage-specific detail there, not here. Index:
 - **[labeling/CLAUDE.md](labeling/CLAUDE.md)** — manual ground-truth production:
   `pull_set_for_alignment.py` into `~/aligning/`, the consistency model
   (`--prune`), the annotator rename convention.
-- **[eda/CLAUDE.md](eda/CLAUDE.md)** — exploratory analysis; corpus-empirics
-  findings + `aux.db`. Full write-ups in
-  [eda/corpus_empirics/findings.md](eda/corpus_empirics/findings.md).
+- **[eda/CLAUDE.md](eda/CLAUDE.md)** — exploratory analysis feeding the aligner
+  (`eda/alignment/` MERT probes + `failure_analysis/` scorecard, imported by the
+  aligner) + `eda/queries/`. *(Corpus-empirics / info-dynamics moved to `lab/`
+  on 2026-07-12.)*
+- **[lab/CLAUDE.md](lab/CLAUDE.md)** — the deferred research lab (north-north
+  star): `corpus_empirics/` findings + `aux.db`, `information_dynamics/`,
+  `audience_prior/`, product specs. Not part of the alignment DAG. Full write-ups
+  in [lab/corpus_empirics/findings.md](lab/corpus_empirics/findings.md).
 - **[core/CLAUDE.md](core/CLAUDE.md)** — shared substrate; `core/identity.py`
   (three axes); the rule that `core` imports nothing upward.
 

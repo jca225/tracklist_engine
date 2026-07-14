@@ -14,7 +14,7 @@
 - `engine/` is FROZEN (Task-2 contract of the bootstrap plan) — never edit; consume `engine.loudness.integrated_lufs(samples, sr) -> Result[float, LoudnessError]` as-is.
 - Offline suite must stay green after every task: `venv/bin/python -m pytest tests/ -m "not integration"` (currently 27 passed, 1 deselected; count grows per task).
 - A global PostToolUse hook ruff-formats .py writes — acceptable; semantics must be unchanged.
-- Grammar constants come verbatim from `bb_mashup_grammar_v1` (tracklist_engine `eda/corpus_empirics/findings.md`): HOOK_BARS=16, hook search restricted to first 60% of song, OUTRO_BARS=8, default drop bar 16, LUFS auto-gain clamp ±9 dB, pickup lead ≤ 1 bar.
+- Grammar constants come verbatim from `bb_mashup_grammar_v1` (tracklist_engine `lab/corpus_empirics/findings.md`): HOOK_BARS=16, hook search restricted to first 60% of song, OUTRO_BARS=8, default drop bar 16, LUFS auto-gain clamp ±9 dB, pickup lead ≤ 1 bar.
 - `_PROFILE_VERSION` bumps 1→2; old sidecar caches invalidate by design. The stem-reuse guard (Task 1) MUST land in the same commit so re-analysis skips separation.
 - The demo pair with warm stems exists at `~/Desktop/mashup_demo/{vocal,instr}.wav` (stems under `~/Desktop/mashup_demo/.stems/<name>/`).
 

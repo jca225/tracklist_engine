@@ -19,7 +19,7 @@ zero-point is re-checked on solo instrumentals every run.
 
 Headline metrics persist to ``aux.analysis_results`` under
 ``analysis_name='bb_pitch_detune_v1'``; the narrative lives in
-``eda/corpus_empirics/findings.md``.
+``lab/corpus_empirics/findings.md``.
 """
 
 from __future__ import annotations

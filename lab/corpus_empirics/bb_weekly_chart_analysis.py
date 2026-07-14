@@ -18,7 +18,7 @@ Re-does two analyses with these features:
   (2) Set-level (per-BB-volume) views regression: do these broader / continuous
       chart features predict YouTube views better than year-end-binary alone?
 
-Reads aux.db (must already be populated by `eda/corpus_empirics/aux_db_sync.py`).
+Reads aux.db (must already be populated by `lab/corpus_empirics/aux_db_sync.py`).
 """
 
 from __future__ import annotations

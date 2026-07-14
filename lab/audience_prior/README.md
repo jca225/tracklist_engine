@@ -16,7 +16,7 @@ we have it: the SoundCloud per-user like graph collected in
 ## Run
 
 ```bash
-venvs/audio/bin/python -m eda.audience_prior.run   # BB12, ~5 s
+venvs/audio/bin/python -m lab.audience_prior.run   # BB12, ~5 s
 ```
 
 `familiarity(track | audience)` = fraction of the set's non-bot SoundCloud
@@ -49,7 +49,7 @@ boundaries was at chance).
 ## De-circularized: cross-audience transfer (`run_cross.py`)
 
 ```bash
-venvs/audio/bin/python -m eda.audience_prior.run_cross
+venvs/audio/bin/python -m lab.audience_prior.run_cross
 ```
 
 Scores BB12's tracklist with the **disjoint BB11 audience** (2,936 listeners, **0

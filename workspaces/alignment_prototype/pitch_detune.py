@@ -28,7 +28,7 @@ CRITICAL correctness rule (kept fixed here): the sub-semitone signal is the
 ``100·pitch_coarse`` so it never saturates, whatever the coarse value.
 
 Pure functions; audio I/O at the edges. No project imports — belongs to the
-alignment prototype and is consumed by ``eda/corpus_empirics/bb_pitch_detune.py``.
+alignment prototype and is consumed by ``lab/corpus_empirics/bb_pitch_detune.py``.
 """
 
 from __future__ import annotations

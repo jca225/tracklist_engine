@@ -8,7 +8,7 @@ this disjoint audience too — and if familiarity *transfers* (rank-correlates)
 across the two audiences — the recognition prior is an intrinsic, transferable
 track property, not a BB12-engagement artifact. That is the personalization claim.
 
-    venvs/audio/bin/python -m eda.audience_prior.run_cross
+    venvs/audio/bin/python -m lab.audience_prior.run_cross
 
 Read-only on data/taste/taste_warehouse.db. Writes data/analysis/audience_prior/cross_summary.md.
 """

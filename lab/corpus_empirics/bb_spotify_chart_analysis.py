@@ -19,7 +19,7 @@ Three questions answered:
      peak position on the tracks where both exist?
 
 Reads aux.db (must already have `track_spotify_charts` populated by
-`eda/corpus_empirics/aux_db_sync.py` after `eda/corpus_empirics/bb_spotify_charts.py` writes the cache).
+`lab/corpus_empirics/aux_db_sync.py` after `lab/corpus_empirics/bb_spotify_charts.py` writes the cache).
 """
 
 from __future__ import annotations
@@ -404,8 +404,8 @@ def main():
 
     n_sp = conn.execute("SELECT COUNT(*) FROM aux.track_spotify_charts").fetchone()[0]
     if n_sp == 0:
-        print("track_spotify_charts is empty — run eda/corpus_empirics/bb_spotify_charts.py "
-              "and eda/corpus_empirics/aux_db_sync.py first", file=sys.stderr)
+        print("track_spotify_charts is empty — run lab/corpus_empirics/bb_spotify_charts.py "
+              "and lab/corpus_empirics/aux_db_sync.py first", file=sys.stderr)
         return 1
     print(f"=== track_spotify_charts: {n_sp} rows ===")
 

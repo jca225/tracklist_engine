@@ -149,7 +149,7 @@ Everything experimental lives in `workspaces/alignment_prototype/`:
 
 Dead ends are recorded in `workspaces/alignment_prototype/attic/EXPERIMENTS.md` — **read it before re-testing an idea**; many plausible approaches are already ruled out with verdicts.
 
-Corpus-level findings from exploratory analysis live in `eda/corpus_empirics/findings.md`.
+Corpus-level findings from exploratory analysis live in `lab/corpus_empirics/findings.md`.
 
 ## How to run
 

@@ -1,6 +1,6 @@
 ---
 name: corpus-empirics
-description: Scaffolds a new Big Bootie / corpus-empirics analysis following the repo's house pattern — script in eda/corpus_empirics/bb_*.py, results persisted to aux.db `analysis_results` table, and a findings section appended to eda/corpus_empirics/findings.md (CLAUDE.md keeps only a one-line pointer). Use when the user wants to run a new empirical analysis on the BB corpus (popularity, era, chart, listener, set-views, etc.), correlate a new signal against set views or another target, or add a finding to the corpus-empirics section. Triggers on phrases like "analyze X across BB", "is X correlated with views", "add a new bb_ analysis", "test whether X drives Y in the corpus".
+description: Scaffolds a new Big Bootie / corpus-empirics analysis following the repo's house pattern — script in lab/corpus_empirics/bb_*.py, results persisted to aux.db `analysis_results` table, and a findings section appended to lab/corpus_empirics/findings.md (CLAUDE.md keeps only a one-line pointer). Use when the user wants to run a new empirical analysis on the BB corpus (popularity, era, chart, listener, set-views, etc.), correlate a new signal against set views or another target, or add a finding to the corpus-empirics section. Triggers on phrases like "analyze X across BB", "is X correlated with views", "add a new bb_ analysis", "test whether X drives Y in the corpus".
 ---
 
 # Corpus Empirics Analysis
@@ -11,9 +11,9 @@ Repeatable pattern for adding a new empirical finding to the Big Bootie corpus a
 
 A corpus-empirics analysis has three artifacts:
 
-1. **Script** at `eda/corpus_empirics/bb_<name>.py` — pure Python, reads `data/db/music_database.db` (main, scraper-side) + `data/analysis/aux.db` (research signals), computes a finding, persists headline metrics to `aux.analysis_results`.
+1. **Script** at `lab/corpus_empirics/bb_<name>.py` — pure Python, reads `data/db/music_database.db` (main, scraper-side) + `data/analysis/aux.db` (research signals), computes a finding, persists headline metrics to `aux.analysis_results`.
 2. **Persisted metrics** in `aux.analysis_results` under a unique `analysis_name` (e.g. `bb_<name>_v1`). One row per (metric, group_key) tuple. Re-running the script upserts.
-3. **Findings section** in `eda/corpus_empirics/findings.md`, in the established format (see template below). CLAUDE.md's `## Corpus empirics` keeps only a one-line summary + pointer — update it if you add a headline finding worth surfacing there.
+3. **Findings section** in `lab/corpus_empirics/findings.md`, in the established format (see template below). CLAUDE.md's `## Corpus empirics` keeps only a one-line summary + pointer — update it if you add a headline finding worth surfacing there.
 
 Don't skip any of the three. The script without persistence makes the finding unreproducible; the persistence without the CLAUDE.md section makes it undiscoverable for the next session.
 
@@ -22,7 +22,7 @@ Don't skip any of the three. The script without persistence makes the finding un
 Before writing a new script, check whether an existing one covers part of the question:
 
 ```bash
-ls eda/corpus_empirics/bb_*.py
+ls lab/corpus_empirics/bb_*.py
 ```
 
 Existing analyses (as of this skill's writing):
@@ -41,9 +41,9 @@ sqlite3 data/analysis/aux.db ".tables"
 sqlite3 data/analysis/aux.db ".schema <table>"
 ```
 
-## Step 2 — Write the script (`eda/corpus_empirics/bb_<name>.py`)
+## Step 2 — Write the script (`lab/corpus_empirics/bb_<name>.py`)
 
-Follow the structure used in `eda/corpus_empirics/bb_set_views_analysis.py` and `eda/corpus_empirics/bb_popularity.py`:
+Follow the structure used in `lab/corpus_empirics/bb_set_views_analysis.py` and `lab/corpus_empirics/bb_popularity.py`:
 
 ```python
 """<One-paragraph statement of the question being asked, the data being
@@ -114,7 +114,7 @@ Conventions to follow:
 ## Step 3 — Run it
 
 ```bash
-python eda/corpus_empirics/bb_<name>.py
+python lab/corpus_empirics/bb_<name>.py
 ```
 
 Output should be human-readable: a header, the correlations table, and a final "persisted N metrics" line. Capture the output verbatim — you'll quote numbers from it in the CLAUDE.md section.
@@ -141,7 +141,7 @@ This is the load-bearing paragraph — every prior finding has one.>
 **Sample-size caveat** (if n < 50): <wide CIs, directional-only,
 what would tighten it>.
 
-Reproduction: [eda/corpus_empirics/bb_<name>.py](eda/corpus_empirics/bb_<name>.py). Results in
+Reproduction: [lab/corpus_empirics/bb_<name>.py](lab/corpus_empirics/bb_<name>.py). Results in
 `aux.analysis_results` under `analysis_name='bb_<name>_v1'`.
 ```
 

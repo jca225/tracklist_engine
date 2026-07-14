@@ -6,7 +6,7 @@ native rip (``pitch_detune.estimate_cents``), and records the context needed to
 tell *why*: the dialed Ableton pitch, native vs local BPM (varispeed test),
 Camelot key (harmonic-mixing test), and whether the clip plays solo or layered.
 
-Output is a per-clip CSV consumed by ``eda/corpus_empirics/bb_pitch_detune.py``,
+Output is a per-clip CSV consumed by ``lab/corpus_empirics/bb_pitch_detune.py``,
 which runs the hypothesis tests and persists headline metrics. The audio work
 lives here (Mac-only, reads ~/aligning) so the eda script stays a pure reader.
 

@@ -40,7 +40,7 @@ Verdict rule (pre-registered)
 
 Usage
 -----
-    venvs/audio/bin/python -m eda.information_dynamics.bb_mashup_surprise_p0
+    venvs/audio/bin/python -m lab.information_dynamics.bb_mashup_surprise_p0
 
 Writes headline metrics to data/analysis/aux.db :: analysis_results under
 analysis_name='bb_mashup_surprise_p0_v1'.

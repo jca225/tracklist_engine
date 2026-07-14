@@ -1,0 +1,6780 @@
+{
+  "set_id": "2nvzlh2k",
+  "train_set_id": "1fsnxchk",
+  "band_s": 45.0,
+  "fp_refine": false,
+  "fp_band_s": null,
+  "fp_placement": true,
+  "spans": [
+    {
+      "slot_label": "1",
+      "recording_id": "tlp2594024",
+      "claimed_stem": "regular",
+      "set_start_s": 442.665,
+      "set_end_s": 471.225,
+      "ref_start_s": 29.91,
+      "ref_end_s": 40.36,
+      "confidence": 0.003941820003092289,
+      "cue_anchor_s": 0.0,
+      "name": "The Scrantones - The Office Theme Song",
+      "start_source": "agentic:fp",
+      "probe_proposals": {
+        "mert_decode": 25.3,
+        "fp": 442.6652154195011
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 7,
+        "fp_sharpness": 1.4,
+        "fp_delta_s": 417.4
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 25.3,
+          "ref_start_s": 29.91,
+          "ref_end_s": 40.36
+        }
+      ],
+      "ref_path_conf": 6.854,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 0.02,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2093
+    },
+    {
+      "slot_label": "1w1",
+      "recording_id": "g8gtgdx",
+      "claimed_stem": "instrumental",
+      "set_start_s": 23.597,
+      "set_end_s": 40.524,
+      "ref_start_s": 66.85,
+      "ref_end_s": 57.23,
+      "confidence": -0.0015728462021797895,
+      "cue_anchor_s": 25.0,
+      "name": "Bastille - Good Grief (Don Diablo Remix)",
+      "start_source": "agentic:cue_prior+fp+surprise",
+      "probe_proposals": {
+        "mert_decode": 38.62,
+        "fp": 21.478458049886623
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 0.0,
+          "ref_start_s": 66.85,
+          "ref_end_s": 72.35
+        },
+        {
+          "mix_start_s": 5.5,
+          "ref_start_s": 82.24,
+          "ref_end_s": 104.24
+        },
+        {
+          "mix_start_s": 27.5,
+          "ref_start_s": 45.22,
+          "ref_end_s": 50.22
+        },
+        {
+          "mix_start_s": 32.5,
+          "ref_start_s": 42.21,
+          "ref_end_s": 49.71
+        },
+        {
+          "mix_start_s": 40.0,
+          "ref_start_s": 34.45,
+          "ref_end_s": 47.45
+        },
+        {
+          "mix_start_s": 53.0,
+          "ref_start_s": 39.83,
+          "ref_end_s": 120.33
+        },
+        {
+          "mix_start_s": 133.5,
+          "ref_start_s": 32.73,
+          "ref_end_s": 57.23
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 31.184399092970523,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.6281039118766785,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 50.27,
+          "end_s": 118.31
+        },
+        {
+          "start_s": 134.1,
+          "end_s": 202.13
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.7
+    },
+    {
+      "slot_label": "1w2",
+      "recording_id": "26b4gz6f",
+      "claimed_stem": "regular",
+      "set_start_s": 41.417,
+      "set_end_s": 45.085,
+      "ref_start_s": 7.987664399092971,
+      "ref_end_s": 11.656417233560092,
+      "confidence": 0.0010678144171833992,
+      "cue_anchor_s": 40.0,
+      "name": "The Fray - Over My Head (Cable Car)",
+      "start_source": "agentic:cue_prior+fp+mert_decode+surprise",
+      "probe_proposals": {
+        "mert_decode": 42.42,
+        "fp": 43.1891156462585
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.55
+    },
+    {
+      "slot_label": "1w3",
+      "recording_id": "4gy6y1p",
+      "claimed_stem": "acappella",
+      "set_start_s": 62.418,
+      "set_end_s": 90.978,
+      "ref_start_s": 81.22,
+      "ref_end_s": 33.26,
+      "confidence": 0.0033198557794094086,
+      "cue_anchor_s": 86.0,
+      "name": "Carly Rae Jepsen - Call Me Maybe (Acappella)",
+      "start_source": "agentic:lyrics+mert_decode",
+      "probe_proposals": {
+        "mert_decode": 63.42,
+        "fp": 317.881179138322,
+        "lyrics": 62.415
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 3,
+        "fp_sharpness": 0.5,
+        "fp_delta_s": 254.5
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 62.41,
+          "ref_start_s": 81.22,
+          "ref_end_s": 89.12
+        },
+        {
+          "mix_start_s": 69.91,
+          "ref_start_s": 11.15,
+          "ref_end_s": 33.26
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 65.55,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 3,
+        "membership": 0.7171961069107056,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 19.27,
+          "end_s": 60.14
+        },
+        {
+          "start_s": 79.3,
+          "end_s": 135.84
+        },
+        {
+          "start_s": 149.42,
+          "end_s": 180.19
+        }
+      ],
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2147
+    },
+    {
+      "slot_label": "1w4",
+      "recording_id": "2m5wh0t5",
+      "claimed_stem": "regular",
+      "set_start_s": 135.906,
+      "set_end_s": 160.666,
+      "ref_start_s": 117.73,
+      "ref_end_s": 135.34,
+      "confidence": -0.0040258439257740974,
+      "cue_anchor_s": 136.0,
+      "name": "Gnash ft. Olivia O'Brien - I Hate U, I Love U",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 133.88,
+        "fp": 695.437641723356
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 7,
+        "fp_sharpness": 1.17,
+        "fp_delta_s": 561.6
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 133.88,
+          "ref_start_s": 117.73,
+          "ref_end_s": 135.34
+        }
+      ],
+      "ref_path_conf": 4.546,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 0.26,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.3039
+    },
+    {
+      "slot_label": "1w5",
+      "recording_id": "n3lnrzgp",
+      "claimed_stem": "regular",
+      "set_start_s": 174.0,
+      "set_end_s": 202.6,
+      "ref_start_s": 129.94,
+      "ref_end_s": 146.21,
+      "confidence": -0.0015308379661291838,
+      "cue_anchor_s": 174.0,
+      "name": "Barenaked Ladies - One Week",
+      "start_source": "agentic:cue_prior",
+      "probe_proposals": {
+        "mert_decode": 158.64
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 158.64,
+          "ref_start_s": 129.94,
+          "ref_end_s": 146.21
+        }
+      ],
+      "ref_path_conf": 7.491,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 1.12,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.6094688773155212,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 44.23,
+          "end_s": 58.63
+        },
+        {
+          "start_s": 116.56,
+          "end_s": 130.96
+        }
+      ],
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2674
+    },
+    {
+      "slot_label": "1w6",
+      "recording_id": "ntm7wqx",
+      "claimed_stem": "regular",
+      "set_start_s": 185.827,
+      "set_end_s": 222.84,
+      "ref_start_s": 23.01,
+      "ref_end_s": 60.02,
+      "confidence": -0.005017242394387722,
+      "cue_anchor_s": 189.0,
+      "name": "Antoine Delvig & Paul Vinx - Blondies",
+      "start_source": "agentic:cue_prior+fp+surprise",
+      "probe_proposals": {
+        "mert_decode": 175.78,
+        "fp": 181.67292517006803
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 181.67,
+          "ref_start_s": 23.01,
+          "ref_end_s": 60.02
+        }
+      ],
+      "ref_path_conf": 12.75,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 129.68344671201814,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.6436818838119507,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 3.6,
+          "end_s": 75.58
+        },
+        {
+          "start_s": 121.56,
+          "end_s": 179.84
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.7
+    },
+    {
+      "slot_label": "1w7",
+      "recording_id": "j14lrq5",
+      "claimed_stem": "regular",
+      "set_start_s": 190.0,
+      "set_end_s": 215.72,
+      "ref_start_s": 149.79,
+      "ref_end_s": 165.25,
+      "confidence": -0.002120591001585126,
+      "cue_anchor_s": 190.0,
+      "name": "JAY-Z - Encore",
+      "start_source": "agentic:cue_prior",
+      "probe_proposals": {
+        "mert_decode": 191.04
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 191.04,
+          "ref_start_s": 149.79,
+          "ref_end_s": 165.25
+        }
+      ],
+      "ref_path_conf": 6.166,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 0.06,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2949
+    },
+    {
+      "slot_label": "2",
+      "recording_id": "2pzm1v6p",
+      "claimed_stem": "regular",
+      "set_start_s": 220.588,
+      "set_end_s": 296.912,
+      "ref_start_s": 43.31,
+      "ref_end_s": 152.45,
+      "confidence": -0.0028520722407847643,
+      "cue_anchor_s": 220.0,
+      "name": "Jonas Aden & Brooks - Take Me Away",
+      "start_source": "agentic:cue_prior+fp+surprise",
+      "probe_proposals": {
+        "mert_decode": 225.8,
+        "fp": 224.00290249433107
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 224.0,
+          "ref_start_s": 43.31,
+          "ref_end_s": 50.16
+        },
+        {
+          "mix_start_s": 233.99,
+          "ref_start_s": 45.4,
+          "ref_end_s": 64.58
+        },
+        {
+          "mix_start_s": 261.94,
+          "ref_start_s": 126.13,
+          "ref_end_s": 152.45
+        }
+      ],
+      "ref_path_conf": 28.016,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 1.5325170068027205,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.7437129616737366,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 15.44,
+          "end_s": 78.6
+        },
+        {
+          "start_s": 95.43,
+          "end_s": 158.59
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.7
+    },
+    {
+      "slot_label": "2w1",
+      "recording_id": "1wvuyhjf",
+      "claimed_stem": "acappella",
+      "set_start_s": 222.659,
+      "set_end_s": 226.769,
+      "ref_start_s": 35.72,
+      "ref_end_s": 195.6,
+      "confidence": 0.00015505887859035283,
+      "cue_anchor_s": 223.0,
+      "name": "The Chainsmokers ft. Emily Warren - Paris (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics+mert_decode",
+      "probe_proposals": {
+        "mert_decode": 227.24,
+        "fp": 226.162358276644,
+        "lyrics": 222.5
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 177.5,
+          "ref_start_s": 35.72,
+          "ref_end_s": 45.26
+        },
+        {
+          "mix_start_s": 182.0,
+          "ref_start_s": 10.79,
+          "ref_end_s": 21.39
+        },
+        {
+          "mix_start_s": 187.0,
+          "ref_start_s": 66.85,
+          "ref_end_s": 168.61
+        },
+        {
+          "mix_start_s": 235.0,
+          "ref_start_s": 118.22,
+          "ref_end_s": 195.6
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 6.65,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.6650500893592834,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 29.72,
+          "end_s": 56.54
+        },
+        {
+          "start_s": 125.74,
+          "end_s": 141.76
+        }
+      ],
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "2w2",
+      "recording_id": "1nls93kx",
+      "claimed_stem": "regular",
+      "set_start_s": 253.968,
+      "set_end_s": 284.448,
+      "ref_start_s": 18.48,
+      "ref_end_s": 44.41,
+      "confidence": -0.003547371830791235,
+      "cue_anchor_s": 254.0,
+      "name": "Avril Lavigne - Sk8er Boi",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 238.68,
+        "fp": 340.26521541950115
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 5,
+        "fp_sharpness": 0.83,
+        "fp_delta_s": 101.6
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 238.68,
+          "ref_start_s": 18.48,
+          "ref_end_s": 44.41
+        }
+      ],
+      "ref_path_conf": 8.004,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 1.04,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2979
+    },
+    {
+      "slot_label": "3",
+      "recording_id": "1wv1fsrx",
+      "claimed_stem": "instrumental",
+      "set_start_s": 299.794,
+      "set_end_s": 372.38,
+      "ref_start_s": 41.05,
+      "ref_end_s": 105.94,
+      "confidence": -0.003848982509225607,
+      "cue_anchor_s": 300.0,
+      "name": "Audien ft. Deb\u2019s Daughter - Crazy Love (MOTi Remix)",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 299.64,
+        "fp": 347.57950113378683,
+        "instr_fp": 310.17215419501133
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 310.17,
+          "ref_start_s": 41.05,
+          "ref_end_s": 60.05
+        },
+        {
+          "mix_start_s": 329.17,
+          "ref_start_s": 52.44,
+          "ref_end_s": 105.94
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 33.436734693877554,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.4358
+    },
+    {
+      "slot_label": "3w1",
+      "recording_id": "10ufdgcf",
+      "claimed_stem": "acappella",
+      "set_start_s": 300.294,
+      "set_end_s": 300.619,
+      "ref_start_s": 18.29,
+      "ref_end_s": 32.693696145124704,
+      "confidence": -0.0028598494827747345,
+      "cue_anchor_s": 300.0,
+      "name": "Misterwives - Reflections (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics",
+      "probe_proposals": {
+        "mert_decode": 301.54,
+        "fp": 312.6334693877551,
+        "lyrics": 300.42999999999995
+      },
+      "ref_decode_status": "skip-too-short",
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "3w2",
+      "recording_id": "2unrq2zp",
+      "claimed_stem": "acappella",
+      "set_start_s": 350.751,
+      "set_end_s": 351.029,
+      "ref_start_s": 31.990000000000002,
+      "ref_end_s": 58.398185941043096,
+      "confidence": -0.0059639932587742805,
+      "cue_anchor_s": 338.0,
+      "name": "Neiked ft. Dyo - Sexual",
+      "start_source": "agentic:fp+surprise",
+      "probe_proposals": {
+        "mert_decode": 345.34,
+        "fp": 349.3906575963719,
+        "lyrics": 297.21500000000003
+      },
+      "ref_decode_status": "skip-too-short",
+      "driver_mode": "suggest",
+      "agentic_quality": 0.193
+    },
+    {
+      "slot_label": "4",
+      "recording_id": "270vfcpx",
+      "claimed_stem": "regular",
+      "set_start_s": 383.406,
+      "set_end_s": 462.423,
+      "ref_start_s": 44.47,
+      "ref_end_s": 123.75,
+      "confidence": 0.0012143850326538086,
+      "cue_anchor_s": 383.0,
+      "name": "Dzeko & Torres ft. Delaney Jane - L'amour Toujours (Ti\u00ebsto Edit)",
+      "start_source": "agentic:cue_prior+fp+mert_decode+surprise",
+      "probe_proposals": {
+        "mert_decode": 387.06,
+        "fp": 383.66331065759636
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 383.66,
+          "ref_start_s": 44.47,
+          "ref_end_s": 62.6
+        },
+        {
+          "mix_start_s": 401.64,
+          "ref_start_s": 62.46,
+          "ref_end_s": 86.64
+        },
+        {
+          "mix_start_s": 425.6,
+          "ref_start_s": 86.36,
+          "ref_end_s": 123.75
+        }
+      ],
+      "ref_path_conf": 32.177,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 44.62875283446709,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.7
+    },
+    {
+      "slot_label": "4w1",
+      "recording_id": "37h72dsx",
+      "claimed_stem": "regular",
+      "set_start_s": 390.326,
+      "set_end_s": 412.486,
+      "ref_start_s": 109.69,
+      "ref_end_s": 131.12,
+      "confidence": -0.0031612967140972614,
+      "cue_anchor_s": 390.0,
+      "name": "Good Charlotte - Girls And Boys",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 398.16
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 398.16,
+          "ref_start_s": 109.69,
+          "ref_end_s": 131.12
+        }
+      ],
+      "ref_path_conf": 4.948,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 1.64,
+      "fiber_ambiguity": {
+        "fiber_id": 1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "fiber_instances": [
+        {
+          "start_s": 109.13,
+          "end_s": 137.69
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.55
+    },
+    {
+      "slot_label": "4w2",
+      "recording_id": "1jrxl0yx",
+      "claimed_stem": "acappella",
+      "set_start_s": 419.969,
+      "set_end_s": 424.219,
+      "ref_start_s": 19.29,
+      "ref_end_s": 164.44,
+      "confidence": 0.0025976020842790604,
+      "cue_anchor_s": 420.0,
+      "name": "DJ Snake ft. Justin Bieber - Let Me Love You (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics",
+      "probe_proposals": {
+        "mert_decode": 407.4,
+        "fp": 418.957641723356,
+        "lyrics": 419.955
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 374.95,
+          "ref_start_s": 19.29,
+          "ref_end_s": 45.37
+        },
+        {
+          "mix_start_s": 394.95,
+          "ref_start_s": 82.3,
+          "ref_end_s": 109.03
+        },
+        {
+          "mix_start_s": 415.45,
+          "ref_start_s": 176.19,
+          "ref_end_s": 205.53
+        },
+        {
+          "mix_start_s": 446.95,
+          "ref_start_s": 135.74,
+          "ref_end_s": 164.44
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 47.88,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.7589
+    },
+    {
+      "slot_label": "4w3",
+      "recording_id": "1cz53gnp",
+      "claimed_stem": "regular",
+      "set_start_s": 449.896,
+      "set_end_s": 473.816,
+      "ref_start_s": 185.53,
+      "ref_end_s": 198.14,
+      "confidence": 0.00328528368845582,
+      "cue_anchor_s": 450.0,
+      "name": "Charli xcx - Break The Rules",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 464.64
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 464.64,
+          "ref_start_s": 185.53,
+          "ref_end_s": 198.14
+        }
+      ],
+      "ref_path_conf": 5.147,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 0.04,
+      "fiber_ambiguity": {
+        "fiber_id": 2,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "fiber_instances": [
+        {
+          "start_s": 156.15,
+          "end_s": 197.25
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.5488
+    },
+    {
+      "slot_label": "5",
+      "recording_id": "1zl2j2tx",
+      "claimed_stem": "regular",
+      "set_start_s": 464.749,
+      "set_end_s": 488.085,
+      "ref_start_s": 42.52,
+      "ref_end_s": 52.09,
+      "confidence": -0.007285008672624826,
+      "cue_anchor_s": 465.0,
+      "name": "Backstreet Boys - Everybody (Backstreet's Back) (Oski & Apashe & Lennon Bootleg)",
+      "start_source": "agentic:cue_prior+fp+surprise",
+      "probe_proposals": {
+        "mert_decode": 466.48,
+        "fp": 464.67773242630386
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 464.68,
+          "ref_start_s": 42.52,
+          "ref_end_s": 52.09
+        }
+      ],
+      "ref_path_conf": 5.328,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 0.2321995464852762,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "fiber_instances": [
+        {
+          "start_s": 9.87,
+          "end_s": 48.76
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.7
+    },
+    {
+      "slot_label": "5w1",
+      "recording_id": "txwtmt6x",
+      "claimed_stem": "regular",
+      "set_start_s": 510.845,
+      "set_end_s": 511.286,
+      "ref_start_s": 48.436825396825384,
+      "ref_end_s": 48.8780045351474,
+      "confidence": -0.0003972725826315582,
+      "cue_anchor_s": 510.0,
+      "name": "Ludacris - Pimpin' All Over The World",
+      "start_source": "agentic:cue_prior+fp",
+      "probe_proposals": {
+        "mert_decode": 508.38,
+        "fp": 511.44272108843535
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.4292
+    },
+    {
+      "slot_label": "6",
+      "recording_id": "20jcmut5",
+      "claimed_stem": "instrumental",
+      "set_start_s": 546.115,
+      "set_end_s": 638.182,
+      "ref_start_s": 98.41,
+      "ref_end_s": 190.41,
+      "confidence": -0.004298259969800711,
+      "cue_anchor_s": 546.0,
+      "name": "Thomas Hayes ft. Joni Fatora - Neon (Alluvion) (Ryos Remix)",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 548.46,
+        "fp": 564.9414965986394,
+        "instr_fp": 547.0853514739229
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 547.09,
+          "ref_start_s": 98.41,
+          "ref_end_s": 190.41
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 98.40616780045349,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.4639
+    },
+    {
+      "slot_label": "6w1",
+      "recording_id": "1f122v4x",
+      "claimed_stem": "acappella",
+      "set_start_s": 550.387,
+      "set_end_s": 550.921,
+      "ref_start_s": 42.620000000000005,
+      "ref_end_s": 48.483265306122405,
+      "confidence": 0.0035626497119665146,
+      "cue_anchor_s": 551.0,
+      "name": "3 Doors Down - Here Without You (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics+mert_decode",
+      "probe_proposals": {
+        "mert_decode": 549.66,
+        "fp": 551.0559637188209,
+        "lyrics": 550.105
+      },
+      "ref_decode_status": "skip-too-short",
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "6w2",
+      "recording_id": "2356hbf5",
+      "claimed_stem": "acappella",
+      "set_start_s": 571.05,
+      "set_end_s": 593.55,
+      "ref_start_s": 130.48,
+      "ref_end_s": 169.49,
+      "confidence": -0.0016184046398848295,
+      "cue_anchor_s": 580.0,
+      "name": "Men At Work - Down Under",
+      "start_source": "agentic:lyrics",
+      "probe_proposals": {
+        "mert_decode": 579.94,
+        "fp": 1139.681814058957,
+        "lyrics": 571.05
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 2,
+        "fp_sharpness": 0.33,
+        "fp_delta_s": 559.7
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 526.05,
+          "ref_start_s": 130.48,
+          "ref_end_s": 149.07
+        },
+        {
+          "mix_start_s": 556.05,
+          "ref_start_s": 160.57,
+          "ref_end_s": 177.89
+        },
+        {
+          "mix_start_s": 584.01,
+          "ref_start_s": 177.89,
+          "ref_end_s": 183.82
+        },
+        {
+          "mix_start_s": 593.57,
+          "ref_start_s": 183.82,
+          "ref_end_s": 187.19
+        },
+        {
+          "mix_start_s": 599.01,
+          "ref_start_s": 177.89,
+          "ref_end_s": 183.82
+        },
+        {
+          "mix_start_s": 608.57,
+          "ref_start_s": 187.19,
+          "ref_end_s": 194.34
+        },
+        {
+          "mix_start_s": 620.12,
+          "ref_start_s": 158.34,
+          "ref_end_s": 169.49
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 26.295,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.25
+    },
+    {
+      "slot_label": "6w3",
+      "recording_id": "dgb3mk5",
+      "claimed_stem": "regular",
+      "set_start_s": 623.441,
+      "set_end_s": 645.941,
+      "ref_start_s": 174.94,
+      "ref_end_s": 183.77,
+      "confidence": 0.0032406984828412533,
+      "cue_anchor_s": 624.0,
+      "name": "Kanye West ft. T-Pain - Good Life",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 587.44
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 587.44,
+          "ref_start_s": 174.94,
+          "ref_end_s": 183.77
+        }
+      ],
+      "ref_path_conf": 4.879,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 1.52,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.5487
+    },
+    {
+      "slot_label": "7",
+      "recording_id": "280rmv5x",
+      "claimed_stem": "instrumental",
+      "set_start_s": 639.946,
+      "set_end_s": 748.546,
+      "ref_start_s": 0.58,
+      "ref_end_s": 109.08,
+      "confidence": 0.005397734232246876,
+      "cue_anchor_s": 640.0,
+      "name": "The Killers - Mr. Brightside (Two Friends Remix)",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 624.94,
+        "fp": 711.0414512471656,
+        "instr_fp": 640.313469387755
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 640.31,
+          "ref_start_s": 0.58,
+          "ref_end_s": 14.08
+        },
+        {
+          "mix_start_s": 653.81,
+          "ref_start_s": 1.1,
+          "ref_end_s": 10.6
+        },
+        {
+          "mix_start_s": 663.31,
+          "ref_start_s": 17.08,
+          "ref_end_s": 23.58
+        },
+        {
+          "mix_start_s": 669.81,
+          "ref_start_s": 30.08,
+          "ref_end_s": 109.08
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 0.5804988662131336,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.4786
+    },
+    {
+      "slot_label": "7w1",
+      "recording_id": "2h9jzrfx",
+      "claimed_stem": "acappella",
+      "set_start_s": 646.892,
+      "set_end_s": 663.252,
+      "ref_start_s": 10.69,
+      "ref_end_s": 27.17,
+      "confidence": 0.000981068005785346,
+      "cue_anchor_s": 647.0,
+      "name": "Avicii ft. Aloe Blacc - Wake Me Up (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics+mert_decode",
+      "probe_proposals": {
+        "mert_decode": 643.02,
+        "fp": 422.487074829932,
+        "lyrics": 646.845
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 5,
+        "fp_sharpness": 1.0,
+        "fp_delta_s": 220.5
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 646.85,
+          "ref_start_s": 10.69,
+          "ref_end_s": 27.17
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 0.74,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "7w2",
+      "recording_id": "1s69nfdx",
+      "claimed_stem": "acappella",
+      "set_start_s": 672.676,
+      "set_end_s": 691.836,
+      "ref_start_s": 74.87,
+      "ref_end_s": 95.01,
+      "confidence": 0.008601394481956959,
+      "cue_anchor_s": 672.0,
+      "name": "Marshmello - Alone (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics",
+      "probe_proposals": {
+        "mert_decode": 643.46,
+        "fp": 956.9872108843538,
+        "lyrics": 672.99
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 6,
+        "fp_sharpness": 0.75,
+        "fp_delta_s": 313.5
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 672.99,
+          "ref_start_s": 74.87,
+          "ref_end_s": 95.01
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 0.765,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.8101435303688049,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 40.75,
+          "end_s": 122.37
+        },
+        {
+          "start_s": 162.42,
+          "end_s": 244.04
+        }
+      ],
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.7562
+    },
+    {
+      "slot_label": "7w3",
+      "recording_id": "1yk0vv5x",
+      "claimed_stem": "acappella",
+      "set_start_s": 696.986,
+      "set_end_s": 729.426,
+      "ref_start_s": 28.46,
+      "ref_end_s": 65.6,
+      "confidence": 0.0013707823818549514,
+      "cue_anchor_s": 697.0,
+      "name": "Sebastian Ingrosso & Tommy Trash ft. John Martin - Reload (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics+mert_decode",
+      "probe_proposals": {
+        "mert_decode": 691.8,
+        "fp": 2000.5616326530612,
+        "lyrics": 696.985
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 807,
+        "fp_sharpness": 0.68,
+        "fp_delta_s": 1308.8
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 696.99,
+          "ref_start_s": 28.46,
+          "ref_end_s": 65.6
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 27.55,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 3,
+        "membership": 0.7148551344871521,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 18.58,
+          "end_s": 60.37
+        },
+        {
+          "start_s": 73.26,
+          "end_s": 89.98
+        },
+        {
+          "start_s": 112.27,
+          "end_s": 164.17
+        }
+      ],
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "8",
+      "recording_id": "2dpvr4z5",
+      "claimed_stem": "regular",
+      "set_start_s": 750.173,
+      "set_end_s": 817.024,
+      "ref_start_s": 52.5,
+      "ref_end_s": 119.41,
+      "confidence": 0.005685825832188129,
+      "cue_anchor_s": 750.0,
+      "name": "Mike Williams - Bambini",
+      "start_source": "agentic:cue_prior+mert_decode+surprise",
+      "probe_proposals": {
+        "mert_decode": 750.26,
+        "fp": 765.2136054421769
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 765.21,
+          "ref_start_s": 52.5,
+          "ref_end_s": 119.41
+        }
+      ],
+      "ref_path_conf": 27.227,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 52.54675736961451,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.476
+    },
+    {
+      "slot_label": "8w1",
+      "recording_id": "2uk8x4jf",
+      "claimed_stem": "acappella",
+      "set_start_s": 758.163,
+      "set_end_s": 759.696,
+      "ref_start_s": 106.21,
+      "ref_end_s": 128.27,
+      "confidence": 0.002954305848106742,
+      "cue_anchor_s": 758.0,
+      "name": "Katy Perry ft. Juicy J - Dark Horse (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics+mert_decode",
+      "probe_proposals": {
+        "mert_decode": 757.7,
+        "fp": 770.2987755102041,
+        "lyrics": 758.24
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 713.24,
+          "ref_start_s": 106.21,
+          "ref_end_s": 135.26
+        },
+        {
+          "mix_start_s": 743.24,
+          "ref_start_s": 150.76,
+          "ref_end_s": 162.86
+        },
+        {
+          "mix_start_s": 755.74,
+          "ref_start_s": 42.54,
+          "ref_end_s": 74.49
+        },
+        {
+          "mix_start_s": 788.74,
+          "ref_start_s": 112.78,
+          "ref_end_s": 128.27
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 112.19,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "8w2",
+      "recording_id": "x601dgf",
+      "claimed_stem": "regular",
+      "set_start_s": 803.699,
+      "set_end_s": 806.346,
+      "ref_start_s": 175.84471655328798,
+      "ref_end_s": 178.49179138321995,
+      "confidence": 0.005466102156788111,
+      "cue_anchor_s": 789.0,
+      "name": "Whethan ft. Flux Pavilion & MAX - Savage",
+      "start_source": "agentic:mert_decode+surprise",
+      "probe_proposals": {
+        "mert_decode": 809.26,
+        "fp": 873.047074829932
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2058
+    },
+    {
+      "slot_label": "9",
+      "recording_id": "1nfwj135",
+      "claimed_stem": "regular",
+      "set_start_s": 832.132,
+      "set_end_s": 869.191,
+      "ref_start_s": 36.92,
+      "ref_end_s": 73.98,
+      "confidence": 0.007555016782134771,
+      "cue_anchor_s": 833.0,
+      "name": "Galantis - No Money",
+      "start_source": "agentic:cue_prior+mert_decode+surprise",
+      "probe_proposals": {
+        "mert_decode": 831.76,
+        "fp": 876.4836281179138
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 876.48,
+          "ref_start_s": 36.92,
+          "ref_end_s": 73.98
+        }
+      ],
+      "ref_path_conf": 12.501,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 135.9760544217687,
+      "fiber_ambiguity": {
+        "fiber_id": 1,
+        "n_instances": 2,
+        "membership": 0.6280998587608337,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 31.0,
+          "end_s": 38.2
+        },
+        {
+          "start_s": 107.16,
+          "end_s": 114.36
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.4916
+    },
+    {
+      "slot_label": "9w1",
+      "recording_id": "zzuhuxp",
+      "claimed_stem": "acappella",
+      "set_start_s": 840.402,
+      "set_end_s": 852.062,
+      "ref_start_s": 50.44,
+      "ref_end_s": 165.63,
+      "confidence": 0.008792728185653687,
+      "cue_anchor_s": 840.0,
+      "name": "Zedd & Alessia Cara - Stay (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics+mert_decode",
+      "probe_proposals": {
+        "mert_decode": 834.86,
+        "lyrics": 840.63
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 795.63,
+          "ref_start_s": 50.44,
+          "ref_end_s": 51.15
+        },
+        {
+          "mix_start_s": 796.09,
+          "ref_start_s": 51.15,
+          "ref_end_s": 61.69
+        },
+        {
+          "mix_start_s": 802.97,
+          "ref_start_s": 61.69,
+          "ref_end_s": 68.08
+        },
+        {
+          "mix_start_s": 807.13,
+          "ref_start_s": 75.55,
+          "ref_end_s": 104.64
+        },
+        {
+          "mix_start_s": 826.09,
+          "ref_start_s": 51.15,
+          "ref_end_s": 61.69
+        },
+        {
+          "mix_start_s": 832.97,
+          "ref_start_s": 104.64,
+          "ref_end_s": 139.98
+        },
+        {
+          "mix_start_s": 856.0,
+          "ref_start_s": 105.03,
+          "ref_end_s": 125.49
+        },
+        {
+          "mix_start_s": 869.47,
+          "ref_start_s": 125.49,
+          "ref_end_s": 127.61
+        },
+        {
+          "mix_start_s": 870.86,
+          "ref_start_s": 127.61,
+          "ref_end_s": 148.63
+        },
+        {
+          "mix_start_s": 884.71,
+          "ref_start_s": 125.49,
+          "ref_end_s": 127.61
+        },
+        {
+          "mix_start_s": 886.1,
+          "ref_start_s": 148.63,
+          "ref_end_s": 165.63
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 1.5050000000000001,
+      "fiber_ambiguity": {
+        "fiber_id": 2,
+        "n_instances": 2,
+        "membership": 0.6979462504386902,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 42.49,
+          "end_s": 64.44
+        },
+        {
+          "start_s": 120.16,
+          "end_s": 142.11
+        }
+      ],
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "9w2",
+      "recording_id": "sdf13qf",
+      "claimed_stem": "acappella",
+      "set_start_s": 901.868,
+      "set_end_s": 917.088,
+      "ref_start_s": 55.0,
+      "ref_end_s": 150.15,
+      "confidence": 0.006165728904306889,
+      "cue_anchor_s": 902.0,
+      "name": "Ti\u00ebsto ft. Michel Zitron - Red Lights (Acappella)",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 872.74,
+        "fp": 1249.0013605442177,
+        "lyrics": 855.955
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 8,
+        "fp_sharpness": 0.89,
+        "fp_delta_s": 376.3
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 810.96,
+          "ref_start_s": 55.0,
+          "ref_end_s": 81.27
+        },
+        {
+          "mix_start_s": 836.46,
+          "ref_start_s": 100.83,
+          "ref_end_s": 134.83
+        },
+        {
+          "mix_start_s": 869.47,
+          "ref_start_s": 134.83,
+          "ref_end_s": 136.27
+        },
+        {
+          "mix_start_s": 870.86,
+          "ref_start_s": 136.27,
+          "ref_end_s": 141.51
+        },
+        {
+          "mix_start_s": 875.96,
+          "ref_start_s": 125.45,
+          "ref_end_s": 130.9
+        },
+        {
+          "mix_start_s": 884.71,
+          "ref_start_s": 134.83,
+          "ref_end_s": 136.27
+        },
+        {
+          "mix_start_s": 886.1,
+          "ref_start_s": 130.9,
+          "ref_end_s": 138.84
+        },
+        {
+          "mix_start_s": 898.85,
+          "ref_start_s": 132.64,
+          "ref_end_s": 150.15
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 12.350000000000001,
+      "fiber_ambiguity": {
+        "fiber_id": 1,
+        "n_instances": 2,
+        "membership": 0.8400214910507202,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 39.59,
+          "end_s": 84.99
+        },
+        {
+          "start_s": 135.6,
+          "end_s": 181.0
+        }
+      ],
+      "driver_mode": "suggest",
+      "agentic_quality": 0.1766
+    },
+    {
+      "slot_label": "10",
+      "recording_id": "1gscm4q5",
+      "claimed_stem": "regular",
+      "set_start_s": 916.401,
+      "set_end_s": 937.903,
+      "ref_start_s": 217.29,
+      "ref_end_s": 231.89,
+      "confidence": 0.007457517087459564,
+      "cue_anchor_s": 917.0,
+      "name": "Gazzo ft. Y LUV - Never Touch The Ground",
+      "start_source": "agentic:cue_prior+fp+mert_decode+surprise",
+      "probe_proposals": {
+        "mert_decode": 911.76,
+        "fp": 916.4451700680272
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 916.45,
+          "ref_start_s": 217.29,
+          "ref_end_s": 231.89
+        }
+      ],
+      "ref_path_conf": 3.86,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 62.48489795918363,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.7
+    },
+    {
+      "slot_label": "10w1",
+      "recording_id": "sjb0g6x",
+      "claimed_stem": "regular",
+      "set_start_s": 901.78,
+      "set_end_s": 919.6,
+      "ref_start_s": 150.28,
+      "ref_end_s": 160.08,
+      "confidence": 0.010259822010993958,
+      "cue_anchor_s": 921.0,
+      "name": "R. Kelly - I Believe I Can Fly",
+      "start_source": "agentic:surprise",
+      "probe_proposals": {
+        "mert_decode": 921.06,
+        "fp": 1856.7372335600908
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 2,
+        "fp_sharpness": 0.22,
+        "fp_delta_s": 935.7
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 921.06,
+          "ref_start_s": 150.28,
+          "ref_end_s": 160.08
+        }
+      ],
+      "ref_path_conf": 2.138,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 0.34,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2097
+    },
+    {
+      "slot_label": "10w2",
+      "recording_id": "7w2vqqp",
+      "claimed_stem": "acappella",
+      "set_start_s": 966.871,
+      "set_end_s": 989.371,
+      "ref_start_s": 170.81,
+      "ref_end_s": 183.05,
+      "confidence": 0.00537154683843255,
+      "cue_anchor_s": 965.0,
+      "name": "Nero - Promises (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics",
+      "probe_proposals": {
+        "mert_decode": 935.14,
+        "fp": 394.6463492063492,
+        "lyrics": 967.74
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 12,
+        "fp_sharpness": 1.09,
+        "fp_delta_s": 540.5
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 922.74,
+          "ref_start_s": 170.81,
+          "ref_end_s": 184.07
+        },
+        {
+          "mix_start_s": 951.74,
+          "ref_start_s": 178.62,
+          "ref_end_s": 193.49
+        },
+        {
+          "mix_start_s": 990.24,
+          "ref_start_s": 181.18,
+          "ref_end_s": 196.73
+        },
+        {
+          "mix_start_s": 1024.24,
+          "ref_start_s": 178.25,
+          "ref_end_s": 183.05
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 29.175,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.858130693435669,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 2.21,
+          "end_s": 69.08
+        },
+        {
+          "start_s": 125.62,
+          "end_s": 196.44
+        }
+      ],
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.7576
+    },
+    {
+      "slot_label": "10w3",
+      "recording_id": "16jdxwwx",
+      "claimed_stem": "regular",
+      "set_start_s": 980.059,
+      "set_end_s": 1002.559,
+      "ref_start_s": 217.66,
+      "ref_end_s": 229.13,
+      "confidence": 0.0011704213684424758,
+      "cue_anchor_s": 980.0,
+      "name": "Zombie Nation - Kernkraft 400 (VAVO 2016 Bootleg)",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 970.76
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 970.76,
+          "ref_start_s": 217.66,
+          "ref_end_s": 229.13
+        }
+      ],
+      "ref_path_conf": 5.382,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 0.56,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.7488558292388916,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 1.04,
+          "end_s": 13.35
+        },
+        {
+          "start_s": 117.03,
+          "end_s": 234.87
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.6991
+    },
+    {
+      "slot_label": "11",
+      "recording_id": "5u7w225",
+      "claimed_stem": "instrumental",
+      "set_start_s": 1010.146,
+      "set_end_s": 1041.075,
+      "ref_start_s": 0.92,
+      "ref_end_s": 31.75,
+      "confidence": 0.007925287820398808,
+      "cue_anchor_s": 1010.0,
+      "name": "Calvin Harris - Feel So Close (Instrumental)",
+      "start_source": "agentic:cue_prior+fp+mert_decode+surprise",
+      "probe_proposals": {
+        "mert_decode": 1010.12,
+        "fp": 1010.2770068027211,
+        "instr_fp": 1100.1150113378685
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1100.12,
+          "ref_start_s": 0.92,
+          "ref_end_s": 31.75
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 1.0681179138323387,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.7
+    },
+    {
+      "slot_label": "11w1",
+      "recording_id": "1xzwwcg5",
+      "claimed_stem": "regular",
+      "set_start_s": 1017.755,
+      "set_end_s": 1034.615,
+      "ref_start_s": 32.44,
+      "ref_end_s": 56.0,
+      "confidence": 0.010522672906517982,
+      "cue_anchor_s": 1018.0,
+      "name": "Semisonic - Closing Time",
+      "start_source": "agentic:cue_prior+mert_decode+surprise",
+      "probe_proposals": {
+        "mert_decode": 1013.88
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1013.88,
+          "ref_start_s": 32.44,
+          "ref_end_s": 56.0
+        }
+      ],
+      "ref_path_conf": 2.416,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 1.2,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.55
+    },
+    {
+      "slot_label": "11w2",
+      "recording_id": "2m4452pp",
+      "claimed_stem": "regular",
+      "set_start_s": 1046.047,
+      "set_end_s": 1047.348,
+      "ref_start_s": 281.9366893424035,
+      "ref_end_s": 283.237006802721,
+      "confidence": 0.004718818236142397,
+      "cue_anchor_s": 1048.0,
+      "name": "Calvin Harris - Feel So Close (Big Z Remix)",
+      "start_source": "agentic:cue_prior+fp",
+      "probe_proposals": {
+        "mert_decode": 1028.86,
+        "fp": 1044.665759637188
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.3793
+    },
+    {
+      "slot_label": "11w3",
+      "recording_id": "84td6wx",
+      "claimed_stem": "acappella",
+      "set_start_s": 1045.767,
+      "set_end_s": 1052.803,
+      "ref_start_s": 13.17,
+      "ref_end_s": 20.17,
+      "confidence": 0.007925287820398808,
+      "cue_anchor_s": 1048.0,
+      "name": "Calvin Harris - Feel So Close (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics",
+      "probe_proposals": {
+        "mert_decode": 1030.74,
+        "fp": 1051.72462585034,
+        "lyrics": 1044.73
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1044.73,
+          "ref_start_s": 13.17,
+          "ref_end_s": 20.17
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 76.005,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.7872574329376221,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 1.74,
+          "end_s": 14.4
+        },
+        {
+          "start_s": 68.61,
+          "end_s": 89.4
+        }
+      ],
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.7565
+    },
+    {
+      "slot_label": "11w4",
+      "recording_id": "1htpqzr5",
+      "claimed_stem": "regular",
+      "set_start_s": 1062.302,
+      "set_end_s": 1079.142,
+      "ref_start_s": 57.14,
+      "ref_end_s": 65.48,
+      "confidence": 0.005559714511036873,
+      "cue_anchor_s": 1062.0,
+      "name": "Bingo Players - Cry (Just A Little) (A-Trak & DiscoTech Remix)",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 1094.48
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1094.48,
+          "ref_start_s": 57.14,
+          "ref_end_s": 65.48
+        }
+      ],
+      "ref_path_conf": 2.142,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 0.08,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 3,
+        "membership": 0.5897516012191772,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 46.21,
+          "end_s": 58.4
+        },
+        {
+          "start_s": 61.07,
+          "end_s": 78.48
+        },
+        {
+          "start_s": 122.02,
+          "end_s": 137.69
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.6964
+    },
+    {
+      "slot_label": "11w5",
+      "recording_id": "9hp84x",
+      "claimed_stem": "acappella",
+      "set_start_s": 1079.035,
+      "set_end_s": 1095.875,
+      "ref_start_s": 188.38,
+      "ref_end_s": 206.11,
+      "confidence": 0.008258835412561893,
+      "cue_anchor_s": 1078.0,
+      "name": "Daft Punk - Around The World (Acappella)",
+      "start_source": "agentic:cue_prior+stem_hubert",
+      "probe_proposals": {
+        "mert_decode": 1096.36,
+        "fp": 1217.4454421768708,
+        "stem_hubert": 1079.61179138322
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 2,
+        "fp_sharpness": 0.4,
+        "fp_delta_s": 121.1
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1079.61,
+          "ref_start_s": 188.38,
+          "ref_end_s": 206.11
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 0.48,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 3,
+        "membership": 0.7683930993080139,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 64.55,
+          "end_s": 96.01
+        },
+        {
+          "start_s": 104.14,
+          "end_s": 244.39
+        },
+        {
+          "start_s": 255.07,
+          "end_s": 356.08
+        }
+      ],
+      "driver_mode": "suggest",
+      "agentic_quality": 0.368
+    },
+    {
+      "slot_label": "11w6",
+      "recording_id": "1t3z8kbf",
+      "claimed_stem": "regular",
+      "set_start_s": 1097.858,
+      "set_end_s": 1098.09,
+      "ref_start_s": 12.770975056689167,
+      "ref_end_s": 13.003174603174557,
+      "confidence": 0.009235460311174393,
+      "cue_anchor_s": 1100.0,
+      "name": "My Chemical Romance - Welcome To The Black Parade",
+      "start_source": "agentic:cue_prior+fp+surprise",
+      "probe_proposals": {
+        "mert_decode": 1103.82,
+        "fp": 1099.8595918367346
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.5476
+    },
+    {
+      "slot_label": "11w7",
+      "recording_id": "1knfs8vf",
+      "claimed_stem": "regular",
+      "set_start_s": 1140.053,
+      "set_end_s": 1144.511,
+      "ref_start_s": 44.14113378684806,
+      "ref_end_s": 48.59936507936504,
+      "confidence": -0.00024076327099464834,
+      "cue_anchor_s": 1138.0,
+      "name": "Don Diablo & Khrebto - Got The Love (Vanze Bootleg)",
+      "start_source": "agentic:cue_prior+fp+surprise",
+      "probe_proposals": {
+        "mert_decode": 1143.22,
+        "fp": 1137.824217687075
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.7
+    },
+    {
+      "slot_label": "11w8",
+      "recording_id": "1gwls24x",
+      "claimed_stem": "acappella",
+      "set_start_s": 1158.58,
+      "set_end_s": 1158.766,
+      "ref_start_s": 12.25,
+      "ref_end_s": 144.19591836734696,
+      "confidence": 0.002053518546745181,
+      "cue_anchor_s": 1160.0,
+      "name": "Calvin Harris - My Way (Acappella)",
+      "start_source": "agentic:cue_prior+fp+stem_hubert+surprise",
+      "probe_proposals": {
+        "mert_decode": 1175.12,
+        "fp": 1160.0921541950113,
+        "lyrics": 1058.92
+      },
+      "ref_decode_status": "skip-too-short",
+      "driver_mode": "review",
+      "agentic_quality": 0.5227
+    },
+    {
+      "slot_label": "12",
+      "recording_id": "yzqsmbf",
+      "claimed_stem": "instrumental",
+      "set_start_s": 1175.076,
+      "set_end_s": 1228.552,
+      "ref_start_s": 24.27,
+      "ref_end_s": 77.27,
+      "confidence": -0.0037994799204170704,
+      "cue_anchor_s": 1175.0,
+      "name": "Sigala ft. Bryn Christopher - Sweet Lovin'",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 1188.72,
+        "fp": 1183.9854875283447,
+        "instr_fp": 1228.892879818594
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1228.89,
+          "ref_start_s": 24.27,
+          "ref_end_s": 77.27
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 24.264852607709827,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.4612
+    },
+    {
+      "slot_label": "12w1",
+      "recording_id": "20m6km2x",
+      "claimed_stem": "regular",
+      "set_start_s": 1182.902,
+      "set_end_s": 1204.002,
+      "ref_start_s": 43.14,
+      "ref_end_s": 56.56,
+      "confidence": 0.0019728741608560085,
+      "cue_anchor_s": 1183.0,
+      "name": "Vanessa Carlton - A Thousand Miles",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 1192.38,
+        "fp": 1463.925260770975
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 3,
+        "fp_sharpness": 0.43,
+        "fp_delta_s": 271.5
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1192.38,
+          "ref_start_s": 43.14,
+          "ref_end_s": 56.56
+        }
+      ],
+      "ref_path_conf": 3.741,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 0.24,
+      "fiber_ambiguity": {
+        "fiber_id": 1,
+        "n_instances": 3,
+        "membership": 0.6353349089622498,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 11.96,
+          "end_s": 49.92
+        },
+        {
+          "start_s": 85.91,
+          "end_s": 105.53
+        },
+        {
+          "start_s": 168.81,
+          "end_s": 176.47
+        }
+      ],
+      "driver_mode": "suggest",
+      "agentic_quality": 0.3079
+    },
+    {
+      "slot_label": "12w2",
+      "recording_id": "w5z6jwx",
+      "claimed_stem": "acappella",
+      "set_start_s": 1233.275,
+      "set_end_s": 1257.295,
+      "ref_start_s": 22.34,
+      "ref_end_s": 55.09,
+      "confidence": -0.000955626368522644,
+      "cue_anchor_s": 1229.0,
+      "name": "2Pac ft. Roger Troutman & Dr. Dre - California Love (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics",
+      "probe_proposals": {
+        "mert_decode": 1230.76,
+        "fp": 1377.0361904761905,
+        "lyrics": 1235.26
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 4,
+        "fp_sharpness": 0.5,
+        "fp_delta_s": 146.3
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1235.26,
+          "ref_start_s": 22.34,
+          "ref_end_s": 55.09
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 21.965000000000003,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "12w3",
+      "recording_id": "2qqzlrdp",
+      "claimed_stem": "acappella",
+      "set_start_s": 1252.242,
+      "set_end_s": 1266.622,
+      "ref_start_s": 33.1,
+      "ref_end_s": 46.53,
+      "confidence": 0.002308907452970743,
+      "cue_anchor_s": 1253.0,
+      "name": "Calvin Harris ft. Florence Welch - Sweet Nothing (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics",
+      "probe_proposals": {
+        "mert_decode": 1265.34,
+        "fp": 943.3570975056689,
+        "lyrics": 1251.89
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 4,
+        "fp_sharpness": 0.57,
+        "fp_delta_s": 322.0
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1251.89,
+          "ref_start_s": 33.1,
+          "ref_end_s": 46.53
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 105.16,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.837734043598175,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 33.09,
+          "end_s": 63.39
+        },
+        {
+          "start_s": 108.09,
+          "end_s": 138.39
+        }
+      ],
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.759
+    },
+    {
+      "slot_label": "13",
+      "recording_id": "x4jt0y5",
+      "claimed_stem": "regular",
+      "set_start_s": 1282.76,
+      "set_end_s": 1335.32,
+      "ref_start_s": 29.91,
+      "ref_end_s": 95.35,
+      "confidence": -0.0029169779736548662,
+      "cue_anchor_s": 1283.0,
+      "name": "Quintino & Hardwell vs. DJ Kool - Let Me Clear My Scorpion (Henry Fong Mashup)",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 1282.62
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1282.62,
+          "ref_start_s": 29.91,
+          "ref_end_s": 61.78
+        },
+        {
+          "mix_start_s": 1314.57,
+          "ref_start_s": 74.81,
+          "ref_end_s": 95.35
+        }
+      ],
+      "ref_path_conf": 20.283,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 0.08,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.7
+    },
+    {
+      "slot_label": "13w1",
+      "recording_id": "1qrzf9p",
+      "claimed_stem": "regular",
+      "set_start_s": 1335.18,
+      "set_end_s": 1388.16,
+      "ref_start_s": 0.06,
+      "ref_end_s": 54.06,
+      "confidence": -0.010181705467402935,
+      "cue_anchor_s": 0.0,
+      "name": "DJ Kool - Let Me Clear My Throat",
+      "start_source": "agentic:surprise",
+      "probe_proposals": {
+        "mert_decode": 1316.1
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.45
+    },
+    {
+      "slot_label": "13w2",
+      "recording_id": "263f1t5f",
+      "claimed_stem": "regular",
+      "set_start_s": 1335.18,
+      "set_end_s": 1387.76,
+      "ref_start_s": 140.97,
+      "ref_end_s": 164.12,
+      "confidence": -0.005769648589193821,
+      "cue_anchor_s": 0.0,
+      "name": "Quintino - Scorpion (Hardwell Edit)",
+      "start_source": "agentic:surprise",
+      "probe_proposals": {
+        "mert_decode": 1318.42
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1318.42,
+          "ref_start_s": 140.97,
+          "ref_end_s": 164.12
+        }
+      ],
+      "ref_path_conf": 19.348,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 0.02,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.6066677570343018,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 0.0,
+          "end_s": 90.56
+        },
+        {
+          "start_s": 98.1,
+          "end_s": 180.54
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.45
+    },
+    {
+      "slot_label": "13w3",
+      "recording_id": "270uk4cp",
+      "claimed_stem": "regular",
+      "set_start_s": 1336.169,
+      "set_end_s": 1339.373,
+      "ref_start_s": 123.94811791383222,
+      "ref_end_s": 127.15247165532878,
+      "confidence": -0.006295248866081238,
+      "cue_anchor_s": 1337.0,
+      "name": "Kill FM - Fresh",
+      "start_source": "agentic:cue_prior+fp+surprise",
+      "probe_proposals": {
+        "mert_decode": 1322.9,
+        "fp": 1337.2139682539682
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.7
+    },
+    {
+      "slot_label": "13w4",
+      "recording_id": "15j25bcp",
+      "claimed_stem": "acappella",
+      "set_start_s": 1350.009,
+      "set_end_s": 1350.195,
+      "ref_start_s": 125.475,
+      "ref_end_s": 134.04879818594122,
+      "confidence": -0.00363741023465991,
+      "cue_anchor_s": 1352.0,
+      "name": "Eminem ft. Nate Dogg - Shake That (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics",
+      "probe_proposals": {
+        "mert_decode": 1327.1,
+        "fp": 1358.9246258503401,
+        "lyrics": 1349.085
+      },
+      "ref_decode_status": "skip-too-short",
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "14",
+      "recording_id": "12rbn8r5",
+      "claimed_stem": "regular",
+      "set_start_s": 1365.624,
+      "set_end_s": 1446.081,
+      "ref_start_s": 5.29,
+      "ref_end_s": 157.82,
+      "confidence": -0.0006356574594974518,
+      "cue_anchor_s": 1367.0,
+      "name": "Madison Mars - Milky Way",
+      "start_source": "agentic:cue_prior+fp+surprise",
+      "probe_proposals": {
+        "mert_decode": 1371.0,
+        "fp": 1363.0113378684807
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1363.01,
+          "ref_start_s": 5.29,
+          "ref_end_s": 23.09
+        },
+        {
+          "mix_start_s": 1380.98,
+          "ref_start_s": 95.7,
+          "ref_end_s": 117.46
+        },
+        {
+          "mix_start_s": 1402.95,
+          "ref_start_s": 117.71,
+          "ref_end_s": 157.82
+        }
+      ],
+      "ref_path_conf": 32.125,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 77.57786848072556,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.5441938042640686,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 0.7,
+          "end_s": 31.35
+        },
+        {
+          "start_s": 80.57,
+          "end_s": 111.92
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.7
+    },
+    {
+      "slot_label": "14w1",
+      "recording_id": "40jsjp5",
+      "claimed_stem": "acappella",
+      "set_start_s": 1367.936,
+      "set_end_s": 1370.026,
+      "ref_start_s": 50.85,
+      "ref_end_s": 129.42,
+      "confidence": 0.0018006067257374525,
+      "cue_anchor_s": 1367.0,
+      "name": "La Roux - Bulletproof (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics+mert_decode",
+      "probe_proposals": {
+        "mert_decode": 1374.8,
+        "fp": 1367.399909297052,
+        "lyrics": 1368.36
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1323.36,
+          "ref_start_s": 50.85,
+          "ref_end_s": 52.89
+        },
+        {
+          "mix_start_s": 1325.36,
+          "ref_start_s": 23.91,
+          "ref_end_s": 35.15
+        },
+        {
+          "mix_start_s": 1336.36,
+          "ref_start_s": 43.64,
+          "ref_end_s": 55.39
+        },
+        {
+          "mix_start_s": 1347.86,
+          "ref_start_s": 87.93,
+          "ref_end_s": 106.32
+        },
+        {
+          "mix_start_s": 1365.86,
+          "ref_start_s": 14.47,
+          "ref_end_s": 31.84
+        },
+        {
+          "mix_start_s": 1382.86,
+          "ref_start_s": 96.21,
+          "ref_end_s": 129.42
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 1.83,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 3,
+        "membership": 0.5656995177268982,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 48.53,
+          "end_s": 63.62
+        },
+        {
+          "start_s": 103.33,
+          "end_s": 133.86
+        },
+        {
+          "start_s": 165.67,
+          "end_s": 196.21
+        }
+      ],
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "14w2",
+      "recording_id": "1u06x2fp",
+      "claimed_stem": "acappella",
+      "set_start_s": 1411.28,
+      "set_end_s": 1416.203,
+      "ref_start_s": 16.35,
+      "ref_end_s": 117.22,
+      "confidence": 0.0018324078992009163,
+      "cue_anchor_s": 1398.0,
+      "name": "Dr. Dre ft. Snoop Dogg & Kurupt & Nate Dogg - The Next Episode (Acappella)",
+      "start_source": "agentic:lyrics",
+      "probe_proposals": {
+        "mert_decode": 1399.56,
+        "fp": 1470.0553287981859,
+        "lyrics": 1411.28
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1366.28,
+          "ref_start_s": 16.35,
+          "ref_end_s": 30.36
+        },
+        {
+          "mix_start_s": 1377.28,
+          "ref_start_s": 20.39,
+          "ref_end_s": 46.49
+        },
+        {
+          "mix_start_s": 1397.78,
+          "ref_start_s": 136.03,
+          "ref_end_s": 160.86
+        },
+        {
+          "mix_start_s": 1417.28,
+          "ref_start_s": 97.85,
+          "ref_end_s": 105.49
+        },
+        {
+          "mix_start_s": 1423.28,
+          "ref_start_s": 90.94,
+          "ref_end_s": 103.03
+        },
+        {
+          "mix_start_s": 1432.78,
+          "ref_start_s": 81.57,
+          "ref_end_s": 117.22
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 116.94,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2414
+    },
+    {
+      "slot_label": "15",
+      "recording_id": "1vtps115",
+      "claimed_stem": "regular",
+      "set_start_s": 1443.212,
+      "set_end_s": 1481.757,
+      "ref_start_s": 39.15,
+      "ref_end_s": 77.69,
+      "confidence": 0.002957632765173912,
+      "cue_anchor_s": 1443.0,
+      "name": "Avicii ft. RAS - The Nights",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 1460.54,
+        "fp": 1479.6219501133787
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1479.62,
+          "ref_start_s": 39.15,
+          "ref_end_s": 77.69
+        }
+      ],
+      "ref_path_conf": 13.407,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 39.148843537414905,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.6991292238235474,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 30.88,
+          "end_s": 59.91
+        },
+        {
+          "start_s": 107.04,
+          "end_s": 135.84
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.4199
+    },
+    {
+      "slot_label": "15w1",
+      "recording_id": "tlp2594082",
+      "claimed_stem": "acappella",
+      "set_start_s": 1442.918,
+      "set_end_s": 1475.298,
+      "ref_start_s": 15.79,
+      "ref_end_s": 80.28,
+      "confidence": 0.0033859245013445616,
+      "cue_anchor_s": 1443.0,
+      "name": "Taylor Swift - New Romantics",
+      "start_source": "agentic:cue_prior+lyrics",
+      "probe_proposals": {
+        "mert_decode": 1462.44,
+        "fp": 1884.3225396825396,
+        "lyrics": 1442.88
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 4,
+        "fp_sharpness": 1.33,
+        "fp_delta_s": 421.9
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1442.88,
+          "ref_start_s": 15.79,
+          "ref_end_s": 31.24
+        },
+        {
+          "mix_start_s": 1457.88,
+          "ref_start_s": 62.77,
+          "ref_end_s": 80.28
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 12.204999999999998,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.7585
+    },
+    {
+      "slot_label": "15w2",
+      "recording_id": "34bj6m5",
+      "claimed_stem": "acappella",
+      "set_start_s": 1475.044,
+      "set_end_s": 1480.083,
+      "ref_start_s": 99.34,
+      "ref_end_s": 165.59,
+      "confidence": -0.004999717231839895,
+      "cue_anchor_s": 1475.0,
+      "name": "Whitney Houston - I Wanna Dance with Somebody (Who Loves Me) (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics",
+      "probe_proposals": {
+        "mert_decode": 1464.34,
+        "fp": 1471.9593650793652,
+        "lyrics": 1475.065
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1432.57,
+          "ref_start_s": 99.34,
+          "ref_end_s": 114.28
+        },
+        {
+          "mix_start_s": 1447.07,
+          "ref_start_s": 174.19,
+          "ref_end_s": 195.31
+        },
+        {
+          "mix_start_s": 1467.57,
+          "ref_start_s": 57.35,
+          "ref_end_s": 92.37
+        },
+        {
+          "mix_start_s": 1501.57,
+          "ref_start_s": 142.93,
+          "ref_end_s": 165.59
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 58.93000000000001,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "15w3",
+      "recording_id": "rl7yhuf",
+      "claimed_stem": "acappella",
+      "set_start_s": 1595.699,
+      "set_end_s": 1627.559,
+      "ref_start_s": 10.73,
+      "ref_end_s": 145.75,
+      "confidence": 0.002244710922241211,
+      "cue_anchor_s": 1510.0,
+      "name": "Alan Walker ft. Iselin Solheim - Faded (Acappella)",
+      "start_source": "agentic:stem_hubert",
+      "probe_proposals": {
+        "mert_decode": 1517.66,
+        "fp": 3399.819319727891,
+        "stem_hubert": 1595.6985034013605
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 60,
+        "fp_sharpness": 0.07,
+        "fp_delta_s": 1882.2
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1550.7,
+          "ref_start_s": 10.73,
+          "ref_end_s": 25.73
+        },
+        {
+          "mix_start_s": 1565.7,
+          "ref_start_s": 42.73,
+          "ref_end_s": 56.23
+        },
+        {
+          "mix_start_s": 1579.2,
+          "ref_start_s": 95.72,
+          "ref_end_s": 114.72
+        },
+        {
+          "mix_start_s": 1633.2,
+          "ref_start_s": 108.25,
+          "ref_end_s": 131.37
+        },
+        {
+          "mix_start_s": 1656.58,
+          "ref_start_s": 131.37,
+          "ref_end_s": 132.08
+        },
+        {
+          "mix_start_s": 1657.3,
+          "ref_start_s": 131.37,
+          "ref_end_s": 132.08
+        },
+        {
+          "mix_start_s": 1657.3,
+          "ref_start_s": 132.08,
+          "ref_end_s": 132.08
+        },
+        {
+          "mix_start_s": 1658.01,
+          "ref_start_s": 132.08,
+          "ref_end_s": 132.08
+        },
+        {
+          "mix_start_s": 1658.01,
+          "ref_start_s": 131.37,
+          "ref_end_s": 132.08
+        },
+        {
+          "mix_start_s": 1658.73,
+          "ref_start_s": 132.08,
+          "ref_end_s": 145.75
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 0.12,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2776
+    },
+    {
+      "slot_label": "16",
+      "recording_id": "37dudbp",
+      "claimed_stem": "regular",
+      "set_start_s": 1518.882,
+      "set_end_s": 1627.621,
+      "ref_start_s": 56.15,
+      "ref_end_s": 164.86,
+      "confidence": 0.00692332535982132,
+      "cue_anchor_s": 1520.0,
+      "name": "Deniz Koyu ft. Wynter Gordon - Follow You",
+      "start_source": "agentic:cue_prior+fp+mert_decode+surprise",
+      "probe_proposals": {
+        "mert_decode": 1519.58,
+        "fp": 1515.5432199546485
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1515.54,
+          "ref_start_s": 56.15,
+          "ref_end_s": 164.86
+        }
+      ],
+      "ref_path_conf": 47.983,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 56.14585034013612,
+      "fiber_ambiguity": {
+        "fiber_id": 1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "fiber_instances": [
+        {
+          "start_s": 32.86,
+          "end_s": 66.41
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.7
+    },
+    {
+      "slot_label": "16w1",
+      "recording_id": "2hb8u3xf",
+      "claimed_stem": "acappella",
+      "set_start_s": 1549.461,
+      "set_end_s": 1577.905,
+      "ref_start_s": 19.92,
+      "ref_end_s": 47.36,
+      "confidence": -0.0013191730249673128,
+      "cue_anchor_s": 1549.0,
+      "name": "Bastille - Pompeii (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics",
+      "probe_proposals": {
+        "mert_decode": 1551.4,
+        "fp": 1549.5140136054422,
+        "lyrics": 1549.6750000000002
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1549.68,
+          "ref_start_s": 19.92,
+          "ref_end_s": 47.36
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 7.159999999999999,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "16w2",
+      "recording_id": "10hrsxsf",
+      "claimed_stem": "regular",
+      "set_start_s": 1579.177,
+      "set_end_s": 1582.706,
+      "ref_start_s": 134.69895691609986,
+      "ref_end_s": 138.22839002267574,
+      "confidence": 0.013383021578192711,
+      "cue_anchor_s": 1579.0,
+      "name": "Kelly Clarkson - Behind These Hazel Eyes",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 1568.28,
+        "fp": 1642.324172335601
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2822
+    },
+    {
+      "slot_label": "17",
+      "recording_id": "qp2smrx",
+      "claimed_stem": "regular",
+      "set_start_s": 1624.364,
+      "set_end_s": 1648.699,
+      "ref_start_s": 39.47,
+      "ref_end_s": 56.03,
+      "confidence": 0.0027936145197600126,
+      "cue_anchor_s": 1624.0,
+      "name": "Porter Robinson - Unison (Crankdat Re-Crank)",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 1609.52,
+        "fp": 1650.9155555555556
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1650.92,
+          "ref_start_s": 39.47,
+          "ref_end_s": 56.03
+        }
+      ],
+      "ref_path_conf": 5.868,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 132.1215419501134,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.6329866647720337,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 24.26,
+          "end_s": 75.12
+        },
+        {
+          "start_s": 77.32,
+          "end_s": 87.89
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.491
+    },
+    {
+      "slot_label": "17w1",
+      "recording_id": "1rzckcmx",
+      "claimed_stem": "acappella",
+      "set_start_s": 1634.439,
+      "set_end_s": 1636.784,
+      "ref_start_s": 23.43,
+      "ref_end_s": 131.42,
+      "confidence": 0.005907535087317228,
+      "cue_anchor_s": 1637.0,
+      "name": "Linkin Park - Numb (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics",
+      "probe_proposals": {
+        "mert_decode": 1615.16,
+        "fp": 1657.8583219954648,
+        "lyrics": 1633.25
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1632.75,
+          "ref_start_s": 23.43,
+          "ref_end_s": 78.94
+        },
+        {
+          "mix_start_s": 1656.61,
+          "ref_start_s": 78.94,
+          "ref_end_s": 80.61
+        },
+        {
+          "mix_start_s": 1657.33,
+          "ref_start_s": 78.94,
+          "ref_end_s": 80.61
+        },
+        {
+          "mix_start_s": 1657.33,
+          "ref_start_s": 80.61,
+          "ref_end_s": 80.61
+        },
+        {
+          "mix_start_s": 1658.04,
+          "ref_start_s": 80.61,
+          "ref_end_s": 80.61
+        },
+        {
+          "mix_start_s": 1658.04,
+          "ref_start_s": 78.94,
+          "ref_end_s": 80.61
+        },
+        {
+          "mix_start_s": 1658.76,
+          "ref_start_s": 80.61,
+          "ref_end_s": 131.42
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 17.035000000000004,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.7574
+    },
+    {
+      "slot_label": "17w2",
+      "recording_id": "1d1b498f",
+      "claimed_stem": "acappella",
+      "set_start_s": 1519.444,
+      "set_end_s": 1538.664,
+      "ref_start_s": 47.2,
+      "ref_end_s": 68.62,
+      "confidence": 0.0038814700674265623,
+      "cue_anchor_s": 1660.0,
+      "name": "Avicii ft. Simon Aldred - Waiting For Love (Acappella)",
+      "start_source": "agentic:fp",
+      "probe_proposals": {
+        "mert_decode": 1637.24,
+        "fp": 1519.4441723356008
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 19,
+        "fp_sharpness": 0.79,
+        "fp_delta_s": 117.8
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1592.24,
+          "ref_start_s": 47.2,
+          "ref_end_s": 54.39
+        },
+        {
+          "mix_start_s": 1611.74,
+          "ref_start_s": 69.09,
+          "ref_end_s": 75.68
+        },
+        {
+          "mix_start_s": 1633.24,
+          "ref_start_s": 4.39,
+          "ref_end_s": 32.39
+        },
+        {
+          "mix_start_s": 1656.61,
+          "ref_start_s": 32.39,
+          "ref_end_s": 33.15
+        },
+        {
+          "mix_start_s": 1657.24,
+          "ref_start_s": 36.5,
+          "ref_end_s": 36.59
+        },
+        {
+          "mix_start_s": 1657.32,
+          "ref_start_s": 32.39,
+          "ref_end_s": 33.15
+        },
+        {
+          "mix_start_s": 1657.32,
+          "ref_start_s": 36.59,
+          "ref_end_s": 36.6
+        },
+        {
+          "mix_start_s": 1657.96,
+          "ref_start_s": 36.5,
+          "ref_end_s": 36.59
+        },
+        {
+          "mix_start_s": 1658.04,
+          "ref_start_s": 36.6,
+          "ref_end_s": 36.6
+        },
+        {
+          "mix_start_s": 1658.04,
+          "ref_start_s": 32.39,
+          "ref_end_s": 33.15
+        },
+        {
+          "mix_start_s": 1658.67,
+          "ref_start_s": 36.5,
+          "ref_end_s": 36.59
+        },
+        {
+          "mix_start_s": 1658.76,
+          "ref_start_s": 36.6,
+          "ref_end_s": 65.86
+        },
+        {
+          "mix_start_s": 1683.17,
+          "ref_start_s": 47.05,
+          "ref_end_s": 68.62
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 0.34,
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2239
+    },
+    {
+      "slot_label": "17w3",
+      "recording_id": "272d6sjx",
+      "claimed_stem": "regular",
+      "set_start_s": 1684.22,
+      "set_end_s": 1705.141,
+      "ref_start_s": 66.48,
+      "ref_end_s": 87.25,
+      "confidence": 0.0030702282674610615,
+      "cue_anchor_s": 1684.0,
+      "name": "Slippy - Divided (VIP)",
+      "start_source": "agentic:cue_prior+fp+mert_decode",
+      "probe_proposals": {
+        "mert_decode": 1678.52,
+        "fp": 1684.3987301587301
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1684.4,
+          "ref_start_s": 66.48,
+          "ref_end_s": 87.25
+        }
+      ],
+      "ref_path_conf": 4.917,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 66.40907029478444,
+      "fiber_ambiguity": {
+        "fiber_id": 1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "fiber_instances": [
+        {
+          "start_s": 66.41,
+          "end_s": 88.0
+        }
+      ],
+      "driver_mode": "suggest",
+      "agentic_quality": 0.3534
+    },
+    {
+      "slot_label": "17w4",
+      "recording_id": "2qrys89f",
+      "claimed_stem": "acappella",
+      "set_start_s": 1683.901,
+      "set_end_s": 1690.681,
+      "ref_start_s": 53.0,
+      "ref_end_s": 59.89,
+      "confidence": 0.008253959007561207,
+      "cue_anchor_s": 1684.0,
+      "name": "Eminem - Lose Yourself (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics",
+      "probe_proposals": {
+        "mert_decode": 1711.82,
+        "fp": 1687.0690249433108,
+        "lyrics": 1683.855
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1683.86,
+          "ref_start_s": 53.0,
+          "ref_end_s": 59.89
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 19.895,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.7564
+    },
+    {
+      "slot_label": "18",
+      "recording_id": "2hh6qfrx",
+      "claimed_stem": "instrumental",
+      "set_start_s": 1707.397,
+      "set_end_s": 1769.116,
+      "ref_start_s": 7.57,
+      "ref_end_s": 69.07,
+      "confidence": 0.007321563549339771,
+      "cue_anchor_s": 1706.0,
+      "name": "Arston ft. Johnny Kelvin - Beautiful Asian",
+      "start_source": "agentic:cue_prior+fp+surprise",
+      "probe_proposals": {
+        "mert_decode": 1719.38,
+        "fp": 1709.4298412698413,
+        "instr_fp": 1710.0335600907028
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1710.03,
+          "ref_start_s": 7.57,
+          "ref_end_s": 69.07
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 7.592925170067929,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.6975
+    },
+    {
+      "slot_label": "18w1",
+      "recording_id": "1grynb8x",
+      "claimed_stem": "acappella",
+      "set_start_s": 1713.047,
+      "set_end_s": 1728.087,
+      "ref_start_s": 213.36,
+      "ref_end_s": 250.32,
+      "confidence": 0.014526033774018288,
+      "cue_anchor_s": 1714.0,
+      "name": "Porter Robinson - Sad Machine",
+      "start_source": "agentic:cue_prior+lyrics",
+      "probe_proposals": {
+        "mert_decode": 1721.22,
+        "fp": 1814.6162358276645,
+        "lyrics": 1712.605
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 4,
+        "fp_sharpness": 0.5,
+        "fp_delta_s": 93.4
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1667.61,
+          "ref_start_s": 213.36,
+          "ref_end_s": 237.37
+        },
+        {
+          "mix_start_s": 1717.11,
+          "ref_start_s": 223.4,
+          "ref_end_s": 250.32
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 208.945,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.7536
+    },
+    {
+      "slot_label": "18w2",
+      "recording_id": "2tll51np",
+      "claimed_stem": "acappella",
+      "set_start_s": 1744.087,
+      "set_end_s": 1757.207,
+      "ref_start_s": 44.65,
+      "ref_end_s": 62.67,
+      "confidence": 0.00808490440249443,
+      "cue_anchor_s": 1744.0,
+      "name": "Imagine Dragons - Demons (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics+mert_decode",
+      "probe_proposals": {
+        "mert_decode": 1743.76,
+        "fp": 1878.0763718820863,
+        "lyrics": 1744.13
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 4,
+        "fp_sharpness": 0.5,
+        "fp_delta_s": 134.3
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1744.13,
+          "ref_start_s": 44.65,
+          "ref_end_s": 62.67
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 44.800000000000004,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.7230721712112427,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 33.79,
+          "end_s": 65.02
+        },
+        {
+          "start_s": 97.76,
+          "end_s": 128.87
+        }
+      ],
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "18w3",
+      "recording_id": "21d380d5",
+      "claimed_stem": "acappella",
+      "set_start_s": 1758.905,
+      "set_end_s": 1758.928,
+      "ref_start_s": 168.9716099773243,
+      "ref_end_s": 168.99482993197284,
+      "confidence": 0.007188425865024328,
+      "cue_anchor_s": 1759.0,
+      "name": "AlunaGeorge - You Know You Like It (Acappella)",
+      "start_source": "agentic:cue_prior+mert_decode+surprise",
+      "probe_proposals": {
+        "mert_decode": 1758.74,
+        "fp": 1669.3754195011338,
+        "stem_hubert": 1711.9375963718821
+      },
+      "ref_decode_status": "skip-too-short",
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2322
+    },
+    {
+      "slot_label": "18w4",
+      "recording_id": "h6zhxyp",
+      "claimed_stem": "regular",
+      "set_start_s": 1773.184,
+      "set_end_s": 1789.484,
+      "ref_start_s": 95.76,
+      "ref_end_s": 112.04,
+      "confidence": 0.002210223115980625,
+      "cue_anchor_s": 1774.0,
+      "name": "DJ Snake & AlunaGeorge - You Know You Like It (Tchami Remix)",
+      "start_source": "agentic:cue_prior+fp+surprise",
+      "probe_proposals": {
+        "mert_decode": 1760.62,
+        "fp": 1773.5865759637188
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1773.59,
+          "ref_start_s": 95.76,
+          "ref_end_s": 112.04
+        }
+      ],
+      "ref_path_conf": 2.979,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 95.75909297052158,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.6992
+    },
+    {
+      "slot_label": "19",
+      "recording_id": "1b7ph9jx",
+      "claimed_stem": "regular",
+      "set_start_s": 1771.9,
+      "set_end_s": 1801.88,
+      "ref_start_s": 26.26,
+      "ref_end_s": 56.24,
+      "confidence": 0.0029291585087776184,
+      "cue_anchor_s": 1799.0,
+      "name": "Murtagh & Aiobahn - Follow Me",
+      "start_source": "agentic:surprise",
+      "probe_proposals": {
+        "mert_decode": 1808.52
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1808.52,
+          "ref_start_s": 26.26,
+          "ref_end_s": 56.24
+        }
+      ],
+      "ref_path_conf": 9.887,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 6.58,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.3625
+    },
+    {
+      "slot_label": "19w1",
+      "recording_id": "rh8dzzf",
+      "claimed_stem": "acappella",
+      "set_start_s": 1817.768,
+      "set_end_s": 1818.859,
+      "ref_start_s": 116.92,
+      "ref_end_s": 76.77,
+      "confidence": 0.0027135140262544155,
+      "cue_anchor_s": 1807.0,
+      "name": "Nico & Vinz - Am I Wrong (Acappella)",
+      "start_source": "agentic:lyrics+mert_decode",
+      "probe_proposals": {
+        "mert_decode": 1810.4,
+        "fp": 1838.648888888889,
+        "lyrics": 1817.785
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1772.79,
+          "ref_start_s": 116.92,
+          "ref_end_s": 133.35
+        },
+        {
+          "mix_start_s": 1788.29,
+          "ref_start_s": 165.35,
+          "ref_end_s": 167.43
+        },
+        {
+          "mix_start_s": 1790.25,
+          "ref_start_s": 167.43,
+          "ref_end_s": 169.5
+        },
+        {
+          "mix_start_s": 1792.2,
+          "ref_start_s": 167.43,
+          "ref_end_s": 169.5
+        },
+        {
+          "mix_start_s": 1792.2,
+          "ref_start_s": 169.5,
+          "ref_end_s": 169.5
+        },
+        {
+          "mix_start_s": 1794.15,
+          "ref_start_s": 167.43,
+          "ref_end_s": 169.5
+        },
+        {
+          "mix_start_s": 1794.15,
+          "ref_start_s": 169.5,
+          "ref_end_s": 169.5
+        },
+        {
+          "mix_start_s": 1796.1,
+          "ref_start_s": 169.5,
+          "ref_end_s": 169.5
+        },
+        {
+          "mix_start_s": 1796.1,
+          "ref_start_s": 167.43,
+          "ref_end_s": 169.5
+        },
+        {
+          "mix_start_s": 1798.05,
+          "ref_start_s": 167.43,
+          "ref_end_s": 169.5
+        },
+        {
+          "mix_start_s": 1798.05,
+          "ref_start_s": 169.5,
+          "ref_end_s": 169.5
+        },
+        {
+          "mix_start_s": 1800.0,
+          "ref_start_s": 169.5,
+          "ref_end_s": 173.83
+        },
+        {
+          "mix_start_s": 1804.09,
+          "ref_start_s": 13.7,
+          "ref_end_s": 76.77
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 20.465,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 3,
+        "membership": 0.7176409959793091,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 63.27,
+          "end_s": 79.06
+        },
+        {
+          "start_s": 112.15,
+          "end_s": 143.38
+        },
+        {
+          "start_s": 192.03,
+          "end_s": 239.4
+        }
+      ],
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2036
+    },
+    {
+      "slot_label": "19w2",
+      "recording_id": "1pb916wp",
+      "claimed_stem": "acappella",
+      "set_start_s": 1852.993,
+      "set_end_s": 1883.033,
+      "ref_start_s": 1.66,
+      "ref_end_s": 31.34,
+      "confidence": -0.005812497343868017,
+      "cue_anchor_s": 1853.0,
+      "name": "The Outfield - Your Love",
+      "start_source": "agentic:cue_prior+lyrics",
+      "probe_proposals": {
+        "mert_decode": 1859.12,
+        "fp": 1632.1073922902494,
+        "lyrics": 1852.99
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 5,
+        "fp_sharpness": 0.71,
+        "fp_delta_s": 227.0
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1852.99,
+          "ref_start_s": 1.66,
+          "ref_end_s": 31.34
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 1.345,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "19w3",
+      "recording_id": "1yk1tlcf",
+      "claimed_stem": "acappella",
+      "set_start_s": 1891.337,
+      "set_end_s": 1905.501,
+      "ref_start_s": 70.03,
+      "ref_end_s": 152.02,
+      "confidence": -0.0007746756309643388,
+      "cue_anchor_s": 1895.0,
+      "name": "Calvin Harris ft. Ellie Goulding - I Need Your Love (Acappella)",
+      "start_source": "agentic:cue_prior+stem_hubert+surprise",
+      "probe_proposals": {
+        "mert_decode": 1881.64,
+        "fp": 1911.7220861678004,
+        "lyrics": 1869.2849999999999
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1824.28,
+          "ref_start_s": 70.03,
+          "ref_end_s": 89.53
+        },
+        {
+          "mix_start_s": 1843.78,
+          "ref_start_s": 120.51,
+          "ref_end_s": 159.51
+        },
+        {
+          "mix_start_s": 1891.78,
+          "ref_start_s": 3.13,
+          "ref_end_s": 32.13
+        },
+        {
+          "mix_start_s": 1920.78,
+          "ref_start_s": 144.52,
+          "ref_end_s": 152.02
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 24.82,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.4225
+    },
+    {
+      "slot_label": "20",
+      "recording_id": "1xl1d8yp",
+      "claimed_stem": "instrumental",
+      "set_start_s": 1911.747,
+      "set_end_s": 1926.19,
+      "ref_start_s": 0.15,
+      "ref_end_s": 14.29,
+      "confidence": 0.0018266424303874373,
+      "cue_anchor_s": 1912.0,
+      "name": "Calvin Harris ft. Ellie Goulding - I Need Your Love",
+      "start_source": "agentic:cue_prior+fp+surprise",
+      "probe_proposals": {
+        "mert_decode": 1894.78,
+        "fp": 1911.7220861678004,
+        "instr_fp": 1911.7220861678004
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1911.72,
+          "ref_start_s": 0.15,
+          "ref_end_s": 14.29
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 0.2089795918366235,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.6995
+    },
+    {
+      "slot_label": "20w1",
+      "recording_id": "26465gy5",
+      "claimed_stem": "regular",
+      "set_start_s": 1916.47,
+      "set_end_s": 1931.75,
+      "ref_start_s": 185.99,
+      "ref_end_s": 194.11,
+      "confidence": 0.00016989670984912664,
+      "cue_anchor_s": 1919.0,
+      "name": "X Ambassadors - Unsteady",
+      "start_source": "agentic:cue_prior+mert_decode+surprise",
+      "probe_proposals": {
+        "mert_decode": 1921.24
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1921.24,
+          "ref_start_s": 185.99,
+          "ref_end_s": 194.11
+        }
+      ],
+      "ref_path_conf": 1.484,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 0.3,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 3,
+        "membership": 0.6339113712310791,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 0.46,
+          "end_s": 31.35
+        },
+        {
+          "start_s": 58.4,
+          "end_s": 106.7
+        },
+        {
+          "start_s": 123.99,
+          "end_s": 187.27
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.55
+    },
+    {
+      "slot_label": "20w2",
+      "recording_id": "15j5xh2x",
+      "claimed_stem": "regular",
+      "set_start_s": 1932.829,
+      "set_end_s": 1933.456,
+      "ref_start_s": 34.597732426303764,
+      "ref_end_s": 35.22467120181386,
+      "confidence": 0.001805452979169786,
+      "cue_anchor_s": 1933.0,
+      "name": "Britney Spears - Hold It Against Me",
+      "start_source": "agentic:cue_prior+fp+mert_decode",
+      "probe_proposals": {
+        "mert_decode": 1930.76,
+        "fp": 1932.712925170068
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.452
+    },
+    {
+      "slot_label": "20w3",
+      "recording_id": "tlp2594105",
+      "claimed_stem": "regular",
+      "set_start_s": 1951.387,
+      "set_end_s": 1953.964,
+      "ref_start_s": 61.69541950113398,
+      "ref_end_s": 64.27283446712022,
+      "confidence": 0.00375193590298295,
+      "cue_anchor_s": 1951.0,
+      "name": "Calvin Harris ft. Ellie Goulding - I Need Your Love (Xristo Remix)",
+      "start_source": "agentic:cue_prior+fp",
+      "probe_proposals": {
+        "mert_decode": 1936.52,
+        "fp": 1951.6604081632654
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2691
+    },
+    {
+      "slot_label": "20w4",
+      "recording_id": "tlp2594106",
+      "claimed_stem": "regular",
+      "set_start_s": 1963.474,
+      "set_end_s": 1974.48,
+      "ref_start_s": 94.71,
+      "ref_end_s": 105.81,
+      "confidence": 0.0034405365586280823,
+      "cue_anchor_s": 1965.0,
+      "name": "Kungs vs. Cookin' On 3 Burners ft. Kylie Auldist - This Girl (JAKKO & Marck! Bootleg)",
+      "start_source": "agentic:cue_prior+fp+surprise",
+      "probe_proposals": {
+        "mert_decode": 1955.72,
+        "fp": 1959.3462131519275
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1959.35,
+          "ref_start_s": 94.71,
+          "ref_end_s": 105.81
+        }
+      ],
+      "ref_path_conf": 0.945,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 94.7838548752834,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.6991
+    },
+    {
+      "slot_label": "20w5",
+      "recording_id": "53ntgjp",
+      "claimed_stem": "regular",
+      "set_start_s": 1980.862,
+      "set_end_s": 1996.222,
+      "ref_start_s": 0.0,
+      "ref_end_s": 9.36,
+      "confidence": -0.005652809515595436,
+      "cue_anchor_s": 1981.0,
+      "name": "The Game ft. 50 Cent - This Is How We Do",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 1978.76,
+        "fp": 1790.0263038548753
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 4,
+        "fp_sharpness": 0.57,
+        "fp_delta_s": 188.7
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1978.76,
+          "ref_start_s": 0.0,
+          "ref_end_s": 9.36
+        }
+      ],
+      "ref_path_conf": 1.727,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 0.08,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.3051
+    },
+    {
+      "slot_label": "21",
+      "recording_id": "7c22s6x",
+      "claimed_stem": "instrumental",
+      "set_start_s": 1996.025,
+      "set_end_s": 2075.832,
+      "ref_start_s": 25.17,
+      "ref_end_s": 89.67,
+      "confidence": -0.003802809864282608,
+      "cue_anchor_s": 1996.0,
+      "name": "Sebastian Ingrosso & Tommy Trash ft. John Martin - Reload",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 1982.6,
+        "instr_fp": 2013.704126984127
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2013.7,
+          "ref_start_s": 25.17,
+          "ref_end_s": 46.67
+        },
+        {
+          "mix_start_s": 2035.2,
+          "ref_start_s": 140.41,
+          "ref_end_s": 166.91
+        },
+        {
+          "mix_start_s": 2061.7,
+          "ref_start_s": 58.17,
+          "ref_end_s": 89.67
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 10.170340136054392,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "fiber_instances": [
+        {
+          "start_s": 15.79,
+          "end_s": 52.48
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.7
+    },
+    {
+      "slot_label": "21w1",
+      "recording_id": "273hkzrx",
+      "claimed_stem": "acappella",
+      "set_start_s": 2004.43,
+      "set_end_s": 2004.639,
+      "ref_start_s": 1.185,
+      "ref_end_s": 4.527891156462601,
+      "confidence": 0.00043124781223013997,
+      "cue_anchor_s": 2004.0,
+      "name": "Alessia Cara - Scars To Your Beautiful (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics+mert_decode",
+      "probe_proposals": {
+        "mert_decode": 2005.46,
+        "fp": 2006.8078004535148,
+        "lyrics": 2004.63
+      },
+      "ref_decode_status": "skip-too-short",
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "21w2",
+      "recording_id": "1c2x2c6f",
+      "claimed_stem": "acappella",
+      "set_start_s": 2049.895,
+      "set_end_s": 2051.149,
+      "ref_start_s": 129.94,
+      "ref_end_s": 142.21,
+      "confidence": -0.0014235064154490829,
+      "cue_anchor_s": 2048.0,
+      "name": "Oliver Heldens & Shaun Frank ft. Delaney Jane - Shades Of Grey (Acappella)",
+      "start_source": "agentic:cue_prior+fp+stem_hubert",
+      "probe_proposals": {
+        "mert_decode": 2076.72,
+        "fp": 2050.9953741496597,
+        "lyrics": 2035.26
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 1990.26,
+          "ref_start_s": 129.94,
+          "ref_end_s": 183.62
+        },
+        {
+          "mix_start_s": 2041.26,
+          "ref_start_s": 38.59,
+          "ref_end_s": 67.02
+        },
+        {
+          "mix_start_s": 2073.26,
+          "ref_start_s": 133.79,
+          "ref_end_s": 142.21
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 8.675,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.7530075311660767,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 31.23,
+          "end_s": 108.32
+        },
+        {
+          "start_s": 124.11,
+          "end_s": 155.23
+        }
+      ],
+      "driver_mode": "suggest",
+      "agentic_quality": 0.3506
+    },
+    {
+      "slot_label": "22",
+      "recording_id": "tlp2594111",
+      "claimed_stem": "instrumental",
+      "set_start_s": 2096.153,
+      "set_end_s": 2120.998,
+      "ref_start_s": 64.32,
+      "ref_end_s": 87.14,
+      "confidence": 0.0051742237992584705,
+      "cue_anchor_s": 2094.0,
+      "name": "Gazzo - Feel The Love",
+      "start_source": "agentic:cue_prior+mert_decode+surprise",
+      "probe_proposals": {
+        "mert_decode": 2097.4,
+        "fp": 2125.647528344671,
+        "instr_fp": 2129.711020408163
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2129.71,
+          "ref_start_s": 64.32,
+          "ref_end_s": 87.14
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 64.27283446711999,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.461
+    },
+    {
+      "slot_label": "22w1",
+      "recording_id": "2814q10p",
+      "claimed_stem": "regular",
+      "set_start_s": 2097.789,
+      "set_end_s": 2142.998,
+      "ref_start_s": 180.33,
+      "ref_end_s": 198.04,
+      "confidence": 0.0010112945456057787,
+      "cue_anchor_s": 2098.0,
+      "name": "Two Friends ft. Cosmos & Creature - Out Of Love",
+      "start_source": "agentic:cue_prior+mert_decode+surprise",
+      "probe_proposals": {
+        "mert_decode": 2097.82,
+        "fp": 2198.1402267573694
+      },
+      "placement_gated": {
+        "rule": "fp-gate-OVERRIDE",
+        "fp_votes": 293,
+        "fp_sharpness": 1.29,
+        "fp_delta_s": 100.3
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2198.14,
+          "ref_start_s": 180.33,
+          "ref_end_s": 198.04
+        }
+      ],
+      "ref_path_conf": 13.947,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 42.701496598639096,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2872
+    },
+    {
+      "slot_label": "22w2",
+      "recording_id": "2p27vuq5",
+      "claimed_stem": "regular",
+      "set_start_s": 1705.041,
+      "set_end_s": 1721.781,
+      "ref_start_s": 155.06,
+      "ref_end_s": 177.41,
+      "confidence": 0.002605775836855173,
+      "cue_anchor_s": 2130.0,
+      "name": "Panic! At The Disco - I Write Sins Not Tragedies",
+      "start_source": "agentic:fp",
+      "probe_proposals": {
+        "mert_decode": 2132.26,
+        "fp": 1705.04126984127
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 5,
+        "fp_sharpness": 0.71,
+        "fp_delta_s": 427.2
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2132.26,
+          "ref_start_s": 155.06,
+          "ref_end_s": 177.41
+        }
+      ],
+      "ref_path_conf": 2.545,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 0.38,
+      "fiber_ambiguity": {
+        "fiber_id": 1,
+        "n_instances": 2,
+        "membership": 0.613471508026123,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 47.83,
+          "end_s": 56.08
+        },
+        {
+          "start_s": 79.3,
+          "end_s": 175.31
+        }
+      ],
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2283
+    },
+    {
+      "slot_label": "22w3",
+      "recording_id": "1vy0dsmx",
+      "claimed_stem": "regular",
+      "set_start_s": 2166.074,
+      "set_end_s": 2204.991,
+      "ref_start_s": 54.52,
+      "ref_end_s": 83.49,
+      "confidence": 0.0010112945456057787,
+      "cue_anchor_s": 2166.0,
+      "name": "Two Friends ft. Cosmos & Creature - Out Of Love (Culture Code Remix)",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 2142.44,
+        "fp": 2157.6214058956916
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2157.62,
+          "ref_start_s": 54.52,
+          "ref_end_s": 83.49
+        }
+      ],
+      "ref_path_conf": 12.438,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 137.74077097505665,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.589332103729248,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 14.86,
+          "end_s": 85.91
+        },
+        {
+          "start_s": 104.03,
+          "end_s": 174.85
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.4199
+    },
+    {
+      "slot_label": "23",
+      "recording_id": "2814q10p",
+      "claimed_stem": "instrumental",
+      "set_start_s": 2196.632,
+      "set_end_s": 2243.699,
+      "ref_start_s": 41.22,
+      "ref_end_s": 88.22,
+      "confidence": -0.0024527176283299923,
+      "cue_anchor_s": 2197.0,
+      "name": "Two Friends ft. Cosmos & Creature - Out Of Love",
+      "start_source": "agentic:cue_prior+fp+surprise",
+      "probe_proposals": {
+        "mert_decode": 2192.82,
+        "fp": 2198.1402267573694,
+        "instr_fp": 2196.654149659864
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2196.65,
+          "ref_start_s": 41.22,
+          "ref_end_s": 88.22
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 41.21541950113351,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.7
+    },
+    {
+      "slot_label": "23w1",
+      "recording_id": "2pbphpjf",
+      "claimed_stem": "regular",
+      "set_start_s": 2195.716,
+      "set_end_s": 2221.036,
+      "ref_start_s": 180.93,
+      "ref_end_s": 191.59,
+      "confidence": 0.0010052646975964308,
+      "cue_anchor_s": 2197.0,
+      "name": "Jason Mraz - I'm Yours",
+      "start_source": "agentic:cue_prior+mert_decode+surprise",
+      "probe_proposals": {
+        "mert_decode": 2194.72,
+        "fp": 2304.5572789115645
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 2,
+        "fp_sharpness": 0.4,
+        "fp_delta_s": 109.8
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2194.72,
+          "ref_start_s": 180.93,
+          "ref_end_s": 191.59
+        }
+      ],
+      "ref_path_conf": 4.78,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 0.7,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.34
+    },
+    {
+      "slot_label": "23w2",
+      "recording_id": "2p27vuq5",
+      "claimed_stem": "regular",
+      "set_start_s": 2219.323,
+      "set_end_s": 2242.743,
+      "ref_start_s": 33.92,
+      "ref_end_s": 56.38,
+      "confidence": 0.0008356919279322028,
+      "cue_anchor_s": 2220.0,
+      "name": "Panic! At The Disco - I Write Sins Not Tragedies",
+      "start_source": "agentic:cue_prior+mert_decode+surprise",
+      "probe_proposals": {
+        "mert_decode": 2220.04,
+        "fp": 1705.04126984127
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 5,
+        "fp_sharpness": 0.71,
+        "fp_delta_s": 515.0
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2220.04,
+          "ref_start_s": 33.92,
+          "ref_end_s": 56.38
+        }
+      ],
+      "ref_path_conf": 5.221,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 0.38,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.4005
+    },
+    {
+      "slot_label": "24",
+      "recording_id": "dbyfd7p",
+      "claimed_stem": "regular",
+      "set_start_s": 2243.743,
+      "set_end_s": 2273.883,
+      "ref_start_s": 3.3,
+      "ref_end_s": 29.14,
+      "confidence": -0.0022091572172939777,
+      "cue_anchor_s": 2244.0,
+      "name": "Valentino Khan - Deep Down Low (Dapp Retwerk)",
+      "start_source": "agentic:cue_prior+fp+surprise",
+      "probe_proposals": {
+        "mert_decode": 2250.24,
+        "fp": 2243.9067573696143
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2243.91,
+          "ref_start_s": 3.3,
+          "ref_end_s": 29.14
+        }
+      ],
+      "ref_path_conf": 9.321,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 2.8792743764170154,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.5724161267280579,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 1.63,
+          "end_s": 72.56
+        },
+        {
+          "start_s": 75.58,
+          "end_s": 178.56
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.7
+    },
+    {
+      "slot_label": "24w1",
+      "recording_id": "d787thx",
+      "claimed_stem": "acappella",
+      "set_start_s": 2278.054,
+      "set_end_s": 2321.094,
+      "ref_start_s": 2.71,
+      "ref_end_s": 51.8,
+      "confidence": -0.004479696974158287,
+      "cue_anchor_s": 2280.0,
+      "name": "JAY-Z - 99 Problems (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics",
+      "probe_proposals": {
+        "mert_decode": 2272.88,
+        "fp": 2385.084081632653,
+        "lyrics": 2277.15
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 6,
+        "fp_sharpness": 1.2,
+        "fp_delta_s": 112.2
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2277.15,
+          "ref_start_s": 2.71,
+          "ref_end_s": 51.8
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 5.61,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "25",
+      "recording_id": "1d2j51t5",
+      "claimed_stem": "regular",
+      "set_start_s": 2316.211,
+      "set_end_s": 2391.211,
+      "ref_start_s": 99.1,
+      "ref_end_s": 170.73,
+      "confidence": -0.006348645780235529,
+      "cue_anchor_s": 2317.0,
+      "name": "Bali Bandits - Kaboom",
+      "start_source": "agentic:cue_prior+fp+surprise",
+      "probe_proposals": {
+        "mert_decode": 2318.22,
+        "fp": 2315.888616780045
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2315.89,
+          "ref_start_s": 99.1,
+          "ref_end_s": 109.38
+        },
+        {
+          "mix_start_s": 2327.87,
+          "ref_start_s": 110.96,
+          "ref_end_s": 122.94
+        },
+        {
+          "mix_start_s": 2341.85,
+          "ref_start_s": 125.5,
+          "ref_end_s": 137.48
+        },
+        {
+          "mix_start_s": 2355.83,
+          "ref_start_s": 64.06,
+          "ref_end_s": 74.34
+        },
+        {
+          "mix_start_s": 2367.81,
+          "ref_start_s": 150.94,
+          "ref_end_s": 170.73
+        }
+      ],
+      "ref_path_conf": 27.316,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 62.76353741496587,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.7
+    },
+    {
+      "slot_label": "25w1",
+      "recording_id": "26295qwf",
+      "claimed_stem": "acappella",
+      "set_start_s": 2316.338,
+      "set_end_s": 2316.895,
+      "ref_start_s": 13.0,
+      "ref_end_s": 88.51446712018151,
+      "confidence": -0.009793674573302269,
+      "cue_anchor_s": 2317.0,
+      "name": "Montell Jordan - This Is How We Do It (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics",
+      "probe_proposals": {
+        "mert_decode": 2321.6,
+        "fp": 2292.9937414965984,
+        "lyrics": 2316.03
+      },
+      "ref_decode_status": "skip-too-short",
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "26",
+      "recording_id": "22g3r615",
+      "claimed_stem": "regular",
+      "set_start_s": 2398.221,
+      "set_end_s": 2401.611,
+      "ref_start_s": 165.9297959183673,
+      "ref_end_s": 169.31990929705216,
+      "confidence": -0.0035028427373617887,
+      "cue_anchor_s": 2398.0,
+      "name": "DJ Snake & Yellow Claw - Ocho Cinco (Henry Fong Remix)",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 2398.42,
+        "fp": 2443.57514739229
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.4189
+    },
+    {
+      "slot_label": "26w1",
+      "recording_id": "9n99s8p",
+      "claimed_stem": "regular",
+      "set_start_s": 2397.716,
+      "set_end_s": 2440.156,
+      "ref_start_s": 79.57,
+      "ref_end_s": 108.38,
+      "confidence": -0.0028716374654322863,
+      "cue_anchor_s": 2399.0,
+      "name": "Jon Bellion ft. Travis Mendes - All Time Low",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 2400.28,
+        "fp": 2131.289977324263
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 3,
+        "fp_sharpness": 0.33,
+        "fp_delta_s": 269.0
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2400.28,
+          "ref_start_s": 79.57,
+          "ref_end_s": 108.38
+        }
+      ],
+      "ref_path_conf": 11.621,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 7.16,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.3282
+    },
+    {
+      "slot_label": "27w1",
+      "recording_id": "rfjn7pp",
+      "claimed_stem": "acappella",
+      "set_start_s": 2471.072,
+      "set_end_s": 2486.092,
+      "ref_start_s": 73.94,
+      "ref_end_s": 180.04,
+      "confidence": 0.005673253443092108,
+      "cue_anchor_s": 2473.0,
+      "name": "JAY-Z ft. Mr. Hudson - Forever Young (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics+mert_decode",
+      "probe_proposals": {
+        "mert_decode": 2472.3,
+        "fp": 2334.952199546485,
+        "lyrics": 2470.17
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 4,
+        "fp_sharpness": 0.67,
+        "fp_delta_s": 137.3
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2425.17,
+          "ref_start_s": 73.94,
+          "ref_end_s": 107.95
+        },
+        {
+          "mix_start_s": 2443.67,
+          "ref_start_s": 121.43,
+          "ref_end_s": 152.69
+        },
+        {
+          "mix_start_s": 2468.17,
+          "ref_start_s": 121.42,
+          "ref_end_s": 175.66
+        },
+        {
+          "mix_start_s": 2497.67,
+          "ref_start_s": 137.75,
+          "ref_end_s": 180.04
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 0.745,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "27w2",
+      "recording_id": "1gwv7rjf",
+      "claimed_stem": "acappella",
+      "set_start_s": 2487.133,
+      "set_end_s": 2502.133,
+      "ref_start_s": 31.61,
+      "ref_end_s": 46.71,
+      "confidence": -0.0007967866840772331,
+      "cue_anchor_s": 2487.0,
+      "name": "Sigala ft. Bryn Christopher - Sweet Lovin' (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics",
+      "probe_proposals": {
+        "mert_decode": 2487.32,
+        "fp": 1243.9626303854875,
+        "lyrics": 2487.1949999999997
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 329,
+        "fp_sharpness": 0.32,
+        "fp_delta_s": 1243.4
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2487.19,
+          "ref_start_s": 31.61,
+          "ref_end_s": 46.71
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 16.314999999999998,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "fiber_instances": [
+        {
+          "start_s": 29.61,
+          "end_s": 74.65
+        }
+      ],
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "28",
+      "recording_id": "1uzxl36x",
+      "claimed_stem": "instrumental",
+      "set_start_s": 2547.224,
+      "set_end_s": 2623.502,
+      "ref_start_s": 29.63,
+      "ref_end_s": 115.53,
+      "confidence": -0.001537266536615789,
+      "cue_anchor_s": 2547.0,
+      "name": "The Chainsmokers ft. Emily Warren - Paris (Pegboard Nerds Remix)",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 2528.58,
+        "fp": 2592.5079365079364,
+        "instr_fp": 2557.0975056689344
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2557.1,
+          "ref_start_s": 29.63,
+          "ref_end_s": 50.31
+        },
+        {
+          "mix_start_s": 2577.6,
+          "ref_start_s": 198.78,
+          "ref_end_s": 226.51
+        },
+        {
+          "mix_start_s": 2605.1,
+          "ref_start_s": 87.29,
+          "ref_end_s": 115.53
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 39.33460317460322,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.4916
+    },
+    {
+      "slot_label": "28w1",
+      "recording_id": "1futm3mp",
+      "claimed_stem": "regular",
+      "set_start_s": 2556.904,
+      "set_end_s": 2560.781,
+      "ref_start_s": 78.13514739229004,
+      "ref_end_s": 82.01287981859377,
+      "confidence": 0.0031763880979269743,
+      "cue_anchor_s": 2557.0,
+      "name": "Fall Out Boy - Sugar, We're Goin' Down",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 2547.32,
+        "fp": 2598.359365079365
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.3518
+    },
+    {
+      "slot_label": "28w2",
+      "recording_id": "1txxwd0f",
+      "claimed_stem": "acappella",
+      "set_start_s": 2612.065,
+      "set_end_s": 2636.065,
+      "ref_start_s": 161.99,
+      "ref_end_s": 254.84,
+      "confidence": -0.004131531808525324,
+      "cue_anchor_s": 2615.0,
+      "name": "Lil Jon & The Eastside Boyz & Ying Yang Twins - Get Low (Acappella)",
+      "start_source": "agentic:cue_prior+stem_hubert+surprise",
+      "probe_proposals": {
+        "mert_decode": 2609.62,
+        "fp": 1465.8989569160997,
+        "lyrics": 2562.59
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 3,
+        "fp_sharpness": 0.5,
+        "fp_delta_s": 1143.7
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2529.59,
+          "ref_start_s": 161.99,
+          "ref_end_s": 175.57
+        },
+        {
+          "mix_start_s": 2543.59,
+          "ref_start_s": 194.41,
+          "ref_end_s": 200.72
+        },
+        {
+          "mix_start_s": 2550.09,
+          "ref_start_s": 93.34,
+          "ref_end_s": 97.22
+        },
+        {
+          "mix_start_s": 2554.09,
+          "ref_start_s": 177.66,
+          "ref_end_s": 215.01
+        },
+        {
+          "mix_start_s": 2592.59,
+          "ref_start_s": 217.5,
+          "ref_end_s": 254.84
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 90.11500000000001,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.389
+    },
+    {
+      "slot_label": "29",
+      "recording_id": "tlp2594130",
+      "claimed_stem": "instrumental",
+      "set_start_s": 2633.986,
+      "set_end_s": 2718.878,
+      "ref_start_s": 2.42,
+      "ref_end_s": 107.49,
+      "confidence": 0.002332942094653845,
+      "cue_anchor_s": 2634.0,
+      "name": "Gazzo - Nothing To Lose",
+      "start_source": "agentic:cue_prior+fp+mert_decode+surprise",
+      "probe_proposals": {
+        "mert_decode": 2642.2,
+        "fp": 2634.2341950113378,
+        "instr_fp": 2636.0221315192744
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2636.02,
+          "ref_start_s": 2.42,
+          "ref_end_s": 6.42
+        },
+        {
+          "mix_start_s": 2640.02,
+          "ref_start_s": 13.27,
+          "ref_end_s": 26.77
+        },
+        {
+          "mix_start_s": 2653.52,
+          "ref_start_s": 40.49,
+          "ref_end_s": 107.49
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 22.987755102040865,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "fiber_instances": [
+        {
+          "start_s": 0.0,
+          "end_s": 12.89
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.7
+    },
+    {
+      "slot_label": "29w1",
+      "recording_id": "y0tvbwf",
+      "claimed_stem": "acappella",
+      "set_start_s": 2639.898,
+      "set_end_s": 2653.598,
+      "ref_start_s": 14.03,
+      "ref_end_s": 27.64,
+      "confidence": 0.01107282005250454,
+      "cue_anchor_s": 2639.0,
+      "name": "Kanye West ft. Rihanna - All Of The Lights (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics+mert_decode",
+      "probe_proposals": {
+        "mert_decode": 2647.34,
+        "fp": 1882.4881632653062,
+        "lyrics": 2640.245
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 12,
+        "fp_sharpness": 1.2,
+        "fp_delta_s": 764.9
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2640.24,
+          "ref_start_s": 14.03,
+          "ref_end_s": 27.64
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 13.37,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 4,
+        "membership": 0.5548842549324036,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 13.58,
+          "end_s": 28.1
+        },
+        {
+          "start_s": 79.99,
+          "end_s": 109.37
+        },
+        {
+          "start_s": 134.1,
+          "end_s": 175.54
+        },
+        {
+          "start_s": 245.9,
+          "end_s": 255.19
+        }
+      ],
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "29w2",
+      "recording_id": "2uq9800f",
+      "claimed_stem": "acappella",
+      "set_start_s": 2651.166,
+      "set_end_s": 2651.213,
+      "ref_start_s": 64.095,
+      "ref_end_s": 18.645623582766348,
+      "confidence": -0.0001871613785624504,
+      "cue_anchor_s": 2654.0,
+      "name": "Two Friends ft. MAX - Pacific Coast Highway (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics",
+      "probe_proposals": {
+        "mert_decode": 2666.2,
+        "fp": 2669.5749659863945,
+        "lyrics": 2649.8500000000004
+      },
+      "ref_decode_status": "skip-too-short",
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "29w3",
+      "recording_id": "cd1urnp",
+      "claimed_stem": "acappella",
+      "set_start_s": 2681.295,
+      "set_end_s": 2695.015,
+      "ref_start_s": 163.28,
+      "ref_end_s": 169.83,
+      "confidence": 0.005845070816576481,
+      "cue_anchor_s": 2668.0,
+      "name": "Timbaland ft. OneRepublic - Apologize (Acappella)",
+      "start_source": "agentic:lyrics",
+      "probe_proposals": {
+        "mert_decode": 2667.9,
+        "fp": 2129.9896598639457,
+        "lyrics": 2681.295
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 8,
+        "fp_sharpness": 1.33,
+        "fp_delta_s": 537.9
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2681.3,
+          "ref_start_s": 163.28,
+          "ref_end_s": 169.83
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 29.479999999999997,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 3,
+        "membership": 0.5849754810333252,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 50.16,
+          "end_s": 62.11
+        },
+        {
+          "start_s": 105.88,
+          "end_s": 120.16
+        },
+        {
+          "start_s": 140.48,
+          "end_s": 171.83
+        }
+      ],
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2654
+    },
+    {
+      "slot_label": "30",
+      "recording_id": "h52br35",
+      "claimed_stem": "regular",
+      "set_start_s": 2723.413,
+      "set_end_s": 2736.533,
+      "ref_start_s": 105.65,
+      "ref_end_s": 118.65,
+      "confidence": 0.003106735646724701,
+      "cue_anchor_s": 2723.0,
+      "name": "DubVision - Sweet Harmony",
+      "start_source": "agentic:cue_prior+fp+surprise",
+      "probe_proposals": {
+        "mert_decode": 2739.64,
+        "fp": 2723.2595011337867
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2723.26,
+          "ref_start_s": 105.65,
+          "ref_end_s": 118.65
+        }
+      ],
+      "ref_path_conf": 0.904,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 98.10430839002265,
+      "fiber_ambiguity": {
+        "fiber_id": 1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "fiber_instances": [
+        {
+          "start_s": 104.61,
+          "end_s": 119.12
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.6988
+    },
+    {
+      "slot_label": "30w1",
+      "recording_id": "1879dbcx",
+      "claimed_stem": "acappella",
+      "set_start_s": 2737.186,
+      "set_end_s": 2746.265,
+      "ref_start_s": 50.0,
+      "ref_end_s": 57.86,
+      "confidence": 0.002452259883284569,
+      "cue_anchor_s": 2737.0,
+      "name": "The Cure - Just Like Heaven",
+      "start_source": "agentic:cue_prior+lyrics+mert_decode",
+      "probe_proposals": {
+        "mert_decode": 2743.4,
+        "fp": 2737.1914739229023,
+        "lyrics": 2737.26
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2737.26,
+          "ref_start_s": 50.0,
+          "ref_end_s": 57.86
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 50.32,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "30w2",
+      "recording_id": "1mjr3m1x",
+      "claimed_stem": "acappella",
+      "set_start_s": 2760.973,
+      "set_end_s": 2761.367,
+      "ref_start_s": 60.245000000000005,
+      "ref_end_s": 49.876462585034005,
+      "confidence": -0.0027568864170461893,
+      "cue_anchor_s": 2761.0,
+      "name": "Melanie Martinez - Pity Party",
+      "start_source": "agentic:cue_prior+lyrics",
+      "probe_proposals": {
+        "mert_decode": 2749.02,
+        "fp": 2764.567800453515,
+        "lyrics": 2760.96
+      },
+      "ref_decode_status": "skip-too-short",
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "30w3",
+      "recording_id": "1q6swtyx",
+      "claimed_stem": "regular",
+      "set_start_s": 2789.064,
+      "set_end_s": 2792.036,
+      "ref_start_s": 161.8430839002267,
+      "ref_end_s": 164.81523809523787,
+      "confidence": 0.0031989901326596737,
+      "cue_anchor_s": 2790.0,
+      "name": "Don Diablo - Back In Time",
+      "start_source": "agentic:cue_prior+mert_decode+surprise",
+      "probe_proposals": {
+        "mert_decode": 2780.9,
+        "fp": 2806.1315192743764
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.4396
+    },
+    {
+      "slot_label": "31",
+      "recording_id": "qkk40nx",
+      "claimed_stem": "instrumental",
+      "set_start_s": 2820.826,
+      "set_end_s": 2862.808,
+      "ref_start_s": 30.21,
+      "ref_end_s": 59.75,
+      "confidence": -0.004584525711834431,
+      "cue_anchor_s": 2820.0,
+      "name": "Jack \u00dc ft. Kiesza - Take \u00dc There",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 2827.8,
+        "fp": 2839.405714285714,
+        "instr_fp": 2844.467664399093
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2844.47,
+          "ref_start_s": 30.21,
+          "ref_end_s": 41.71
+        },
+        {
+          "mix_start_s": 2855.97,
+          "ref_start_s": 149.71,
+          "ref_end_s": 167.21
+        },
+        {
+          "mix_start_s": 2873.47,
+          "ref_start_s": 47.25,
+          "ref_end_s": 59.75
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 30.209160997732397,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.704677164554596,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 13.82,
+          "end_s": 106.7
+        },
+        {
+          "start_s": 143.85,
+          "end_s": 167.76
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.4807
+    },
+    {
+      "slot_label": "31w1",
+      "recording_id": "jzr25jf",
+      "claimed_stem": "regular",
+      "set_start_s": 2820.525,
+      "set_end_s": 2820.549,
+      "ref_start_s": 25.193650793650704,
+      "ref_end_s": 25.216870748299243,
+      "confidence": -0.002422101330012083,
+      "cue_anchor_s": 2820.0,
+      "name": "Fountains Of Wayne - Stacy's Mom",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 2829.28,
+        "fp": 2832.8112471655327
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.3048
+    },
+    {
+      "slot_label": "31w2",
+      "recording_id": "1mftr92p",
+      "claimed_stem": "acappella",
+      "set_start_s": 2883.382,
+      "set_end_s": 2950.142,
+      "ref_start_s": 62.14,
+      "ref_end_s": 192.66,
+      "confidence": -0.006390351802110672,
+      "cue_anchor_s": 2874.0,
+      "name": "MIMS - This Is Why I'm Hot (Acappella)",
+      "start_source": "agentic:lyrics+surprise",
+      "probe_proposals": {
+        "mert_decode": 2877.24,
+        "fp": 2484.999546485261,
+        "lyrics": 2882.4799999999996
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 5,
+        "fp_sharpness": 0.83,
+        "fp_delta_s": 392.2
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2882.48,
+          "ref_start_s": 62.14,
+          "ref_end_s": 73.74
+        },
+        {
+          "mix_start_s": 2888.48,
+          "ref_start_s": 101.7,
+          "ref_end_s": 144.22
+        },
+        {
+          "mix_start_s": 2910.48,
+          "ref_start_s": 118.24,
+          "ref_end_s": 192.66
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 9.575,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.3347
+    },
+    {
+      "slot_label": "32",
+      "recording_id": "1r8rnl5x",
+      "claimed_stem": "instrumental",
+      "set_start_s": 2886.629,
+      "set_end_s": 2941.219,
+      "ref_start_s": 130.43,
+      "ref_end_s": 134.48,
+      "confidence": -0.0034272093325853348,
+      "cue_anchor_s": 2886.0,
+      "name": "Justin Caruso ft. Victoria Zaro - Talk About Me",
+      "start_source": "agentic:cue_prior+fp+surprise",
+      "probe_proposals": {
+        "mert_decode": 2895.08,
+        "fp": 2887.7032199546484,
+        "instr_fp": 2888.4694784580497
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2888.47,
+          "ref_start_s": 130.43,
+          "ref_end_s": 133.93
+        },
+        {
+          "mix_start_s": 2891.97,
+          "ref_start_s": 6.05,
+          "ref_end_s": 50.05
+        },
+        {
+          "mix_start_s": 2935.97,
+          "ref_start_s": 127.48,
+          "ref_end_s": 134.48
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 2.5541950113374696,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.5002468228340149,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 27.75,
+          "end_s": 56.08
+        },
+        {
+          "start_s": 64.2,
+          "end_s": 130.96
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.7
+    },
+    {
+      "slot_label": "32w1",
+      "recording_id": "22gjb1nf",
+      "claimed_stem": "acappella",
+      "set_start_s": 2895.024,
+      "set_end_s": 2895.186,
+      "ref_start_s": 11.265,
+      "ref_end_s": 15.23229024943339,
+      "confidence": 0.005024779587984085,
+      "cue_anchor_s": 2895.0,
+      "name": "Ed Sheeran - Shape Of You (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics+mert_decode",
+      "probe_proposals": {
+        "mert_decode": 2897.3,
+        "fp": 2899.591836734694,
+        "lyrics": 2895.025
+      },
+      "ref_decode_status": "skip-too-short",
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "32w2",
+      "recording_id": "1vv1fbwx",
+      "claimed_stem": "regular",
+      "set_start_s": 2942.96,
+      "set_end_s": 2987.054,
+      "ref_start_s": 79.81,
+      "ref_end_s": 124.72,
+      "confidence": -0.0014780055498704314,
+      "cue_anchor_s": 2944.0,
+      "name": "The Chainsmokers ft. ROZES - Roses",
+      "start_source": "agentic:cue_prior+fp",
+      "probe_proposals": {
+        "mert_decode": 2935.1,
+        "fp": 2942.223673469388
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2942.22,
+          "ref_start_s": 79.81,
+          "ref_end_s": 100.35
+        },
+        {
+          "mix_start_s": 2962.19,
+          "ref_start_s": 99.93,
+          "ref_end_s": 124.72
+        }
+      ],
+      "ref_path_conf": 15.985,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 85.12435374149663,
+      "fiber_ambiguity": {
+        "fiber_id": 1,
+        "n_instances": 2,
+        "membership": 0.7107125520706177,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 64.09,
+          "end_s": 120.51
+        },
+        {
+          "start_s": 160.1,
+          "end_s": 219.78
+        }
+      ],
+      "driver_mode": "suggest",
+      "agentic_quality": 0.3506
+    },
+    {
+      "slot_label": "32w3",
+      "recording_id": "2l9bw08x",
+      "claimed_stem": "acappella",
+      "set_start_s": 2950.133,
+      "set_end_s": 2968.802,
+      "ref_start_s": 35.08,
+      "ref_end_s": 53.95,
+      "confidence": -0.000807746488135308,
+      "cue_anchor_s": 2950.0,
+      "name": "Hailee Steinfeld & Grey ft. Zedd - Starving (Acappella)",
+      "start_source": "agentic:cue_prior+lyrics",
+      "probe_proposals": {
+        "mert_decode": 2941.76,
+        "fp": 2948.8181405895693,
+        "lyrics": 2950.195
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2950.2,
+          "ref_start_s": 35.08,
+          "ref_end_s": 53.95
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 20.335,
+      "fiber_ambiguity": {
+        "fiber_id": 1,
+        "n_instances": 3,
+        "membership": 0.7162388563156128,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 33.9,
+          "end_s": 71.87
+        },
+        {
+          "start_s": 101.12,
+          "end_s": 139.09
+        },
+        {
+          "start_s": 144.2,
+          "end_s": 155.92
+        }
+      ],
+      "driver_mode": "auto_commit",
+      "agentic_quality": 0.76
+    },
+    {
+      "slot_label": "33",
+      "recording_id": "57cy895",
+      "claimed_stem": "regular",
+      "set_start_s": 2987.058,
+      "set_end_s": 2990.077,
+      "ref_start_s": 61.37034013605444,
+      "ref_end_s": 64.38893424036269,
+      "confidence": 0.006814800202846527,
+      "cue_anchor_s": 2987.0,
+      "name": "Tim Berg - Bromance (Avicii Arena Mix)",
+      "start_source": "agentic:cue_prior+fp+mert_decode+surprise",
+      "probe_proposals": {
+        "mert_decode": 2990.56,
+        "fp": 2987.2239455782315
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.7
+    },
+    {
+      "slot_label": "33w1",
+      "recording_id": "2l9bw08x",
+      "claimed_stem": "acappella",
+      "set_start_s": 2947.959,
+      "set_end_s": 2966.628,
+      "ref_start_s": 35.08,
+      "ref_end_s": 53.95,
+      "confidence": 0.002582135144621134,
+      "cue_anchor_s": 2995.0,
+      "name": "Hailee Steinfeld & Grey ft. Zedd - Starving (Acappella)",
+      "start_source": "agentic:fp+lyrics+stem_hubert",
+      "probe_proposals": {
+        "mert_decode": 2996.06,
+        "fp": 2948.8181405895693,
+        "lyrics": 2950.195
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2950.2,
+          "ref_start_s": 35.08,
+          "ref_end_s": 53.95
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 20.335,
+      "fiber_ambiguity": {
+        "fiber_id": 1,
+        "n_instances": 3,
+        "membership": 0.7162388563156128,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 33.9,
+          "end_s": 71.87
+        },
+        {
+          "start_s": 101.12,
+          "end_s": 139.09
+        },
+        {
+          "start_s": 144.2,
+          "end_s": 155.92
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.5574
+    },
+    {
+      "slot_label": "33w2",
+      "recording_id": "14m0zkwp",
+      "claimed_stem": "acappella",
+      "set_start_s": 2949.523,
+      "set_end_s": 2982.333,
+      "ref_start_s": 86.77,
+      "ref_end_s": 119.27,
+      "confidence": 0.002156228292733431,
+      "cue_anchor_s": 3011.0,
+      "name": "The Chainsmokers ft. ROZES - Roses (Acappella)",
+      "start_source": "agentic:fp+stem_hubert",
+      "probe_proposals": {
+        "mert_decode": 2999.5,
+        "fp": 2948.678820861678,
+        "stem_hubert": 2950.7453968253967
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2948.68,
+          "ref_start_s": 86.77,
+          "ref_end_s": 119.27
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 187.5707936507938,
+      "fiber_ambiguity": {
+        "fiber_id": 1,
+        "n_instances": 3,
+        "membership": 0.577186107635498,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 74.07,
+          "end_s": 106.12
+        },
+        {
+          "start_s": 122.72,
+          "end_s": 131.19
+        },
+        {
+          "start_s": 170.09,
+          "end_s": 208.05
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.4294
+    },
+    {
+      "slot_label": "34",
+      "recording_id": "g99m0t5",
+      "claimed_stem": "instrumental",
+      "set_start_s": 3070.051,
+      "set_end_s": 3111.057,
+      "ref_start_s": 176.06,
+      "ref_end_s": 216.24,
+      "confidence": -0.0012644261587411165,
+      "cue_anchor_s": 3071.0,
+      "name": "Martin Garrix & Dua Lipa - Scared To Be Lonely",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 3041.28,
+        "fp": 3023.7024943310657,
+        "instr_fp": 3023.79537414966
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3023.8,
+          "ref_start_s": 176.06,
+          "ref_end_s": 216.24
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 175.5660770975055,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.4361
+    },
+    {
+      "slot_label": "34w1",
+      "recording_id": "28tckm0x",
+      "claimed_stem": "acappella",
+      "set_start_s": 3001.645,
+      "set_end_s": 3016.645,
+      "ref_start_s": 13.64,
+      "ref_end_s": 27.92,
+      "confidence": 0.006831752602010965,
+      "cue_anchor_s": 3084.0,
+      "name": "Mumford & Sons - The Cave",
+      "start_source": "agentic:lyrics",
+      "probe_proposals": {
+        "mert_decode": 3069.34,
+        "lyrics": 3001.645
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3001.64,
+          "ref_start_s": 13.64,
+          "ref_end_s": 27.92
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 10.68,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2757
+    },
+    {
+      "slot_label": "34w2",
+      "recording_id": "36sxy3x",
+      "claimed_stem": "acappella",
+      "set_start_s": 2720.938,
+      "set_end_s": 2735.938,
+      "ref_start_s": 54.34,
+      "ref_end_s": 72.47,
+      "confidence": 0.00409459276124835,
+      "cue_anchor_s": 3119.0,
+      "name": "Adele - Set Fire To The Rain (Acappella)",
+      "start_source": "agentic:fp",
+      "probe_proposals": {
+        "mert_decode": 3103.08,
+        "fp": 2720.937505668934,
+        "stem_hubert": 3032.9208163265307
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 5,
+        "fp_sharpness": 1.0,
+        "fp_delta_s": 382.1
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3032.92,
+          "ref_start_s": 54.34,
+          "ref_end_s": 72.47
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 0.32,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.702274739742279,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 44.12,
+          "end_s": 75.93
+        },
+        {
+          "start_s": 95.2,
+          "end_s": 145.47
+        }
+      ],
+      "driver_mode": "suggest",
+      "agentic_quality": 0.1714
+    },
+    {
+      "slot_label": "34w3",
+      "recording_id": "tfdwxp5",
+      "claimed_stem": "acappella",
+      "set_start_s": 3131.023,
+      "set_end_s": 3144.143,
+      "ref_start_s": 40.75,
+      "ref_end_s": 187.79,
+      "confidence": 0.0011032354086637497,
+      "cue_anchor_s": 3133.0,
+      "name": "Justin Bieber - Love Yourself (Acappella)",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 3159.34,
+        "fp": 3018.59410430839,
+        "lyrics": 3035.0699999999997
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 3,
+        "fp_sharpness": 0.43,
+        "fp_delta_s": 140.7
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 2997.57,
+          "ref_start_s": 40.75,
+          "ref_end_s": 53.63
+        },
+        {
+          "mix_start_s": 3007.07,
+          "ref_start_s": 94.17,
+          "ref_end_s": 133.49
+        },
+        {
+          "mix_start_s": 3036.07,
+          "ref_start_s": 37.96,
+          "ref_end_s": 80.67
+        },
+        {
+          "mix_start_s": 3067.57,
+          "ref_start_s": 157.28,
+          "ref_end_s": 162.67
+        },
+        {
+          "mix_start_s": 3071.62,
+          "ref_start_s": 162.67,
+          "ref_end_s": 164.28
+        },
+        {
+          "mix_start_s": 3072.83,
+          "ref_start_s": 164.28,
+          "ref_end_s": 167.54
+        },
+        {
+          "mix_start_s": 3075.27,
+          "ref_start_s": 162.67,
+          "ref_end_s": 164.28
+        },
+        {
+          "mix_start_s": 3076.48,
+          "ref_start_s": 167.54,
+          "ref_end_s": 180.97
+        },
+        {
+          "mix_start_s": 3086.57,
+          "ref_start_s": 180.97,
+          "ref_end_s": 182.94
+        },
+        {
+          "mix_start_s": 3088.06,
+          "ref_start_s": 182.94,
+          "ref_end_s": 185.9
+        },
+        {
+          "mix_start_s": 3090.28,
+          "ref_start_s": 180.97,
+          "ref_end_s": 182.94
+        },
+        {
+          "mix_start_s": 3091.76,
+          "ref_start_s": 185.9,
+          "ref_end_s": 187.79
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 8.25,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "fiber_instances": [
+        {
+          "start_s": 19.85,
+          "end_s": 75.81
+        }
+      ],
+      "driver_mode": "suggest",
+      "agentic_quality": 0.1842
+    },
+    {
+      "slot_label": "35",
+      "recording_id": "2mztl2xp",
+      "claimed_stem": "regular",
+      "set_start_s": 3161.227,
+      "set_end_s": 3175.247,
+      "ref_start_s": 202.32,
+      "ref_end_s": 209.18,
+      "confidence": 0.0016276517417281866,
+      "cue_anchor_s": 3147.0,
+      "name": "Jay Hardway - Bootcamp",
+      "start_source": "agentic:mert_decode+surprise",
+      "probe_proposals": {
+        "mert_decode": 3164.94,
+        "fp": 3063.617596371882
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 294,
+        "fp_sharpness": 0.17,
+        "fp_delta_s": 101.3
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3164.94,
+          "ref_start_s": 202.32,
+          "ref_end_s": 209.18
+        }
+      ],
+      "ref_path_conf": 1.511,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 0.48,
+      "fiber_ambiguity": {
+        "fiber_id": 1,
+        "n_instances": 2,
+        "membership": 0.6165196895599365,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 60.6,
+          "end_s": 134.79
+        },
+        {
+          "start_s": 154.41,
+          "end_s": 243.58
+        }
+      ],
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2775
+    },
+    {
+      "slot_label": "35w1",
+      "recording_id": "2q04x5fx",
+      "claimed_stem": "acappella",
+      "set_start_s": 3069.51,
+      "set_end_s": 3082.15,
+      "ref_start_s": 32.75,
+      "ref_end_s": 185.67,
+      "confidence": -0.0031987521797418594,
+      "cue_anchor_s": 3151.0,
+      "name": "Twenty One Pilots - Heathens (Acappella)",
+      "start_source": "agentic:lyrics",
+      "probe_proposals": {
+        "mert_decode": 3166.82,
+        "fp": 2736.727074829932,
+        "lyrics": 3069.51
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 3,
+        "fp_sharpness": 0.5,
+        "fp_delta_s": 430.1
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3024.51,
+          "ref_start_s": 32.75,
+          "ref_end_s": 87.75
+        },
+        {
+          "mix_start_s": 3052.01,
+          "ref_start_s": 37.79,
+          "ref_end_s": 72.79
+        },
+        {
+          "mix_start_s": 3069.51,
+          "ref_start_s": 76.67,
+          "ref_end_s": 80.83
+        },
+        {
+          "mix_start_s": 3071.6,
+          "ref_start_s": 80.83,
+          "ref_end_s": 83.61
+        },
+        {
+          "mix_start_s": 3072.99,
+          "ref_start_s": 83.61,
+          "ref_end_s": 88.19
+        },
+        {
+          "mix_start_s": 3075.3,
+          "ref_start_s": 80.83,
+          "ref_end_s": 83.61
+        },
+        {
+          "mix_start_s": 3076.69,
+          "ref_start_s": 88.19,
+          "ref_end_s": 107.83
+        },
+        {
+          "mix_start_s": 3086.55,
+          "ref_start_s": 107.83,
+          "ref_end_s": 110.78
+        },
+        {
+          "mix_start_s": 3088.04,
+          "ref_start_s": 110.78,
+          "ref_end_s": 115.21
+        },
+        {
+          "mix_start_s": 3090.27,
+          "ref_start_s": 107.83,
+          "ref_end_s": 110.78
+        },
+        {
+          "mix_start_s": 3091.75,
+          "ref_start_s": 115.21,
+          "ref_end_s": 185.67
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 2.475,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 3,
+        "membership": 0.6448356509208679,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 6.62,
+          "end_s": 47.95
+        },
+        {
+          "start_s": 73.14,
+          "end_s": 93.23
+        },
+        {
+          "start_s": 129.57,
+          "end_s": 149.19
+        }
+      ],
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2431
+    },
+    {
+      "slot_label": "35w2",
+      "recording_id": "1u0xwz85",
+      "claimed_stem": "acappella",
+      "set_start_s": 3106.615,
+      "set_end_s": 3111.259,
+      "ref_start_s": 174.15,
+      "ref_end_s": 209.9,
+      "confidence": 0.0012227825354784727,
+      "cue_anchor_s": 3181.0,
+      "name": "The White Stripes - Seven Nation Army (Acappella)",
+      "start_source": "agentic:lyrics",
+      "probe_proposals": {
+        "mert_decode": 3174.82,
+        "fp": 3219.6789115646257,
+        "lyrics": 3106.615
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3061.61,
+          "ref_start_s": 174.15,
+          "ref_end_s": 183.4
+        },
+        {
+          "mix_start_s": 3080.11,
+          "ref_start_s": 98.37,
+          "ref_end_s": 101.56
+        },
+        {
+          "mix_start_s": 3086.51,
+          "ref_start_s": 101.56,
+          "ref_end_s": 102.35
+        },
+        {
+          "mix_start_s": 3088.09,
+          "ref_start_s": 102.35,
+          "ref_end_s": 103.42
+        },
+        {
+          "mix_start_s": 3090.23,
+          "ref_start_s": 101.56,
+          "ref_end_s": 102.35
+        },
+        {
+          "mix_start_s": 3091.81,
+          "ref_start_s": 103.42,
+          "ref_end_s": 107.62
+        },
+        {
+          "mix_start_s": 3100.19,
+          "ref_start_s": 20.12,
+          "ref_end_s": 27.54
+        },
+        {
+          "mix_start_s": 3118.55,
+          "ref_start_s": 27.54,
+          "ref_end_s": 28.03
+        },
+        {
+          "mix_start_s": 3119.76,
+          "ref_start_s": 28.03,
+          "ref_end_s": 28.3
+        },
+        {
+          "mix_start_s": 3120.42,
+          "ref_start_s": 27.54,
+          "ref_end_s": 28.03
+        },
+        {
+          "mix_start_s": 3121.63,
+          "ref_start_s": 28.3,
+          "ref_end_s": 35.88
+        },
+        {
+          "mix_start_s": 3140.4,
+          "ref_start_s": 206.15,
+          "ref_end_s": 209.9
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 15.915000000000001,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2389
+    },
+    {
+      "slot_label": "35w3",
+      "recording_id": "13n64sf5",
+      "claimed_stem": "regular",
+      "set_start_s": 3208.892,
+      "set_end_s": 3259.86,
+      "ref_start_s": 149.26,
+      "ref_end_s": 102.57,
+      "confidence": -0.00015531927056144923,
+      "cue_anchor_s": 3209.0,
+      "name": "Dropgun - Ninja",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 3176.7,
+        "fp": 3106.040453514739
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3106.04,
+          "ref_start_s": 149.26,
+          "ref_end_s": 161.18
+        },
+        {
+          "mix_start_s": 3118.02,
+          "ref_start_s": 63.79,
+          "ref_end_s": 102.57
+        }
+      ],
+      "ref_path_conf": 18.608,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 171.71156462585031,
+      "fiber_ambiguity": {
+        "fiber_id": 2,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "fiber_instances": [
+        {
+          "start_s": 123.3,
+          "end_s": 191.33
+        }
+      ],
+      "driver_mode": "suggest",
+      "agentic_quality": 0.3831
+    },
+    {
+      "slot_label": "36",
+      "recording_id": "1c5fq6vp",
+      "claimed_stem": "instrumental",
+      "set_start_s": 3244.376,
+      "set_end_s": 3281.389,
+      "ref_start_s": 61.0,
+      "ref_end_s": 98.51,
+      "confidence": 0.004987279884517193,
+      "cue_anchor_s": 3241.0,
+      "name": "Mako - Let Go Of The Wheel (WE ARE FURY Remix)",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 3229.1,
+        "fp": 3188.4016326530614
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3188.4,
+          "ref_start_s": 61.0,
+          "ref_end_s": 98.51
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 67.0592290249433,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.4751
+    },
+    {
+      "slot_label": "36w1",
+      "recording_id": "4vpcxt5",
+      "claimed_stem": "regular",
+      "set_start_s": 3242.308,
+      "set_end_s": 3284.668,
+      "ref_start_s": 146.94,
+      "ref_end_s": 175.32,
+      "confidence": 0.0011570900678634644,
+      "cue_anchor_s": 3244.0,
+      "name": "Florence + The Machine - Dog Days Are Over",
+      "start_source": "agentic:cue_prior+mert_decode+surprise",
+      "probe_proposals": {
+        "mert_decode": 3246.06,
+        "fp": 2692.7020408163266
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 3,
+        "fp_sharpness": 0.75,
+        "fp_delta_s": 553.4
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3246.06,
+          "ref_start_s": 146.94,
+          "ref_end_s": 175.32
+        }
+      ],
+      "ref_path_conf": 12.295,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 0.04,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.367
+    },
+    {
+      "slot_label": "36w2",
+      "recording_id": "f9x17rx",
+      "claimed_stem": "acappella",
+      "set_start_s": 3196.082,
+      "set_end_s": 3197.87,
+      "ref_start_s": 160.93,
+      "ref_end_s": 80.91,
+      "confidence": 0.0005266983062028885,
+      "cue_anchor_s": 3279.0,
+      "name": "Kiiara - Gold",
+      "start_source": "agentic:fp+stem_hubert",
+      "probe_proposals": {
+        "mert_decode": 3260.18,
+        "fp": 3198.316553287982,
+        "stem_hubert": 3193.3010430839004
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3156.32,
+          "ref_start_s": 160.93,
+          "ref_end_s": 177.91
+        },
+        {
+          "mix_start_s": 3173.82,
+          "ref_start_s": 112.97,
+          "ref_end_s": 135.88
+        },
+        {
+          "mix_start_s": 3197.43,
+          "ref_start_s": 135.88,
+          "ref_end_s": 144.5
+        },
+        {
+          "mix_start_s": 3206.32,
+          "ref_start_s": 54.24,
+          "ref_end_s": 56.52
+        },
+        {
+          "mix_start_s": 3208.67,
+          "ref_start_s": 56.52,
+          "ref_end_s": 68.2
+        },
+        {
+          "mix_start_s": 3220.74,
+          "ref_start_s": 135.88,
+          "ref_end_s": 144.5
+        },
+        {
+          "mix_start_s": 3229.62,
+          "ref_start_s": 54.24,
+          "ref_end_s": 56.52
+        },
+        {
+          "mix_start_s": 3231.97,
+          "ref_start_s": 68.2,
+          "ref_end_s": 80.91
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 1.1842176870750336,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.5949925184249878,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 33.55,
+          "end_s": 47.83
+        },
+        {
+          "start_s": 120.28,
+          "end_s": 183.32
+        }
+      ],
+      "driver_mode": "suggest",
+      "agentic_quality": 0.3552
+    },
+    {
+      "slot_label": "37",
+      "recording_id": "2l8vbt4p",
+      "claimed_stem": "instrumental",
+      "set_start_s": 3315.534,
+      "set_end_s": 3326.889,
+      "ref_start_s": 217.5,
+      "ref_end_s": 228.83,
+      "confidence": -0.0013320837169885635,
+      "cue_anchor_s": 3313.0,
+      "name": "Tove Lo - Cool Girl (Two Friends Remix)",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 3316.62,
+        "instr_fp": 3298.7196371882087
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3298.72,
+          "ref_start_s": 217.5,
+          "ref_end_s": 228.83
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 76.44009070294805,
+      "fiber_ambiguity": {
+        "fiber_id": 1,
+        "n_instances": 2,
+        "membership": 0.5363004803657532,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 66.18,
+          "end_s": 138.16
+        },
+        {
+          "start_s": 179.14,
+          "end_s": 252.05
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.7
+    },
+    {
+      "slot_label": "37w1",
+      "recording_id": "199lcb8p",
+      "claimed_stem": "acappella",
+      "set_start_s": 3240.994,
+      "set_end_s": 3242.573,
+      "ref_start_s": 49.4,
+      "ref_end_s": 63.37,
+      "confidence": -0.0030617150478065014,
+      "cue_anchor_s": 3323.0,
+      "name": "Cheat Codes & Kris Kross Amsterdam - SEX (Acappella)",
+      "start_source": "agentic:fp+lyrics+stem_hubert",
+      "probe_proposals": {
+        "mert_decode": 3325.84,
+        "fp": 3241.4127891156463,
+        "lyrics": 3241.2400000000002
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3196.24,
+          "ref_start_s": 49.4,
+          "ref_end_s": 50.57
+        },
+        {
+          "mix_start_s": 3197.45,
+          "ref_start_s": 50.57,
+          "ref_end_s": 61.52
+        },
+        {
+          "mix_start_s": 3208.69,
+          "ref_start_s": 61.52,
+          "ref_end_s": 66.45
+        },
+        {
+          "mix_start_s": 3213.74,
+          "ref_start_s": 164.41,
+          "ref_end_s": 171.24
+        },
+        {
+          "mix_start_s": 3220.75,
+          "ref_start_s": 50.57,
+          "ref_end_s": 61.52
+        },
+        {
+          "mix_start_s": 3231.99,
+          "ref_start_s": 61.52,
+          "ref_end_s": 66.45
+        },
+        {
+          "mix_start_s": 3231.99,
+          "ref_start_s": 171.24,
+          "ref_end_s": 171.72
+        },
+        {
+          "mix_start_s": 3232.48,
+          "ref_start_s": 123.72,
+          "ref_end_s": 128.59
+        },
+        {
+          "mix_start_s": 3237.48,
+          "ref_start_s": 14.65,
+          "ref_end_s": 63.37
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 6.1000000000000005,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.7566421031951904,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 27.63,
+          "end_s": 75.46
+        },
+        {
+          "start_s": 87.07,
+          "end_s": 152.21
+        }
+      ],
+      "driver_mode": "review",
+      "agentic_quality": 0.5365
+    },
+    {
+      "slot_label": "37w2",
+      "recording_id": "2gcw8l8p",
+      "claimed_stem": "regular",
+      "set_start_s": 3369.117,
+      "set_end_s": 3408.957,
+      "ref_start_s": 155.64,
+      "ref_end_s": 172.94,
+      "confidence": 0.0012886251788586378,
+      "cue_anchor_s": 3361.0,
+      "name": "The Fray - You Found Me",
+      "start_source": "agentic:mert_decode+surprise",
+      "probe_proposals": {
+        "mert_decode": 3367.26
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3367.26,
+          "ref_start_s": 155.64,
+          "ref_end_s": 172.94
+        }
+      ],
+      "ref_path_conf": 11.862,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 0.38,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.3312
+    },
+    {
+      "slot_label": "38",
+      "recording_id": "df8k0u5",
+      "claimed_stem": "regular",
+      "set_start_s": 3398.616,
+      "set_end_s": 3429.615,
+      "ref_start_s": 111.29,
+      "ref_end_s": 139.66,
+      "confidence": 0.004450594075024128,
+      "cue_anchor_s": 3398.0,
+      "name": "Martin Garrix & Mesto - WIEE",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 3409.78,
+        "fp": 3316.9937414965984
+      },
+      "placement_gated": {
+        "rule": "fp-gate-OVERRIDE",
+        "fp_votes": 351,
+        "fp_sharpness": 1.92,
+        "fp_delta_s": 92.8
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3316.99,
+          "ref_start_s": 111.29,
+          "ref_end_s": 116.3
+        },
+        {
+          "mix_start_s": 3322.98,
+          "ref_start_s": 23.72,
+          "ref_end_s": 30.4
+        },
+        {
+          "mix_start_s": 3330.97,
+          "ref_start_s": 125.43,
+          "ref_end_s": 139.66
+        }
+      ],
+      "ref_path_conf": 8.501,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 16.323628117913813,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.4307
+    },
+    {
+      "slot_label": "38w1",
+      "recording_id": "k38prdx",
+      "claimed_stem": "acappella",
+      "set_start_s": 3328.92,
+      "set_end_s": 3355.56,
+      "ref_start_s": 6.22,
+      "ref_end_s": 59.65,
+      "confidence": 0.006716697011142969,
+      "cue_anchor_s": 3413.0,
+      "name": "Kygo & Selena Gomez - It Ain't Me (Acappella)",
+      "start_source": "agentic:lyrics",
+      "probe_proposals": {
+        "mert_decode": 3412.44,
+        "fp": 3105.0652154195013,
+        "lyrics": 3328.92
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 3,
+        "fp_sharpness": 0.43,
+        "fp_delta_s": 307.4
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3328.92,
+          "ref_start_s": 6.22,
+          "ref_end_s": 18.57
+        },
+        {
+          "mix_start_s": 3338.42,
+          "ref_start_s": 37.55,
+          "ref_end_s": 59.65
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 1.53,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2592
+    },
+    {
+      "slot_label": "38w2",
+      "recording_id": "1zptckrx",
+      "claimed_stem": "acappella",
+      "set_start_s": 3236.351,
+      "set_end_s": 3262.991,
+      "ref_start_s": 162.6,
+      "ref_end_s": 186.04,
+      "confidence": 0.00019168407015968114,
+      "cue_anchor_s": 3433.0,
+      "name": "Maroon 5 ft. Future - Cold (Acappella)",
+      "start_source": "agentic:fp",
+      "probe_proposals": {
+        "mert_decode": 3415.12,
+        "fp": 3236.3508390022675
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 6,
+        "fp_sharpness": 1.2,
+        "fp_delta_s": 178.8
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3415.12,
+          "ref_start_s": 162.6,
+          "ref_end_s": 186.04
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 2.18,
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2285
+    },
+    {
+      "slot_label": "38w3",
+      "recording_id": "17fp2h85",
+      "claimed_stem": "regular",
+      "set_start_s": 3361.019,
+      "set_end_s": 3399.541,
+      "ref_start_s": 40.68,
+      "ref_end_s": 79.2,
+      "confidence": 0.0003209550050087273,
+      "cue_anchor_s": 3449.0,
+      "name": "Clarx & Uplink - Titans",
+      "start_source": "agentic:fp",
+      "probe_proposals": {
+        "mert_decode": 3425.78,
+        "fp": 3361.0187755102043
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3361.02,
+          "ref_start_s": 40.68,
+          "ref_end_s": 79.2
+        }
+      ],
+      "ref_path_conf": 13.784,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 40.68136054421802,
+      "fiber_ambiguity": {
+        "fiber_id": 0,
+        "n_instances": 2,
+        "membership": 0.8215100169181824,
+        "ambiguous": true
+      },
+      "fiber_instances": [
+        {
+          "start_s": 3.72,
+          "end_s": 80.46
+        },
+        {
+          "start_s": 101.24,
+          "end_s": 177.98
+        }
+      ],
+      "driver_mode": "suggest",
+      "agentic_quality": 0.204
+    },
+    {
+      "slot_label": "39",
+      "recording_id": "1lnqmw75",
+      "claimed_stem": "instrumental",
+      "set_start_s": 3477.713,
+      "set_end_s": 3493.061,
+      "ref_start_s": 0.72,
+      "ref_end_s": 16.17,
+      "confidence": -0.0007092548767104745,
+      "cue_anchor_s": 3481.0,
+      "name": "Alan Walker ft. Iselin Solheim - Faded (Instrumental Version)",
+      "start_source": "agentic:cue_prior+surprise",
+      "probe_proposals": {
+        "mert_decode": 3459.1,
+        "fp": 3399.819319727891,
+        "instr_fp": 3496.4607709750567
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3399.82,
+          "ref_start_s": 0.72,
+          "ref_end_s": 16.17
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 1.5092970521541247,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.4305
+    },
+    {
+      "slot_label": "39w1",
+      "recording_id": "198ts0x5",
+      "claimed_stem": "acappella",
+      "set_start_s": 3405.451,
+      "set_end_s": 3432.071,
+      "ref_start_s": 25.08,
+      "ref_end_s": 57.11,
+      "confidence": 0.0008589487406425178,
+      "cue_anchor_s": 3491.0,
+      "name": "Coldplay - The Scientist (Acappella)",
+      "start_source": "agentic:lyrics+stem_hubert",
+      "probe_proposals": {
+        "mert_decode": 3483.18,
+        "fp": 3121.6442630385486,
+        "lyrics": 3408.565
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 3,
+        "fp_sharpness": 0.75,
+        "fp_delta_s": 361.5
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3408.57,
+          "ref_start_s": 25.08,
+          "ref_end_s": 57.11
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 26.445,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.4324
+    },
+    {
+      "slot_label": "39w2",
+      "recording_id": "tlp2594168",
+      "claimed_stem": "acappella",
+      "set_start_s": 3432.877,
+      "set_end_s": 3460.857,
+      "ref_start_s": 22.32,
+      "ref_end_s": 50.65,
+      "confidence": -0.00027872007922269404,
+      "cue_anchor_s": 3512.0,
+      "name": "Rent - Seasons Of Love",
+      "start_source": "agentic:lyrics+stem_hubert",
+      "probe_proposals": {
+        "mert_decode": 3491.14,
+        "fp": 2123.5345124716555,
+        "lyrics": 3431.72
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 4,
+        "fp_sharpness": 0.4,
+        "fp_delta_s": 1367.6
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3431.72,
+          "ref_start_s": 22.32,
+          "ref_end_s": 50.65
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 22.130000000000003,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.392
+    },
+    {
+      "slot_label": "39w3",
+      "recording_id": "1lnh2x95",
+      "claimed_stem": "acappella",
+      "set_start_s": 3457.602,
+      "set_end_s": 3457.741,
+      "ref_start_s": 61.83473922902522,
+      "ref_end_s": 61.97405895691645,
+      "confidence": -0.004223726689815521,
+      "cue_anchor_s": 3536.0,
+      "name": "Flume ft. Tove Lo - Say It (Acappella)",
+      "start_source": "agentic:fp+stem_hubert",
+      "probe_proposals": {
+        "mert_decode": 3513.78,
+        "fp": 3459.842902494331,
+        "stem_hubert": 3454.8273922902495
+      },
+      "ref_decode_status": "skip-too-short",
+      "driver_mode": "review",
+      "agentic_quality": 0.539
+    },
+    {
+      "slot_label": "39w4",
+      "recording_id": "2fn4gfk5",
+      "claimed_stem": "acappella",
+      "set_start_s": 3480.17,
+      "set_end_s": 3506.85,
+      "ref_start_s": 59.18,
+      "ref_end_s": 139.05,
+      "confidence": -0.004830457270145416,
+      "cue_anchor_s": 3557.0,
+      "name": "Afroman - Because I Got High (Acappella)",
+      "start_source": "agentic:lyrics",
+      "probe_proposals": {
+        "mert_decode": 3535.12,
+        "fp": 3123.2,
+        "lyrics": 3480.17
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 3,
+        "fp_sharpness": 0.5,
+        "fp_delta_s": 411.9
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3435.17,
+          "ref_start_s": 59.18,
+          "ref_end_s": 67.13
+        },
+        {
+          "mix_start_s": 3442.67,
+          "ref_start_s": 63.65,
+          "ref_end_s": 73.72
+        },
+        {
+          "mix_start_s": 3452.17,
+          "ref_start_s": 94.68,
+          "ref_end_s": 96.65
+        },
+        {
+          "mix_start_s": 3454.03,
+          "ref_start_s": 96.65,
+          "ref_end_s": 100.51
+        },
+        {
+          "mix_start_s": 3457.67,
+          "ref_start_s": 78.0,
+          "ref_end_s": 82.8
+        },
+        {
+          "mix_start_s": 3462.2,
+          "ref_start_s": 82.8,
+          "ref_end_s": 99.73
+        },
+        {
+          "mix_start_s": 3478.17,
+          "ref_start_s": 72.27,
+          "ref_end_s": 115.88
+        },
+        {
+          "mix_start_s": 3519.43,
+          "ref_start_s": 96.65,
+          "ref_end_s": 100.51
+        },
+        {
+          "mix_start_s": 3523.07,
+          "ref_start_s": 78.0,
+          "ref_end_s": 82.8
+        },
+        {
+          "mix_start_s": 3527.6,
+          "ref_start_s": 82.8,
+          "ref_end_s": 99.73
+        },
+        {
+          "mix_start_s": 3527.6,
+          "ref_start_s": 115.88,
+          "ref_end_s": 127.34
+        },
+        {
+          "mix_start_s": 3538.45,
+          "ref_start_s": 127.34,
+          "ref_end_s": 129.8
+        },
+        {
+          "mix_start_s": 3540.77,
+          "ref_start_s": 129.8,
+          "ref_end_s": 138.64
+        },
+        {
+          "mix_start_s": 3549.14,
+          "ref_start_s": 127.34,
+          "ref_end_s": 129.8
+        },
+        {
+          "mix_start_s": 3551.46,
+          "ref_start_s": 138.64,
+          "ref_end_s": 139.05
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 27.925,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2816
+    },
+    {
+      "slot_label": "39w5",
+      "recording_id": "glptj17f",
+      "claimed_stem": "regular",
+      "set_start_s": 3578.0,
+      "set_end_s": 3604.66,
+      "ref_start_s": 134.05,
+      "ref_end_s": 148.66,
+      "confidence": -0.0009976262226700783,
+      "cue_anchor_s": 3578.0,
+      "name": "Steve Miller Band - The Joker",
+      "start_source": "agentic:cue_prior",
+      "probe_proposals": {
+        "mert_decode": 3537.8
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3537.8,
+          "ref_start_s": 134.05,
+          "ref_end_s": 148.66
+        }
+      ],
+      "ref_path_conf": 6.178,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 1.46,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "review",
+      "agentic_quality": 0.5
+    },
+    {
+      "slot_label": "39w6",
+      "recording_id": "5currxf",
+      "claimed_stem": "acappella",
+      "set_start_s": 2075.934,
+      "set_end_s": 2102.594,
+      "ref_start_s": 195.7,
+      "ref_end_s": 223.79,
+      "confidence": 0.004162783268839121,
+      "cue_anchor_s": 3590.0,
+      "name": "Coldplay - Paradise (Acappella)",
+      "start_source": "agentic:fp",
+      "probe_proposals": {
+        "mert_decode": 3540.48,
+        "fp": 2075.933605442177,
+        "stem_hubert": 3502.567619047619
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 4,
+        "fp_sharpness": 0.5,
+        "fp_delta_s": 1464.5
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3502.57,
+          "ref_start_s": 195.7,
+          "ref_end_s": 223.79
+        }
+      ],
+      "ref_decoder": "looptrace",
+      "ref_decode_status": "looptrace",
+      "ref_start_detect": 0.02,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.2244
+    },
+    {
+      "slot_label": "39w7",
+      "recording_id": "14ml2byx",
+      "claimed_stem": "regular",
+      "set_start_s": 3125.661,
+      "set_end_s": 3152.341,
+      "ref_start_s": 22.5,
+      "ref_end_s": 51.14,
+      "confidence": -0.0074078598991036415,
+      "cue_anchor_s": 3601.0,
+      "name": "Louis The Child & Icona Pop - Weekend",
+      "start_source": "agentic:fp",
+      "probe_proposals": {
+        "mert_decode": 3543.12,
+        "fp": 3125.6613151927436
+      },
+      "placement_gated": {
+        "rule": "fp-gate-90s",
+        "fp_votes": 2,
+        "fp_sharpness": 0.15,
+        "fp_delta_s": 417.5
+      },
+      "ref_segments": [
+        {
+          "mix_start_s": 3543.12,
+          "ref_start_s": 22.5,
+          "ref_end_s": 51.14
+        }
+      ],
+      "ref_path_conf": 6.643,
+      "ref_decode_status": "legacy",
+      "ref_start_detect": 0.0,
+      "fiber_ambiguity": {
+        "fiber_id": -1,
+        "n_instances": 1,
+        "membership": 0.0,
+        "ambiguous": false
+      },
+      "driver_mode": "suggest",
+      "agentic_quality": 0.3104
+    }
+  ],
+  "skipped": [
+    {
+      "slot_label": "27",
+      "name": "Class & Clowns - ID 40"
+    }
+  ],
+  "ref_decode": "looptrace landmark Hough+DP (acappella,instrumental) + path_decode (others)",
+  "driver": "agentic (live)"
+}

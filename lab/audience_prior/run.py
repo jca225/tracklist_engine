@@ -1,6 +1,6 @@
 """Build familiarity(track | audience) for BB12 and test acappella vs instrumental.
 
-    venvs/audio/bin/python -m eda.audience_prior.run
+    venvs/audio/bin/python -m lab.audience_prior.run
 
 Hypothesis: the DJ picks acappellas the audience already knows (the recognition
 "payload"), while instrumentals are compatibility anchors the audience need not

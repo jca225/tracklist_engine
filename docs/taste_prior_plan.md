@@ -3,7 +3,7 @@
 **Status:** Phase 1 scaffold — SoundCloud cohort + likes on **pi-worker**.  
 **Home:** [personalization/](../personalization/)  
 **Sibling:** [aligner_attention_design.md](aligner_attention_design.md) (structure probe),
-[eda/corpus_empirics/findings.md](../eda/corpus_empirics/findings.md) §7 (user-history is
+[lab/corpus_empirics/findings.md](../lab/corpus_empirics/findings.md) §7 (user-history is
 per-user, not aggregate).
 
 ## Problem

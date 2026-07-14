@@ -1,0 +1,76 @@
+{
+  "bed_len_bars": "median=36.0  p25=26.6  p75=48.3  n=121",
+  "bed_len_quantization": {
+    "within_1bar_of_mult_of_4": 0.6,
+    "within_1bar_of_mult_of_8": 0.24,
+    "within_1bar_of_mult_of_16": 0.12,
+    "within_1bar_of_mult_of_32": 0.06
+  },
+  "acaps_per_bed": {
+    "0": 22,
+    "1": 43,
+    "2": 25,
+    "3": 27,
+    "4": 3,
+    "6": 1
+  },
+  "acap_len_bars": "median=15.9  p25=9.1  p75=22.1  n=192",
+  "acap_len_quantization": {
+    "within_1bar_of_mult_of_4": 0.65,
+    "within_1bar_of_mult_of_8": 0.46,
+    "within_1bar_of_mult_of_16": 0.19,
+    "within_1bar_of_mult_of_32": 0.02
+  },
+  "acap_len_rounded_top": [
+    [
+      8,
+      34
+    ],
+    [
+      16,
+      19
+    ],
+    [
+      17,
+      14
+    ],
+    [
+      9,
+      11
+    ],
+    [
+      20,
+      7
+    ],
+    [
+      12,
+      7
+    ],
+    [
+      7,
+      6
+    ],
+    [
+      24,
+      6
+    ],
+    [
+      13,
+      6
+    ],
+    [
+      14,
+      6
+    ]
+  ],
+  "entry_offset_bars": "median=17.3  p25=4.5  p75=28.3  n=192",
+  "entry_offset_quantization": {
+    "within_1bar_of_mult_of_4": 0.49,
+    "within_1bar_of_mult_of_8": 0.16,
+    "within_1bar_of_mult_of_16": 0.07,
+    "within_1bar_of_mult_of_32": 0.04
+  },
+  "exit_offset_bars": "median=5.1  p25=-0.1  p75=18.6  n=192",
+  "vocal_coverage_of_bed": "median=0.6  p25=0.2  p75=0.9  n=121",
+  "gap_between_sequential_acaps_bars": "median=7.1  p25=2.9  p75=8.6  n=36"
+}

@@ -15,7 +15,7 @@ the taxonomy lives in this index. Two subdirectories hold the rest:
   row. Moved scripts use `parents[2]` for repo root.
 
 > Corpus-empirics scripts that used to live here (`bb_popularity.py`,
-> `aux_db_sync.py`, `bb_*.py`) moved to `eda/corpus_empirics/` (commit 4a2fe45).
+> `aux_db_sync.py`, `bb_*.py`) moved to `lab/corpus_empirics/` (commit 4a2fe45).
 > Don't recreate them here.
 
 ## Stage map (live, flat)

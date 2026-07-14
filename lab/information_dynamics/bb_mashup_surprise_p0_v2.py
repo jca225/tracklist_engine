@@ -39,7 +39,7 @@ tempo — see ``_load_chroma_tempo``).
 
 Usage
 -----
-    venvs/audio/bin/python -m eda.information_dynamics.bb_mashup_surprise_p0_v2
+    venvs/audio/bin/python -m lab.information_dynamics.bb_mashup_surprise_p0_v2
 
 Persists headline metrics to aux.db under analysis_name='bb_mashup_surprise_p0_v2'
 (does NOT overwrite v1). Updates FINDINGS.md is done by hand.
@@ -57,7 +57,7 @@ from dataclasses import dataclass, replace
 import numpy as np
 
 # Reuse everything from v1 --------------------------------------------------
-from eda.information_dynamics.bb_mashup_surprise_p0 import (
+from lab.information_dynamics.bb_mashup_surprise_p0 import (
     ALIGNING,
     AUX_DB,
     BB11_DIR,
