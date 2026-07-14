@@ -14,7 +14,7 @@ mashup_compiler/server/   ←── product process (uvicorn)
   library/                       WAV files land here
 
 tracklist_engine/         ←── librarian process (polls state.db)
-  scripts/appleseed_librarian.py
+  lab/appleseed/appleseed_librarian.py
 ```
 
 Shared surface: the `state.db` path + `library/` folder. No network call
@@ -36,7 +36,7 @@ venv/bin/uvicorn server.app:app --host 0.0.0.0 --port 8500
 
 ```bash
 cd ~/Desktop/tracklist_engine
-venvs/audio/bin/python -m scripts.appleseed_librarian \
+venvs/audio/bin/python -m lab.appleseed.appleseed_librarian \
     --db ~/Desktop/mashup_compiler/server/state.db \
     --library ~/Desktop/mashup_compiler/server/library
 ```
@@ -98,7 +98,7 @@ the download is in flight.
 - SoundCloud slug-URL `player_id` extraction is cosmetically wrong when the
   URL is `soundcloud.com/artist/slug` rather than
   `api.soundcloud.com/tracks/<id>` — download works, filename is off. Fix in
-  `scripts/appleseed_librarian.py`.
+  `lab/appleseed/appleseed_librarian.py`.
 - Two requests for the same song title produce the same WAV filename and the
   second silently overwrites the first. Fix: add a uniqueness suffix
   (`_<row_id>`).

@@ -4,7 +4,7 @@
 
 **Goal:** (A) High-pass the acapella in the renderer so every mashup sounds pro (bass-swap: one low end at a time); (B) let a friend add ANY song to Appleseed by typing a name or pasting a link — the last barrier to entry — without putting a downloader in the product repo.
 
-**Architecture:** The product repo (`mashup_compiler`) stays downloader-free. The server records a **song request** in its SQLite; a **separate fulfiller process** living in the research repo (`tracklist_engine/scripts/appleseed_librarian.py`) polls that DB, fetches the best match with the existing ingest stack, drops a `.wav` into `server/library/`, and marks the request done/failed. The server's existing library scan + analyze pipeline turns that file into a ready, mashable song. Cross-repo coupling is one SQLite file path + one folder — no network, no downloader in the product.
+**Architecture:** The product repo (`mashup_compiler`) stays downloader-free. The server records a **song request** in its SQLite; a **separate fulfiller process** living in the research repo (`tracklist_engine/lab/appleseed/appleseed_librarian.py`) polls that DB, fetches the best match with the existing ingest stack, drops a `.wav` into `server/library/`, and marks the request done/failed. The server's existing library scan + analyze pipeline turns that file into a ready, mashable song. Cross-repo coupling is one SQLite file path + one folder — no network, no downloader in the product.
 
 **Tech Stack:** existing repo stacks. New: `scipy.signal` (already in the mashup_compiler venv) for the HPF; the fulfiller reuses `ingest.adapters.ytmusic_adapter.search` + `ingest.adapters.downloader.download_one` from tracklist_engine.
 
@@ -309,7 +309,7 @@ if (addForm) {
 ### Task 4: The librarian fulfiller (research repo)
 
 **Files:**
-- Create: `$TLE/scripts/appleseed_librarian.py`
+- Create: `$TLE/lab/appleseed/appleseed_librarian.py`
 - Test: `$TLE/tests/test_appleseed_librarian.py` (unit-test the pure pieces with the network mocked)
 
 **Interfaces:**
@@ -326,7 +326,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from scripts.appleseed_librarian import _best_hit, _safe_stem, _claim_one
+from lab.appleseed.appleseed_librarian import _best_hit, _safe_stem, _claim_one
 
 
 def test_safe_stem_sanitizes() -> None:
@@ -363,14 +363,14 @@ def test_claim_one_is_atomic(tmp_path: Path) -> None:
 
 - [ ] **Step 3: Run to verify FAIL** (ModuleNotFoundError).
 
-- [ ] **Step 4: Implement `scripts/appleseed_librarian.py`** — CLI + loop. Structure (fill the ingest calls from Step 1's real signatures):
+- [ ] **Step 4: Implement `lab/appleseed/appleseed_librarian.py`** — CLI + loop. Structure (fill the ingest calls from Step 1's real signatures):
 
 ```python
 """Appleseed librarian — fulfills song_requests from Appleseed's SQLite by
 fetching audio with the ingest stack into the app's library folder. Runs in
 tracklist_engine (has yt-dlp); the product repo stays downloader-free.
 
-    venvs/audio/bin/python -m scripts.appleseed_librarian \
+    venvs/audio/bin/python -m lab.appleseed.appleseed_librarian \
         --db ~/Desktop/mashup_compiler/server/state.db \
         --library ~/Desktop/mashup_compiler/server/library [--once]
 """
@@ -479,10 +479,10 @@ Wire `_fetch_to_library`'s two branches using the real ingest signatures from St
 ### Task 5: End-to-end wiring, docs, and the live demo
 
 **Files:**
-- Modify: `$MC/README.md`, `$MC/BACKLOG.md`; create `$TLE/docs/appleseed_librarian.md` (run instructions)
+- Modify: `$MC/README.md`, `$MC/BACKLOG.md`; create `$TLE/lab/appleseed/appleseed_librarian.md` (run instructions)
 
 - [ ] **Step 1: $MC README** — document: HPF/bass-swap now applied to acapellas; "Add any song" needs the librarian running (`$TLE` fulfiller command), and that the downloader deliberately lives outside the product repo. Commit in $MC.
-- [ ] **Step 2: $TLE run doc** (`docs/appleseed_librarian.md`) — the exact two-process runbook: server (`$MC/venv/bin/uvicorn server.app:app --host 0.0.0.0 --port 8500`) + librarian (`$TLE/venvs/audio/bin/python -m scripts.appleseed_librarian --db … --library …`), the request lifecycle (searching→fetching→wav lands→scan→analyzing→ready), and yt-dlp cookie/bot-check caveat (link to feedback_ytdlp_bot_detection_recipe). Commit in $TLE.
+- [ ] **Step 2: $TLE run doc** (`lab/appleseed/appleseed_librarian.md`) — the exact two-process runbook: server (`$MC/venv/bin/uvicorn server.app:app --host 0.0.0.0 --port 8500`) + librarian (`$TLE/venvs/audio/bin/python -m lab.appleseed.appleseed_librarian --db … --library …`), the request lifecycle (searching→fetching→wav lands→scan→analyzing→ready), and yt-dlp cookie/bot-check caveat (link to feedback_ytdlp_bot_detection_recipe). Commit in $TLE.
 - [ ] **Step 3: Manual end-to-end (John, real network)** — start server + librarian; in the library UI type a song name (e.g. one of the five-friend ideas) → watch it go searching → ready; then mash it with an existing song and confirm the HPF makes the acapella sit cleaner over the bed. Record the outcome in the $TLE doc. (Not a blocking automated gate — it's the real acceptance test.)
 - [ ] **Step 4: BACKLOG** ($MC) — mark HPF + any-song DONE; add: search-match confirmation UI (let the user pick among hits when the name is ambiguous), and the streaming-partner catalog as the eventual replacement for the local fulfiller. Commit in $MC.
 

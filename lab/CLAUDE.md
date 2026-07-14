@@ -22,8 +22,12 @@ sets); until then it is *preserved but deprioritized* against the alignment gate
   mashup-compatibility signal ("why did the DJ pick *this* pairing"). Weak-GO
   result (see `information_dynamics/FINDINGS.md`); persisted to `aux.db`.
 - **`audience_prior/`** — listener/taste priors ("why we like it").
-- **`specs/`** — product design docs for the empowerment layer (Appleseed /
-  compiler / cast), whose implementation lives in separate repos.
+- **`appleseed/`** — the Appleseed empowerment layer: `appleseed_librarian.py`
+  (the fulfiller that feeds the `mashup_compiler` product repo via one SQLite
+  file), its runbook + empowerment-layer doc, and its design specs. Stdlib-only,
+  no chain coupling; test in `tests/test_appleseed_librarian.py`.
+- **`specs/`** — product design docs for the rest of the empowerment layer
+  (compiler / cast), whose implementation lives in separate repos.
 
 ## Running
 

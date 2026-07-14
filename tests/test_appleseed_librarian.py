@@ -3,7 +3,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from scripts.appleseed_librarian import _best_hit, _safe_stem, _claim_one
+from lab.appleseed.appleseed_librarian import _best_hit, _safe_stem, _claim_one
 
 
 def test_safe_stem_sanitizes() -> None:

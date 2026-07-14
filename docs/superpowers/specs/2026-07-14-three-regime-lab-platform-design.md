@@ -5,7 +5,7 @@
 **Author:** John Abrahams (w/ Claude)
 **Companion docs:** [architecture_north_star.md](../../architecture_north_star.md) ·
 [alignment_status.md](../../alignment_status.md) ·
-[appleseed_empowerment_layer.md](../../appleseed_empowerment_layer.md)
+[appleseed_empowerment_layer.md](../../../lab/appleseed/appleseed_empowerment_layer.md)
 
 ---
 

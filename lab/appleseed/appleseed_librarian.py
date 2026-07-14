@@ -2,7 +2,7 @@
 fetching audio with the ingest stack into the app's library folder. Runs in
 tracklist_engine (has yt-dlp); the product repo stays downloader-free.
 
-    venvs/audio/bin/python -m scripts.appleseed_librarian \\
+    venvs/audio/bin/python -m lab.appleseed.appleseed_librarian \\
         --db ~/Desktop/mashup_compiler/server/state.db \\
         --library ~/Desktop/mashup_compiler/server/library [--once]
 
