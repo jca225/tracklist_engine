@@ -37,7 +37,7 @@ A JSON array of span objects, one per span in play order::
           {
             "probe": "fp",             // probe name (e.g. "fp", "mert", "hubert")
             "recording_id": "r1",      // null to abstain
-            "offset_s": 8.0,           // ref-frame offset (set_start_s - ref_start_s)
+            "offset_s": 8.0,           // ref-frame offset (ref_start_s - set_start_s)
             "confidence": 0.8,         // calibrated [0,1]
             "abstain": false,
             "features": [0.8, 1.2, 0.5]  // sharpness proxies (margin, z, prominence)
