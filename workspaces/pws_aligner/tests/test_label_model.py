@@ -34,32 +34,18 @@ def test_dawid_skene_recovers_accuracies_and_labels():
     ds = DawidSkene()
     ds.fit(spans)
     est = ds.probe_accuracy()
-    # After the C1 symmetric wrong-mass fix the EM fixed point changes: with 2 classes
-    # and correlated probes the 'good' probe is systematically underestimated because
-    # the corrected (1-a)/(K-1) formula makes votes for non-null hypotheses less
-    # discriminative against competing non-null hypotheses than the old (wrong)
-    # (1-a)/(K-2) formula.  What remains reliably guaranteed:
-    #   - good > bad and ok > bad (the "bad" probe is always the least accurate)
-    #   - all estimates within 0.20 of truth (wider than the old 0.12 for "good")
-    #   - MAP accuracy ≥ 0.80 on this easy 2-class synthetic
-    assert est["good"] > est["bad"], (
-        f"good({est['good']:.3f}) should beat bad({est['bad']:.3f})"
-    )
-    assert est["ok"] > est["bad"], (
-        f"ok({est['ok']:.3f}) should beat bad({est['bad']:.3f})"
-    )
+    # ranking preserved: good > ok > bad, each within 0.12 of truth
+    assert est["good"] > est["ok"] > est["bad"]
     for p in accs:
-        assert abs(est[p] - accs[p]) < 0.20, (
-            f"probe {p}: |{est[p]:.3f} - {accs[p]:.3f}| = {abs(est[p] - accs[p]):.3f} > 0.20"
-        )
-    # MAP accuracy must exceed chance (0.5) and the bad probe's solo accuracy (0.45).
-    # 0.80 is a conservative bar that holds robustly with the symmetric formula.
+        assert abs(est[p] - accs[p]) < 0.12
+    # label accuracy beats the worst probe and beats majority vote is not required,
+    # but MAP labels must be >= 0.9 correct on this easy synthetic
     correct = 0
     for votes, (rid, b) in zip(spans, truths):
         proba = ds.predict_proba(votes)
         top = max(proba, key=proba.get)
         correct += top == Hypothesis(rid, b)
-    assert correct / len(spans) >= 0.80
+    assert correct / len(spans) >= 0.9
 
 
 # ---------------------------------------------------------------------------
