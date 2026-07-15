@@ -294,9 +294,34 @@ decisive).
   batch 4 (plateau), output batch-invariant. See below.
 - **WS-encoder (MERT/HuBERT speedup):** QUEUED (see below).
 - **WS3 (anytime confidence):** untouched, still speculative per the plan.
-- **Next levers (from sota_speed_research_20260715.md):** ensemble reduction
-  3→2→1 passes + bf16/fp16 autocast (= flash-SDPA unlock) — measured by
-  `speed_quality_ab.py`, results section pending.
+- **Ensemble reduction (3→2→1 passes):** MEASURED — 1.27× (p2) / 2.42× (p1);
+  deploy gated on BB11/BB12 scorer invariance (see A/B RESULT below).
+- **Naive autocast (bf16/fp16):** NO-GO — see A/B RESULT below.
+
+## Ensemble/precision A/B RESULT — speed_quality_ab on AWS A10G (2026-07-15)
+
+3 real corpus tracks, `speed_quality_ab.py`, reference = shipped chain
+(3 unique passes, fp32, batch 4). Mean wall per track + per-stem SDR vs ref:
+
+| arm | wall | speedup | SDR vs ref (voc / inst) | read |
+|---|---|---|---|---|
+| p3_fp32 | 160.5 s | 1.00× | — | reference |
+| p2_fp32 (drop kimmel) | 126.0 s | **1.27×** | 28–30 / 182–184 dB | inst IDENTICAL (same 2-model ensemble — also validates the harness); vocals differ ~3–4% RMS = the kimmel contribution |
+| p1_fp32 (bs only) | 66.3 s | **2.42×** | 19–24 / 28–42 dB | single model vs ensemble |
+| p3_bf16 | ERROR | — | — | `view_as_complex ... BFloat16` — RoFormer complex ops are bf16-incompatible (proves autocast reaches the model) |
+| p3_fp16 | 158.4 s | 1.01× | 161–184 dB | output fp32-IDENTICAL → MSST's demix internals neutralize autocast for the heavy ops; no compute actually ran in half |
+| p1_fp16 | 66.2 s | 2.42× | = p1_fp32 | consistent with autocast no-op |
+
+**Verdicts.** (1) **Naive autocast around `MSSeparator.separate()` is a NO-GO**
+— fp16 does nothing (1.01×, bit-level-identical output), bf16 crashes. Real
+half-precision needs surgery inside MSST's inference loop (cast model+inputs,
+patch complex ops) — parked; nobody in the ecosystem ships it with quality
+numbers (see sota_speed_research_20260715.md finding on BSRoformer.cpp).
+(2) **Ensemble reduction is the live lever**: p2 = 1.27× with instrumental
+untouched; p1 = 2.42×. NOT deployable on SDR numbers alone — vocals stems feed
+HuBERT probes/alignment GT, so the gate is scorer invariance: re-separate
+BB11/BB12 refs with the reduced chain, run capture-votes/scorecard, compare.
+p2 is the low-risk candidate (only the vocal ensemble slims); p1 is the prize.
 
 ## WS1.5 A/B RESULT — defer-Essentia on AWS A10G (2026-07-15)
 
