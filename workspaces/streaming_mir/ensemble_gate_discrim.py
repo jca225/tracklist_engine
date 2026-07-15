@@ -53,6 +53,7 @@ def pull(remote: str, local: Path) -> None:
 
 
 def clip(src: Path, start: float, end: float, dst: Path) -> None:
+    dst.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         [
             "ffmpeg",
