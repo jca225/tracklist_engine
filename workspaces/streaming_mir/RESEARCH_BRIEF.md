@@ -256,6 +256,43 @@ follow-on levers, ranked:
 **WS1 status: DONE + validated.** Prefetch + persist-overlap landed
 (`400efae`); the corpus analysis loop now runs the GPU at ~100% duty.
 
+## WS2 REAL-SET RESULT — overlap seam heal on BB11 (2026-07-15)
+
+Same Vast RTX 4090. Three full renders of the BB11 mix (`set_audio_id=6`, 3581 s,
+RoFormer, `--no-push`): `ovl0` (hard cut, legacy), `ovl10` (10 s overlap+trim),
+and `pref` (10 s overlap, `--grid-offset-sec 180` → the shifted-grid
+pseudo-reference, since a 60-min set has no full-file offline reference). Scored
+by `seam_check.py`: SDR in ±2 s windows at each of the 9 chunk joins vs the
+pseudo-reference, with chunk-midpoint windows as the interior control.
+
+| stem | hard-cut (ovl0) join vs interior | overlap-10 (ovl10) join vs interior |
+|---|---|---|
+| vocals | 17.8 vs 41.7 dB → **−23.9 dB seam** (worst join −18.1 dB) | 41.9 vs 41.2 → **−0.78 dB (no seam)** |
+| instrumental | 22.5 vs 86.7 dB → **−64.2 dB seam** | 86.2 vs 86.7 → **+0.45 dB (within noise)** |
+
+**Verdict: the 10 s overlap fully heals the hard-cut seam on a real 60-min set
+with the production RoFormer ensemble.** 24–64 dB of boundary damage collapses to
+within ~0.5 dB of interior quality — passing the spec criterion (B join within
+0.5 dB of its interior control) and confirming the earlier MPS single-model sweep
+(plateau ~6 s, 10 s for safety) on real GPU + real audio. Worst-join ear-check
+clips at `workspaces/streaming_mir/ws2_snippets/` (untracked; SDR verdict already
+decisive).
+
+**WS2 status: CLOSED.** The `--overlap-sec 10` default in `render_set_stems.py`
+(`cad14a3`) is validated end-to-end; no further work.
+
+---
+
+## streaming_mir standing (2026-07-15)
+
+- **WS1 (throughput):** DONE — GPU duty 89% → ~100%, ~11% corpus wall-clock at
+  identical output. Next levers, ranked: (1) **WS1.5** overlap Essentia's ~18 s
+  CPU cost behind GPU separation (~13% more, low risk, same thread trick);
+  (2) batch the RoFormer forward pass (79% of analyze, invasive, needs
+  identical-output proof).
+- **WS2 (seam):** CLOSED — 10 s overlap validated on BB11.
+- **WS3 (anytime confidence):** untouched, still speculative per the plan.
+
 ## Research findings — per-task verdicts (2026-07-12, pass 2)
 
 Can a streaming/blockwise estimator converge to offline SOTA, and at what
