@@ -43,7 +43,12 @@
       "Bash(venvs/audio/bin/python -m audio_pipeline.main --set-id 1d9zwh49 --limit 1)",
       "Bash(cat)",
       "Bash(venvs/audio/bin/python /tmp/smoke_analyze.py)",
-      "Bash(PYTHONPATH=. venvs/audio/bin/python /tmp/smoke_analyze.py)"
+      "Bash(PYTHONPATH=. venvs/audio/bin/python /tmp/smoke_analyze.py)",
+      "Bash(curl -s https://console.vast.ai/api/v0/*)",
+      "Bash(curl -s -X PUT https://console.vast.ai/api/v0/*)",
+      "Bash(curl -s -X DELETE https://console.vast.ai/api/v0/*)",
+      "Bash(ssh vast *)",
+      "Bash(nc -z *)"
     ]
   }
 }
