@@ -15,7 +15,7 @@ the taxonomy lives in this index. Two subdirectories hold the rest:
   row. Moved scripts use `parents[2]` for repo root.
 
 > Corpus-empirics scripts that used to live here (`bb_popularity.py`,
-> `aux_db_sync.py`, `bb_*.py`) moved to `lab/corpus_empirics/` (commit 4a2fe45).
+> `aux_db_sync.py`, `bb_*.py`) moved to `eda/corpus_empirics/` (commit 4a2fe45).
 > Don't recreate them here.
 
 ## Stage map (live, flat)
@@ -74,6 +74,10 @@ the taxonomy lives in this index. Two subdirectories hold the rest:
 - `typecheck.sh` — mypy subset (`make check`, pre-commit, CI).
 
 **Vast provisioning / GPU workers — ⚠️ DO NOT MOVE OR RENAME:**
+- `vast_box.py` — Mac-side box-lifecycle CLI (search / rent / wait-ssh with
+  dud-host auto-re-rent / provision via GitHub clone / link-pi / destroy with
+  ownership ledger). Backs the `vast-box` skill. Not raw-URL-pinned; keep flat
+  like its siblings.
 - `vast_bootstrap.sh` — provisions an ephemeral Vast box.
 - `vast_run.sh` — launches a Vast run (`vast_worker` + pi-storage sshfs).
 - `vast_taste_embed.sh` — tail MERT embed (no pi-storage; label `taste-embed`).
