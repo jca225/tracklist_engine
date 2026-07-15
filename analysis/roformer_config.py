@@ -11,6 +11,14 @@ import yaml
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MSST_ROOT = _REPO_ROOT / "workspaces" / "msst_webui"
 
+_PRECISIONS = ("fp32", "bf16", "fp16")
+
+
+def _validated_precision(value: str) -> str:
+    if value not in _PRECISIONS:
+        raise ValueError(f"precision must be one of {_PRECISIONS}, got {value!r}")
+    return value
+
 
 @dataclass(frozen=True)
 class ModelSpec:
@@ -37,6 +45,12 @@ class RoformerChainConfig:
     # overlap-add is deterministic), just higher GPU utilization. Overrides
     # the model YAML's inference.batch_size via MSSeparator(inference_params=).
     batch_size: int = 1
+    # Inference compute dtype: fp32 | bf16 | fp16. Non-fp32 wraps the model
+    # forward in torch.autocast, which also lets SDPA dispatch flash-attention
+    # kernels (they are half-precision-only, so fp32 never engages them).
+    # Output is near-identical, NOT bit-identical — any non-fp32 default must
+    # first pass the real-music dB gate (streaming_mir precision A/B).
+    precision: str = "fp32"
 
     @property
     def version(self) -> str:
@@ -69,6 +83,7 @@ class RoformerChainConfig:
             output_format=data.get("output_format", "flac"),
             flac_bit_depth=data.get("flac_bit_depth", "PCM_16"),
             batch_size=int(data.get("batch_size", 1)),
+            precision=_validated_precision(data.get("precision", "fp32")),
         )
 
     @classmethod

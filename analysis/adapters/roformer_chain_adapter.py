@@ -26,6 +26,24 @@ from ..roformer_config import ModelSpec, RoformerChainConfig
 _log = logging.getLogger(__name__)
 
 
+def _autocast(precision: str, device: str):
+    """torch.autocast for bf16/fp16 inference; nullcontext for fp32.
+
+    Half precision also unlocks SDPA's flash-attention kernels (fp16/bf16-only),
+    which fp32 inference can never dispatch. Near-identical output — see
+    RoformerChainConfig.precision.
+    """
+    if precision == "fp32":
+        import contextlib
+
+        return contextlib.nullcontext()
+    import torch
+
+    dev = "cuda" if device.startswith("cuda") else device
+    dtype = torch.bfloat16 if precision == "bf16" else torch.float16
+    return torch.autocast(device_type=dev, dtype=dtype)
+
+
 @dataclass(frozen=True)
 class RoformerChainHandle:
     config: RoformerChainConfig
@@ -176,7 +194,8 @@ def _run_model(
             mix = np.stack([mix, mix])
         t0 = time.monotonic()
         with cwd:
-            raw = sep.separate(mix)
+            with _autocast(h.config.precision, h.device):
+                raw = sep.separate(mix)
             sep.del_cache()
         stems = dict(raw)
         if "instrumental" not in stems and "other" in stems:

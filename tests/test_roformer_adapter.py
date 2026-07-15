@@ -54,3 +54,35 @@ def test_roformer_config_with_batch_size_override() -> None:
     assert cfg.batch_size == 16
     # unrelated fields preserved
     assert len(cfg.vocal_models) == 3
+
+
+def test_roformer_config_precision_parsed_from_dict() -> None:
+    cfg = RoformerChainConfig.from_dict(
+        {
+            "vocal_models": [{"model_type": "bs_roformer", "ckpt": "a.ckpt"}],
+            "instrumental_models": [{"model_type": "bs_roformer", "ckpt": "b.ckpt"}],
+            "precision": "bf16",
+        }
+    )
+    assert cfg.precision == "bf16"
+
+
+def test_roformer_config_precision_defaults_to_fp32() -> None:
+    # fp32 = shipped behavior; bf16/fp16 are experiment-only until they pass
+    # the near-identical gate (see streaming_mir precision A/B).
+    assert RoformerChainConfig.default().precision == "fp32"
+
+
+def test_roformer_config_precision_rejects_unknown() -> None:
+    import pytest
+
+    with pytest.raises(ValueError):
+        RoformerChainConfig.from_dict(
+            {
+                "vocal_models": [{"model_type": "bs_roformer", "ckpt": "a.ckpt"}],
+                "instrumental_models": [
+                    {"model_type": "bs_roformer", "ckpt": "b.ckpt"}
+                ],
+                "precision": "int8",
+            }
+        )
