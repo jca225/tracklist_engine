@@ -20,10 +20,11 @@ def test_roformer_config_msst_root_resolves() -> None:
     assert cfg.msst_root.is_dir() or cfg.msst_root.name == "msst_webui"
 
 
-def test_roformer_config_batch_size_defaults_to_1() -> None:
-    # Default MUST stay 1 — the corpus behavior before the batching knob.
+def test_roformer_config_shipped_default_is_4() -> None:
+    # roformer_chain.yaml ships batch_size: 4 — the validated sweet spot
+    # (1.65x, plateaus there; output batch-invariant). See WS-batching result.
     cfg = RoformerChainConfig.default()
-    assert cfg.batch_size == 1
+    assert cfg.batch_size == 4
 
 
 def test_roformer_config_batch_size_parsed_from_dict() -> None:
