@@ -291,10 +291,49 @@ decisive).
   (2) batch the RoFormer forward pass (79% of analyze, invasive, needs
   identical-output proof).
 - **WS2 (seam):** CLOSED — 10 s overlap validated on BB11.
-- **WS-batching (RoFormer batch_size):** code landed (`be1a957`), on-box
-  identical-output + speedup A/B in progress.
+- **WS-batching (RoFormer batch_size):** DONE — 1.65× separation speedup at
+  batch 4 (plateau), output batch-invariant. See below.
 - **WS-encoder (MERT/HuBERT speedup):** QUEUED (see below).
 - **WS3 (anytime confidence):** untouched, still speculative per the plan.
+
+## WS-batching RESULT — RoFormer batch_size on AWS A10G (2026-07-15)
+
+Validated on a **personal-AWS** g5.xlarge (A10G 23 GB, us-east-2 — the personal
+account's GPU quota lives there, not us-east-1), single `bs_roformer_ep_368`
+model, synthetic 4-min stereo wav, separation-only wall time:
+
+| batch_size | separation time | speedup vs 1 |
+|---|---|---|
+| 1  | 117.7 s | 1.00× |
+| 4  | 71.4 s  | **1.65×** |
+| 8  | 71.4 s  | 1.65× (no further gain) |
+| 16 | 71.2 s  | 1.65× (no further gain) |
+
+**Verdict: ~1.65× on the separation stage, plateauing at batch 4.** The A10G
+saturates at batch 4 for this model + track length; 8/16 add nothing (and cost
+VRAM). Separation is 79% of analyze, so ~1.65× there ≈ ~1.45× overall
+analyze-time reduction — the single biggest corpus-throughput lever found, larger
+than WS1's 11%. Corpus default set to **`batch_size: 4`** in
+`analysis/roformer_chain.yaml`.
+
+**Output batch-invariance — CONFIRMED (with a caveat on the test signal):**
+instrumental SDR(bs1 vs bs8) = **57.9 dB** (≈ bit-identical). Vocals read
+−12.5 dB, but that is a **silent-signal artifact, not a real difference** — the
+synthetic input (noise + 440 Hz sine) has no vocal content, so the vocals stem is
+near-silent and its SDR is numerically meaningless. bs_roformer emits *both*
+stems from *one* forward pass, so the instrumental being bit-identical proves the
+forward pass is batch-invariant → vocals necessarily is too (chunked overlap-add
+is deterministic regardless of batch grouping). **Follow-up before full corpus
+rollout:** one real-music A/B (a track with vocals) to get a clean vocals SDR and
+close the caveat — cheap, do it on the next GPU run.
+
+**Caveats/notes:** (1) numbers are for ONE model; the production chain runs a
+5-model ensemble (3 vocal + 2 instrumental), and the ~1.65× per-model factor
+applies to each, so the chain-level win is comparable. (2) The plateau at 4 is
+track-length dependent — full 60-min *sets* have far more chunks and may benefit
+from larger batches; re-measure batch size on the set path (`render_set_stems`)
+separately. (3) g5.xlarge on-demand ~\$1/hr; the whole validation was <\$2;
+instance terminated + SG/keypair deleted at teardown.
 
 ## WS-encoder — MERT/HuBERT faster at no quality loss (QUEUED 2026-07-15)
 

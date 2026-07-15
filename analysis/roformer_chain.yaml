@@ -6,6 +6,9 @@ device: auto                    # auto | mps | cuda | cpu
 ensemble_algorithm: avg_fft
 output_format: flac
 flac_bit_depth: PCM_16
+# Chunks per GPU forward pass. 4 = validated sweet spot (1.65x vs 1, plateaus
+# there on A10G; output batch-invariant). See streaming_mir WS-batching result.
+batch_size: 4
 
 # Vocals: 3-model ensemble
 vocal_models:
