@@ -291,7 +291,47 @@ decisive).
   (2) batch the RoFormer forward pass (79% of analyze, invasive, needs
   identical-output proof).
 - **WS2 (seam):** CLOSED — 10 s overlap validated on BB11.
+- **WS-batching (RoFormer batch_size):** code landed (`be1a957`), on-box
+  identical-output + speedup A/B in progress.
+- **WS-encoder (MERT/HuBERT speedup):** QUEUED (see below).
 - **WS3 (anytime confidence):** untouched, still speculative per the plan.
+
+## WS-encoder — MERT/HuBERT faster at no quality loss (QUEUED 2026-07-15)
+
+Same batching lesson applied to the transformer encoders. **Priority context:**
+in the corpus loop MERT is only ~3.7% (5.1 s/track) and HuBERT is absent
+(HuBERT lives in the aligner: `fp_probe`/`stem_placement`/`joint_ref_decode`/
+`lyrics_align`, all layer 9). So this matters for **(a)** the planned MERT-95M→330M
+upgrade (~3× cost → MERT becomes a real slice) and **(b)** running the aligner at
+~40k-set scale — not for shaving the current corpus loop. Do it AFTER RoFormer
+batching + WS1.5.
+
+Verified against the code, ranked by how lossless each is:
+
+1. **Batch the 10 s chunks (truly lossless, #1 lever).** `mert_adapter`
+   (`analysis/adapters/mert_adapter.py:196`) and the HuBERT feature code both run
+   one forward pass PER chunk in a Python `for` loop. Stack N chunks into one
+   batched forward → mathematically identical output, big GPU-util win (the
+   RoFormer lesson).
+2. **Early-exit at the consumed layer (lossless, single-layer consumers only).**
+   HuBERT uses layer 9 of 12 → compute 1–9, skip 10–12 (~25% off, bit-identical).
+   personalization MERT uses layer 6 → skip 7–12 (~50% off). **NOT** the corpus
+   MERT production path — it deliberately `torch.stack`s ALL 13 hidden states
+   (`mert_adapter.py:205`) for the future learned weighted-sum head; early-exit
+   would break that design.
+3. **bf16/fp16 autocast (near-free).** Corpus MERT already STORES fp16 but
+   COMPUTES fp32 (`mert_adapter.py:205-206`) — the fp32 precision is discarded at
+   storage anyway, so a bf16 forward is ~2× + half VRAM at negligible cosine
+   drift. Strongest near-free lever.
+4. **SDPA/FlashAttention** (`attn_implementation="sdpa"`) + **torch.compile** —
+   near-identical numerics, 1.2–2×.
+5. **Distillation (distilHuBERT / MERT-lite) — LOSSY**, only with a downstream
+   equivalence gate (alignment SDR / taste AUC held).
+
+**Equivalence gate:** cosine ≈1.0 for #1–4 (bit-identical for #1–2), downstream
+metric for #5 — same discipline as the RoFormer batch A/B. Near-free combo =
+batch chunks + bf16 + (HuBERT) early-exit → plausibly 3–4× on aligner HuBERT,
+~2× on corpus MERT, zero measurable loss.
 
 ## Research findings — per-task verdicts (2026-07-12, pass 2)
 
