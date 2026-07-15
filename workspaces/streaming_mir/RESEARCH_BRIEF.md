@@ -316,16 +316,29 @@ analyze-time reduction — the single biggest corpus-throughput lever found, lar
 than WS1's 11%. Corpus default set to **`batch_size: 4`** in
 `analysis/roformer_chain.yaml`.
 
-**Output batch-invariance — CONFIRMED (with a caveat on the test signal):**
-instrumental SDR(bs1 vs bs8) = **57.9 dB** (≈ bit-identical). Vocals read
-−12.5 dB, but that is a **silent-signal artifact, not a real difference** — the
-synthetic input (noise + 440 Hz sine) has no vocal content, so the vocals stem is
-near-silent and its SDR is numerically meaningless. bs_roformer emits *both*
-stems from *one* forward pass, so the instrumental being bit-identical proves the
-forward pass is batch-invariant → vocals necessarily is too (chunked overlap-add
-is deterministic regardless of batch grouping). **Follow-up before full corpus
-rollout:** one real-music A/B (a track with vocals) to get a clean vocals SDR and
-close the caveat — cheap, do it on the next GPU run.
+**Output batch-invariance — CONFIRMED on real music (near-identical, not
+bit-identical).** Re-tested on a real full song (Coldplay – A Sky Full Of Stars,
+both stems carry real energy — vocals rms 0.11), bs1 vs bs8:
+
+| stem | SDR(bs1 vs bs8) | interpretation |
+|---|---|---|
+| vocals | **38.1 dB** | ~1.3% RMS diff — inaudible |
+| instrumental | **48.0 dB** | ~0.4% RMS diff — inaudible |
+
+This **revises the earlier "mathematically identical" claim**: batching is
+near-identical, not bit-identical. Batch 1 vs batch 8 take different GPU
+kernel/reduction paths, so there is tiny floating-point divergence — expected GPU
+non-determinism, not a correctness bug. It is immaterial: the 38 dB batch-to-batch
+difference sits **~27 dB below the model's own ~11 dB separation SDR vs ground
+truth**, so the stems are perceptually identical and fine for alignment GT +
+analysis. (The earlier synthetic run's instrumental 57.9 dB / vocals −12.5 dB were
+misleading — the vocals were silent, inflating one number and making the other
+meaningless; real music is the honest test.) **Verdict stands: GO on
+`batch_size: 4`.**
+
+*Real-music speedup note:* on this track bs1 = 125.6 s → bs8 = 85.0 s = **1.48×**
+(vs 1.65× synthetic; only 1 and 8 were run here). The win holds on real content;
+the exact plateau is track-dependent (see caveat 2).
 
 **Caveats/notes:** (1) numbers are for ONE model; the production chain runs a
 5-model ensemble (3 vocal + 2 instrumental), and the ~1.65× per-model factor
