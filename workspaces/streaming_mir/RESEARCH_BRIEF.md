@@ -323,6 +323,34 @@ HuBERT probes/alignment GT, so the gate is scorer invariance: re-separate
 BB11/BB12 refs with the reduced chain, run capture-votes/scorecard, compare.
 p2 is the low-risk candidate (only the vocal ensemble slims); p1 is the prize.
 
+## Ensemble deploy-gate RESULT — HuBERT discrimination, BB12 (2026-07-15)
+
+`ensemble_gate_discrim.py`, 8 BB12 GT acappella spans, p3 vs p1, 8-way closed-set
+(each span's correct ref + 7 distractors). Acappella refs are pre-isolated
+(unseparated) so only the MIX side varies with the ensemble. Score = HuBERT-L9
+normalized matched-filter peak of mix-span-vocal vs each candidate ref.
+
+**Result: INCONCLUSIVE — the cheap proxy is under-powered.** p3 itself only
+scored 4/8; margins at the noise floor (0.000–0.032); one ref (`13ruhr5p`) was
+an attractor winning 4 spans it shouldn't. Root cause: the simplified peak does
+NOT do the tempo/key stretch-search the real HubertProbe uses to match an in-mix
+acappella against a studio acappella, so absolute accuracy is low for BOTH arms.
+Cannot certify p1 on this.
+
+**The one signal it carries (mildly pro-p1):** where p3 makes a CONFIDENT correct
+call (margin ≥0.013: spans 42w4, 41w1, 7w1), p1 preserves it 3/3; 7/8 spans have
+identical winners across arms; the lone flip (37w4) was a 0.000-margin p3 "win"
+(a tie, not real discrimination). So p1 MIRRORS p3's decisions — no sign of
+systematic harm — but n=3 confident spans through a noisy proxy is not
+deploy-grade. Raw: `results_ensemble_gate_bb12_20260715.json`.
+
+**Verdict: do NOT deploy p1 on this evidence.** To actually certify the 2.42×
+lever, the gate must use the REAL HubertProbe (with stretch/tempo search), not
+the simplified matched-filter — that would lift p3 accuracy and make the p3-vs-p1
+delta meaningful. Until then: banked 2× stands; ensemble reduction = promising,
+uncertified. p2 (1.27×, instrumental bit-identical, vocal cosine 0.955 > p1's
+0.909) remains the lower-risk candidate if the lever is revisited.
+
 ## WS1.5 A/B RESULT — defer-Essentia on AWS A10G (2026-07-15)
 
 **GO — deployed default-off (`--defer-essentia`); turn it on for corpus loops.**
