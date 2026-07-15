@@ -33,7 +33,16 @@ Now defaults to 4 (`220c299`).
 
 ## Next options — persisted for hand-off (recommendation: #1)
 
-### 1. Deploy the wins (RECOMMENDED — highest real value)
+### 1. Deploy the wins — ✅ DONE 2026-07-15
+Route (a) taken: main was 0 commits ahead, so the whole branch fast-forwarded to
+`main` @ `7c3e4fa` (no merge commit, no conflicts). Ratchet baselines bumped
+95→99 / 131→139 with per-file justification (`7c3e4fa`) — `make check` fully
+green. Both Pis pulled `7c3e4fa`; `batch_size: 4` confirmed live in
+`analysis/roformer_chain.yaml` on pi-storage. No service restart needed (changes
+touch the Vast/Mac analysis loop, not jobqueue/scraper); next `vast_loop` /
+`mac_analyze_loop` run uses the new default. Remaining options: #2, #3 below.
+
+### ~~1. Deploy the wins~~ (original notes, kept for the record)
 The `batch_size: 4` + prefetch + WS1.5 changes speed up **nothing** until they're on
 `main` and deployed to pi/Vast. Two routes — **user must choose**:
 - **(a) Merge the whole branch** — only if the parallel PWS-aligner work is also
