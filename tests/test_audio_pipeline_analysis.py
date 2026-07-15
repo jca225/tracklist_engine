@@ -297,3 +297,29 @@ def test_persist_analysis_skips_essentia_row_when_none(db_with_audio: tuple[Path
     ]
     conn.close()
     assert sources == ["audio_pipeline_v1"]
+
+
+# --- WS1.5: deferrable Essentia (overlap CPU behind next track's GPU) ---
+
+
+def test_essentia_gate_true_only_for_regular_with_essentia() -> None:
+    assert pipeline._essentia_gate(True, "regular") is True
+    assert pipeline._essentia_gate(False, "regular") is False
+    assert pipeline._essentia_gate(True, "acappella") is False
+    assert pipeline._essentia_gate(True, "instrumental") is False
+
+
+def test_merge_essentia_none_returns_result_unchanged() -> None:
+    r = _fake_result(7)
+    assert pipeline.merge_essentia(r, None) is r
+
+
+def test_merge_essentia_folds_features_and_version() -> None:
+    r = _fake_result(7)
+    feat = _fake_essentia(7)
+    merged = pipeline.merge_essentia(r, feat)
+    assert merged.essentia == feat
+    assert merged.analyzer_versions["essentia"] == "essentia_v2"
+    # original versions preserved, original object untouched
+    assert merged.analyzer_versions["beat_this"] == "final0"
+    assert r.essentia is None

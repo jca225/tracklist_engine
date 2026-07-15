@@ -45,7 +45,12 @@ sys.path.insert(0, str(REPO))
 os.environ["TRACKLIST_DISABLE_FK"] = "1"
 
 from core import db as db_adapter
-from analysis.pipeline import load_analyzers, analyze_track
+from analysis.pipeline import (
+    analyze_track,
+    compute_essentia,
+    load_analyzers,
+    merge_essentia,
+)
 from analysis import persistence
 from core.models import AudioAsset
 from scripts.loop_prefetch import PrefetchFailure, PrefetchItem, PrefetchSlot
@@ -328,9 +333,16 @@ def main() -> int:
     p.add_argument(
         "--roformer-batch-size",
         type=int,
-        default=1,
-        help="chunks per RoFormer GPU forward pass (roformer only). 1 = legacy; "
-        "higher raises GPU utilization at identical output. A/B this on the box.",
+        default=4,
+        help="chunks per RoFormer GPU forward pass (roformer only). 4 = validated "
+        "corpus default (1.65x vs 1, plateaus there; output batch-invariant). "
+        "1 = legacy A/B baseline.",
+    )
+    p.add_argument(
+        "--defer-essentia",
+        action="store_true",
+        help="run Essentia (CPU, ~18s) in the background tail so it overlaps the "
+        "next track's GPU analyze (WS1.5). Off = legacy inline (A/B baseline).",
     )
     args = p.parse_args()
     shard: tuple[int, int] | None = None
@@ -406,9 +418,36 @@ def main() -> int:
     bg: threading.Thread | None = None
     persist_tid: int | None = None
 
-    def _persist_in_bg(tid: int, stem_local: Path) -> None:
-        """Owns the cleanup of stem_local once handed off."""
+    def _finish_in_bg(
+        tid: int,
+        asset: AudioAsset,
+        result: object,
+        stem_local: Path,
+        local_audio: Path,
+        defer_essentia: bool,
+    ) -> None:
+        """Background tail: (WS1.5) Essentia on the CPU + merge, then persist
+        to scratch, rsync stems, push rows — all overlapping the NEXT track's
+        GPU analyze. Owns cleanup of both stem_local and local_audio.
+
+        When defer_essentia is set, Essentia was skipped in analyze_track and
+        runs here (needs local_audio, hence the deferred audio delete). When
+        not set, Essentia already ran inline and `result` is complete.
+        """
         try:
+            essentia_s = 0.0
+            if defer_essentia:
+                t_e = time.monotonic()
+                feat = compute_essentia(a, asset)
+                result = merge_essentia(result, feat)
+                essentia_s = time.monotonic() - t_e
+
+            p_r = persistence.persist_analysis(SCRATCH_DB, result)
+            if not p_r.is_ok():
+                # canonical never gets track_analysis → tid re-picked later.
+                log.warning("[%d] (bg) persist failed: %s", tid, p_r.error.detail)
+                return
+
             t_r = time.monotonic()
             if stem_local.exists():
                 log.info("[%d] (bg) pushing stems", tid)
@@ -418,21 +457,22 @@ def main() -> int:
             t_p = time.monotonic()
             push_track_rows(tid)
             log.info(
-                "TIMING-BG tid=%d rsync_out_s=%.1f push_s=%.1f",
+                "TIMING-BG tid=%d essentia_s=%.1f rsync_out_s=%.1f push_s=%.1f",
                 tid,
+                essentia_s,
                 rsync_out_s,
                 time.monotonic() - t_p,
             )
             log.info("[%d] (bg) DONE", tid)
         except subprocess.CalledProcessError as e:
-            # We can't add to failed_tids from here (main thread owns it),
-            # but it doesn't matter: canonical never received track_analysis,
-            # so next_task re-picks this tid once it leaves the in-flight
-            # set and we'll re-run the GPU work. Annoying, but safe.
-            log.error("[%d] (bg) push failed: %s", tid, e)
+            # canonical never received track_analysis (or partial), so
+            # next_task re-picks this tid once it leaves the in-flight set.
+            log.error("[%d] (bg) tail failed: %s", tid, e)
         finally:
             if stem_local.exists():
                 shutil.rmtree(stem_local, ignore_errors=True)
+            if local_audio.exists():
+                local_audio.unlink(missing_ok=True)
 
     def _pick(skip: frozenset[int]) -> tuple[int, str] | None:
         return next_task(skip, sets=active_sets, shard=shard)
@@ -531,7 +571,12 @@ def main() -> int:
                 "[%d] analyzing %s (%s)", tid, item.asset.track_id, item.asset.platform
             )
             t1 = time.monotonic()
-            r = analyze_track(a, item.asset, stems_dir=LOCAL_STEMS)
+            r = analyze_track(
+                a,
+                item.asset,
+                stems_dir=LOCAL_STEMS,
+                defer_essentia=args.defer_essentia,
+            )
             analyze_s = time.monotonic() - t1
             if not r.is_ok():
                 log.warning(
@@ -544,29 +589,32 @@ def main() -> int:
                 failed_tids.add(tid)
                 continue
             log.info(
-                "TIMING tid=%d prefetched=%d pull_s=%.1f analyze_s=%.1f",
+                "TIMING tid=%d prefetched=%d deferess=%d pull_s=%.1f analyze_s=%.1f",
                 tid,
                 int(prefetch is not None),
+                int(args.defer_essentia),
                 item.pull_s,
                 analyze_s,
             )
 
-            p_r = persistence.persist_analysis(SCRATCH_DB, r.value)
-            if not p_r.is_ok():
-                log.warning("[%d] persist failed: %s", tid, p_r.error.detail)
-                n_failed += 1
-                failed_tids.add(tid)
-                continue
-
-            # Hand off rsync + push_track_rows. Single slot: join the
-            # PREVIOUS persist here (not at loop top) so it overlapped this
-            # track's analyze.
+            # Hand off the tail (essentia + persist + rsync + push). Single
+            # slot: join the PREVIOUS tail here (not at loop top) so it
+            # overlapped this track's analyze. persist moved INTO the bg thread
+            # so deferred Essentia (CPU) overlaps the next track's GPU work
+            # (WS1.5). The bg thread now owns local_audio (Essentia needs it).
             if bg is not None:
                 bg.join()
             stem_local = LOCAL_STEMS / str(tid)
             bg = threading.Thread(
-                target=_persist_in_bg,
-                args=(tid, stem_local),
+                target=_finish_in_bg,
+                args=(
+                    tid,
+                    item.asset,
+                    r.value,
+                    stem_local,
+                    local_audio,
+                    args.defer_essentia,
+                ),
                 daemon=False,
             )
             persist_tid = tid
@@ -579,11 +627,12 @@ def main() -> int:
             n_failed += 1
             failed_tids.add(tid)
         finally:
-            if local_audio.exists():
-                local_audio.unlink()
-            # If hand-off succeeded, the bg thread owns stem_local cleanup.
-            # Otherwise (failed before hand-off) clean up here.
+            # On hand-off the bg thread owns BOTH local_audio (deferred
+            # Essentia still needs it) and stem_local. Only clean up here when
+            # we did NOT hand off (failed mid-track before the tail started).
             if not handed_off:
+                if local_audio.exists():
+                    local_audio.unlink()
                 stem_local = LOCAL_STEMS / str(tid)
                 if stem_local.exists():
                     shutil.rmtree(stem_local, ignore_errors=True)

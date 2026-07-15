@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -162,6 +162,47 @@ def run_separation(
     return demucs_adapter.separate(a.demucs, audio_path, out_dir, audio_id)
 
 
+def _essentia_gate(with_essentia: bool, stem: str) -> bool:
+    """Essentia runs only on full 'regular' recordings — vocals-only /
+    instrumental releases have no meaningful BPM/key (see labeling/CLAUDE.md)."""
+    return with_essentia and stem == "regular"
+
+
+def compute_essentia(a: Analyzers, asset: AudioAsset) -> EssentiaFeatures | None:
+    """Best-effort Essentia enrichment, extracted so the driver can DEFER it
+    into a background thread that overlaps the next track's GPU work (WS1.5:
+    Essentia is CPU-bound, so it hides behind GPU separation for free). Returns
+    None on gate-miss or worker failure (logged, non-fatal)."""
+    if not _essentia_gate(a.with_essentia, asset.stem):
+        return None
+    ess_r = essentia_adapter.analyze(Path(asset.path), asset.track_audio_id)
+    match ess_r:
+        case Ok(feat):
+            return feat
+        case Err(err):
+            _log.warning(
+                "essentia worker failed for track_audio_id=%s: %s — %s",
+                asset.track_audio_id,
+                err.kind,
+                err.detail,
+            )
+            return None
+
+
+def merge_essentia(
+    result: TrackAnalysisResult, feat: EssentiaFeatures | None
+) -> TrackAnalysisResult:
+    """Fold deferred Essentia features into an already-built result (adds the
+    essentia field + its analyzer_versions entry). No-op when feat is None."""
+    if feat is None:
+        return result
+    return replace(
+        result,
+        essentia=feat,
+        analyzer_versions={**result.analyzer_versions, "essentia": feat.version},
+    )
+
+
 def _section_bounds(
     cue_times: tuple[float, ...], total_duration_s: float
 ) -> tuple[tuple[float, float], ...]:
@@ -188,6 +229,7 @@ def analyze_track(
     a: Analyzers,
     asset: AudioAsset,
     stems_dir: Path,
+    defer_essentia: bool = False,
 ) -> Result[TrackAnalysisResult, AnalysisError]:
     """Run the full per-track analysis, streaming resources linearly.
 
@@ -195,6 +237,12 @@ def analyze_track(
     Essentia, loudness) runs against the **original full-mix audio** at
     asset.path — never the demucs-separated vocal/instrumental stems.
     Stems are produced as a side output for downstream alignment use only.
+
+    `defer_essentia=True` skips the Essentia stage here (result.essentia stays
+    None); the caller is then responsible for `compute_essentia` +
+    `merge_essentia` — used by the driver to run Essentia's ~18 s CPU cost in a
+    background thread overlapping the next track's GPU work (WS1.5). The audio
+    file at asset.path must outlive that deferred call.
     """
     assert asset.track_audio_id is not None, (
         "AudioAsset must be persisted before analysis"
@@ -290,24 +338,16 @@ def analyze_track(
     # (Py 3.13) and is invoked via subprocess. If the venv is missing or the
     # worker fails, we log and continue — stems/beats/MERT are the contract,
     # Essentia features are a bonus layer.
+    # Essentia enrichment (best-effort). Deferred by the driver into a bg
+    # thread that overlaps the next track's GPU work — see compute_essentia /
+    # merge_essentia and scripts/vast_loop.py (WS1.5).
     essentia_features: EssentiaFeatures | None = None
-    # Vocals-only / instrumental releases have no meaningful BPM/key — use the
-    # parent full song's features (see labeling/CLAUDE.md).
-    if a.with_essentia and asset.stem == "regular":
+    if not defer_essentia:
         _t = time.monotonic()
-        ess_r = essentia_adapter.analyze(audio_path, asset.track_audio_id)
-        stage_s["essentia"] = time.monotonic() - _t
-        match ess_r:
-            case Ok(feat):
-                essentia_features = feat
-                versions["essentia"] = feat.version
-            case Err(err):
-                _log.warning(
-                    "essentia worker failed for track_audio_id=%s: %s — %s",
-                    asset.track_audio_id,
-                    err.kind,
-                    err.detail,
-                )
+        essentia_features = compute_essentia(a, asset)
+        if essentia_features is not None:
+            stage_s["essentia"] = time.monotonic() - _t
+            versions["essentia"] = essentia_features.version
 
     _log.info(
         "TIMING-STAGES track_audio_id=%s %s",
