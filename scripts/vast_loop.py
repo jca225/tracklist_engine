@@ -325,6 +325,13 @@ def main() -> int:
         default=None,
         help="stop after this many tracks (analyzed+failed); A/B run sizing",
     )
+    p.add_argument(
+        "--roformer-batch-size",
+        type=int,
+        default=1,
+        help="chunks per RoFormer GPU forward pass (roformer only). 1 = legacy; "
+        "higher raises GPU utilization at identical output. A/B this on the box.",
+    )
     args = p.parse_args()
     shard: tuple[int, int] | None = None
     if args.shard:
@@ -346,7 +353,11 @@ def main() -> int:
 
     log.info("loading analyzers (cuda, %s)…", args.separator)
     t0 = time.time()
-    ar = load_analyzers(device="cuda", separator=args.separator)
+    ar = load_analyzers(
+        device="cuda",
+        separator=args.separator,
+        roformer_batch_size=args.roformer_batch_size,
+    )
     if not ar.is_ok():
         log.error("load_analyzers failed: %s", ar.error)
         return 1

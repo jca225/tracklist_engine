@@ -3,6 +3,7 @@
 Drop-in alternative to demucs_adapter / uvr_chain_adapter. Requires
 workspaces/msst_webui + venvs/msst (see scripts/setup_roformer_separation.sh).
 """
+
 from __future__ import annotations
 
 import logging
@@ -38,6 +39,7 @@ def _resolve_device(device: str) -> str:
         return device
     try:
         import torch
+
         if torch.cuda.is_available():
             return "cuda"
         if torch.backends.mps.is_available():
@@ -82,26 +84,37 @@ def load(
     dev = _resolve_device(device if device != "auto" else cfg.device)
     msst = cfg.msst_root
     if not msst.is_dir():
-        return Err(StemError(
-            kind="model_load",
-            detail=f"msst_root not found: {msst} — run scripts/setup_roformer_separation.sh",
-        ))
+        return Err(
+            StemError(
+                kind="model_load",
+                detail=f"msst_root not found: {msst} — run scripts/setup_roformer_separation.sh",
+            )
+        )
     try:
         with _ensure_msst_on_path(msst):
             from inference.msst_infer import MSSeparator  # noqa: F401
     except ImportError as e:
         return Err(StemError(kind="model_load", detail=f"msst import: {e}"))
-    return Ok(RoformerChainHandle(
-        config=cfg, device=dev, version=cfg.version, _msst_root=msst,
-    ))
+    return Ok(
+        RoformerChainHandle(
+            config=cfg,
+            device=dev,
+            version=cfg.version,
+            _msst_root=msst,
+        )
+    )
 
 
 def _build_separator(
-    h: RoformerChainHandle, spec: ModelSpec, cwd: _MsstCwd,
+    h: RoformerChainHandle,
+    spec: ModelSpec,
+    cwd: _MsstCwd,
 ) -> Result[object, StemError]:
     weights = h._msst_root / "pretrain" / "vocal_models" / spec.ckpt
     if not weights.is_file():
-        return Err(StemError(kind="model_load", detail=f"missing checkpoint: {weights}"))
+        return Err(
+            StemError(kind="model_load", detail=f"missing checkpoint: {weights}")
+        )
     with cwd:
         from inference.msst_infer import MSSeparator
         from utils.logger import get_logger
@@ -121,20 +134,35 @@ def _build_separator(
             if spec.model_type == "bs_roformer"
             else {"vocals": "", "other": ""}
         )
-        return Ok(MSSeparator(
-            model_type=spec.model_type,
-            config_path=str(Path("configs") / "vocal_models" / f"{spec.ckpt}.yaml"),
-            model_path=str(Path("pretrain") / "vocal_models" / spec.ckpt),
-            device=h.device,
-            output_format="wav",
-            store_dirs=store,
-            logger=msst_logger,
-            debug=False,
-        ))
+        return Ok(
+            MSSeparator(
+                model_type=spec.model_type,
+                config_path=str(Path("configs") / "vocal_models" / f"{spec.ckpt}.yaml"),
+                model_path=str(Path("pretrain") / "vocal_models" / spec.ckpt),
+                device=h.device,
+                output_format="wav",
+                store_dirs=store,
+                logger=msst_logger,
+                debug=False,
+                # Override the model YAML's inference.batch_size (usually 1).
+                # None keys leave the YAML value untouched (MSSeparator
+                # .update_inference_params); only batch_size is steered here.
+                inference_params={
+                    "batch_size": h.config.batch_size,
+                    "num_overlap": None,
+                    "chunk_size": None,
+                    "normalize": None,
+                },
+            )
+        )
 
 
 def _run_model(
-    h: RoformerChainHandle, spec: ModelSpec, audio_path: Path, scratch: Path, cwd: _MsstCwd,
+    h: RoformerChainHandle,
+    spec: ModelSpec,
+    audio_path: Path,
+    scratch: Path,
+    cwd: _MsstCwd,
 ) -> Result[dict[str, Path], StemError]:
     import librosa
 
@@ -171,18 +199,25 @@ def _run_model(
 
 
 def _ensemble(
-    paths: list[Path], algorithm: str, cwd: _MsstCwd,
+    paths: list[Path],
+    algorithm: str,
+    cwd: _MsstCwd,
 ) -> Result[tuple[np.ndarray, int], StemError]:
     try:
         with cwd:
             from utils.ensemble import ensemble_audios
-            audio, sr = ensemble_audios([str(p) for p in paths], algorithm, [1.0] * len(paths))
+
+            audio, sr = ensemble_audios(
+                [str(p) for p in paths], algorithm, [1.0] * len(paths)
+            )
     except (OSError, ValueError, RuntimeError) as e:
         return Err(StemError(kind="inference", detail=f"ensemble: {e}"))
     return Ok((audio, sr))
 
 
-def _write_stem(path: Path, audio: np.ndarray, sr: int, fmt: str, flac_depth: str) -> Result[None, StemError]:
+def _write_stem(
+    path: Path, audio: np.ndarray, sr: int, fmt: str, flac_depth: str
+) -> Result[None, StemError]:
     try:
         if fmt == "flac":
             sf.write(str(path), audio, sr, format="FLAC", subtype=flac_depth)
@@ -250,9 +285,22 @@ def separate(
         if not wr.is_ok():
             return wr
 
-    return Ok(StemSet(track_audio_id=track_audio_id, stems=(
-        StemAsset(track_audio_id=track_audio_id, stem_name="vocals",
-                  path=str(vocals_dest), codec=ext),
-        StemAsset(track_audio_id=track_audio_id, stem_name="instrumental",
-                  path=str(instrumental_dest), codec=ext),
-    )))
+    return Ok(
+        StemSet(
+            track_audio_id=track_audio_id,
+            stems=(
+                StemAsset(
+                    track_audio_id=track_audio_id,
+                    stem_name="vocals",
+                    path=str(vocals_dest),
+                    codec=ext,
+                ),
+                StemAsset(
+                    track_audio_id=track_audio_id,
+                    stem_name="instrumental",
+                    path=str(instrumental_dest),
+                    codec=ext,
+                ),
+            ),
+        )
+    )

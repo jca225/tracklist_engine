@@ -1,7 +1,8 @@
 """Config for the MSST RoFormer separation chain."""
+
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,12 @@ class RoformerChainConfig:
     ensemble_algorithm: str = "avg_fft"
     output_format: str = "flac"
     flac_bit_depth: str = "PCM_16"
+    # Chunks fed to the RoFormer per GPU forward pass. Default 1 = the pre-
+    # batching corpus behavior. Raising it (e.g. 8) processes independent
+    # audio chunks in parallel — mathematically identical output (chunked
+    # overlap-add is deterministic), just higher GPU utilization. Overrides
+    # the model YAML's inference.batch_size via MSSeparator(inference_params=).
+    batch_size: int = 1
 
     @property
     def version(self) -> str:
@@ -37,12 +44,17 @@ class RoformerChainConfig:
         i = "+".join(m.tag for m in self.instrumental_models)
         return f"roformer:voc={v}|inst={i}@{self.ensemble_algorithm}"
 
+    def with_batch_size(self, n: int) -> RoformerChainConfig:
+        """Return a copy with batch_size overridden (runner applies
+        --roformer-batch-size). batch_size is NOT in `version` — it changes
+        only speed, not output, so cached stems stay valid across values."""
+        return replace(self, batch_size=int(n))
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> RoformerChainConfig:
         def _models(key: str) -> tuple[ModelSpec, ...]:
             return tuple(
-                ModelSpec(model_type=m["model_type"], ckpt=m["ckpt"])
-                for m in data[key]
+                ModelSpec(model_type=m["model_type"], ckpt=m["ckpt"]) for m in data[key]
             )
 
         root = Path(data.get("msst_root", DEFAULT_MSST_ROOT))
@@ -56,6 +68,7 @@ class RoformerChainConfig:
             ensemble_algorithm=data.get("ensemble_algorithm", "avg_fft"),
             output_format=data.get("output_format", "flac"),
             flac_bit_depth=data.get("flac_bit_depth", "PCM_16"),
+            batch_size=int(data.get("batch_size", 1)),
         )
 
     @classmethod

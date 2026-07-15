@@ -31,6 +31,7 @@ from core.models import AudioAsset
 from core.result import Err, Ok, Result
 from . import grid_repair
 from .adapters import mert_adapter
+from .roformer_config import RoformerChainConfig
 from .errors import AnalysisError, StemError
 from .models import (
     BeatGrid,
@@ -81,7 +82,9 @@ class Analyzers:
 
 
 def load_analyzers(
-    device: str = "auto", separator: str = "demucs"
+    device: str = "auto",
+    separator: str = "demucs",
+    roformer_batch_size: int = 1,
 ) -> Result[Analyzers, AnalysisError]:
     """Load every model once. Fails fast on the first load error.
 
@@ -89,6 +92,11 @@ def load_analyzers(
     the selected one is loaded. `demucs` is the legacy default kept for
     backward compatibility — **`roformer` is the current choice**; pass it
     explicitly on new runs.
+
+    `roformer_batch_size` (roformer only) sets how many audio chunks the model
+    processes per GPU forward pass. Default 1 = pre-batching corpus behavior;
+    higher raises GPU utilization at mathematically identical output. Ignored
+    by the other backends.
     """
     b = beat_this_adapter.load(device=device)
     if not b.is_ok():
@@ -107,7 +115,8 @@ def load_analyzers(
             return u
         uvr_h = u.value
     elif separator == "roformer":
-        r = roformer_chain_adapter.load(device=device)
+        rcfg = RoformerChainConfig.default().with_batch_size(roformer_batch_size)
+        r = roformer_chain_adapter.load(config=rcfg, device=device)
         if not r.is_ok():
             return r
         roformer_h = r.value
