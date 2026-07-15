@@ -340,9 +340,12 @@ def main() -> int:
     )
     p.add_argument(
         "--defer-essentia",
-        action="store_true",
-        help="run Essentia (CPU, ~18s) in the background tail so it overlaps the "
-        "next track's GPU analyze (WS1.5). Off = legacy inline (A/B baseline).",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="run Essentia (CPU, ~15-18s) in the background tail so it overlaps "
+        "the next track's GPU analyze (WS1.5). Default on = validated GO "
+        "(A10G A/B 2026-07-15: -11%% critical path, no blocking/contention). "
+        "--no-defer-essentia = legacy inline (A/B baseline).",
     )
     args = p.parse_args()
     shard: tuple[int, int] | None = None

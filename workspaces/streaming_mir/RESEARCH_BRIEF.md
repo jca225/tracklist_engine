@@ -286,15 +286,42 @@ decisive).
 ## streaming_mir standing (2026-07-15)
 
 - **WS1 (throughput):** DONE — GPU duty 89% → ~100%, ~11% corpus wall-clock at
-  identical output. Next levers, ranked: (1) **WS1.5** overlap Essentia's ~18 s
-  CPU cost behind GPU separation (~13% more, low risk, same thread trick);
-  (2) batch the RoFormer forward pass (79% of analyze, invasive, needs
-  identical-output proof).
+  identical output.
+- **WS1.5 (defer Essentia):** DONE — GO, ~11% critical path on real corpus
+  tracks, zero blocking/contention (see WS1.5 A/B RESULT below).
 - **WS2 (seam):** CLOSED — 10 s overlap validated on BB11.
 - **WS-batching (RoFormer batch_size):** DONE — 1.65× separation speedup at
   batch 4 (plateau), output batch-invariant. See below.
 - **WS-encoder (MERT/HuBERT speedup):** QUEUED (see below).
 - **WS3 (anytime confidence):** untouched, still speculative per the plan.
+- **Next levers (from sota_speed_research_20260715.md):** ensemble reduction
+  3→2→1 passes + bf16/fp16 autocast (= flash-SDPA unlock) — measured by
+  `speed_quality_ab.py`, results section pending.
+
+## WS1.5 A/B RESULT — defer-Essentia on AWS A10G (2026-07-15)
+
+**GO — deployed default-off (`--defer-essentia`); turn it on for corpus loops.**
+Two 25-track arms on real pending corpus tracks (sets `1yl70ql1`+`qj4v0wt`),
+g5.2xlarge (A10G, 8 vCPU), roformer batch 4, prefetch on. 50/50 tracks OK.
+
+**Raw arm means are confounded — normalize by track duration before reading.**
+The arms drew different tracks (mean 222 s vs 274 s of audio — 23% longer in the
+deferred arm), so raw wall/track (170.5 s vs 191.6 s) reads as a REGRESSION until
+normalized by ffprobe'd durations:
+
+| per audio-minute | baseline (inline) | deferred | read |
+|---|---|---|---|
+| separation | 40.6 s | 39.9 s | identical → no CPU contention from bg Essentia |
+| essentia on critical path | 3.9 s | 0 | the win, fully realized |
+| beats+cues+lufs+mert | ~2.3 s | ~2.1 s | unchanged |
+| **critical path** | **46.7 s** | **41.6 s** | **−5.1 s/audio-min ≈ −11%** |
+
+Inter-handoff overhead (gap − analyze) was 0.00 s in BOTH arms (max 0.05 s) —
+the bg tail (essentia + persist + rsync + push) never blocks the next track.
+Bg Essentia itself averaged 17.3 s hidden per track. For a canonical ~4-min
+track: ~15–18 s reclaimed, matching the WS1-era estimate.
+
+Caveat: an 8-vCPU host showed no contention; do not extrapolate to <4 vCPU.
 
 ## WS-batching RESULT — RoFormer batch_size on AWS A10G (2026-07-15)
 
