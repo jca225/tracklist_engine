@@ -158,6 +158,33 @@ lift off the floor (calibration tripwire clears)? Then add a sample of others (D
 Armin 33, John Summit 24, Lane 8 12…) → Arm B → does pooling help (scale thesis) or hurt
 (→ FABLE instance-conditioning needed)? Pilot 50 sets before the full 609.
 
+## Workstream F — Stem "separation of powers" (buildable after A finishes; HIGH VALUE)
+
+The new operation LFs are currently **stem-agnostic** — they run on generic audio and
+their vote carries no stem tag. They SHOULD run over the three SET-audio stems
+(`mix_vocals`, `mix_instrumental`, full `mix` — capture_votes already produces all
+three) with a **competence table** ("separation of powers"): each LF has jurisdiction
+over the stem(s) where it is competent. Three payoffs: (1) correctness — echo on
+vocal = throw, filter/sidechain on instrumental = bed, chroma is unreliable on a
+vocal-only stem; (2) the stem is a **FABLE instance feature** — the label model learns
+per-(LF, stem) accuracy; (3) it MULTIPLIES votes per span → denser co-voting → the
+direct fix for the Gate-v3 σ-sparsity that blocks promotion.
+
+### Task F1 — `stem_routing.py` (new)
+- `Stem` enum (FULL / VOCAL / INSTRUMENTAL); an `LF → competent-stems` table
+  (e.g. echo→{full,vocal}, noise_sweep→{full}, filter_sweep→{full,instrumental},
+  sidechain→{instrumental,full}, keylock/varispeed→{instrumental} + acap-repitch→{vocal},
+  loop→{full,vocal,instrumental}, HuBERT→{vocal}, chroma→{instrumental,full}, fp→{full},
+  cue-time/LLM→stem-agnostic).
+- A `stem` tag on votes (wrap votes rather than break the `OperationVote` contract, or
+  extend it once the LF-army agent is done — coordinate to avoid collision).
+- A runner: given the 3 stem audios + the enabled LFs, dispatch each LF to its
+  competent stem(s) and return stem-tagged votes for `fit_corpus`/the label model.
+- Route the per-(LF, stem) accuracy into the calibration tripwire so we can see which
+  (LF, stem) pairs are trustworthy.
+- Caveat to document: mix separation is imperfect (Roformer bleed) → a mix_vocal vote
+  carries artifact noise → lower learned per-(LF, stem) accuracy (absorbed, not hidden).
+
 ## Workstream E — Promotion
 
 The fork must beat hand-tuned fusion on the BB11/BB12 scorecard (or show σ-identifiability
