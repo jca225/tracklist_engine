@@ -107,8 +107,33 @@ canonical query store.**
   cues, lufs) — no schema change on pi.
 - `scripts/mac_analyze_loop.py` — same treatment (it shares the write path).
 
+## Reference implementation — port `jspace-hrm/runs_infra`, don't build from scratch
+
+`~/workspace/jspace-hrm/runs_infra/` is a **proven, pytest-covered** Vast runner that
+already implements the durable-buffer + robustness patterns this spec calls for (it runs
+LLM train/eval jobs on rented Vast boxes with S3 provenance). **Port it; adapt the
+per-track parts.** Its `runs_infra/README.md` is the source doc. Component → our use:
+
+| runs_infra piece | What it does | Port to us as |
+|---|---|---|
+| **S3 layout** `runs/<job>/{manifest.json,logs/,checkpoints/latest/,final/,EXIT}` | periodic sync during run + `final/` + an **`EXIT` marker written last** (its presence = artifacts complete) | our per-track `stems/<taid>/` + `manifests/<taid>.json`; the manifest **is** the "EXIT written last" commit marker |
+| **`manifest.json`** (schema=1: job, git_sha, recipe_args verbatim, attempts[], cost) | provenance a result cites; append an attempt per (re)launch | per-track manifest = the DB rows + checksums + box id + git_sha the reconciler applies |
+| **`vast_run.sh resume --job`** | pull `checkpoints/latest/` onto a fresh box, relaunch under the SAME job id (append attempt); **hard-errors** rather than silently warm-restart with corrupt state | box death → resume the shard from the last synced manifest set; idempotent per-track re-apply (DELETE+INSERT) |
+| **`vast_provision.sh --race N`** | rent N, 4-part health probe (GPU+VRAM, disk, net, CUDA-usable), 120s fail-fast, **quarantine** dud machine_ids, **KEEP-guard** destroy losers | **DONE (partial):** ported the race + quarantine into `scripts/vast_box.py race --n N` (2026-07-16; port-22 health only — the deeper GPU/CUDA probe is the remaining port) |
+| **scoped IAM** (`aws sts assume-role` 12h session, scp'd to box as `/workspace/.aws_env`, S3 `runs/*` prefix only, no long-lived keys on Vast) | blast radius of a compromised Vast host = read/write `runs/` for ≤12h | reuse verbatim (personal acct `008971646190`; jspace already uses `jspace-torch-008971646190` bucket, us-east-1) |
+
+**The one real adaptation — job-granularity → task-granularity.** jspace runs *one long job
+per box* (an LLM train; the artifact is a checkpoint synced periodically). Our stem pipeline
+runs *many tiny per-track tasks*, and pi is both the input source *and* the output sink. So:
+jspace's per-*job* `checkpoints/latest/` sync becomes our per-*track* manifest+stems write,
+and we additionally need the **reconciler (buffer→pi)** piece above — jspace has no
+reconciler because its sink *is* S3, whereas ours must land in pi's canonical DB. Everything
+else (S3 layout discipline, manifest/provenance, resume identity, race provisioning, scoped
+creds) ports directly.
+
 ## Cost / when to build
 Storage ~$2/mo + modest egress; reconciler ~a few hundred lines. **Overkill for a
 one-off run; correct and necessary for the 16k-track / 40k-set scale-up.** Build Phase 1
-before the next large corpus pass. Not on the Aug-1 aligner critical path, but it removes
-the operational risk that just cost us ~3h + a scare.
+before the next large corpus pass by **porting `runs_infra`** (above), not greenfield. Not
+on the Aug-1 aligner critical path, but it removes the operational risk that just cost us
+~3h + a scare. The `--race N` slice is already landed in `vast_box.py`.
