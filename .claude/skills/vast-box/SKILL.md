@@ -45,6 +45,13 @@ venvs/audio/bin/python scripts/vast_box.py rent <offer_id> --label <purpose>
 #    auto-rented (this happens in practice).
 venvs/audio/bin/python scripts/vast_box.py wait-ssh <instance_id>
 
+# 2+3 combined — RACE (preferred when duds hurt): rent N boxes at once, keep
+#    the first to open port 22, destroy the losers, and quarantine dud
+#    machine_ids (~/.config/vastai/vast_quarantine) so they aren't re-rented.
+#    Faster + more robust than sequential wait-ssh re-rent. --n 3 is the sweet
+#    spot. Emits "Winner instance id: <id>" as its last line.
+venvs/audio/bin/python scripts/vast_box.py race --label <purpose> --n 3
+
 # 4. Provision — GitHub clone (never rsync of the working tree) + bootstrap.
 #    --roformer adds the 2.5 GB checkpoint fetch in the background.
 venvs/audio/bin/python scripts/vast_box.py provision --id <instance_id> [--branch main] [--roformer]
