@@ -588,8 +588,11 @@ def _demo_cases() -> list[GtCandidateCase]:
     pair on a wrong candidate (ABSTAIN). Real runs replace this with BB GT
     cases + the real-probe scorer.
     """
+    # placeholder set_id — this is a synthetic demo, NOT a real BB GT run (real
+    # runs pass BB11 2nvzlh2k / BB12 1fsnxchk cases in; keeps the hardcoded-set_id
+    # guardrail honest).
     span = MixSpan(
-        set_id="2nvzlh2k", slot_label="027", set_start_s=812.0, span_dur_s=40.0
+        set_id="demo-set", slot_label="027", set_start_s=812.0, span_dur_s=40.0
     )
     good = RefCandidate(recording_id="tlpX", source_url="yt://good", display_name="A")
     bad = RefCandidate(recording_id="tlpY", source_url="yt://bad", display_name="B")
