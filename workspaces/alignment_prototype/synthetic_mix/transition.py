@@ -114,7 +114,36 @@ def recovered_curve_error(
         slope = float("nan")
     return {
         "ref_mae_s": float(np.mean(err)),
+        "ref_med_s": float(np.median(err)),
         "ref_p90_s": float(np.percentile(err, 90)),
         "mean_ratio_err": float(abs(slope - ride.mean_ratio())),
         "n": float(len(mt)),
     }
+
+
+def monotonic_filter(
+    points: list[tuple[float, float]], slack_s: float = 2.0
+) -> list[tuple[float, float]]:
+    """Keep the LONGEST forward-consistent chain of (mix_t, ref_t) points.
+
+    A DJ plays forward, so ref_t must be non-decreasing in mix_t. Raw per-window
+    matched-filter emits occasional catastrophic false peaks; the longest
+    non-decreasing subsequence (within `slack_s` backward jitter) drops them — a
+    cheap proxy for the aligner's Viterbi path constraint. Uses LNDS (not a greedy
+    sweep) so a bad FIRST point can't poison the whole chain."""
+    if not points:
+        return []
+    pts = sorted(points, key=lambda p: p[0])
+    n = len(pts)
+    best = [1] * n
+    prev = [-1] * n
+    for i in range(n):
+        for j in range(i):
+            if pts[i][1] >= pts[j][1] - slack_s and best[j] + 1 > best[i]:
+                best[i], prev[i] = best[j] + 1, j
+    i = max(range(n), key=lambda k: best[k])
+    chain: list[tuple[float, float]] = []
+    while i != -1:
+        chain.append(pts[i])
+        i = prev[i]
+    return chain[::-1]

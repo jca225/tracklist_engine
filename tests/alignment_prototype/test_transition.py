@@ -7,9 +7,24 @@ import pytest
 
 from workspaces.alignment_prototype.synthetic_mix.transition import (
     TempoRide,
+    monotonic_filter,
     recovered_curve_error,
     render_ride,
 )
+
+
+def test_monotonic_filter_drops_outliers_not_anchor():
+    # a clean rising chain with a catastrophic false peak as the FIRST point
+    pts = [(0.0, 900.0), (1.0, 10.0), (2.0, 20.0), (3.0, 15.0), (4.0, 30.0)]
+    kept = monotonic_filter(pts, slack_s=2.0)
+    # LNDS keeps the long rising chain (10,20,30) incl. the 15 within slack? 15<20-2
+    # -> 15 excluded; chain = (10,20,30), the bad first point dropped
+    assert (0.0, 900.0) not in kept
+    assert [r for _, r in kept] == [10.0, 20.0, 30.0]
+
+
+def test_monotonic_filter_empty():
+    assert monotonic_filter([]) == []
 
 
 def test_constant_ride_is_linear():
