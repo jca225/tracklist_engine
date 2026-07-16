@@ -54,9 +54,9 @@ from eda.alignment.generalization.grammar_coverage import (
 )
 from eda.alignment.generalization.rank_ingest_queue import PI_DB, PI_HOST
 
-# eda/alignment/generalization/<this> -> repo root is 3 dirs up.
-REPO_ROOT = Path(__file__).resolve().parents[3]
-JOB_DIR = REPO_ROOT / "data" / "djs"
+# Repo convention (eda/CLAUDE.md, core.acquisition_case.default_path): scripts run
+# from the project root, so data paths are CWD-relative — not Path.parents[N].
+JOB_DIR = Path("data") / "djs"
 JOB_NAME = "grammar_coverage_batch.json"
 
 # joint-cell corpus-mass floor for "is this a real starved corner" (mirrors

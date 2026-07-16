@@ -23,6 +23,21 @@ curvature |  path MAE | path median | constant MAE |  kept  | gap
    steep |   18.39s |     17.67s |      36.38s |  8/15  | +18.0s  (±18%)
 ```
 
+Cross-stem robustness (BB12 `1fsnxchk` mix_instrumental, same params):
+
+```
+    flat |    0.01s |      0.01s |       0.00s | 15/15
+  gentle |    0.06s |      0.07s |       0.63s | 15/15
+  medium |    3.70s |      0.06s |       0.57s | 12/15
+   steep |    6.61s |      0.07s |       0.99s | 10/15
+```
+
+On BB12 the **median recovers to sub-0.1 s at every curvature incl. steep** — the
+gentle/medium conclusion holds on both stems, and steep is **stem-dependent** (BB11
+steep ~18 s, BB12 steep 0.07 s median). The MAE-vs-median gap (outliers the LNDS
+proxy doesn't catch) is consistent across stems; the real `path_decode` Viterbi
+would tighten the MAE toward the median.
+
 ## Verdict
 - **Gentle–medium rides (±4–10%, the realistic DJ transition range) are recoverable**
   to **sub-0.2 s median** — inside the ±2 s alignment tolerance. Keep the transition
