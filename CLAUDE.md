@@ -77,6 +77,10 @@ is a superseded 2026-07-12 snapshot).
 New features land inside one of the chain modules. New top-level folders
 require explicit justification.
 
+Standing design/plan/research docs (not dated snapshots) are indexed in
+[docs/design_docs_index.md](docs/design_docs_index.md); dated handoffs age out to
+`docs/archive/` via `scripts/docs_gc.py` (`make docs-gc`).
+
 ## Track identity (three axes)
 
 Recorded music in this repo is keyed on **three orthogonal axes** (plus optional
