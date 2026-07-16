@@ -481,6 +481,23 @@ def warn_soft() -> None:
     _warn_missing_refs(STATE_OF_RECORD_PATH, DOCS_DIR)
     if MEMORY_INDEX_PATH.is_file():
         _warn_missing_refs(MEMORY_INDEX_PATH, MEMORY_INDEX_PATH.parent, bare_only=True)
+    _warn_collectable_docs()
+
+
+def _warn_collectable_docs() -> None:
+    """WARN if docs/ has dead dated snapshots — nudge to run `make docs-gc`."""
+    try:
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        import docs_gc  # local tool; reachability-based classifier
+
+        n = len(docs_gc.classify()["collectable"])
+    except Exception:
+        return  # never let the collector's failure block or noise up a commit
+    if n:
+        print(
+            f"guardrails: WARN {n} collectable doc(s) in docs/ (dated + unlinked) "
+            "— run `make docs-gc` to review, `make docs-gc-apply` to archive"
+        )
 
 
 def run_checks() -> list[Violation]:

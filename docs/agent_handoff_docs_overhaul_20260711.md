@@ -120,7 +120,7 @@ Enumerate every artifact that states an alignment status or number. Known set
 | `workspaces/alignment_prototype/cotrain_loso_findings.md` | LOSO result | fold headline into canonical; keep detail |
 | `workspaces/alignment_prototype/external/fiber_validation_findings.md` | SALAMI validation | keep; canonical cites it |
 | `docs/agent_handoff_fibers_20260710.md` | race board (fiber-aware) | source for canonical fiber rows |
-| `docs/agent_handoff_flywheel_select_20260711.md` | flywheel gears 2–3 | keep as active-work pointer |
+| `docs/archive/agent_handoff_flywheel_select_20260711.md` | flywheel gears 2–3 | keep as active-work pointer |
 | `attic/EXPERIMENTS.md` | closed-experiments ledger | keep; canonical links "dead" methods here |
 | `MEMORY.md` + `memory/*.md` (~80) | session memory | update stale entries (esp. fibers), point to canonical |
 | root `CLAUDE.md`, `docs/architecture_north_star.md`, `docs/alignment_objective.md` | north star | add link to canonical status |
