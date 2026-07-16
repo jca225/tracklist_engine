@@ -36,7 +36,7 @@ Once the current bugs are fixed, the ratchet pins the count at the new floor:
 `make check` fails the instant anyone reintroduces the pattern. **The deterministic
 layer becomes a regression fence around exactly the bugs the semantic layer finds.**
 
-## Architecture — three components
+## Architecture — three components + a governance track
 
 ### 1. `scripts/entropy_audit.py` — deterministic metrics
 
@@ -110,6 +110,37 @@ A weekly cloud routine (Mon morning) that:
 Runs in the cloud, so it fires whether or not the Mac is on. Findings are advisory
 — the routine never edits code, only reports.
 
+### 4. Governance — make invariants unbypassable (companion track)
+
+The thesis shared with the auditor: chaos in a solo-operator + agent-fleet shop
+comes from *bypassable invariants that fail silently*, not from too little
+ceremony. Two low-drag, machine-enforced additions:
+
+**4a. PR-gated `main`.** Today CLAUDE.md permits direct pushes to non-`main`, and
+the pre-push hook (`git config core.hooksPath .githooks`) is opt-in per clone —
+which agents in fresh worktrees silently skip. Change:
+- Enable GitHub branch protection on `main`: require PR + passing `guardrails.yml`
+  (which will include `entropy_audit.py --check`) before merge.
+- All agent/session work lands via branch → PR → CI-gated merge. `make check`
+  becomes unbypassable with no human ceremony beyond the merge.
+- Update CLAUDE.md's "Git workflow" section to state the branch+PR rule.
+- *Cost:* mild friction vs direct push to a feature branch; accepted because
+  agents are the ones pushing and an unguarded `main` is the real risk.
+
+**4b. `AGENTS.md` — one-page operating agreement.** Consolidate the agent-behavior
+rules currently scattered across CLAUDE.md fragments and private memory into a
+single referenceable page: pull-before-work, never revert another agent's
+workspace, numbers only in the SSOT (`alignment_status.md`), branch+PR for `main`,
+run `make check` before push, close dead ends in the EXPERIMENTS ledger. **Hard
+cap: one page** — the moment it's a binder, it stops being read. CLAUDE.md links
+to it rather than duplicating it.
+
+Explicitly NOT added (would be pure tax on a solo shop): commit-message rules
+beyond the existing `feat:`/`docs:` prefixes, mandatory design docs for trivial
+changes, recurring human status rituals. Commit/push *cadence* is unchanged —
+the current "proactive logical-unit commits" policy is correct; the fix is the
+gate between pushed and on-`main`, not the cadence.
+
 ## Data flow
 
 ```
@@ -157,6 +188,10 @@ Order:
 3. **Wire `--check` into `make check`** so regressions fail at push time.
 4. **Author the semantic-audit prompt + waivers.yaml.**
 5. **Create the `/schedule` weekly routine.**
+6. **Governance (4a/4b):** enable `main` branch protection + require CI; write
+   `AGENTS.md`; update CLAUDE.md's Git-workflow section. Can land in parallel with
+   2–5; branch protection should go on *after* the entropy fence is in CI (step 3)
+   so the required check exists.
 
 ## Out of scope (YAGNI)
 
@@ -164,4 +199,5 @@ Order:
   guardrails / `make check-corpus` / `/pulse`; user deferred).
 - AST/complexity analysis beyond grep counts (add only if a metric proves it needs it).
 - Auto-fixing findings (the routine reports; humans/sessions fix).
+- Human process ceremony beyond the one-page `AGENTS.md` (see 4b rationale).
 ```

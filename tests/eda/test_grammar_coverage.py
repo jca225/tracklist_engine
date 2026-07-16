@@ -7,9 +7,13 @@ from eda.alignment.generalization.grammar_coverage import (
     build_coverage,
     frac_bin,
     frac_bin3,
+    parse_performers,
     parse_play_time,
     quantile_edges,
+    self_fraction,
 )
+
+_RS = "\x1e"
 
 
 def _fp(sid, *, w=0.0, ver=0.0, stem=0.0, tracks=20, pt=60.0, audio=False, fetch=True):
@@ -27,6 +31,8 @@ def _fp(sid, *, w=0.0, ver=0.0, stem=0.0, tracks=20, pt=60.0, audio=False, fetch
         styles="",
         has_audio=audio,
         fetchable=fetch and not audio,
+        self_frac=0.0,
+        is_live_pa=False,
     )
 
 
@@ -87,3 +93,34 @@ def test_coverage_shares_are_fractions():
     for axis, bins in cov.per_axis.items():
         for b, c in bins.items():
             assert 0.0 <= c <= 1.0, (axis, b, c)
+
+
+def test_parse_performers_single_and_venue():
+    assert parse_performers("Hardwell @ Mainstage, Tomorrowland") == ["hardwell"]
+    assert parse_performers("Two Friends - Big Bootie Mix 11") == ["two friends"]
+    # diacritics folded
+    assert parse_performers("RÜFÜS DU SOL @ Zamna") == ["rufus du sol"]
+
+
+def test_parse_performers_multi_dj_b2b():
+    assert parse_performers("Fisher B2B Chris Lake @ Coachella") == [
+        "fisher",
+        "chris lake",
+    ]
+    got = parse_performers("David Guetta & AFROJACK & Nicky Romero @ Tomorrowland")
+    assert got == ["david guetta", "afrojack", "nicky romero"]
+    assert parse_performers("Tiesto vs Diplo - Radio") == ["tiesto", "diplo"]
+
+
+def test_self_fraction_dj_vs_live():
+    # DJ set: performer Two Friends, slots by other artists -> ~0
+    dj_slots = _RS.join(['["The Fray"]', '["Bastille"]', '["Carly Rae Jepsen"]'])
+    assert self_fraction("Two Friends - Big Bootie 11", dj_slots) == 0.0
+    # Live PA: RÜFÜS performs own songs -> 1.0 (diacritic-folded match)
+    live_slots = _RS.join(['["RÜFÜS DU SOL"]', '["RUFUS DU SOL"]', '["Rüfüs Du Sol"]'])
+    assert self_fraction("RÜFÜS DU SOL @ Coachella", live_slots) == 1.0
+    # B2B: a slot by either DJ counts as self
+    b2b_slots = _RS.join(['["Fisher"]', '["Chris Lake"]', '["Someone Else"]'])
+    assert self_fraction("Fisher B2B Chris Lake @ X", b2b_slots) == 2 / 3
+    # empty blob -> 0
+    assert self_fraction("Anyone @ X", "") == 0.0

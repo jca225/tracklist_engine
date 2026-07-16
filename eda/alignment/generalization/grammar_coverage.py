@@ -27,6 +27,8 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
+from eda.alignment.generalization.rank_ingest_queue import _fold
+
 OUT_DIR = Path(__file__).resolve().parent / "out"
 PI_HOST = "pi-storage"
 PI_DB = "/mnt/storage/data/db/music_database.db"
@@ -35,9 +37,18 @@ PI_DB = "/mnt/storage/data/db/music_database.db"
 STRAT_AXES = ("w_frac", "version_frac", "stem_frac", "density")
 JOINT_AXES = ("w_frac", "version_frac", "stem_frac")
 MIN_CELL = 20  # joint cells below this corpus mass are scrape noise, not grammar gaps
+# self_frac >= this ⇒ the set plays mostly its own material ⇒ live PA, not a DJ set
+# (no released constituents to align — excluded from co-training candidates).
+LIVE_PA_SELF_FRAC = 0.35
+_RS = "\x1e"  # record sep joining per-slot artists in the GROUP_CONCAT blob
 
 _PT_H = re.compile(r"(\d+)\s*h")
 _PT_M = re.compile(r"(\d+)\s*m")
+_PERF_SPLIT = re.compile(r"\s[@\-]\s")
+# Split a performer head into individual DJs: B2B/B3B, vs, &, +, comma, ' x '.
+# (Over-splits genuine duos like 'Dimitri Vegas & Like Mike', but self_fraction's
+# any-DJ match recovers it, so err toward splitting.)
+_DJ_SPLIT = re.compile(r"\s*(?:\bb\d?b\b|\bvs\.?\b|&|\+|,|\bx\b)\s*", re.IGNORECASE)
 
 
 def parse_play_time(s: str) -> float | None:
@@ -49,6 +60,44 @@ def parse_play_time(s: str) -> float | None:
     if not h and not m:
         return None
     return 60.0 * (int(h.group(1)) if h else 0) + (int(m.group(1)) if m else 0)
+
+
+def parse_performers(title: str) -> list[str]:
+    """Performing DJ(s) = the title head before ' @ '/' - ', split on B2B/&/vs/etc.
+
+    dj_sets.artists is empty corpus-wide and creator_name is the uploader, so the
+    title is the only performer source. Sets can have MULTIPLE DJs (B2B): 'Fisher
+    B2B Chris Lake' -> ['Fisher', 'Chris Lake']; 'David Guetta & AFROJACK & Nicky
+    Romero' -> three. Returns folded+casefolded names (>=2 chars, deduped).
+    """
+    head = _PERF_SPLIT.split(title, maxsplit=1)[0].strip()
+    names, seen = [], set()
+    for part in _DJ_SPLIT.split(head):
+        p = _fold(part).casefold().strip()
+        if len(p) >= 2 and p not in seen:
+            seen.add(p)
+            names.append(p)
+    return names
+
+
+def self_fraction(title: str, slot_artists: str) -> float:
+    """Fraction of a set's slots played by ANY of the performing DJ(s).
+
+    High ⇒ the set performs its own material (live PA); low ⇒ it mixes other
+    artists (DJ set). Multi-DJ (B2B) aware: a slot counts as self if it matches any
+    performer. Diacritic-folded containment either direction (handles the artist
+    being a substring of a combined credit and vice versa).
+    """
+    perfs = parse_performers(title)
+    recs = [r for r in slot_artists.split(_RS) if r.strip()] if slot_artists else []
+    if not perfs or not recs:
+        return 0.0
+    hits = 0
+    for r in recs:
+        a = _fold(r).casefold().strip(" []\"',")
+        if a and any(p in a or a in p for p in perfs):
+            hits += 1
+    return hits / len(recs)
 
 
 @dataclass(frozen=True)
@@ -66,6 +115,8 @@ class SetFingerprint:
     styles: str
     has_audio: bool
     fetchable: bool
+    self_frac: float
+    is_live_pa: bool
 
     @property
     def density(self) -> float | None:
@@ -209,7 +260,10 @@ WITH slot_agg AS (
          AVG(CASE WHEN title LIKE 'ID%' THEN 1.0 ELSE 0.0 END) AS id_frac,
          COUNT(cue_time_seconds) AS n_cued,
          MAX(cue_time_seconds) AS cue_max,
-         MIN(cue_time_seconds) AS cue_min
+         MIN(cue_time_seconds) AS cue_min,
+         GROUP_CONCAT(
+           REPLACE(REPLACE(REPLACE(COALESCE(artists_json,''), char(9),' '),
+                   char(10),' '), char(13),' '), char(30)) AS slot_artists
   FROM set_track_slots GROUP BY set_id HAVING n_slots >= 5
 ),
 audio AS (SELECT DISTINCT set_id FROM set_audio),
@@ -224,7 +278,8 @@ SELECT d.set_id,
        sa.n_cued, COALESCE(sa.cue_max,0), COALESCE(sa.cue_min,0),
        REPLACE(COALESCE(d.styles,''), char(9), ' '),
        CASE WHEN au.set_id IS NOT NULL THEN 1 ELSE 0 END,
-       COALESCE(l.any_link,0)
+       COALESCE(l.any_link,0),
+       COALESCE(sa.slot_artists,'')
 FROM dj_sets d
 JOIN slot_agg sa ON sa.set_id=d.set_id
 LEFT JOIN audio au ON au.set_id=d.set_id
@@ -237,9 +292,11 @@ def _row_to_fp(c: list[str]) -> SetFingerprint:
     n_cued, cue_max, cue_min = int(c[9]), float(c[10]), float(c[11])
     mean_cue_gap = (cue_max - cue_min) / (n_cued - 1) if n_cued >= 2 else None
     has_audio = c[13] == "1"
+    title = c[1]
+    sf = self_fraction(title, c[15])
     return SetFingerprint(
         set_id=c[0],
-        title=c[1][:90],
+        title=title[:90],
         n_slots=n_slots,
         total_tracks=int(c[3]),
         play_time_min=parse_play_time(c[4]),
@@ -251,6 +308,8 @@ def _row_to_fp(c: list[str]) -> SetFingerprint:
         styles=c[12],
         has_audio=has_audio,
         fetchable=(c[14] == "1") and not has_audio,
+        self_frac=round(sf, 3),
+        is_live_pa=sf >= LIVE_PA_SELF_FRAC,
     )
 
 
@@ -272,7 +331,7 @@ def fetch_rows() -> list[SetFingerprint]:
     out = []
     for line in proc.stdout.strip().splitlines():
         parts = line.split("\t")
-        if len(parts) == 15:
+        if len(parts) == 16:
             out.append(_row_to_fp(parts))
     return out
 
@@ -306,13 +365,22 @@ def main(argv: list[str] | None = None) -> int:
     rows = fetch_rows()
     dl = [r for r in rows if r.has_audio]
     fetchable = [r for r in rows if r.fetchable]
+    # Live PAs (perform own material) have no released constituents to align —
+    # exclude from co-training candidates. Tie-break maximally-starved sets by
+    # lowest self_frac (most clearly a DJ set) then most slots (most signal).
+    candidates = [r for r in fetchable if not r.is_live_pa]
+    n_live = sum(1 for r in fetchable if r.is_live_pa)
     print(
-        f"sets: {len(rows)}  downloaded: {len(dl)}  fetchable(undownloaded): {len(fetchable)}"
+        f"sets: {len(rows)}  downloaded: {len(dl)}  "
+        f"fetchable: {len(fetchable)}  (live-PA excluded: {n_live})  "
+        f"candidates: {len(candidates)}"
     )
 
     cov = build_coverage(rows)
 
-    ranked = sorted(fetchable, key=lambda r: -cov.fill_weight(r))
+    ranked = sorted(
+        candidates, key=lambda r: (-cov.fill_weight(r), r.self_frac, -r.n_slots)
+    )
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     dest = OUT_DIR / "grammar_coverage.tsv"
     fields = [
@@ -322,6 +390,7 @@ def main(argv: list[str] | None = None) -> int:
         "set_id",
         "title",
         "n_slots",
+        "self_frac",
         "density",
         "w_frac",
         "version_frac",
@@ -342,6 +411,7 @@ def main(argv: list[str] | None = None) -> int:
                     r.set_id,
                     r.title,
                     r.n_slots,
+                    r.self_frac,
                     round(r.density, 3) if r.density is not None else "",
                     round(r.w_frac, 3),
                     round(r.version_frac, 3),
@@ -358,8 +428,9 @@ def main(argv: list[str] | None = None) -> int:
     for i, r in enumerate(ranked[:12], 1):
         d = f"{r.density:.2f}" if r.density is not None else "  na"
         print(
-            f"  {i:>2}. fill={cov.fill_weight(r):6.1f}  w={r.w_frac:.2f} ver={r.version_frac:.2f} "
-            f"stem={r.stem_frac:.2f} dens={d}  {r.title[:50]}"
+            f"  {i:>2}. fill={cov.fill_weight(r):6.1f}  self={r.self_frac:.2f}  "
+            f"w={r.w_frac:.2f} ver={r.version_frac:.2f} "
+            f"stem={r.stem_frac:.2f} dens={d}  {r.title[:46]}"
         )
     return 0
 

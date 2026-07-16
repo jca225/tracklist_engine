@@ -55,12 +55,25 @@ grid axes) to avoid a noise-sparse high-dimensional grid.
    (e.g. 3×3×3) → flag cells where downloaded/corpus coverage is thinnest (catches
    combined moves like mashup+acappella that per-dimension misses).
 
+## Live-PA vs DJ-set filter (self-fraction)
+
+`dj_sets.artists` is empty corpus-wide and `creator_name` is the uploader, so the
+performer is parsed from the **title** (before ` @ `/` - `), split into multiple DJs
+for B2B sets ('Fisher B2B Chris Lake' → two). **self_frac** = fraction of a set's
+slots whose `artists_json` matches ANY performer (diacritic-folded). High self_frac ⇒
+the set performs its own material (**live PA** — no released constituents to align);
+low ⇒ it mixes other artists (**DJ set**). Sets with `self_frac >= 0.35` are **excluded
+from candidates**. Validated: RÜFÜS "Rose Ave Radio" (self 0.0, kept) vs RÜFÜS
+"@ World Tour" (excluded).
+
 ## Stratified candidate list
 
-Score each **fetchable & not-downloaded** set by an **inverse-coverage fill weight**:
-sum over its bins of `1 / (downloaded_coverage_of_that_bin + ε)`, so sets landing in
-starved corners rank highest. Tie-break with light data-quality (id_rate, audio-coverage
-of constituents) from the rank_ingest_queue signals. Output `out/grammar_coverage.tsv`.
+Score each **fetchable, not-downloaded, non-live-PA** set by a **bounded starvation
+fill weight**: mean over strat axes of `1 - downloaded_coverage_of_its_bin`, plus a
+mass-gated joint-cell term (`>= MIN_CELL` corpus mass). `na` density (missing
+play_time) is skipped, not counted as a gap. Tie-break maximally-starved ties by
+lowest `self_frac` (most clearly a DJ set) then most slots (most signal). Output
+`out/grammar_coverage.tsv`.
 
 ## Outputs (artifacts only)
 
