@@ -37,9 +37,13 @@ PI_DB = "/mnt/storage/data/db/music_database.db"
 STRAT_AXES = ("w_frac", "version_frac", "stem_frac", "density")
 JOINT_AXES = ("w_frac", "version_frac", "stem_frac")
 MIN_CELL = 20  # joint cells below this corpus mass are scrape noise, not grammar gaps
-# self_frac >= this ⇒ the set plays mostly its own material ⇒ live PA, not a DJ set
-# (no released constituents to align — excluded from co-training candidates).
-LIVE_PA_SELF_FRAC = 0.35
+# self_frac >= this ⇒ the set is overwhelmingly its own material ⇒ live PA / album
+# showcase (little to align — excluded from co-training candidates). Deliberately
+# CONSERVATIVE: a producer-heavy DJ set (~0.4-0.6 self, e.g. Vini Vici 0.39) is
+# still mostly other-artist released tracks = good co-training fuel, so keep it.
+# Only >=0.7 (world-tour live PAs, album previews) is clearly unalignable. Tunable
+# via --live-pa-thresh; self_frac itself is always reported so nothing is hidden.
+LIVE_PA_SELF_FRAC = 0.7
 _RS = "\x1e"  # record sep joining per-slot artists in the GROUP_CONCAT blob
 
 _PT_H = re.compile(r"(\d+)\s*h")
@@ -329,7 +333,10 @@ def fetch_rows() -> list[SetFingerprint]:
         check=True,
     )
     out = []
-    for line in proc.stdout.strip().splitlines():
+    # NB: split on "\n" only — NOT str.splitlines(), which also breaks on the
+    # \x1e (char(30)) GROUP_CONCAT separator inside the slot_artists blob and
+    # would shred every 1-row-per-set line into 1-row-per-slot fragments.
+    for line in proc.stdout.strip().split("\n"):
         parts = line.split("\t")
         if len(parts) == 16:
             out.append(_row_to_fp(parts))
@@ -360,6 +367,12 @@ def thin_corners(rows: list[SetFingerprint], cov: Coverage) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--top", type=int, default=2000, help="candidate rows to write")
+    ap.add_argument(
+        "--live-pa-thresh",
+        type=float,
+        default=LIVE_PA_SELF_FRAC,
+        help="exclude sets with self_frac >= this (own-material live PAs)",
+    )
     args = ap.parse_args(argv)
 
     rows = fetch_rows()
@@ -368,8 +381,8 @@ def main(argv: list[str] | None = None) -> int:
     # Live PAs (perform own material) have no released constituents to align —
     # exclude from co-training candidates. Tie-break maximally-starved sets by
     # lowest self_frac (most clearly a DJ set) then most slots (most signal).
-    candidates = [r for r in fetchable if not r.is_live_pa]
-    n_live = sum(1 for r in fetchable if r.is_live_pa)
+    candidates = [r for r in fetchable if r.self_frac < args.live_pa_thresh]
+    n_live = len(fetchable) - len(candidates)
     print(
         f"sets: {len(rows)}  downloaded: {len(dl)}  "
         f"fetchable: {len(fetchable)}  (live-PA excluded: {n_live})  "

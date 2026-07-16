@@ -62,9 +62,17 @@ performer is parsed from the **title** (before ` @ `/` - `), split into multiple
 for B2B sets ('Fisher B2B Chris Lake' → two). **self_frac** = fraction of a set's
 slots whose `artists_json` matches ANY performer (diacritic-folded). High self_frac ⇒
 the set performs its own material (**live PA** — no released constituents to align);
-low ⇒ it mixes other artists (**DJ set**). Sets with `self_frac >= 0.35` are **excluded
-from candidates**. Validated: RÜFÜS "Rose Ave Radio" (self 0.0, kept) vs RÜFÜS
-"@ World Tour" (excluded).
+low ⇒ it mixes other artists (**DJ set**). Sets with `self_frac >= 0.7` are **excluded
+from candidates** (tunable `--live-pa-thresh`). The threshold is deliberately
+CONSERVATIVE — a producer-heavy DJ set (Vini Vici 0.39, Lucas & Steve 0.39) is still
+mostly other-artist tracks = good co-training fuel, so it's kept; only >=0.7 (RÜFÜS
+World Tour, album previews) is clearly unalignable. Validated on those exact cases.
+
+**Transport gotcha (load-bearing):** the per-slot `artists_json` are joined with
+`char(30)` (`\x1e`); `fetch_rows` MUST split output on `"\n"`, NOT `str.splitlines()`
+— the latter also breaks on `\x1e`, shredding 41k set-rows into 1.2M slot-fragments
+and collapsing self_frac to a degenerate 0/1. (Found via a self_frac-distribution
+audit; the first cut shipped this bug.)
 
 ## Stratified candidate list
 
