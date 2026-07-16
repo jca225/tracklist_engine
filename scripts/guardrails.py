@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import ast
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -44,6 +45,34 @@ DOC_STALE_PIPELINE_RE = re.compile(
 )
 
 DOCS_DIR = REPO_ROOT / "docs"
+
+# --- State-of-record soft checks (WARN only — never block) -----------------
+# docs/alignment_state_of_record.md is the read-first living orientation doc for
+# alignment work. These checks keep it honest without gating: a hard gate on a
+# fast-moving research repo just gets bypassed. They print WARN lines (like the
+# ratchet "improved" nudge) and add no Violations.
+STATE_OF_RECORD_PATH = DOCS_DIR / "alignment_state_of_record.md"
+# Commits touching these paths are what should trigger a re-checkpoint.
+STATE_RECORD_ALIGNER_PATHS = (
+    "workspaces/alignment_prototype",
+    "workspaces/pws_aligner",
+    "agentic",
+    "harness",
+    "docs/alignment_state_of_record.md",
+)
+STATE_RECORD_STALE_COMMITS = 10  # warn once HEAD is this far ahead of the stamp
+# MEMORY.md lives outside the repo (machine-specific, absent in CI) — scanned
+# only if present so its links can't rot pointing at deleted docs.
+MEMORY_INDEX_PATH = (
+    Path.home()
+    / ".claude"
+    / "projects"
+    / "-Users-johnnycabrahams-Desktop-tracklist-engine"
+    / "memory"
+    / "MEMORY.md"
+)
+_MD_LINK_RE = re.compile(r"\]\(([^)]+)\)")
+_STAMP_SHA_RE = re.compile(r"@ `([0-9a-f]{7,40})`")
 
 ADAPTER_PARENTS_DIRS = (
     REPO_ROOT / "analysis" / "adapters",
@@ -380,6 +409,80 @@ def _check_ratchets() -> list[Violation]:
     return violations
 
 
+def _local_md_links(text: str) -> list[str]:
+    """Repo-local markdown link targets — skip URLs, anchors, wikilinks."""
+    out: list[str] = []
+    for m in _MD_LINK_RE.finditer(text):
+        target = m.group(1).strip().split("#", 1)[0].strip()
+        if not target or "://" in target or target.startswith("mailto:"):
+            continue
+        out.append(target)
+    return out
+
+
+def _warn_missing_refs(doc_path: Path, base_dir: Path, bare_only: bool = False) -> None:
+    """WARN on markdown links whose local target doesn't exist.
+
+    ``bare_only`` skips path-containing targets — used for MEMORY.md, whose
+    ``../../docs/...`` links are symbolic cross-tree pointers (memory lives under
+    ~/.claude, not the repo) that never filesystem-resolve; only its bare sibling
+    memory-file links (``project_x.md``) are checkable.
+    """
+    try:
+        text = doc_path.read_text(encoding="utf-8")
+    except OSError:
+        return
+    for target in _local_md_links(text):
+        if bare_only and "/" in target:
+            continue
+        if not (base_dir / target).resolve().exists():
+            print(f"guardrails: WARN {doc_path.name} references missing path: {target}")
+
+
+def _warn_state_of_record_stale() -> None:
+    if not STATE_OF_RECORD_PATH.is_file():
+        return
+    text = STATE_OF_RECORD_PATH.read_text(encoding="utf-8", errors="ignore")
+    m = _STAMP_SHA_RE.search(text)
+    if not m:
+        print("guardrails: WARN alignment_state_of_record.md has no `@ <sha>` stamp")
+        return
+    stamp = m.group(1)
+    try:
+        proc = subprocess.run(
+            [
+                "git",
+                "rev-list",
+                "--count",
+                f"{stamp}..HEAD",
+                "--",
+                *STATE_RECORD_ALIGNER_PATHS,
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if proc.returncode != 0:  # stamp not in history (shallow/rebased) — skip
+            return
+        n = int(proc.stdout.strip() or "0")
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return
+    if n > STATE_RECORD_STALE_COMMITS:
+        print(
+            f"guardrails: WARN alignment_state_of_record.md is {n} aligner-commits "
+            f"behind HEAD (stamp {stamp}); run /align-checkpoint"
+        )
+
+
+def warn_soft() -> None:
+    """Non-blocking WARN-only checks for the alignment state-of-record."""
+    _warn_state_of_record_stale()
+    _warn_missing_refs(STATE_OF_RECORD_PATH, DOCS_DIR)
+    if MEMORY_INDEX_PATH.is_file():
+        _warn_missing_refs(MEMORY_INDEX_PATH, MEMORY_INDEX_PATH.parent, bare_only=True)
+
+
 def run_checks() -> list[Violation]:
     violations: list[Violation] = []
     for path in _iter_py_files():
@@ -409,6 +512,7 @@ def run_checks() -> list[Violation]:
 
 
 def main() -> int:
+    warn_soft()  # non-blocking WARN lines; never affect exit code
     violations = run_checks()
     if not violations:
         print("guardrails: OK")
