@@ -28,7 +28,6 @@ import json
 import logging
 import os
 import shutil
-import shlex
 import subprocess
 import sys
 import threading
@@ -169,12 +168,14 @@ def fetch_asset(track_audio_id: int, local_audio_path: Path) -> AudioAsset:
 
 def rsync_in(remote: str, local: Path) -> None:
     local.parent.mkdir(parents=True, exist_ok=True)
-    # shlex.quote: the remote side of an rsync path goes through the remote
-    # shell — unquoted spaces/parens in filenames abort with exit 2
-    # (hit 2026-07-10 on "… (Official Karaoke Instrumental) ｜ SongJam.wav").
-    subprocess.check_call(
-        ["rsync", "-q", f"{PI_HOST}:{shlex.quote(remote)}", str(local)]
-    )
+    # -s / --protect-args: send the remote path verbatim instead of relying on
+    # the remote login shell to strip shell-quotes. shlex.quote worked over
+    # direct ssh/sshfs but FAILS over the Tailscale-userspace SOCKS ProxyCommand
+    # (the single quotes survive → path resolves relative to $HOME, "No such
+    # file"), which silently stalled the whole loop on space/paren filenames
+    # (manual-ingest acappella/instrumental) on 2026-07-16. -s handles spaces
+    # and parens on the remote side without any shell interpretation.
+    subprocess.check_call(["rsync", "-qs", f"{PI_HOST}:{remote}", str(local)])
 
 
 def rsync_stems_out(local_dir: Path, track_audio_id: int) -> None:
