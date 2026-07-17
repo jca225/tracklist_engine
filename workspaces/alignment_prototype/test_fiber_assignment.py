@@ -241,8 +241,10 @@ def test_assign_single_instance_miss_costs_true_gap():
     }
     classes = equivalence_classes(gt_rows, fibers)
 
-    # Sanity: must be a singleton (unique class, no sharing partner)
-    assert len(set(classes.values())) == 1  # one entry, one class
+    # Sanity: one row → one class id (trivially true for any single-row input;
+    # the real guard is the pytest.approx(746.0) cost assertion below, which
+    # fails if the singleton were incorrectly forgiven as a within-class swap).
+    assert len(set(classes.values())) == 1
 
     pred_segments = [756.0]  # 746 s off
 
@@ -254,3 +256,37 @@ def test_assign_single_instance_miss_costs_true_gap():
         f"Single-instance miss must cost true gap 746 s; got {cost:.2f} s — "
         "singletons must NEVER be forgiven (regression guard 2026-07-17)"
     )
+
+
+def test_assign_rectangular_returns_min_count():
+    """Rectangular cost matrix (n_pred != n_gt) returns exactly min(n_pred, n_gt) triples.
+
+    linear_sum_assignment operates on the matrix as-is and returns a partial
+    matching of size min(n_pred, n_gt) — it does NOT pad or trim.  With 3
+    predictions and 2 GT rows the result must have exactly 2 triples, with
+    the unmatched third prediction absent.
+    """
+    gt_row_a = _row("tid_rect", 10.0)
+    gt_row_b = _row("tid_rect", 50.0)
+    gt_rows = [gt_row_a, gt_row_b]
+
+    # No fibers → both rows are singletons
+    classes = equivalence_classes(gt_rows, fibers={})
+
+    # 3 predictions, only 2 GT rows → one prediction will be unmatched
+    pred_segments = [10.0, 50.0, 200.0]
+
+    matches = assign(pred_segments, gt_rows, classes)
+
+    # Must return exactly min(3, 2) = 2 triples
+    assert len(matches) == 2, (
+        f"Expected 2 matches (min(3 preds, 2 GT rows)); got {len(matches)}"
+    )
+
+    # Every returned triple must have valid in-range indices
+    n_pred = len(pred_segments)
+    n_gt = len(gt_rows)
+    for pred_idx, gt_idx, cost in matches:
+        assert 0 <= pred_idx < n_pred, f"pred_idx {pred_idx} out of range [0, {n_pred})"
+        assert 0 <= gt_idx < n_gt, f"gt_idx {gt_idx} out of range [0, {n_gt})"
+        assert cost >= 0.0, f"cost must be non-negative; got {cost}"

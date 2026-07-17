@@ -194,9 +194,17 @@ def assign(
 
     Returns:
         List of ``(pred_idx, gt_idx, cost)`` triples — one per matched pair.
-        The matching is one-to-one (Hungarian).  If ``len(pred_segments) !=
-        len(gt_rows)`` the rectangular cost matrix is padded / trimmed by
-        ``linear_sum_assignment``; only the matched pairs are returned.
+        The matching is one-to-one (Hungarian).  ``linear_sum_assignment``
+        operates on the cost matrix as-is and returns a partial matching of
+        size ``min(n_pred, n_gt)`` — it does NOT pad or trim the matrix:
+
+        - When ``n_pred > n_gt``: some predictions are left unmatched and are
+          not present in the returned triples.
+        - When ``n_pred < n_gt``: some GT rows are left unmatched and are not
+          present in the returned triples.
+
+        The returned list has exactly ``min(len(pred_segments), len(gt_rows))``
+        triples.
     """
     n_pred = len(pred_segments)
     n_gt = len(gt_rows)
