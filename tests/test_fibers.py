@@ -14,8 +14,14 @@ fast `make check` tier.
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
-from workspaces.alignment_prototype.fibers.detect import (
+# fibers.detect pulls librosa transitively, which is excluded from
+# requirements-ci.txt — skip gracefully in the lightweight CI (importorskip
+# must run BEFORE the workspaces import that triggers it).
+pytest.importorskip("librosa")
+
+from workspaces.alignment_prototype.fibers.detect import (  # noqa: E402
     _avg_linkage,
     compute_fibers,
     compute_fibers_soft,
