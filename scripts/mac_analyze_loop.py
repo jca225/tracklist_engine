@@ -284,7 +284,13 @@ def push_track_rows(track_audio_id: int) -> None:
     # of pushing through and leaving partial state (which is what bit us
     # before — track_stems INSERT failed but the rest of the rows still
     # landed because sqlite3 kept executing).
-    sql_lines = [".bail on", "BEGIN;"]
+    # busy_timeout + BEGIN IMMEDIATE (mirrors vast_loop.push_track_rows): this
+    # loop shares the canonical DB with pi services and other pushers. Without a
+    # lock wait, a concurrent writer makes sqlite3 die with "database is locked
+    # (5)" immediately, and the caller quarantines the track after ~250 s of
+    # wasted MPS analysis. IMMEDIATE takes the write lock up front so the retry
+    # is on acquisition, not mid-transaction.
+    sql_lines = [".bail on", "PRAGMA busy_timeout=120000;", "BEGIN IMMEDIATE;"]
     sql_lines.append(f"DELETE FROM track_stems WHERE track_audio_id={track_audio_id};")
     for t in tables_keyed:
         sql_lines.append(f"DELETE FROM {t} WHERE track_audio_id={track_audio_id};")
