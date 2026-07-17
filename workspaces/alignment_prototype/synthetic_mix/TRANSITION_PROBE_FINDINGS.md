@@ -38,6 +38,21 @@ steep ~18 s, BB12 steep 0.07 s median). The MAE-vs-median gap (outliers the LNDS
 proxy doesn't catch) is consistent across stems; the real `path_decode` Viterbi
 would tighten the MAE toward the median.
 
+Aggregate eval (12 rides = 4 refs × 3 curvatures × directions, `eval_transitions.py`
+over a `generate_transitions` dataset — the statistical version, not 2 hand stems):
+
+```
+curvature |  n | median-of-medians | p75 median | median MAE
+  gentle  |  4 |      0.06s        |    0.07s   |    0.06s
+  medium  |  4 |      0.04s        |    0.06s   |    0.76s
+   steep  |  4 |     19.69s        |   36.65s   |   17.59s
+```
+
+On aggregate, **gentle + medium recover robustly (sub-0.1 s median-of-medians across
+refs and accel/decel), steep genuinely fails (~20 s)**. This SUPERSEDES the earlier
+"steep is stem-dependent" hedge — the one BB12-steep-easy case was ref-specific luck;
+across refs, ±18% rides are not recoverable by the windowed chroma decoder.
+
 ## Verdict
 - **Gentle–medium rides (±4–10%, the realistic DJ transition range) are recoverable**
   to **sub-0.2 s median** — inside the ±2 s alignment tolerance. Keep the transition
