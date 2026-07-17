@@ -161,23 +161,31 @@ from the scorers; other docs cite it. Dead ends live in the EXPERIMENTS ledger.
 
 ## 3. Open fronts (what's live / undecided right now)
 
-- **Co-training corpus expansion (immediate next work).** Run the Tier-1
-  metadata-proxy fingerprint over the scraped ~41k (`density`, `w/`-fraction,
-  version/stem/ID tag fractions, cue-gap, styles), produce a grammar-coverage map,
-  stratified-sample the underrepresented corners. Tier-2 audio-only moves
-  (loops/jumps/tempo-ride/key-mix/fx) are invisible in scrape — revealed by
-  probes *after* download → top up next round. Seed artists to check (DJ sets not
-  live PA): Alesso (mashup corner), RUFUS DU SOL / ODESZA / Galantis (own
-  material). Detail: [handoff_pws_cotrain_20260716.md](handoff_pws_cotrain_20260716.md) §4.
-- **Synthetic-transition probe (decides Aug-1 transition scope).** (a) verify the
-  `.als` round-trip survives a *continuous* tempo curve; (b) build the
-  synthetic-transition generator (known curve → rendered audio + labels);
-  (c) probe the aligner, report gradual-tempo recovery accuracy. That number
-  picks the branch on decision #12.
-- **Co-training seam wiring.** suspect-detector → `AcquisitionCase` producer;
-  candidate-ref → align-to-mix → `TrainingSignal` + `track_audio_correction`
-  ledger, GT-calibrated, ZERO canonical mutation. `bb_reacquire_queue.json` = 879
-  fetch_missing-only, no executor wired yet.
+- **Co-training corpus expansion — Tier-1 BUILT (branch `cotrain-grammar-coverage`).**
+  `eda/alignment/generalization/grammar_coverage.py` fingerprints all ~41k by
+  grammar proxies (w/-frac, version/stem/ID, density), maps downloaded-vs-corpus
+  coverage, ranks fetchable candidates by starvation fill, with a **self-fraction
+  live-PA filter** (own-material sets excluded). Biggest starved corner: 16k+
+  remix-heavy-non-mashup sets ~1% covered. `download_from_coverage.py` emits an
+  ingest job file (dry-run). Open: run the actual downloads (rides the ingest path
+  — wants the parked ingest bug-fixes first); Tier-2 audio-only moves revealed
+  post-download. Traps saved: [[project_corpus_artist_query_traps]] (dj_sets.artists
+  empty, diacritics), [[project_grammar_coverage_selection]] (str.splitlines \x1e bug).
+- **Synthetic-transition probe — BUILT + RUN → answer: gentle/medium IN scope,
+  steep abstain.** `.als` round-trip survives a continuous tempo curve (§5a
+  confirmed); `synthetic_mix/transition.py` (ride generator + exact varispeed
+  render + LNDS path-proxy) + `transition_probe.py` + `eval_transitions.py`.
+  Aggregate (12 rides × refs): gentle 0.06s / medium 0.04s median-of-medians
+  (recoverable), steep 19.7s (fails). Keeps decision #12's transition regime IN
+  Aug-1 scope for gentle/medium. `generate_transitions.py` emits ride training data.
+  Full: `synthetic_mix/TRANSITION_PROBE_FINDINGS.md`, [[project_transition_recovery_finding]].
+- **Co-training seam — dry-run skeleton BUILT.** `workspaces/pws_aligner/cotrain_seam.py`:
+  suspect → `AcquisitionCase` producer; candidate-ref → align-to-mix → `TrainingSignal`
+  + PROPOSED `track_audio_correction`. ACCEPT requires ≥2 independent channels
+  agreeing (confirmation-drift guard); ZERO canonical mutation (tested). Open
+  (real-probe wiring): per-probe [0,1] calibration, offset-frame normalization
+  (`capture_votes._ABSOLUTE_FRAME_PROBES`), BB GT cases from `bb_reacquire_queue.json`
+  (879 fetch_missing) + GT YAML. Runs all-abstain no-op without audio.
 - **PWS phase-1b (continuous) build-out.** Lives in worktree
   `~/Desktop/tracklist_engine-pws1b` on branch `pws-phase1b-continuous` (187
   tests). Not yet merged.
