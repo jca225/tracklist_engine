@@ -100,8 +100,10 @@ MEASURE"). **First synthetic→real transfer read (trajectory decoder, held-out
 BB12) → 🟢:** real+synthetic augmentation beats the real-only training ceiling and
 is markedly more stable across epochs — synthetic *transfers and helps*. Qualified:
 modest lift at only 100 synthetic mixes, this is *augmentation* not *pure-synthetic
-substitution*, single direction (eval BB12), single seed, leakage check (BB tracks
-in synthetic catalog?) still owed. PWS **v4** (singleton-σ fix — the diagnosed
+substitution*, single direction (eval BB12), single seed. **Leakage check DONE +
+CLEAN** (2026-07-17): 0/66 synthetic track_ids appear in BB12 (the eval set); the
+lone BB overlap (`13n64sf5`) is in BB11 (train) — so the result is not memorization
+of eval recordings. PWS **v4** (singleton-σ fix — the diagnosed
 lever if fusion is revisited) is demoted to a fallback. Spec:
 `docs/superpowers/specs/2026-07-17-synthetic-transfer-spike-design.md`; provisional
 numbers in the spike log, not yet in the status SSOT.
@@ -189,8 +191,8 @@ from the scorers; other docs cite it. Dead ends live in the EXPERIMENTS ledger.
   real-only training and is more stable (D13). Reuses the existing scaffold
   (`trajectory/train.py --synthetic-root`, `synthetic_adapter` train-only,
   `path_decode.trajectory_acc`, no-model control) on the 100 `data/synthetic_mixes_v2`
-  windows. **Next, in order:** (1) leakage check — confirm the synthetic catalog
-  excludes BB recordings; (2) matched-epoch + multi-seed rerun to beat single-epoch
+  windows. **Next, in order:** (1) leakage check **DONE + clean** — 0/66 synthetic
+  track_ids in BB12 eval (lone overlap `13n64sf5` is BB11-train); (2) matched-epoch + multi-seed rerun to beat single-epoch
   noise; (3) **Axis-1 volume curve** — scale synthetic generation + featurization
   on **Vast** (GPU-bound HuBERT) and plot held-out acc vs #mixes — the go-signal
   for the learned-aligner program; (4) pure-synthetic-only (train-only-synthetic)
