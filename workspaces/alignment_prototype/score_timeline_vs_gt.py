@@ -528,9 +528,7 @@ def main(argv: list[str] | None = None) -> int:
         if Path(tl_path).exists()
         else "unknown"
     )
-    print(
-        f"provenance: git={sha}  timeline_mtime={tl_mtime}  file={tl_path.name if hasattr(tl_path, 'name') else Path(tl_path).name}"
-    )
+    print(f"provenance: git={sha}  timeline_mtime={tl_mtime}  file={tl_path.name}")
 
     # Stale-cohort WARNING: if ≥2 driver timelines exist and their mtimes diverge
     # more than 6 h, comparing them is unsound (mismatched vintages).

@@ -61,9 +61,12 @@ from workspaces.alignment_prototype.refine_ref_offsets import (  # noqa: E402
 
 FPS = SR / HOP
 
-# Minimum contiguous run length (seconds) for a fiber interval to be counted.
-# Derived from the SALAMI-based detector configuration — do not lower without
-# re-validating precision on the external SALAMI corpus.
+# Minimum contiguous run length (seconds) for a fiber interval to be counted in
+# fiber_consistent scoring. Deliberately 3.0 — LOOSER than the detector's own
+# 4.0 default (fibers.detect.fiber_intervals) — to admit slightly shorter repeats
+# at scoring time; a considered override, not the default. Derived from the
+# SALAMI-based detector configuration — do not lower without re-validating
+# precision on the external SALAMI corpus.
 _MIN_FIBER_RUN_S = 3.0
 
 

@@ -10,7 +10,6 @@ from __future__ import annotations
 from workspaces.alignment_prototype.timeline_provenance import (
     _git_sha,
     cohort_spread_s,
-    driver_provenance,
 )
 
 # ------------------------------------------------------------------ cohort_spread_s
