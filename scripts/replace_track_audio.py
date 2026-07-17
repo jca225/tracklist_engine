@@ -60,6 +60,7 @@ import re
 import shutil
 import subprocess
 import sys
+import unicodedata
 import urllib.parse
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -288,6 +289,33 @@ def _purge_sibling_rows(
         _log.info("purged %d sibling row(s) for track_id=%s", len(siblings), track_id)
 
 
+_PLAYER_ID_MAXLEN = 96
+
+
+def _ascii_player_id(pid: str) -> str:
+    """Slugify `player_id` to pure ASCII so it cannot inject raw unicode into a
+    canonical path.
+
+    A player_id derived from a manual-ingest filename stem (e.g. a name
+    containing U+FF5C `｜`) otherwise survives into
+    ``<tid>__<platform>__<player_id>.<ext>``; that path string then
+    mojibake-corrupts crossing the Mac(UTF-8)->pi(Latin-1) SSH/sqlite boundary
+    (bug A1). Real platform ids (youtube/soundcloud/spotify) are already ASCII,
+    so this is a no-op for them. Idempotent; falls back to a stable hash if no
+    ASCII survives (e.g. an all-CJK name)."""
+    if not pid:
+        return pid
+    # Transliterate accented Latin (é->e, Ü->U) then drop anything non-ASCII.
+    norm = unicodedata.normalize("NFKD", pid).encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "_", norm).strip("._-")
+    if len(slug) > _PLAYER_ID_MAXLEN:
+        slug = slug[:_PLAYER_ID_MAXLEN].strip("._-")
+    if not slug:
+        # Nothing ASCII survived — deterministic, path-safe fallback.
+        slug = "id_" + hashlib.sha1(pid.encode("utf-8")).hexdigest()[:16]
+    return slug
+
+
 def _place_file_in_canonical(
     src: Path,
     audio_root: Path,
@@ -297,6 +325,7 @@ def _place_file_in_canonical(
 ) -> Path:
     """Move/copy `src` to /mnt/storage/objects/<tid>/<tid>__<platform>__
     <player_id>.<ext>. Returns destination path."""
+    player_id = _ascii_player_id(player_id)
     ext = src.suffix.lstrip(".") or "m4a"
     dst_dir = audio_root / "objects" / track_id
     dst_dir.mkdir(parents=True, exist_ok=True)
@@ -535,6 +564,9 @@ def _replace_via_file(
     if not file_path.is_file():
         _log.error("file does not exist: %s", file_path)
         return 1
+    # Keep the stored player_id column consistent with the ASCII-sanitized path
+    # (bug A1). Idempotent with the slug applied inside _place_file_in_canonical.
+    player_id = _ascii_player_id(player_id)
     dst = _place_file_in_canonical(
         file_path,
         audio_root,
