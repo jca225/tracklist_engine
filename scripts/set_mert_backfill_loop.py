@@ -11,6 +11,7 @@ Run on Mac after BB12 mix analysis:
         'caffeinate -i venvs/audio/bin/python scripts/set_mert_backfill_loop.py \\
             --set-ids 1fsnxchk --device mps 2>&1 | tee logs/set_mert_backfill.log'
 """
+
 from __future__ import annotations
 
 import json
@@ -29,6 +30,14 @@ os.environ["TRACKLIST_DISABLE_FK"] = "1"
 from analysis import persistence
 from analysis.adapters import audio_io, mert_adapter
 from analysis.adapters.mert_adapter import MERT_MODEL
+from scripts.loop_hardening import (
+    RSYNC_IO_TIMEOUT,
+    RSYNC_TIMEOUT,
+    SSH_OPTS,
+    SSH_PUSH_TIMEOUT,
+    SSH_QUERY_TIMEOUT,
+    exit_status,
+)
 
 PI_HOST = "pi-storage"
 CANONICAL_DB = "/mnt/storage/data/db/music_database.db"
@@ -48,10 +57,13 @@ log = logging.getLogger("set_mert_backfill")
 def ssh_pi(sql: str) -> str:
     full = f'sqlite3 -separator "|" {CANONICAL_DB} "{sql}"'
     r = subprocess.run(
-        ["ssh", PI_HOST, full],
+        ["ssh", *SSH_OPTS, PI_HOST, full],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="surrogateescape",
         check=True,
+        timeout=SSH_QUERY_TIMEOUT,
     )
     return r.stdout.strip()
 
@@ -103,7 +115,21 @@ def fetch_measure_times(set_audio_id: int) -> tuple[float, ...]:
 
 def rsync_in(remote: str, local: Path) -> None:
     local.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.check_call(["rsync", "-q", f"{PI_HOST}:{remote}", str(local)])
+    # -s / --protect-args: the remote path was previously unquoted and unprotected
+    # (bug B3, active) — a set_audio path with a space/paren aborted with exit 2 or
+    # resolved to the wrong file. --timeout + subprocess timeout bound a broken-pipe
+    # hang (B1).
+    subprocess.check_call(
+        [
+            "rsync",
+            "-qs",
+            "--timeout",
+            str(RSYNC_IO_TIMEOUT),
+            f"{PI_HOST}:{remote}",
+            str(local),
+        ],
+        timeout=RSYNC_TIMEOUT,
+    )
 
 
 def init_scratch_db() -> None:
@@ -112,8 +138,11 @@ def init_scratch_db() -> None:
 
     if not SCRATCH_DB.exists():
         schema = subprocess.check_output(
-            ["ssh", PI_HOST, f"sqlite3 {CANONICAL_DB} '.schema'"],
+            ["ssh", *SSH_OPTS, PI_HOST, f"sqlite3 {CANONICAL_DB} '.schema'"],
             text=True,
+            encoding="utf-8",
+            errors="surrogateescape",
+            timeout=SSH_QUERY_TIMEOUT,
         )
         cleaned: list[str] = []
         skip = False
@@ -137,7 +166,9 @@ def init_scratch_db() -> None:
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='set_mert_measures'"
     ).fetchone()
     if row is None:
-        migrate = (REPO / "scripts/migrations/migrate_set_mert_measures.sql").read_text()
+        migrate = (
+            REPO / "scripts/migrations/migrate_set_mert_measures.sql"
+        ).read_text()
         conn.executescript(migrate)
         conn.commit()
         log.info("applied set_mert_measures migration to stale scratch DB")
@@ -153,6 +184,9 @@ def push_set_mert_rows(set_audio_id: int, mert_version: str) -> None:
         ["sqlite3", str(SCRATCH_DB)],
         input=dump_script,
         text=True,
+        encoding="utf-8",
+        errors="surrogateescape",
+        timeout=SSH_QUERY_TIMEOUT,
     )
     sql_lines = [
         ".bail on",
@@ -162,10 +196,13 @@ def push_set_mert_rows(set_audio_id: int, mert_version: str) -> None:
         "COMMIT;",
     ]
     subprocess.run(
-        ["ssh", PI_HOST, f"sqlite3 {CANONICAL_DB}"],
+        ["ssh", *SSH_OPTS, PI_HOST, f"sqlite3 {CANONICAL_DB}"],
         input="\n".join(sql_lines),
         text=True,
+        encoding="utf-8",
+        errors="surrogateescape",
         check=True,
+        timeout=SSH_PUSH_TIMEOUT,
     )
     versions_raw = ssh_pi(
         "SELECT analyzer_versions_json FROM set_analysis "
@@ -175,13 +212,16 @@ def push_set_mert_rows(set_audio_id: int, mert_version: str) -> None:
     versions["mert"] = mert_version
     versions_lit = json.dumps(versions).replace("'", "''")
     subprocess.run(
-        ["ssh", PI_HOST, f"sqlite3 {CANONICAL_DB}"],
+        ["ssh", *SSH_OPTS, PI_HOST, f"sqlite3 {CANONICAL_DB}"],
         input=(
             f"UPDATE set_analysis SET analyzer_versions_json='{versions_lit}', "
             f"analyzed_at=CURRENT_TIMESTAMP WHERE set_audio_id={set_audio_id};"
         ),
         text=True,
+        encoding="utf-8",
+        errors="surrogateescape",
         check=True,
+        timeout=SSH_PUSH_TIMEOUT,
     )
     import sqlite3 as _sqlite3
 
@@ -214,7 +254,10 @@ def main() -> int:
 
     log.info(
         "starting set MERT backfill (model=%s, dim=%d, device=%s, set_ids=%s)",
-        MERT_MODEL, MERT_TARGET_DIM, args.device, set_ids or "ALL",
+        MERT_MODEL,
+        MERT_TARGET_DIM,
+        args.device,
+        set_ids or "ALL",
     )
     init_scratch_db()
 
@@ -232,8 +275,9 @@ def main() -> int:
     while True:
         nxt = next_task(frozenset(failed), set_ids)
         if nxt is None:
-            log.info("queue drained — embedded %d sets, failed %d", n_done, n_failed)
-            return 0
+            code, level, msg = exit_status(n_done, n_failed)
+            log.log(level, "%s", msg)
+            return code
         sid, set_id, remote_path = nxt
         local_audio = LOCAL_SETS / f"{sid}.m4a"
         try:
@@ -252,7 +296,10 @@ def main() -> int:
 
             t0 = time.time()
             emb_r = mert_adapter.embed_track_per_measure(
-                h, wf.samples, sid, measure_times,
+                h,
+                wf.samples,
+                sid,
+                measure_times,
             )
             if not emb_r.is_ok():
                 log.warning("[%d] embed failed: %s", sid, emb_r.error.detail)
@@ -262,11 +309,16 @@ def main() -> int:
             measures = emb_r.value
             log.info(
                 "[%d] embedded %d measures in %.1fs",
-                sid, len(measures), time.time() - t0,
+                sid,
+                len(measures),
+                time.time() - t0,
             )
 
             p = persistence.persist_set_mert_measures(
-                SCRATCH_DB, sid, measures, h.version,
+                SCRATCH_DB,
+                sid,
+                measures,
+                h.version,
             )
             if not p.is_ok():
                 log.warning("[%d] scratch persist failed: %s", sid, p.error.detail)
@@ -278,7 +330,9 @@ def main() -> int:
             n_done += 1
             log.info("[%d] pushed to canonical (n_done=%d)", sid, n_done)
             if args.max_sets is not None and n_done >= args.max_sets:
-                return 0
+                code, level, msg = exit_status(n_done, n_failed)
+                log.log(level, "hit --max-sets=%d — %s", args.max_sets, msg)
+                return code
         except subprocess.CalledProcessError as e:
             log.error("[%d] subprocess failed: %s", sid, e)
             n_failed += 1

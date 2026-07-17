@@ -53,6 +53,18 @@ from analysis.pipeline import (
 from analysis import persistence
 from core.models import AudioAsset
 from scripts.loop_prefetch import PrefetchFailure, PrefetchItem, PrefetchSlot
+from scripts.loop_hardening import (
+    RSYNC_IO_TIMEOUT,
+    RSYNC_TIMEOUT,
+    SSH_OPTS,
+    SSH_PUSH_TIMEOUT,
+    SSH_QUERY_TIMEOUT,
+    Counts,
+    exit_status,
+    register_transient,
+    sha256_file,
+    transient_backoff_seconds,
+)
 
 PI_HOST = "pi-storage"  # ~/.ssh/config alias on Vast (Tailscale SOCKS5 proxy)
 PI_USER = "johncabrahams"
@@ -68,12 +80,22 @@ BB_SETS = ("w1mgcjt", "2nvzlh2k", "1fsnxchk", "qj4v0wt", "1yl70ql1", "237tdqmk")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("vast_loop")
 
+# Subprocess/SSH hardening constants (A2 encoding + B1 timeouts/keepalive) and
+# the failure-accounting helpers (C1/C2/C3) live in scripts/loop_hardening.py,
+# shared with mac_analyze_loop and set_mert_backfill_loop.
+
 
 def ssh_pi(sql: str) -> str:
     """Run a sqlite3 query on pi-storage via SSH; return stdout text."""
     full = f'sqlite3 -separator "|" {CANONICAL_DB} "{sql}"'
     r = subprocess.run(
-        ["ssh", PI_HOST, full], capture_output=True, text=True, check=True
+        ["ssh", *SSH_OPTS, PI_HOST, full],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="surrogateescape",
+        check=True,
+        timeout=SSH_QUERY_TIMEOUT,
     )
     return r.stdout.strip()
 
@@ -175,7 +197,19 @@ def rsync_in(remote: str, local: Path) -> None:
     # file"), which silently stalled the whole loop on space/paren filenames
     # (manual-ingest acappella/instrumental) on 2026-07-16. -s handles spaces
     # and parens on the remote side without any shell interpretation.
-    subprocess.check_call(["rsync", "-qs", f"{PI_HOST}:{remote}", str(local)])
+    # --timeout aborts if no I/O flows for RSYNC_IO_TIMEOUT s (the broken-pipe
+    # hang); the subprocess timeout is a hard wall-clock backstop.
+    subprocess.check_call(
+        [
+            "rsync",
+            "-qs",
+            "--timeout",
+            str(RSYNC_IO_TIMEOUT),
+            f"{PI_HOST}:{remote}",
+            str(local),
+        ],
+        timeout=RSYNC_TIMEOUT,
+    )
 
 
 def rsync_stems_out(local_dir: Path, track_audio_id: int) -> None:
@@ -183,9 +217,13 @@ def rsync_stems_out(local_dir: Path, track_audio_id: int) -> None:
     src = f"{local_dir}/"
     dst = f"{PI_HOST}:{PI_STEMS_ROOT}/{track_audio_id}/"
     subprocess.check_call(
-        ["ssh", PI_HOST, f"mkdir -p {PI_STEMS_ROOT}/{track_audio_id}"]
+        ["ssh", *SSH_OPTS, PI_HOST, f"mkdir -p {PI_STEMS_ROOT}/{track_audio_id}"],
+        timeout=SSH_QUERY_TIMEOUT,
     )
-    subprocess.check_call(["rsync", "-aq", src, dst])
+    subprocess.check_call(
+        ["rsync", "-aq", "--timeout", str(RSYNC_IO_TIMEOUT), src, dst],
+        timeout=RSYNC_TIMEOUT,
+    )
 
 
 def init_scratch_db() -> None:
@@ -195,8 +233,11 @@ def init_scratch_db() -> None:
     if SCRATCH_DB.exists():
         return
     schema = subprocess.check_output(
-        ["ssh", PI_HOST, f"sqlite3 {CANONICAL_DB} '.schema'"],
+        ["ssh", *SSH_OPTS, PI_HOST, f"sqlite3 {CANONICAL_DB} '.schema'"],
         text=True,
+        encoding="utf-8",
+        errors="surrogateescape",
+        timeout=SSH_QUERY_TIMEOUT,
     )
     # SQLite reserves sqlite_sequence for AUTOINCREMENT bookkeeping; can't
     # CREATE TABLE it manually. Strip its statement out of the dump.
@@ -248,7 +289,12 @@ def push_track_rows(track_audio_id: int) -> None:
     # busy_timeout + BEGIN IMMEDIATE: concurrent pushers (sharded boxes) and
     # pi services share this DB — without a timeout a second writer dies with
     # "database is locked (5)" mid-transaction (hit 2026-07-09, 2-box fleet).
-    sql_lines = ["PRAGMA busy_timeout=120000;", "BEGIN IMMEDIATE;"]
+    # .bail on: abort the whole script on the first error (bug B5). Without it,
+    # a mid-script failure (e.g. an INSERT hitting a lock after the DELETEs) still
+    # falls through to COMMIT, committing the DELETEs with no re-INSERT — silent
+    # data loss for this track's prior rows. .bail on makes sqlite3 exit nonzero
+    # before COMMIT, so the transaction rolls back and check=True surfaces it.
+    sql_lines = [".bail on", "PRAGMA busy_timeout=120000;", "BEGIN IMMEDIATE;"]
     for t in tables:
         sql_lines.append(f"DELETE FROM {t} WHERE track_audio_id={track_audio_id};")
 
@@ -275,16 +321,22 @@ def push_track_rows(track_audio_id: int) -> None:
         ["sqlite3", str(SCRATCH_DB)],
         input=dump_script,
         text=True,
+        encoding="utf-8",
+        errors="surrogateescape",
+        timeout=SSH_QUERY_TIMEOUT,
     )
     sql_lines.append(dumped)
     sql_lines.append("COMMIT;")
     full_sql = "\n".join(sql_lines)
 
     subprocess.run(
-        ["ssh", PI_HOST, f"sqlite3 {CANONICAL_DB}"],
+        ["ssh", *SSH_OPTS, PI_HOST, f"sqlite3 {CANONICAL_DB}"],
         input=full_sql,
         text=True,
+        encoding="utf-8",
+        errors="surrogateescape",
         check=True,
+        timeout=SSH_PUSH_TIMEOUT,
     )
 
     # Clear scratch rows for this track so scratch doesn't grow unbounded
@@ -398,8 +450,13 @@ def main() -> int:
             orphan.unlink(missing_ok=True)
     log.info("cleared orphan local stems/audio from prior run")
 
-    n_done = 0
-    n_failed = 0
+    # Honest tally (C3): `counts.done` is bumped by the bg tail only after the
+    # canonical push confirms, so the headline can't over-report. `n_seen`
+    # (dispatched-or-finally-failed) drives the --max-tracks gate. `attempts`
+    # backs the transient-retry-with-backoff (C2).
+    counts = Counts()
+    n_seen = 0
+    attempts: dict[int, int] = {}
     # In-session "tried and failed" set. Without this, any track whose audio
     # fails to decode (or any analyze_track failure mode that doesn't write a
     # track_analysis row) re-appears on every next_task() poll → infinite
@@ -449,6 +506,9 @@ def main() -> int:
             p_r = persistence.persist_analysis(SCRATCH_DB, result)
             if not p_r.is_ok():
                 # canonical never gets track_analysis → tid re-picked later.
+                # Count as a persist failure (C3) so the headline doesn't claim
+                # this track as done.
+                counts.persist_failed_inc()
                 log.warning("[%d] (bg) persist failed: %s", tid, p_r.error.detail)
                 return
 
@@ -467,10 +527,13 @@ def main() -> int:
                 rsync_out_s,
                 time.monotonic() - t_p,
             )
+            # Confirmed persisted + pushed — only NOW is the track truly done (C3).
+            counts.done_inc()
             log.info("[%d] (bg) DONE", tid)
         except subprocess.CalledProcessError as e:
             # canonical never received track_analysis (or partial), so
             # next_task re-picks this tid once it leaves the in-flight set.
+            counts.persist_failed_inc()
             log.error("[%d] (bg) tail failed: %s", tid, e)
         finally:
             if stem_local.exists():
@@ -511,16 +574,13 @@ def main() -> int:
         return PrefetchItem(tid=tid, local_audio=local, asset=asset, pull_s=pull_s)
 
     while True:
-        if args.max_tracks is not None and n_done + n_failed >= args.max_tracks:
-            log.info(
-                "--max-tracks %d reached — analyzed %d, failed %d",
-                args.max_tracks,
-                n_done,
-                n_failed,
-            )
+        if args.max_tracks is not None and n_seen >= args.max_tracks:
             if bg is not None:
                 bg.join()
-            return 0
+            done, failed, pf = counts.snapshot()
+            code, level, msg = exit_status(done, failed, pf)
+            log.log(level, "--max-tracks %d reached — %s", args.max_tracks, msg)
+            return code
 
         # ---- obtain this iteration's item ----
         inflight = frozenset(t for t in (persist_tid,) if t is not None)
@@ -548,18 +608,45 @@ def main() -> int:
                 persist_tid = None
             item = _sync_item(frozenset(failed_tids))
             if item is None:
-                log.info("queue drained — analyzed %d, failed %d", n_done, n_failed)
-                return 0
+                done, failed, pf = counts.snapshot()
+                code, level, msg = exit_status(done, failed, pf)
+                log.log(level, "%s", msg)
+                return code
 
         if isinstance(item, PrefetchFailure):
-            log.error("[%d] input pull failed: %s", item.tid, item.detail)
-            n_failed += 1
-            failed_tids.add(item.tid)
+            # Input pull failures are transient (rsync/ssh timeout, broken pipe
+            # over the SOCKS proxy) — retry with backoff before quarantining (C2),
+            # rather than permanently skipping a track a re-pull would recover.
+            if register_transient(
+                item.tid, item.detail, attempts, failed_tids, counts, log
+            ):
+                n_seen += 1
+            else:
+                time.sleep(transient_backoff_seconds(attempts[item.tid]))
             continue
 
         tid = item.tid
         local_audio = item.local_audio
         handed_off = False
+
+        # B2: verify the pulled file against canonical sha256 before analyzing.
+        # rsync can hand back a truncated file (partial transfer / resumed run)
+        # that decodes to garbage; treat a mismatch as a transient pull failure
+        # (re-pull, not a permanent quarantine).
+        if item.asset.sha256:
+            try:
+                local_sha = sha256_file(local_audio)
+            except OSError as exc:
+                local_sha = f"<unreadable: {exc}>"
+            if local_sha != item.asset.sha256:
+                if local_audio.exists():
+                    local_audio.unlink(missing_ok=True)
+                detail = f"sha256 mismatch (got {local_sha[:12]}…, want {item.asset.sha256[:12]}…)"
+                if register_transient(tid, detail, attempts, failed_tids, counts, log):
+                    n_seen += 1
+                else:
+                    time.sleep(transient_backoff_seconds(attempts[tid]))
+                continue
 
         # Kick off the NEXT prefetch now — it downloads behind this track's
         # GPU work. Skip set: failures + this tid + the persisting tid.
@@ -583,14 +670,17 @@ def main() -> int:
             )
             analyze_s = time.monotonic() - t1
             if not r.is_ok():
+                # A decode/analyze failure is a poison pill (deterministic) —
+                # quarantine on first sight, no retry (C2).
                 log.warning(
                     "[%d] analyze_track failed: %s — %s",
                     tid,
                     r.error.kind,
                     r.error.detail,
                 )
-                n_failed += 1
+                counts.failed_inc()
                 failed_tids.add(tid)
+                n_seen += 1
                 continue
             log.info(
                 "TIMING tid=%d prefetched=%d deferess=%d pull_s=%.1f analyze_s=%.1f",
@@ -624,12 +714,23 @@ def main() -> int:
             persist_tid = tid
             bg.start()
             handed_off = True
-            n_done += 1
-            log.info("[%d] handed off (n_done=%d, n_failed=%d)", tid, n_done, n_failed)
+            # Dispatched (drives --max-tracks); the honest done-count is bumped
+            # by the bg tail only once the push confirms (C3).
+            n_seen += 1
+            done, failed, pf = counts.snapshot()
+            log.info(
+                "[%d] handed off (seen=%d done=%d failed=%d persist_failed=%d)",
+                tid,
+                n_seen,
+                done,
+                failed,
+                pf,
+            )
         except subprocess.CalledProcessError as e:
             log.error("[%d] subprocess failed: %s", tid, e)
-            n_failed += 1
+            counts.failed_inc()
             failed_tids.add(tid)
+            n_seen += 1
         finally:
             # On hand-off the bg thread owns BOTH local_audio (deferred
             # Essentia still needs it) and stem_local. Only clean up here when

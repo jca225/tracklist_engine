@@ -12,11 +12,22 @@ module directly.
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
+
+_log = logging.getLogger("loop_prefetch")
+
+# Watchdog for take(): the injected pull/hydrate carry their own subprocess
+# timeouts (rsync --timeout + subprocess timeout ≈ 600s), so a thread alive past
+# this is an unexpectedly slow pull or a non-subprocess stall — surface it loudly
+# (bug B1: an unbounded join silently wedged the whole loop) rather than blocking
+# invisibly. We still wait for the bounded subprocess timeout to release it; we
+# never abandon the thread (that would break the single-slot happens-before).
+PREFETCH_WARN_AFTER_S = 660.0
 
 
 @dataclass(frozen=True)
@@ -93,8 +104,20 @@ class PrefetchSlot:
         self._thread = threading.Thread(target=_run, daemon=False)
         self._thread.start()
 
-    def take(self) -> PrefetchItem | PrefetchFailure | None:
+    def take(
+        self, warn_after: float | None = PREFETCH_WARN_AFTER_S
+    ) -> PrefetchItem | PrefetchFailure | None:
         assert self._thread is not None, "take() without start()"
+        if warn_after is not None:
+            self._thread.join(warn_after)
+            if self._thread.is_alive():
+                _log.error(
+                    "prefetch pull still running after %.0fs — waiting on its "
+                    "bounded subprocess timeout to release it",
+                    warn_after,
+                )
+        # Final unbounded wait: the subprocess timeout guarantees the thread ends,
+        # and joining preserves the single-slot happens-before for _result.
         self._thread.join()
         self._thread = None
         result = self._result
