@@ -202,6 +202,19 @@ from the scorers; other docs cite it. Dead ends live in the EXPERIMENTS ledger.
   the Mac is a contended multi-agent box (parallel `race`/`infer` starve + kill
   runs); use `PYTHONUNBUFFERED=1` + `HF_HUB_OFFLINE=1` for observability; persist
   synthetic features (they cache to `.feat_cache`, but a cold pass is ~40 min).
+- **Structure wall (instance-selection) — lever redirected to synthetic repeat
+  *ambiguity*, not repeat *presence*.** Two prior framings falsified against live
+  code: (a) a hand-tuned decode tie-breaker (dead — features identical across a
+  true repeat), (b) "synthetic emits straight plays only" (FALSE — `generate_v2 →
+  labels_v2.window_to_gt` already emits loop+multiseg `ref_segments`/`is_loop`;
+  bb12-lite `n_loops:1`, `instr_jump_prob:0.85`; the cited `labels.py:scenario_to_gt`
+  is dead v1 code). The learned decoder already trains on structure yet stays flat
+  (~26–27% BB12) because synthetic loops point every repeat at the *same* random
+  ref window — the real hardness (reference has multiple look-alike regions, pick
+  the DJ's) is only incidental. **Un-run lever:** engineer reference-internal
+  repeat ambiguity into synthetic loop/multiseg → retrain `trajectory/` → eval.
+  JOB 1's structure curve is the control (flat-as-N ⇒ hardness, not quantity).
+  Spec: `docs/superpowers/specs/2026-07-17-instance-selection-arbiter-design.md`.
 - **Co-training harvest can run on the EXISTING downloaded corpus — NOT blocked on
   the 20k pull or the ingest agent.** To close the synthetic→real gap we need real
   (mix ↔ alignment) pairs; the seam manufactures them by running the probe ensemble
