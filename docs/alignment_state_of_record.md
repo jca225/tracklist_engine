@@ -1,6 +1,6 @@
 # Alignment — State of Record (current best + settled decisions)
 
-> **As of 2026-07-16 @ `223fc68`** (branch `pws-alignment-reframe`).
+> **As of 2026-07-17 @ `da97c00`** (branch `cotrain-grammar-coverage`).
 >
 > **What this doc is.** The single *living* answer to "what is the aligner at its
 > best right now, and what have we settled on — so build ON this, don't
@@ -61,7 +61,12 @@ grammar = "Turing-complete over DJ moves" (see §2, decision D1).
 - **Structure** — segment-list decode. Piecewise-linear path decode (Viterbi
   over offset) handles loops / jumps / odd-ratio warps; lyric-anchor ref-decode
   helps acappellas but loses loops, so it is fused with abstention rather than
-  used alone.
+  used alone. The **learned trajectory decoder** (`trajectory/`) is the primary
+  lever going forward, and **synthetic-mix augmentation of its training set is a
+  validated win** (§2, D13): on held-out BB12 it beats real-only training and is
+  markedly more stable across epochs. The single-global-stretch limit of
+  `decode_path` (constant slope per span) is the transition-recovery wall — lever
+  is stretch-in-state Viterbi (§3).
 
 **Cross-cutting machinery (settled, in use):**
 - **Scorer** scores over played + gain-audible intervals only (de-inflated; no
@@ -82,6 +87,24 @@ Harness: `harness/`. Agentic loop: `agentic/`.
 ## 2. Settled decisions (append-only; status = SETTLED | SUPERSEDED-BY-#N)
 
 > Append new entries at the top. Never rewrite history — supersede it.
+
+**#13 — Primary bet = synthetic-supervised learned placement/structure; PWS
+demoted to the fusion layer.** `2026-07-17` · SETTLED (direction) / OPEN (does it
+scale — §3). The bottleneck is **placement/structure**, not fusion: the PWS
+continuous label model already *matches* hand-tuned fusion (Gate v3 PARTIAL), so
+more fusion machinery is diminishing returns, while placement is ~91% of the
+oracle→e2e gap. The lever is a **learned placement/structure model trained on
+synthetic (manufactured-label) mixes, validated on BB** — synthetic is the only
+way to get unlimited *labeled* data given n=2 GT (builds on #11 "synthetic for
+MEASURE"). **First synthetic→real transfer read (trajectory decoder, held-out
+BB12) → 🟢:** real+synthetic augmentation beats the real-only training ceiling and
+is markedly more stable across epochs — synthetic *transfers and helps*. Qualified:
+modest lift at only 100 synthetic mixes, this is *augmentation* not *pure-synthetic
+substitution*, single direction (eval BB12), single seed, leakage check (BB tracks
+in synthetic catalog?) still owed. PWS **v4** (singleton-σ fix — the diagnosed
+lever if fusion is revisited) is demoted to a fallback. Spec:
+`docs/superpowers/specs/2026-07-17-synthetic-transfer-spike-design.md`; provisional
+numbers in the spike log, not yet in the status SSOT.
 
 **#12 — Transition / gradual-tempo regime is IN SCOPE (representation).**
 `2026-07-16` · SETTLED (representation) / OPEN (recovery-by-Aug-1).
@@ -161,6 +184,32 @@ from the scorers; other docs cite it. Dead ends live in the EXPERIMENTS ledger.
 
 ## 3. Open fronts (what's live / undecided right now)
 
+- **Synthetic→real transfer — FIRST READ DONE (🟢); #1 next = volume-scaling curve
+  on Vast.** Trajectory decoder, held-out BB12: real+synthetic augmentation beats
+  real-only training and is more stable (D13). Reuses the existing scaffold
+  (`trajectory/train.py --synthetic-root`, `synthetic_adapter` train-only,
+  `path_decode.trajectory_acc`, no-model control) on the 100 `data/synthetic_mixes_v2`
+  windows. **Next, in order:** (1) leakage check — confirm the synthetic catalog
+  excludes BB recordings; (2) matched-epoch + multi-seed rerun to beat single-epoch
+  noise; (3) **Axis-1 volume curve** — scale synthetic generation + featurization
+  on **Vast** (GPU-bound HuBERT) and plot held-out acc vs #mixes — the go-signal
+  for the learned-aligner program; (4) pure-synthetic-only (train-only-synthetic)
+  variant to measure the true transfer gap, not just augmentation. Spec:
+  `docs/superpowers/specs/2026-07-17-synthetic-transfer-spike-design.md`.
+  **Infra lessons (reusable):** MPS *hangs* trajectory training (run `--device cpu`);
+  the Mac is a contended multi-agent box (parallel `race`/`infer` starve + kill
+  runs); use `PYTHONUNBUFFERED=1` + `HF_HUB_OFFLINE=1` for observability; persist
+  synthetic features (they cache to `.feat_cache`, but a cold pass is ~40 min).
+- **Co-training harvest can run on the EXISTING downloaded corpus — NOT blocked on
+  the 20k pull or the ingest agent.** To close the synthetic→real gap we need real
+  (mix ↔ alignment) pairs; the seam manufactures them by running the probe ensemble
+  on already-downloaded+analyzed sets and keeping confident agreements as
+  pseudo-labels. It only *reads* analysis outputs → collision-free with ingest. The
+  20k grammar-coverage pull demotes to a later *diversity/scale* lever, not a
+  prerequisite. Gate on this: validate ACCEPT precision on BB GT first (bad
+  pseudo-labels poison training); keep abstain-heavy. Blocked-adjacent: per-probe
+  [0,1] calibration (below). Sizing step (read-only): inventory downloaded+analyzed
+  sets on pi-storage.
 - **Co-training corpus expansion — Tier-1 BUILT (branch `cotrain-grammar-coverage`).**
   `eda/alignment/generalization/grammar_coverage.py` fingerprints all ~41k by
   grammar proxies (w/-frac, version/stem/ID, density), maps downloaded-vs-corpus
@@ -182,10 +231,13 @@ from the scorers; other docs cite it. Dead ends live in the EXPERIMENTS ledger.
 - **Co-training seam — dry-run skeleton BUILT.** `workspaces/pws_aligner/cotrain_seam.py`:
   suspect → `AcquisitionCase` producer; candidate-ref → align-to-mix → `TrainingSignal`
   + PROPOSED `track_audio_correction`. ACCEPT requires ≥2 independent channels
-  agreeing (confirmation-drift guard); ZERO canonical mutation (tested). Open
-  (real-probe wiring): per-probe [0,1] calibration, offset-frame normalization
-  (`capture_votes._ABSOLUTE_FRAME_PROBES`), BB GT cases from `bb_reacquire_queue.json`
-  (879 fetch_missing) + GT YAML. Runs all-abstain no-op without audio.
+  agreeing (confirmation-drift guard); ZERO canonical mutation (tested).
+  **`real_probe_scorer` now WIRED** — delegates to the same `capture_votes`
+  harness-probe machinery (incl. the load-bearing ABSOLUTE→RELATIVE offset-frame
+  normalization, single-sourced), gated to all-abstain when audio absent. Open:
+  **per-probe [0,1] confidence calibration** (banding currently leans on offset
+  *agreement* first, confidence second — needs a live BB-GT probe pass to
+  calibrate); BB GT cases from `bb_reacquire_queue.json` (879 fetch_missing) + GT YAML.
 - **PWS phase-1b (continuous) build-out.** Lives in worktree
   `~/Desktop/tracklist_engine-pws1b` on branch `pws-phase1b-continuous` (187
   tests). Not yet merged.
