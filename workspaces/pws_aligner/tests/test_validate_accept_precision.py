@@ -12,9 +12,18 @@ from __future__ import annotations
 from pathlib import Path
 
 from labeling.ground_truth.schema import GroundTruthSet, GroundTruthTrack
+from workspaces.pws_aligner.cotrain_seam import (
+    AgreementReport,
+    Band,
+    CandidateProposal,
+    GtCandidateCase,
+    MixSpan,
+    RefCandidate,
+)
 from workspaces.pws_aligner.validate_accept_precision import (
     build_gt_cases,
     gt_relative_offset,
+    score_by_stem,
 )
 
 
@@ -186,3 +195,44 @@ def test_stem_filter_restricts_positives():
 def test_gt_relative_offset_is_ref_minus_set_start():
     t = _track("rA", "acappella", "010", 100.0, 140.0, 12.0)
     assert gt_relative_offset(t) == 12.0 - 100.0
+
+
+def _case(stem: str, correct: bool) -> GtCandidateCase:
+    return GtCandidateCase(
+        candidate=RefCandidate(recording_id="r", source_url="u", stem=stem),
+        span=MixSpan("s1", "010", 100.0, 40.0),
+        candidate_is_correct=correct,
+    )
+
+
+def _prop(band: Band) -> CandidateProposal:
+    return CandidateProposal(
+        candidate=RefCandidate(recording_id="r", source_url="u"),
+        span=MixSpan("s1", "010", 100.0, 40.0),
+        agreement=AgreementReport(band, (), None, 0, None, 0.0, ""),
+    )
+
+
+def test_score_by_stem_groups_and_scores_each_axis():
+    # acappella: 1 correct ACCEPT + 1 WRONG ACCEPT (precision 0.5, the poison)
+    # instrumental: 1 correct ACCEPT + 1 correct ABSTAIN-missed (precision 1.0)
+    cases = [
+        _case("acappella", True),
+        _case("acappella", False),
+        _case("instrumental", True),
+        _case("instrumental", True),
+    ]
+    props = [
+        _prop(Band.ACCEPT),
+        _prop(Band.ACCEPT),
+        _prop(Band.ACCEPT),
+        _prop(Band.ABSTAIN),
+    ]
+    by = score_by_stem(cases, props)
+    assert set(by) == {"acappella", "instrumental"}
+    assert by["acappella"].accept_correct == 1
+    assert by["acappella"].accept_wrong == 1
+    assert by["acappella"].precision == 0.5
+    assert by["instrumental"].accept_correct == 1
+    assert by["instrumental"].abstain_missed == 1
+    assert by["instrumental"].precision == 1.0

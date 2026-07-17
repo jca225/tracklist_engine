@@ -32,7 +32,9 @@ from labeling.ground_truth.schema import GroundTruthSet, GroundTruthTrack, load
 from workspaces.pws_aligner.cotrain_seam import (
     DEFAULT_THRESHOLDS,
     Band,
+    BandingScore,
     BandThresholds,
+    CandidateProposal,
     GtCandidateCase,
     MixSpan,
     RefCandidate,
@@ -62,6 +64,25 @@ def gt_relative_offset(track: GroundTruthTrack) -> float:
 
 def _claim_axes(stem: str) -> dict[str, str]:
     return {"version": "original", "stem": stem, "variant": "regular"}
+
+
+def score_by_stem(
+    cases: list[GtCandidateCase], proposals: list[CandidateProposal]
+) -> dict[str, BandingScore]:
+    """Per-axis ACCEPT confusion, keyed by the candidate's claimed stem.
+
+    Aggregate precision hides the axis story — instrumental/regular identity is
+    strong, acappella is the weak axis. The go/no-go on the flywheel is usually
+    per-axis ("turn it on for the strong axes, hold acappella"), so break the
+    confusion out by stem.
+    """
+    out: dict[str, BandingScore] = {}
+    for case, prop in zip(cases, proposals):
+        stem = case.candidate.stem or "regular"
+        out.setdefault(stem, BandingScore()).observe(
+            prop.agreement.band, case.candidate_is_correct
+        )
+    return out
 
 
 def build_gt_cases(
@@ -273,6 +294,15 @@ def main(argv: list[str] | None = None) -> int:
         f"review={score.review}  abstain_correct={score.abstain_correct}  "
         f"abstain_missed={score.abstain_missed}"
     )
+    per_stem = score_by_stem(cases, proposals)
+    print("  by stem (the go/no-go is per-axis):")
+    for stem in sorted(per_stem):
+        s = per_stem[stem]
+        print(
+            f"    {stem:>12}: precision={s.precision:.3f} recall={s.recall:.3f} "
+            f"(accept_correct={s.accept_correct} accept_wrong={s.accept_wrong} "
+            f"review={s.review} abstain_missed={s.abstain_missed})"
+        )
     if placement_errors:
         errs = sorted(placement_errors)
         med = _stats.median(errs)
