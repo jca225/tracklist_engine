@@ -10,6 +10,8 @@ import numpy as np
 
 from core.contracts import load_timeline
 from workspaces.alignment_prototype.experiments.bb_baselines import (
+    PILEUP_DENSITY,
+    _stats,
     baseline_timeline,
     cohort_spread_s,
     summarize,
@@ -38,18 +40,29 @@ def test_cohort_spread_none_when_single_or_absent():
     assert cohort_spread_s(prov) == 60.0
 
 
-def test_summarize_basic_stats():
-    errs = np.array([0.0, 1.0, 2.0, 20.0])  # 3/4 under 15s
-    s = summarize(errs)
+def test_stats_basic():
+    s = _stats([0.0, 1.0, 2.0, 20.0])  # 3/4 under 15s
     assert s["n"] == 4
     assert s["median"] == 1.5
     assert s["lt15_pct"] == 75.0
     assert s["mae"] == 5.75
 
 
-def test_summarize_empty():
-    s = summarize(np.array([]))
+def test_stats_empty():
+    s = _stats([])
     assert s["n"] == 0 and s["median"] is None and s["p90"] is None
+
+
+def test_summarize_pileup_exclusion():
+    # a big-error span sitting in a medley pileup (density>=4) must NOT count
+    # against the noPile placement axis, but DOES count in strict.
+    pairs = [(1.0, 1), (2.0, 2), (300.0, PILEUP_DENSITY + 1)]
+    out = summarize(pairs)
+    assert out["strict"]["n"] == 3
+    assert out["strict"]["median"] == 2.0  # median of [1, 2, 300]
+    assert out["noPile"]["n"] == 2  # pileup span dropped
+    assert out["noPile"]["median"] == 1.5  # median of [1, 2]
+    assert out["noPile"]["p90"] < out["strict"]["p90"]  # tail no longer penalized
 
 
 def test_baseline_timeline_is_load_timeline_valid():

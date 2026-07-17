@@ -174,32 +174,51 @@ def baseline_timeline(set_id: str, rows: list[dict], preds: dict[str, float]) ->
 
 
 # ------------------------------------------------------------------- scoring/agg
-def place_errs(scores) -> np.ndarray:
-    """Finite per-span placement errors from a score_spans result."""
-    return np.array(
-        [s.place_err_s for s in scores if s.place_err_s is not None], dtype=float
-    )
+# median >= this many concurrent GT layers = a sustained medley pileup, where
+# placement is inherently ambiguous (many tracks packed in a short window). The
+# scorecard already excludes these for its trajectory HEADLINE; we mirror the
+# threshold so the placement metric does NOT penalize the aligner for landing
+# one-neighbour-off inside a pileup — the instance-ambiguity is a property of the
+# mix, not an error the actor can resolve. (`unalignable` GT rows need no handling
+# here: they are the mix/mix_instrumental placeholders with no track_id, so
+# score_spans never matches them to a span.)
+PILEUP_DENSITY = 4
 
 
-def summarize(errs: np.ndarray) -> dict:
-    if errs.size == 0:
+def place_pairs(scores) -> list[tuple[float, int | None]]:
+    """(placement_error_s, overlay_density) for spans with a finite place_err."""
+    return [
+        (float(s.place_err_s), s.density) for s in scores if s.place_err_s is not None
+    ]
+
+
+def _stats(errs: list[float]) -> dict:
+    if not errs:
         return dict(n=0, mae=None, median=None, lt15_pct=None, p90=None)
+    a = np.array(errs, dtype=float)
     return dict(
-        n=int(errs.size),
-        mae=round(float(errs.mean()), 2),
-        median=round(float(np.median(errs)), 2),
-        lt15_pct=round(100.0 * float((errs < 15).mean()), 0),
-        p90=round(float(np.percentile(errs, 90)), 1),
+        n=int(a.size),
+        mae=round(float(a.mean()), 2),
+        median=round(float(np.median(a)), 2),
+        lt15_pct=round(100.0 * float((a < 15).mean()), 0),
+        p90=round(float(np.percentile(a, 90)), 1),
     )
+
+
+def summarize(pairs: list[tuple[float, int | None]]) -> dict:
+    """Strict placement over ALL spans, AND pileup-excluded placement (drop spans
+    whose overlay density >= PILEUP_DENSITY). Report both — never silently
+    penalize the aligner for medley-pileup instance-ambiguity."""
+    strict = [e for e, _ in pairs]
+    nopile = [e for e, d in pairs if d is None or d < PILEUP_DENSITY]
+    return {"strict": _stats(strict), "noPile": _stats(nopile)}
 
 
 def score_driver(set_id: str, template: str, gt_path: Path) -> dict:
     tl = OUT_DIR / template.format(sid=set_id)
     if not tl.is_file():
-        return dict(
-            n=0, mae=None, median=None, lt15_pct=None, p90=None, missing=str(tl)
-        )
-    return summarize(place_errs(score_spans(set_id, tl, gt_path=gt_path)))
+        return {"strict": _stats([]), "noPile": _stats([]), "missing": str(tl)}
+    return summarize(place_pairs(score_spans(set_id, tl, gt_path=gt_path)))
 
 
 def score_baseline(
@@ -212,7 +231,7 @@ def score_baseline(
         json.dump(tl, fh)
         tmp = Path(fh.name)
     try:
-        return summarize(place_errs(score_spans(set_id, tmp, gt_path=gt_path)))
+        return summarize(place_pairs(score_spans(set_id, tmp, gt_path=gt_path)))
     finally:
         tmp.unlink(missing_ok=True)
 
@@ -331,27 +350,37 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[{sid}] scoring {methods} …", file=sys.stderr)
         results[sid] = run_set(sid, methods)
 
-    # table: method rows x (set: median / <15s / p90 / n)
-    print("\nplacement set_start error — baselines (identity GIVEN) vs our drivers")
-    print("NMF/DTW omitted: different regime (short synthetic excerpts), see spec.\n")
-    hdr = f"{'method':<10}"
-    for sid in sets:
-        hdr += f" | {sid}: med / <15s / p90 / n"
-    print(hdr)
-    print("-" * len(hdr))
-    for m in methods:
-        line = f"{m:<10}"
+    # table: two blocks — STRICT (all spans) and noPile (medley pileups excluded,
+    # density<4) — so the aligner is never silently penalized for pileup ambiguity.
+    def _print_block(variant: str, label: str) -> None:
+        print(
+            f"\nplacement set_start error [{label}] — baselines (identity GIVEN) vs drivers"
+        )
+        hdr = f"{'method':<10}"
         for sid in sets:
-            r = results[sid].get(m, {})
-            line += (
-                f" | {_fmt(r.get('median'))} / {_fmt(r.get('lt15_pct'))}%"
-                f" / {_fmt(r.get('p90'))} / {_fmt(r.get('n'))}"
-            )
-        print(line)
+            hdr += f" | {sid}: med / <15s / p90 / n"
+        print(hdr)
+        print("-" * len(hdr))
+        for m in methods:
+            line = f"{m:<10}"
+            for sid in sets:
+                r = results[sid].get(m, {}).get(variant, {})
+                line += (
+                    f" | {_fmt(r.get('median'))} / {_fmt(r.get('lt15_pct'))}%"
+                    f" / {_fmt(r.get('p90'))} / {_fmt(r.get('n'))}"
+                )
+            print(line)
+
+    print("\nNMF/DTW omitted: different regime (short synthetic excerpts), see spec.")
+    _print_block("strict", "STRICT — all spans")
+    _print_block(
+        "noPile", f"noPile — medley pileups (density>={PILEUP_DENSITY}) excluded"
+    )
     print(
         "\nCaveats: n=2 real sets (no cross-set CI); baselines get correct identity"
-        " for free (favors them); baselines assume ref_start=0 single-instance —"
-        " the heavy tail is the real-mix difficulty, not a bug."
+        " for free (favors them); baselines assume ref_start=0 single-instance."
+        " noPile is the fair placement axis: it drops medley-pileup spans where"
+        " instance-ambiguity is the mix's property, not the actor's error."
     )
 
     # --- provenance + cohort-coherence guard (see the block above run_set) ---
