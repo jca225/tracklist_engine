@@ -210,8 +210,13 @@ from the scorers; other docs cite it. Dead ends live in the EXPERIMENTS ledger.
   20k grammar-coverage pull demotes to a later *diversity/scale* lever, not a
   prerequisite. Gate on this: validate ACCEPT precision on BB GT first (bad
   pseudo-labels poison training); keep abstain-heavy. Blocked-adjacent: per-probe
-  [0,1] calibration (below). Sizing step (read-only): inventory downloaded+analyzed
-  sets on pi-storage.
+  [0,1] calibration (below). **Inventory DONE (2026-07-17, canonical pi-storage):
+  1,016 sets have a downloaded mix, 19.6k ref-track audios, but mix-side analysis
+  is barely run — `set_measures`=0 beat grids, `set_stems`=4 mixes, ~3.3k/19.6k
+  refs analyzed. CORRECTION to the "nearly free" framing: the bottleneck is NOT
+  downloads (we have the mixes) but a MIX-SIDE ANALYSIS PASS (RoFormer stems +
+  beats + MERT + fp on the 1,016 mixes + refs) — GPU-bound. This converges with the
+  synthetic scale-up: both need a Vast GPU pass, so Vast is the shared next engine.**
 - **Co-training corpus expansion — Tier-1 BUILT (branch `cotrain-grammar-coverage`).**
   `eda/alignment/generalization/grammar_coverage.py` fingerprints all ~41k by
   grammar proxies (w/-frac, version/stem/ID, density), maps downloaded-vs-corpus
