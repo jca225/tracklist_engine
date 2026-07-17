@@ -19,6 +19,7 @@ import json
 import re
 import sys
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -42,6 +43,11 @@ from workspaces.alignment_prototype.path_decode import (
 from workspaces.alignment_prototype.refine_ref_offsets import (
     _STEM_FILE,
     find_aligning_dir,
+)
+from workspaces.alignment_prototype.timeline_provenance import (
+    _git_sha,
+    cohort_spread_s,
+    driver_provenance,
 )
 
 OUT_DIR = Path(__file__).resolve().parent / "out"
@@ -512,6 +518,28 @@ def main(argv: list[str] | None = None) -> int:
     # --- Print section (identical to old main) ---
     n = len(spans)
     print(f"=== end-to-end pipeline vs GT ({args.set_id}, {n} predicted spans) ===")
+
+    # Provenance stamp: git sha + scored timeline mtime
+    sha = _git_sha()
+    tl_mtime = (
+        datetime.fromtimestamp(Path(tl_path).stat().st_mtime, timezone.utc).isoformat(
+            timespec="minutes"
+        )
+        if Path(tl_path).exists()
+        else "unknown"
+    )
+    print(
+        f"provenance: git={sha}  timeline_mtime={tl_mtime}  file={tl_path.name if hasattr(tl_path, 'name') else Path(tl_path).name}"
+    )
+
+    # Stale-cohort WARNING: if ≥2 driver timelines exist and their mtimes diverge
+    # more than 6 h, comparing them is unsound (mismatched vintages).
+    # Guard the None case: 0 or 1 timeline on disk → no warning, no crash.
+    _dprov = driver_provenance(args.set_id, ["classical", "agentic"])
+    _spread = cohort_spread_s(_dprov)
+    if _spread is not None and _spread > 21600:
+        print(f"⚠ INCOHERENT COHORT (mtimes span {_spread / 3600:.1f} h)")
+
     nid = id_ok + len(id_bad)
     print(
         f"identity: {id_ok}/{nid} ({100 * id_ok / max(nid, 1):.0f}%)  "
