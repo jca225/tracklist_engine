@@ -96,6 +96,9 @@ def _fiber_key(
     if ref_s is None:
         return None
 
+    # Intervals are assumed non-overlapping: the first enclosing interval is the
+    # unique owner of ref_s.  If it is not validated we stop immediately (a later
+    # overlapping valid interval would be a data-integrity error, not a fallback).
     for start_s, end_s, fiber_id, n_instances in intervals:
         if start_s <= ref_s < end_s:
             # Found the enclosing interval — check validation criteria.

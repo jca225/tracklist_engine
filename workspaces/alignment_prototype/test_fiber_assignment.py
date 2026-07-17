@@ -107,23 +107,43 @@ def test_ref_start_outside_all_intervals_is_singleton():
 def test_multiseg_row_uses_first_ref_start():
     """For a row with ref_segments, equivalence_classes uses
     ref_segments[0]['ref_start_s'] as the ref position (matching the brief's
-    spec), not the top-level ref_start_s."""
-    row = {
+    spec), not the top-level ref_start_s.
+
+    The test is structured so it FAILS if _ref_start were changed to return the
+    top-level 999.0:  999.0 falls outside all defined fiber intervals, so the
+    multiseg row would become a singleton and would NOT share a class id with the
+    plain 30.0 row — the assertion ``result[0] == result[1]`` would fail.
+    """
+    # Multiseg row: top-level ref_start_s=999.0 must be IGNORED; the position
+    # used is ref_segments[0]["ref_start_s"]=30.0, which falls in fiber 0.
+    row_ms = {
         "track_id": "tid_ms",
-        "ref_start_s": 999.0,  # top-level — should be IGNORED
+        "ref_start_s": 999.0,  # top-level — must be IGNORED
         "ref_segments": [
             {"ref_start_s": 30.0},
             {"ref_start_s": 60.0},
         ],
     }
+    # Plain row at 30.0 (no ref_segments) — falls in the same validated fiber 0.
+    # If _ref_start correctly reads ref_segments[0] for the multiseg row (→30.0),
+    # both rows land in fiber 0 and share a class id.
+    # If _ref_start incorrectly returns 999.0, row_ms is a singleton (999.0 is
+    # outside all intervals) and the assertion below fails.
+    row_plain = {
+        "track_id": "tid_ms",
+        "ref_start_s": 30.0,
+    }
     fibers: dict[str, list[tuple[float, float, int, int]]] = {
         "tid_ms": [
-            (25.0, 55.0, 0, 2),
-            (85.0, 115.0, 0, 2),
+            (25.0, 55.0, 0, 2),  # covers 30.0 — validated repeat (fiber 0)
+            (85.0, 115.0, 0, 2),  # second interval of the same fiber
         ],
     }
-    result = equivalence_classes([row], fibers)
-    assert len(result) == 1
-    # The row's ref_start at 30s hits a validated fiber; it should get that
-    # fiber's class (not the same as a row at 999s which would be a singleton).
-    # We verify it doesn't panic and returns exactly one key.
+    result = equivalence_classes([row_ms, row_plain], fibers)
+    assert len(result) == 2
+    assert result[0] == result[1], (
+        f"Multiseg row (ref_segments[0].ref_start_s=30.0) and plain row "
+        f"(ref_start_s=30.0) must share the same fiber class id; "
+        f"got {result[0]} and {result[1]} — likely _ref_start returned the "
+        f"top-level 999.0 instead of the first segment's 30.0"
+    )
