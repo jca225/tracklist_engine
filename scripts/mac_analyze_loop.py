@@ -46,6 +46,18 @@ from core import db as db_adapter
 from analysis.pipeline import load_analyzers, analyze_track
 from analysis import persistence
 from core.models import AudioAsset
+from scripts.loop_hardening import (
+    RSYNC_IO_TIMEOUT,
+    RSYNC_TIMEOUT,
+    SSH_OPTS,
+    SSH_PUSH_TIMEOUT,
+    SSH_QUERY_TIMEOUT,
+    Counts,
+    exit_status,
+    register_transient,
+    sha256_file,
+    transient_backoff_seconds,
+)
 
 # Pi-storage configuration (same Tailscale alias as vast_loop, just no
 # SOCKS proxy since Mac runs Tailscale natively).
@@ -81,7 +93,13 @@ log = logging.getLogger("mac_analyze")
 def ssh_pi(sql: str) -> str:
     full = f'sqlite3 -separator "|" {CANONICAL_DB} "{sql}"'
     r = subprocess.run(
-        ["ssh", PI_HOST, full], capture_output=True, text=True, check=True
+        ["ssh", *SSH_OPTS, PI_HOST, full],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="surrogateescape",
+        check=True,
+        timeout=SSH_QUERY_TIMEOUT,
     )
     return r.stdout.strip()
 
@@ -155,8 +173,18 @@ def rsync_in(remote: str, local: Path) -> None:
     # shlex.quote: the remote side of an rsync path goes through the remote
     # shell — unquoted spaces/parens in filenames abort with exit 2
     # (hit 2026-07-10 on "… (Official Karaoke Instrumental) ｜ SongJam.wav").
+    # --timeout aborts on an I/O stall (broken pipe / dead connection); the
+    # subprocess timeout is a hard wall-clock backstop (bug B1).
     subprocess.check_call(
-        ["rsync", "-q", f"{PI_HOST}:{shlex.quote(remote)}", str(local)]
+        [
+            "rsync",
+            "-q",
+            "--timeout",
+            str(RSYNC_IO_TIMEOUT),
+            f"{PI_HOST}:{shlex.quote(remote)}",
+            str(local),
+        ],
+        timeout=RSYNC_TIMEOUT,
     )
 
 
@@ -165,9 +193,13 @@ def rsync_stems_out(local_dir: Path, track_audio_id: int) -> None:
     src = f"{local_dir}/"
     dst = f"{PI_HOST}:{PI_STEMS_ROOT}/{track_audio_id}/"
     subprocess.check_call(
-        ["ssh", PI_HOST, f"mkdir -p {PI_STEMS_ROOT}/{track_audio_id}"]
+        ["ssh", *SSH_OPTS, PI_HOST, f"mkdir -p {PI_STEMS_ROOT}/{track_audio_id}"],
+        timeout=SSH_QUERY_TIMEOUT,
     )
-    subprocess.check_call(["rsync", "-aq", src, dst])
+    subprocess.check_call(
+        ["rsync", "-aq", "--timeout", str(RSYNC_IO_TIMEOUT), src, dst],
+        timeout=RSYNC_TIMEOUT,
+    )
 
 
 def init_scratch_db() -> None:
@@ -176,8 +208,11 @@ def init_scratch_db() -> None:
     if SCRATCH_DB.exists():
         return
     schema = subprocess.check_output(
-        ["ssh", PI_HOST, f"sqlite3 {CANONICAL_DB} '.schema'"],
+        ["ssh", *SSH_OPTS, PI_HOST, f"sqlite3 {CANONICAL_DB} '.schema'"],
         text=True,
+        encoding="utf-8",
+        errors="surrogateescape",
+        timeout=SSH_QUERY_TIMEOUT,
     )
     cleaned = []
     skip = False
@@ -262,15 +297,21 @@ def push_track_rows(track_audio_id: int) -> None:
         ["sqlite3", str(SCRATCH_DB)],
         input=dump_script,
         text=True,
+        encoding="utf-8",
+        errors="surrogateescape",
+        timeout=SSH_QUERY_TIMEOUT,
     )
     sql_lines.append(dumped)
     sql_lines.append("COMMIT;")
     full_sql = "\n".join(sql_lines)
     subprocess.run(
-        ["ssh", PI_HOST, f"sqlite3 {CANONICAL_DB}"],
+        ["ssh", *SSH_OPTS, PI_HOST, f"sqlite3 {CANONICAL_DB}"],
         input=full_sql,
         text=True,
+        encoding="utf-8",
+        errors="surrogateescape",
         check=True,
+        timeout=SSH_PUSH_TIMEOUT,
     )
     tables = ("track_stems",) + tables_keyed
     # Clear scratch rows for this track
@@ -350,8 +391,12 @@ def main() -> int:
             orphan.unlink(missing_ok=True)
     log.info("cleared orphan local stems/audio from prior run")
 
-    n_done = 0
-    n_failed = 0
+    # Honest tally (C3): counts.done bumped by the bg tail only after the push
+    # confirms; n_seen (dispatched-or-finally-failed) drives --max-tracks;
+    # attempts backs the transient retry-with-backoff (C2).
+    counts = Counts()
+    n_seen = 0
+    attempts: dict[int, int] = {}
     failed_tids: set[int] = set()
     bg: threading.Thread | None = None
 
@@ -362,8 +407,11 @@ def main() -> int:
                 rsync_stems_out(stem_local, tid)
             log.info("[%d] (bg) pushing DB rows to canonical", tid)
             push_track_rows(tid)
+            # Confirmed pushed — only NOW is the track truly done (C3).
+            counts.done_inc()
             log.info("[%d] (bg) DONE", tid)
         except subprocess.CalledProcessError as e:
+            counts.persist_failed_inc()
             log.error("[%d] (bg) push failed: %s", tid, e)
         finally:
             if stem_local.exists():
@@ -380,8 +428,10 @@ def main() -> int:
             only_reference=args.only_reference,
         )
         if nxt is None:
-            log.info("queue drained — analyzed %d, failed %d", n_done, n_failed)
-            return 0
+            done, failed, pf = counts.snapshot()
+            code, level, msg = exit_status(done, failed, pf)
+            log.log(level, "%s", msg)
+            return code
         tid, remote_path = nxt
         local_audio = LOCAL_AUDIO / f"{tid}.m4a"
         handed_off = False
@@ -391,26 +441,44 @@ def main() -> int:
             rsync_in(remote_path, local_audio)
 
             asset = fetch_asset(tid, local_audio)
+            # B2: verify the pulled file against canonical sha256 before analyzing
+            # (rsync can hand back a truncated file). Mismatch = transient pull
+            # failure → retry with backoff, not a permanent quarantine. (local_audio
+            # is deleted in the finally either way.)
+            if asset.sha256:
+                local_sha = sha256_file(local_audio)
+                if local_sha != asset.sha256:
+                    detail = f"sha256 mismatch (got {local_sha[:12]}…, want {asset.sha256[:12]}…)"
+                    if register_transient(
+                        tid, detail, attempts, failed_tids, counts, log
+                    ):
+                        n_seen += 1
+                    else:
+                        time.sleep(transient_backoff_seconds(attempts[tid]))
+                    continue
             log.info("[%d] analyzing %s (%s)", tid, asset.track_id, asset.platform)
             t1 = time.time()
             r = analyze_track(a, asset, stems_dir=LOCAL_STEMS)
             if not r.is_ok():
+                # Decode/analyze failure is a poison pill — quarantine on sight (C2).
                 log.warning(
                     "[%d] analyze_track failed: %s — %s",
                     tid,
                     r.error.kind,
                     r.error.detail,
                 )
-                n_failed += 1
+                counts.failed_inc()
                 failed_tids.add(tid)
+                n_seen += 1
                 continue
             log.info("[%d] analyzed in %.1fs", tid, time.time() - t1)
 
             p = persistence.persist_analysis(SCRATCH_DB, r.value)
             if not p.is_ok():
                 log.warning("[%d] persist failed: %s", tid, p.error.detail)
-                n_failed += 1
+                counts.failed_inc()
                 failed_tids.add(tid)
+                n_seen += 1
                 continue
 
             stem_local = LOCAL_STEMS / str(tid)
@@ -421,17 +489,32 @@ def main() -> int:
             )
             bg.start()
             handed_off = True
-            n_done += 1
-            log.info("[%d] handed off (n_done=%d, n_failed=%d)", tid, n_done, n_failed)
-            if args.max_tracks is not None and n_done >= args.max_tracks:
+            # Dispatched (drives --max-tracks); honest done-count is bumped by the
+            # bg tail once the push confirms (C3).
+            n_seen += 1
+            done, failed, pf = counts.snapshot()
+            log.info(
+                "[%d] handed off (seen=%d done=%d failed=%d persist_failed=%d)",
+                tid,
+                n_seen,
+                done,
+                failed,
+                pf,
+            )
+            if args.max_tracks is not None and n_seen >= args.max_tracks:
                 if bg is not None:
                     bg.join()
-                log.info("hit --max-tracks=%d, exiting", args.max_tracks)
-                return 0
+                done, failed, pf = counts.snapshot()
+                code, level, msg = exit_status(done, failed, pf)
+                log.log(level, "hit --max-tracks=%d — %s", args.max_tracks, msg)
+                return code
         except subprocess.CalledProcessError as e:
-            log.error("[%d] subprocess failed: %s", tid, e)
-            n_failed += 1
-            failed_tids.add(tid)
+            # Pull/ssh failures reaching here are transient (timeout, broken
+            # pipe) — retry with backoff before quarantining (C2).
+            if register_transient(tid, str(e), attempts, failed_tids, counts, log):
+                n_seen += 1
+            else:
+                time.sleep(transient_backoff_seconds(attempts[tid]))
         finally:
             if local_audio.exists():
                 local_audio.unlink()

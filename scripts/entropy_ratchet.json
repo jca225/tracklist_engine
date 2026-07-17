@@ -1,0 +1,5 @@
+{
+  "net_subprocess_no_timeout": 35,
+  "net_subprocess_no_encoding": 29,
+  "bare_except": 0
+}

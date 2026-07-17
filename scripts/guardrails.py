@@ -65,8 +65,13 @@ class Violation:
 
 def _iter_py_files() -> list[Path]:
     out: list[Path] = []
-    for path in REPO_ROOT.rglob("*.py"):
-        if any(part in SKIP_DIR_NAMES for part in path.parts):
+    root = REPO_ROOT.resolve()
+    for path in root.rglob("*.py"):
+        # Skip on parts RELATIVE to the repo root, not absolute — otherwise a
+        # checkout living under a skipped dir (e.g. a git worktree in
+        # .claude/worktrees/) skips its own entire tree and the gate scans
+        # nothing. From the main repo, .claude/worktrees copies are still skipped.
+        if any(part in SKIP_DIR_NAMES for part in path.relative_to(root).parts):
             continue
         out.append(path)
     return sorted(out)
@@ -333,7 +338,7 @@ def _ratchet_counts() -> dict[str, int]:
     counts = {name: 0 for name in RATCHET_PATTERNS}
     counts.update({name: 0 for name in SCOPED_RATCHETS})
     for path in _iter_py_files():
-        if _RATCHET_SKIP_PARTS & set(path.parts):
+        if _RATCHET_SKIP_PARTS & set(path.relative_to(REPO_ROOT.resolve()).parts):
             continue
         try:
             text = path.read_text(encoding="utf-8")
@@ -405,6 +410,18 @@ def run_checks() -> list[Violation]:
                 continue
             violations.extend(_check_stale_audio_pipeline_docs(path, text))
     violations.extend(_check_ratchets())
+    # AST-based bug-class fences (subprocess-no-timeout / -no-encoding, bare
+    # except) live in entropy_audit.py — the line-based ratchet above can't see a
+    # missing kwarg on a multi-line call. Ride the same gate.
+    try:  # runs both as `python scripts/guardrails.py` and as `scripts.guardrails`
+        from scripts.entropy_audit import BASELINE_PATH as _EA_BASELINE
+        from scripts.entropy_audit import check as _entropy_check
+    except ImportError:
+        from entropy_audit import BASELINE_PATH as _EA_BASELINE
+        from entropy_audit import check as _entropy_check
+
+    for msg in _entropy_check():
+        violations.append(Violation(_EA_BASELINE, 0, "entropy_audit", msg))
     return violations
 
 

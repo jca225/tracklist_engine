@@ -70,8 +70,10 @@ the taxonomy lives in this index. Two subdirectories hold the rest:
 - `build_taste_roster.py` / `merge_taste_roster.py` — SoundCloud listener-cohort roster build + merge (`personalization/config/mixes.yaml`).
 
 **Dev / guardrails:**
-- `guardrails.py` + `guardrails_ratchet.json` — stale-name/path/dead-flag checks + entropy ratchet baselines (`make check`, pre-commit, CI).
+- `guardrails.py` + `guardrails_ratchet.json` — stale-name/path/dead-flag checks + entropy ratchet baselines (`make check`, pre-commit, CI). Also invokes `entropy_audit.check()`.
+- `entropy_audit.py` + `entropy_ratchet.json` — AST-based bug-class fences (net-subprocess-without-`timeout`/`encoding`, bare `except`) that the line-based guardrails ratchet can't see (they're about a missing kwarg on a multi-line call). Modes: `--snapshot` / `--check` / `--bump`. Rides `make check` via guardrails. Baseline freezes current counts and prevents regression of the 2026-07-16 ingest/pull hardening.
 - `typecheck.sh` — mypy subset (`make check`, pre-commit, CI).
+- `loop_hardening.py` — shared driver-loop hardening lib (imported, not run; sibling of `rescue_common.py`). SSH/rsync timeout+encoding constants and the failure-accounting primitives (`exit_status` escalation, `Counts` honest tally, `register_transient` backoff, `sha256_file`) used by `vast_loop` / `mac_analyze_loop` / `set_mert_backfill_loop` so the same hang/mojibake/silent-failure classes can't be fixed in one loop and left latent in the others.
 
 **Vast provisioning / GPU workers — ⚠️ DO NOT MOVE OR RENAME:**
 - `vast_box.py` — Mac-side box-lifecycle CLI (search / rent / wait-ssh with
