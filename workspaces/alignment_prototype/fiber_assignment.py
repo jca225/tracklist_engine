@@ -76,7 +76,7 @@ def _ref_start(row: dict) -> float | None:
     return float(val) if val is not None else None
 
 
-def _fiber_key(
+def fiber_key(
     row: dict,
     fibers: dict[str, list[tuple[float, float, int, int]]],
 ) -> tuple[str, int] | None:
@@ -135,7 +135,7 @@ def equivalence_classes(
     next_id = 0
 
     for idx, row in enumerate(gt_rows):
-        key = _fiber_key(row, fibers)
+        key = fiber_key(row, fibers)
         if key is not None:
             # Validated fiber — reuse or allocate a shared class id.
             if key not in class_map:
@@ -156,6 +156,7 @@ def assign(
     classes: dict[int, int],
     *,
     tol: float = 2.0,
+    class_to_positions: dict[int, list[float]] | None = None,
 ) -> list[tuple[int, int, float]]:
     """Optimally match predictions to GT rows using fiber-consistent costs.
 
@@ -164,18 +165,23 @@ def assign(
 
     **Cost rule:**
 
-    - **0.0** — the prediction's ref time is within ``tol`` seconds of ANY GT
-      row that shares the same fiber equivalence class (``classes[gt_idx]``).
-      Within-class occurrence swaps are FREE: the aligner cannot distinguish
-      which chorus repeat the DJ played, so penalising the wrong-but-equivalent
-      assignment would be unfair.
+    - **0.0** — the prediction's ref time is within ``tol`` seconds of ANY
+      position associated with the GT row's fiber equivalence class.  When
+      ``class_to_positions`` is ``None`` (default, F0.2 behavior), those
+      positions are the ref_start values of GT rows in the same class.  When
+      the caller supplies ``class_to_positions``, it can include ALL occurrences
+      of a validated fiber — not just those that appear as GT rows — so that a
+      prediction landing on occurrence B of a validated fiber costs 0 against
+      a GT row at occurrence A.  Within-class occurrence swaps are FREE: the
+      aligner cannot distinguish which chorus repeat the DJ played.
     - **true gap in seconds** — ``|pred_ref_s - gt_ref_s|`` — when the
       prediction does not land on any member of the correct class.
 
-    **Singleton guarantee:** a single-instance span's class contains only
-    itself, so "any class member" reduces to exactly that one GT row's ref
-    position.  A miss is never forgiven — the cost is the true seconds gap.
-    This guards the 746 s single-instance miss regression seen on 2026-07-17.
+    **Singleton convention:** a singleton class contributes exactly its own
+    ref_start as the sole member position, forgiven only within ``tol`` of that
+    point.  A singleton miss is never forgiven — the cost is the true seconds
+    gap.  This guards the 746 s single-instance miss regression seen on
+    2026-07-17.
 
     Args:
         pred_segments: List of predicted ref-start times (floats, in seconds).
@@ -190,7 +196,13 @@ def assign(
         tol: Tolerance in seconds for the cost-0 decision (default 2.0 s,
             matching the scorer's canonical tolerance).  A prediction is
             considered to "land on" a class member when
-            ``|pred_ref_s - member_ref_s| < tol``.
+            ``|pred_ref_s - member_pos| < tol``.
+        class_to_positions: Optional caller-supplied map from class id to a
+            list of ref-start positions that count as valid hits for that class.
+            When ``None`` (default), the map is built from ``gt_rows`` exactly
+            as in F0.2 — all existing tests and callers are unaffected.  F0.3
+            passes the full fiber-occurrence map so that predictions landing on
+            non-GT occurrences of a validated fiber are forgiven.
 
     Returns:
         List of ``(pred_idx, gt_idx, cost)`` triples — one per matched pair.
@@ -212,14 +224,19 @@ def assign(
     if n_pred == 0 or n_gt == 0:
         return []
 
-    # Pre-build: for each GT class id, the set of ref positions of all members
-    # (used to evaluate whether a pred "lands on any member of the class").
-    class_to_ref_positions: dict[int, list[float]] = {}
-    for gt_idx, row in enumerate(gt_rows):
-        class_id = classes[gt_idx]
-        ref_s = _ref_start(row)
-        if ref_s is not None:
-            class_to_ref_positions.setdefault(class_id, []).append(ref_s)
+    # Build the class → member-positions map if not supplied by the caller.
+    # Default (class_to_positions=None): derive from gt_rows — F0.2 behavior,
+    # byte-identical to the original implementation.
+    if class_to_positions is None:
+        _positions: dict[int, list[float]] = {}
+        for gt_idx, row in enumerate(gt_rows):
+            class_id = classes[gt_idx]
+            ref_s = _ref_start(row)
+            if ref_s is not None:
+                _positions.setdefault(class_id, []).append(ref_s)
+        effective_positions = _positions
+    else:
+        effective_positions = class_to_positions
 
     # Build cost matrix: shape (n_pred, n_gt).
     cost_matrix = np.empty((n_pred, n_gt), dtype=np.float64)
@@ -228,13 +245,12 @@ def assign(
         for g_idx in range(n_gt):
             gt_ref_s = _ref_start(gt_rows[g_idx])
             class_id = classes[g_idx]
-            member_positions = class_to_ref_positions.get(class_id, [])
+            member_positions = effective_positions.get(class_id, [])
 
-            # Cost is 0 if the pred lands within tol of ANY member of the
-            # correct class (validated fiber) OR of the GT row itself.
-            # For singletons the only member IS the GT row itself, so this
-            # reduces to checking |pred - gt| < tol — which evaluates to a
-            # non-zero cost when the pred is 746 s away.
+            # Cost is 0 if the pred lands within tol of ANY member position for
+            # the correct class.  For singletons the only member IS the GT row's
+            # own ref_start (singleton convention: single-point membership),
+            # so this reduces to |pred - gt| < tol — never forgiven at 746 s.
             if any(abs(pred_ref_s - m) < tol for m in member_positions):
                 cost_matrix[p_idx, g_idx] = 0.0
             else:

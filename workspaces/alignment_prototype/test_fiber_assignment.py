@@ -427,6 +427,10 @@ def test_trajectory_acc_default_behavior_unchanged():
 
     A simple straight-span prediction exactly on GT must return the same
     (strict, n_pred, fiber_acc) with or without fiber_consistent=False.
+
+    Also pins a concrete numeric expectation: on a perfect exact-hit case,
+    strict == fiber_acc == 1.0.  This catches any regression to the
+    pre-F0.3 strict path or the same_fiber greedy path.
     """
     from workspaces.alignment_prototype.path_decode import trajectory_acc
 
@@ -434,7 +438,7 @@ def test_trajectory_acc_default_behavior_unchanged():
         "tid_ref", ref_start_s=0.0, set_start_s=0.0, set_end_s=30.0
     )
 
-    # Perfect prediction
+    # Perfect prediction: pred ref_start=0.0, ref_end=30.0 exactly matches GT.
     pred_segs = [(0.0, 0.0, 30.0)]
 
     n_frames = 50
@@ -450,3 +454,14 @@ def test_trajectory_acc_default_behavior_unchanged():
     assert result_default == result_explicit_false, (
         "fiber_consistent=False must produce byte-identical output to the default call"
     )
+
+    # Numeric pin: exact-hit case must yield strict=1.0 and fiber_acc=1.0.
+    strict, n_pred, fiber_acc = result_default
+    assert strict == pytest.approx(1.0), (
+        f"Exact-hit strict must be 1.0 (pre-F0.3 path regression guard); got {strict:.4f}"
+    )
+    assert fiber_acc == pytest.approx(1.0), (
+        f"Exact-hit fiber_acc must be 1.0 (same_fiber greedy path regression guard); "
+        f"got {fiber_acc:.4f}"
+    )
+    assert n_pred == 1, f"Expected 1 pred segment; got {n_pred}"
