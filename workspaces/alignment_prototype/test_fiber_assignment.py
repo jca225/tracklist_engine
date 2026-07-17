@@ -5,6 +5,7 @@ Table-driven, no audio, no I/O — plain hand-constructable inputs only.
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 from workspaces.alignment_prototype.fiber_assignment import assign, equivalence_classes
@@ -290,3 +291,162 @@ def test_assign_rectangular_returns_min_count():
         assert 0 <= pred_idx < n_pred, f"pred_idx {pred_idx} out of range [0, {n_pred})"
         assert 0 <= gt_idx < n_gt, f"gt_idx {gt_idx} out of range [0, {n_gt})"
         assert cost >= 0.0, f"cost must be non-negative; got {cost}"
+
+
+# ---------------------------------------------------------------------------
+# Tests for trajectory_acc(fiber_consistent=True) — F0.3
+# ---------------------------------------------------------------------------
+
+
+def _make_straight_row(
+    track_id: str,
+    ref_start_s: float,
+    set_start_s: float,
+    set_end_s: float,
+    *,
+    tempo_ratio: float = 1.0,
+) -> dict:
+    """Build a minimal straight-clip GT row for trajectory_acc testing.
+
+    No ref_segments → trajectory_acc takes the linear-span branch (whole-envelope
+    sampling), which requires ref_start_s and ref_end_s at top level.
+    """
+    duration = set_end_s - set_start_s
+    return {
+        "track_id": track_id,
+        "ref_start_s": ref_start_s,
+        "ref_end_s": ref_start_s + duration * tempo_ratio,
+        "set_start_s": set_start_s,
+        "set_end_s": set_end_s,
+        "tempo_ratio": tempo_ratio,
+    }
+
+
+def test_trajectory_acc_fiber_consistent_wrong_occurrence_forgiven():
+    """fiber_consistent=True scores HIGHER than strict when the prediction lands
+    on the WRONG occurrence of a VALIDATED fiber (n_instances >= 2).
+
+    Setup:
+    - GT row: track plays 0..20 s in the mix; GT ref_start = 30 s (occurrence A).
+    - The ref track has a validated fiber 0 that covers BOTH 30..60 s (occ A)
+      AND 90..120 s (occ B); n_instances=2.
+    - Prediction: pred ref_start = 90 s — wrong occurrence (B), but same fiber.
+    - strict_acc must be 0.0 (|90 - 30| = 60 >> tol=2).
+    - fiber_consistent fiber_acc must be > strict (the wrong occurrence is forgiven
+      because it belongs to the SAME validated class as GT).
+    """
+    from workspaces.alignment_prototype.path_decode import trajectory_acc
+
+    row = _make_straight_row(
+        "tid_chorus", ref_start_s=30.0, set_start_s=0.0, set_end_s=20.0
+    )
+
+    # pred_segs format: list of (mix_offset_s, ref_start_s, ref_end_s)
+    # trajectory_acc adds set_start_s (0.0) to mix_offset internally.
+    # Prediction lands at ref_start=90 s — wrong occurrence B of fiber 0.
+    pred_segs = [(0.0, 90.0, 110.0)]
+
+    # Fiber (labels, hz) covering the ref track.
+    # fiber_intervals(labels, hz, min_len_s=3.0) must produce intervals that
+    # encompass BOTH 30 s (occ A) and 90 s (occ B) under the SAME fiber id.
+    # We construct a compact label array:
+    #   labels[0..29] = 0 (fiber 0, occ A: 30..60 s at 1 Hz → frames 30..60)
+    #   labels[30..89] = -1 (silence)
+    #   labels[60..119] = 0 (fiber 0, occ B: 90..120 s at 1 Hz → frames 90..120)
+    # Actually simpler at 1 Hz: frame i covers second [i, i+1).
+    n_frames = 130
+    labels = -np.ones(n_frames, dtype=np.int32)
+    labels[30:60] = 0  # fiber 0, occurrence A — covers ref_start 30..60 s
+    labels[90:120] = 0  # fiber 0, occurrence B — covers ref_start 90..120 s
+    hz = 1.0
+
+    fiber = (labels, hz)
+
+    strict, n_pred, fiber_acc_old = trajectory_acc(pred_segs, row, fiber=fiber)
+    _, _, fiber_acc_new = trajectory_acc(
+        pred_segs, row, fiber=fiber, fiber_consistent=True
+    )
+
+    # strict must be 0 — prediction is 60 s off GT, >> tol=2
+    assert strict == pytest.approx(0.0, abs=0.01), (
+        f"strict must be 0.0 for a 60-s miss; got {strict:.3f}"
+    )
+
+    # fiber_consistent must credit the wrong-occurrence hit
+    assert fiber_acc_new > strict, (
+        f"fiber_consistent=True must score > strict when pred lands on the wrong "
+        f"occurrence of a validated fiber; got fiber_acc={fiber_acc_new:.3f}, "
+        f"strict={strict:.3f}"
+    )
+
+
+def test_trajectory_acc_fiber_consistent_single_instance_not_forgiven():
+    """fiber_consistent=True scores IDENTICALLY to strict when the GT row is a
+    SINGLE-INSTANCE span (n_instances=1 — singleton fiber, never forgiven).
+
+    Setup:
+    - GT row: track plays 0..20 s; GT ref_start = 10 s (only one occurrence).
+    - Fiber interval covers only 5..20 s with n_instances=1 (unvalidated).
+    - Prediction: ref_start = 756 s — 746 s off.
+    - Both strict_acc and fiber_acc must equal 0.0.
+    """
+    from workspaces.alignment_prototype.path_decode import trajectory_acc
+
+    row = _make_straight_row(
+        "tid_single", ref_start_s=10.0, set_start_s=0.0, set_end_s=20.0
+    )
+
+    pred_segs = [(0.0, 756.0, 776.0)]
+
+    # Single-instance fiber: n_instances=1 → unvalidated → singleton class.
+    n_frames = 800
+    labels = -np.ones(n_frames, dtype=np.int32)
+    labels[5:20] = 2  # fiber_id=2, only ONE interval → n_instances=1 after detect
+    hz = 1.0
+    fiber = (labels, hz)
+
+    strict, _, fiber_acc_old = trajectory_acc(pred_segs, row, fiber=fiber)
+    _, _, fiber_acc_new = trajectory_acc(
+        pred_segs, row, fiber=fiber, fiber_consistent=True
+    )
+
+    # strict must be 0 (746 s off)
+    assert strict == pytest.approx(0.0, abs=0.01), (
+        f"strict must be 0.0 for a 746-s miss; got {strict:.3f}"
+    )
+
+    # fiber_consistent must NOT forgive a single-instance miss
+    assert fiber_acc_new == pytest.approx(strict, abs=0.01), (
+        f"fiber_consistent=True must equal strict for single-instance miss; "
+        f"got fiber_acc={fiber_acc_new:.3f}, strict={strict:.3f}"
+    )
+
+
+def test_trajectory_acc_default_behavior_unchanged():
+    """Default fiber_consistent=False leaves the return value byte-identical.
+
+    A simple straight-span prediction exactly on GT must return the same
+    (strict, n_pred, fiber_acc) with or without fiber_consistent=False.
+    """
+    from workspaces.alignment_prototype.path_decode import trajectory_acc
+
+    row = _make_straight_row(
+        "tid_ref", ref_start_s=0.0, set_start_s=0.0, set_end_s=30.0
+    )
+
+    # Perfect prediction
+    pred_segs = [(0.0, 0.0, 30.0)]
+
+    n_frames = 50
+    labels = np.zeros(n_frames, dtype=np.int32)
+    hz = 1.0
+    fiber = (labels, hz)
+
+    result_default = trajectory_acc(pred_segs, row, fiber=fiber)
+    result_explicit_false = trajectory_acc(
+        pred_segs, row, fiber=fiber, fiber_consistent=False
+    )
+
+    assert result_default == result_explicit_false, (
+        "fiber_consistent=False must produce byte-identical output to the default call"
+    )

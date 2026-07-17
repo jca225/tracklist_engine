@@ -506,7 +506,12 @@ def gap_hallucination_frac(pred_segs, row: dict) -> float:
 
 
 def trajectory_acc(
-    pred_segs, row: dict, tol: float = 2.0, step: float = 1.0, fiber=None
+    pred_segs,
+    row: dict,
+    tol: float = 2.0,
+    step: float = 1.0,
+    fiber=None,
+    fiber_consistent: bool = False,
 ) -> tuple[float, int, float]:
     """(strict_acc, n_pred_segments, fiber_acc).
 
@@ -517,7 +522,15 @@ def trajectory_acc(
     at its true slope rather than diluted toward the next. Linear spans keep the
     whole-envelope sampling. fiber_acc additionally credits a sample when
     predicted and GT ref fall in the SAME self-repeat class (fiber=(labels,
-    label_hz)); with no fiber it equals strict_acc."""
+    label_hz)); with no fiber it equals strict_acc.
+
+    fiber_consistent=True (opt-in): replaces the greedy per-sample same_fiber
+    OR-credit with an optimal (Hungarian) assignment over segments so each GT
+    occurrence is matched to at most one prediction.  A predicted segment that
+    lands on a WRONG occurrence of a VALIDATED fiber (n_instances>=2) scores
+    cost=0 and is forgiven; a single-instance miss is never forgiven.  Unmatched
+    GT segments are treated as UNCOVERED.  The strict first element is unchanged
+    in both modes — this branch is entirely separate."""
     s0, s1 = float(row["set_start_s"]), float(row["set_end_s"])
     if s1 <= s0 or not pred_segs:
         return 0.0, len(pred_segs), 0.0
@@ -543,17 +556,153 @@ def trajectory_acc(
     gr = np.array([_ref_at(gt, t) for t in ts])
     near = np.abs(pr - gr) < tol
     strict = float(near.mean())
+
+    # ------------------------------------------------------------------ strict
+    # Everything above this line is the strict path — untouched in both modes.
+    # ------------------------------------------------------------------ strict
+
     if fiber is None:
         return strict, len(pred_segs), strict
-    from workspaces.alignment_prototype.ref_fibers import same_fiber
+
+    if not fiber_consistent:
+        # --- original greedy per-sample same_fiber OR-credit (unchanged) ------
+        from workspaces.alignment_prototype.ref_fibers import same_fiber
+
+        labels, hz = fiber
+        # same_fiber excludes label -1 (silence / ungrouped): two ungrouped frames
+        # are NOT equivalent, so within-fiber credit only applies to real repeats.
+        eq = np.array(
+            [same_fiber(labels, hz, float(p), float(gq)) for p, gq in zip(pr, gr)]
+        )
+        return strict, len(pred_segs), float((near | eq).mean())
+
+    # --- fiber_consistent=True: optimal (Hungarian) segment-level assignment --
+    # Uses F0.1 equivalence_classes + a direct cost matrix that encodes the
+    # full fiber class membership (ALL intervals of the same fiber_id), so a
+    # prediction landing on occurrence B of a validated fiber costs 0 against
+    # the GT row that used occurrence A.  The strict element is untouched.
+    from workspaces.alignment_prototype.fiber_assignment import equivalence_classes
+    from workspaces.alignment_prototype.fibers.detect import fiber_intervals
+    from scipy.optimize import linear_sum_assignment
 
     labels, hz = fiber
-    # same_fiber excludes label -1 (silence / ungrouped): two ungrouped frames
-    # are NOT equivalent, so within-fiber credit only applies to real repeats.
-    eq = np.array(
-        [same_fiber(labels, hz, float(p), float(gq)) for p, gq in zip(pr, gr)]
-    )
-    return strict, len(pred_segs), float((near | eq).mean())
+    track_id: str = str(row.get("track_id", ""))
+
+    # Step 1: call fiber_intervals to get contiguous runs (excludes silence).
+    ivs = fiber_intervals(labels, hz, min_len_s=3.0)  # [(start_s, end_s, label)]
+
+    # Step 2: count n_instances per label.
+    label_count: dict[int, int] = {}
+    for _, _, lab in ivs:
+        label_count[lab] = label_count.get(lab, 0) + 1
+
+    # Step 3: fibers dict in the shape equivalence_classes expects.
+    fibers_dict: dict[str, list[tuple[float, float, int, int]]] = {
+        track_id: [
+            (start_s, end_s, lab, label_count[lab]) for start_s, end_s, lab in ivs
+        ]
+    }
+
+    # Step 4: build real GT rows (straight-clip: single ref_start; multiseg:
+    # one row per segment).  These are the SCORING rows — denominator = n_gt.
+    ref_segs = row.get("ref_segments")
+    if ref_segs:
+        gt_rows = [
+            {"track_id": track_id, "ref_start_s": float(seg["ref_start_s"])}
+            for seg in ref_segs
+        ]
+    else:
+        gt_rows = [{"track_id": track_id, "ref_start_s": float(row["ref_start_s"])}]
+
+    n_gt = len(gt_rows)
+    if n_gt == 0:
+        return strict, len(pred_segs), strict
+
+    # Step 5: compute equivalence classes for the real GT rows.
+    classes = equivalence_classes(gt_rows, fibers_dict)
+
+    # Step 6: for each fiber class id, collect the ref positions of every interval
+    # that belongs to it — ALL occurrences, not just those in gt_rows.
+    # This is the key difference from F0.2 assign: that function builds
+    # class_to_ref_positions only from gt_rows, so a pred at occurrence B would
+    # not be found "within tol of a class member" when the only GT row is at
+    # occurrence A.  Here we pre-load ALL fiber occurrences into the class map.
+    #
+    # For each interval we record BOTH the start and end so that the tol check
+    # "within tol of the interval" uses the nearest endpoint rather than a
+    # midpoint that may be far from the pred.  The membership check in Step 7
+    # computes the interval-clamped distance: a pred inside the interval has
+    # distance 0; a pred tol seconds outside still qualifies.
+    label_to_intervals: dict[int, list[tuple[float, float]]] = {}
+    for start_s, end_s, lab in ivs:
+        label_to_intervals.setdefault(lab, []).append((start_s, end_s))
+
+    # Build class_id -> all fiber intervals (from the full ivs list, not just
+    # GT rows).  We recover each GT row's fiber label via _fiber_key, then map
+    # class_id → list of (start_s, end_s) for every interval of that label.
+    from workspaces.alignment_prototype.fiber_assignment import _fiber_key  # type: ignore[attr-defined]
+
+    class_id_to_label: dict[int, int] = {}
+    for gt_idx, gt_row in enumerate(gt_rows):
+        fk = _fiber_key(gt_row, fibers_dict)
+        if fk is not None:
+            _tid, fib_label = fk
+            class_id_to_label[classes[gt_idx]] = fib_label
+
+    # class_id -> all fiber intervals (start_s, end_s) for the membership check.
+    class_to_intervals: dict[int, list[tuple[float, float]]] = {}
+    for class_id, fib_label in class_id_to_label.items():
+        class_to_intervals[class_id] = label_to_intervals.get(fib_label, [])
+    # Singleton classes: only the GT row's own ref_start (single-point interval).
+    for gt_idx, gt_row in enumerate(gt_rows):
+        cid = classes[gt_idx]
+        if cid not in class_to_intervals:
+            ref_s = gt_row.get("ref_start_s")
+            if ref_s is not None:
+                r = float(ref_s)
+                class_to_intervals[cid] = [(r, r)]
+
+    # Step 7: build cost matrix (n_pred x n_gt) with fiber-aware costs.
+    # Cost is 0 when pred falls within tol of ANY fiber interval for the GT's
+    # class — i.e., distance from pred to the nearest point in [start_s, end_s)
+    # is < tol.  For singletons the only interval is the GT row's own ref_start,
+    # so the check reduces to |pred - gt| < tol (never forgiven unless exact).
+    pred_ref_starts = [float(rs) for (_, rs, _) in pred_segs]
+    n_pred = len(pred_ref_starts)
+
+    def _dist_to_interval(x: float, a: float, b: float) -> float:
+        """Distance from x to the half-open interval [a, b); 0 if inside."""
+        if x < a:
+            return a - x
+        if x >= b:
+            return x - b
+        return 0.0
+
+    cost_matrix = np.empty((n_pred, n_gt), dtype=np.float64)
+    for p_idx, pred_ref_s in enumerate(pred_ref_starts):
+        for g_idx, gt_row in enumerate(gt_rows):
+            cid = classes[g_idx]
+            intervals_for_class = class_to_intervals.get(cid, [])
+            # Cost 0 if pred is within tol of ANY occurrence's interval.
+            if any(
+                _dist_to_interval(pred_ref_s, a, b) < tol
+                for a, b in intervals_for_class
+            ):
+                cost_matrix[p_idx, g_idx] = 0.0
+            else:
+                ref_s = gt_row.get("ref_start_s")
+                cost_matrix[p_idx, g_idx] = (
+                    abs(pred_ref_s - float(ref_s)) if ref_s is not None else 1e9
+                )
+
+    # Step 8: optimal one-to-one matching (Hungarian).
+    row_ind, col_ind = linear_sum_assignment(cost_matrix)
+
+    # Step 9: fiber_acc = fraction of GT segments covered (cost < tol).
+    # Unmatched GT segments (not in col_ind) are UNCOVERED.
+    covered = sum(1 for p, g in zip(row_ind, col_ind) if cost_matrix[p, g] < tol)
+    fiber_acc = covered / n_gt
+    return strict, len(pred_segs), fiber_acc
 
 
 def _span_class(row: dict) -> str:
