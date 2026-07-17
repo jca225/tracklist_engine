@@ -92,6 +92,17 @@ _SET_ID: str = _FIXTURE.stem.split("_")[0]  # "1fsnxchk"
 EXPECTED_PLACEMENT_MEDIAN_S: float = 2.91
 TOLERANCE_S: float = 0.5
 
+# Compile-time guard: pinned constant must stay within TOLERANCE_S of the
+# published status-doc figure.  If this fires, update docs/alignment_status.md
+# before re-pinning EXPECTED_PLACEMENT_MEDIAN_S.
+_STATUS_DOC_PLACEMENT_S = (
+    3.3  # docs/alignment_status.md §4 (commit eb21a5e): agentic BB12 placement
+)
+assert abs(EXPECTED_PLACEMENT_MEDIAN_S - _STATUS_DOC_PLACEMENT_S) <= TOLERANCE_S, (
+    f"Pinned {EXPECTED_PLACEMENT_MEDIAN_S}s drifted >{TOLERANCE_S}s from published "
+    f"{_STATUS_DOC_PLACEMENT_S}s — update docs/alignment_status.md before re-pinning."
+)
+
 
 # --------------------------------------------------------------------------- helpers
 # These helpers are LOCAL (not copied from score_timeline_vs_gt or bb_baselines)
@@ -99,7 +110,7 @@ TOLERANCE_S: float = 0.5
 # bb_baselines.place_errs / summarize exactly.
 
 
-def _placement_median(scores) -> float:
+def _placement_median(scores: list) -> float:
     """Median set_start placement error (seconds) over spans that have a GT match."""
     errs = [float(s.place_err_s) for s in scores if s.place_err_s is not None]
     if not errs:
