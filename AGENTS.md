@@ -51,7 +51,10 @@ is the *how we work* layer; the *what the code is* layer lives in
 ---
 
 ## Branch protection (repo admin, one-time)
-Make the gate unbypassable on `main`. As a repo admin:
+Make the gate unbypassable on `main`. **Precondition: confirm the `guardrails`
+check is green on `main` first** — marking a currently-red check as required
+freezes *all* merges (learned the hard way: the check had been red for days, and
+requiring it briefly froze the branch). As a repo admin:
 ```
 gh api -X PUT repos/jca225/tracklist_engine/branches/main/protection \
   -f 'required_status_checks[strict]=true' \
