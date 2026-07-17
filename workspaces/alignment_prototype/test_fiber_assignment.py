@@ -1,0 +1,467 @@
+"""Tests for fiber_assignment.equivalence_classes and fiber_assignment.assign.
+
+Table-driven, no audio, no I/O — plain hand-constructable inputs only.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import pytest
+
+from workspaces.alignment_prototype.fiber_assignment import assign, equivalence_classes
+
+
+def _row(track_id: str, ref_start_s: float) -> dict:
+    """Minimal GT row for testing (straight-clip, no ref_segments)."""
+    return {"track_id": track_id, "ref_start_s": ref_start_s}
+
+
+def test_equivalence_classes():
+    """Two GT rows of the SAME recording whose ref-starts fall in ONE validated
+    fiber (n_instances>=2) share a class id; a third single-instance row is its
+    own distinct class.
+
+    Fiber structure: dict mapping track_id ->
+        list of (start_s, end_s, fiber_id, n_instances).
+    A ref_start_s falls in the interval [start_s, end_s).
+    fiber_id < 0 means ungrouped/silence; n_instances < 2 means unvalidated.
+    """
+    # Two acappella plays of the same recording land in the SAME repeated chorus
+    # fiber — validated (n_instances=2).
+    row_a = _row("tid_chorus", 30.0)  # ref_start at 30s — in fiber 0, chorus repeat
+    row_b = _row("tid_chorus", 90.0)  # ref_start at 90s — in fiber 0, chorus repeat
+
+    # A third row for a DIFFERENT recording with no validated fiber match.
+    row_c = _row("tid_verse", 5.0)  # ref_start at 5s — unvalidated (n_instances=1)
+
+    fibers: dict[str, list[tuple[float, float, int, int]]] = {
+        "tid_chorus": [
+            # (start_s, end_s, fiber_id, n_instances)
+            (25.0, 55.0, 0, 2),  # covers row_a at 30s — validated repeat
+            (85.0, 115.0, 0, 2),  # covers row_b at 90s — same fiber, validated
+        ],
+        "tid_verse": [
+            (0.0, 20.0, 1, 1),  # covers row_c at 5s — n_instances=1, NOT validated
+        ],
+    }
+
+    result = equivalence_classes([row_a, row_b, row_c], fibers)
+
+    # row_a and row_b share a validated fiber — same class id
+    assert result[0] == result[1], (
+        f"Rows in the same validated fiber must share a class id; "
+        f"got {result[0]} and {result[1]}"
+    )
+
+    # row_c is unvalidated (n_instances=1) — must get its own singleton class
+    assert result[2] != result[0], (
+        f"Unvalidated row must get its own singleton class; "
+        f"got {result[2]} (same as validated class {result[0]})"
+    )
+
+    # All three rows must have an entry
+    assert len(result) == 3, f"Expected 3 entries, got {len(result)}"
+
+
+def test_singleton_for_negative_fiber_id():
+    """A row whose ref_start lands in a fiber_id < 0 interval is a singleton
+    even when n_instances >= 2 (ungrouped/silence — the low-recall-honest rule)."""
+    row = _row("tid_silence", 10.0)
+    fibers: dict[str, list[tuple[float, float, int, int]]] = {
+        "tid_silence": [
+            (5.0, 20.0, -1, 3),  # fiber_id < 0 — ungrouped; must NOT collapse
+        ],
+    }
+    result = equivalence_classes([row], fibers)
+    assert len(result) == 1
+
+    # A second row for the same silence interval must also be a singleton and
+    # must NOT share a class with the first (two separate singletons).
+    row2 = _row("tid_silence", 12.0)
+    result2 = equivalence_classes([row, row2], fibers)
+    assert len(result2) == 2
+    assert result2[0] != result2[1], (
+        "Two rows in a silence fiber (fiber_id<0) must each be their own singleton"
+    )
+
+
+def test_no_fiber_entry_is_singleton():
+    """A row for a track_id with no fiber data at all is a singleton."""
+    row_a = _row("tid_unknown", 0.0)
+    row_b = _row("tid_unknown", 50.0)
+    result = equivalence_classes([row_a, row_b], fibers={})
+    assert len(result) == 2
+    assert result[0] != result[1], "No-fiber rows must each be singletons"
+
+
+def test_ref_start_outside_all_intervals_is_singleton():
+    """A row whose ref_start_s falls outside all fiber intervals is a singleton."""
+    row = _row("tid_chorus", 200.0)  # well past all defined intervals
+    fibers: dict[str, list[tuple[float, float, int, int]]] = {
+        "tid_chorus": [
+            (25.0, 55.0, 0, 2),
+            (85.0, 115.0, 0, 2),
+        ],
+    }
+    result = equivalence_classes([row], fibers)
+    assert len(result) == 1
+
+
+def test_multiseg_row_uses_first_ref_start():
+    """For a row with ref_segments, equivalence_classes uses
+    ref_segments[0]['ref_start_s'] as the ref position (matching the brief's
+    spec), not the top-level ref_start_s.
+
+    The test is structured so it FAILS if _ref_start were changed to return the
+    top-level 999.0:  999.0 falls outside all defined fiber intervals, so the
+    multiseg row would become a singleton and would NOT share a class id with the
+    plain 30.0 row — the assertion ``result[0] == result[1]`` would fail.
+    """
+    # Multiseg row: top-level ref_start_s=999.0 must be IGNORED; the position
+    # used is ref_segments[0]["ref_start_s"]=30.0, which falls in fiber 0.
+    row_ms = {
+        "track_id": "tid_ms",
+        "ref_start_s": 999.0,  # top-level — must be IGNORED
+        "ref_segments": [
+            {"ref_start_s": 30.0},
+            {"ref_start_s": 60.0},
+        ],
+    }
+    # Plain row at 30.0 (no ref_segments) — falls in the same validated fiber 0.
+    # If _ref_start correctly reads ref_segments[0] for the multiseg row (→30.0),
+    # both rows land in fiber 0 and share a class id.
+    # If _ref_start incorrectly returns 999.0, row_ms is a singleton (999.0 is
+    # outside all intervals) and the assertion below fails.
+    row_plain = {
+        "track_id": "tid_ms",
+        "ref_start_s": 30.0,
+    }
+    fibers: dict[str, list[tuple[float, float, int, int]]] = {
+        "tid_ms": [
+            (25.0, 55.0, 0, 2),  # covers 30.0 — validated repeat (fiber 0)
+            (85.0, 115.0, 0, 2),  # second interval of the same fiber
+        ],
+    }
+    result = equivalence_classes([row_ms, row_plain], fibers)
+    assert len(result) == 2
+    assert result[0] == result[1], (
+        f"Multiseg row (ref_segments[0].ref_start_s=30.0) and plain row "
+        f"(ref_start_s=30.0) must share the same fiber class id; "
+        f"got {result[0]} and {result[1]} — likely _ref_start returned the "
+        f"top-level 999.0 instead of the first segment's 30.0"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Tests for assign() — F0.2
+# ---------------------------------------------------------------------------
+
+
+def test_assign_within_class_swap_costs_zero():
+    """A prediction landing on the WRONG occurrence of a validated fiber costs 0.
+
+    GT has two rows at ref 30 s and 90 s, both in validated fiber 0.
+    Prediction: [90.0, 30.0] — each pred is on a member of the class but
+    "swapped" relative to GT order.  Hungarian should assign pred 0 → gt 1
+    and pred 1 → gt 0, both at cost 0 (within-class swap is free).
+    """
+    gt_row_a = _row("tid_chorus", 30.0)
+    gt_row_b = _row("tid_chorus", 90.0)
+    gt_rows = [gt_row_a, gt_row_b]
+
+    fibers: dict[str, list[tuple[float, float, int, int]]] = {
+        "tid_chorus": [
+            (25.0, 55.0, 0, 2),  # covers 30 s — validated fiber 0
+            (85.0, 115.0, 0, 2),  # covers 90 s — same fiber 0
+        ],
+    }
+    classes = equivalence_classes(gt_rows, fibers)
+
+    # Predictions: ref_start floats in the same order as pred_segments list.
+    # Pred 0 → 90.0 (hits gt row 1's class member), pred 1 → 30.0 (hits gt row 0).
+    pred_segments = [90.0, 30.0]
+
+    matches = assign(pred_segments, gt_rows, classes)
+
+    # Each match is (pred_idx, gt_idx, cost).  All swapped costs must be 0.
+    costs = {(p, g): c for p, g, c in matches}
+    assert len(costs) == 2, f"Expected 2 matches, got {len(costs)}"
+    for (p, g), c in costs.items():
+        assert c == 0.0, (
+            f"Within-class swap must cost 0; pred {p} → gt {g} cost {c:.2f} s"
+        )
+
+
+def test_assign_outside_class_costs_true_gap():
+    """A prediction landing OUTSIDE the correct class costs the true ref-time gap.
+
+    GT: two rows in separate singleton classes (ref 30 s and 200 s).
+    Prediction: [30.0, 750.0].  Pred 1 (750 s) is far from GT row 1 (200 s) — the
+    cost should be |750 - 200| = 550 s, not 0.
+    """
+    gt_row_a = _row("tid_a", 30.0)
+    gt_row_b = _row("tid_b", 200.0)
+    gt_rows = [gt_row_a, gt_row_b]
+
+    # No fibers → both rows are singletons
+    classes = equivalence_classes(gt_rows, fibers={})
+
+    pred_segments = [30.0, 750.0]
+
+    matches = assign(pred_segments, gt_rows, classes)
+
+    costs = {(p, g): c for p, g, c in matches}
+    assert len(costs) == 2
+
+    # Find the match for pred 1
+    pred1_cost = next(c for (p, _), c in costs.items() if p == 1)
+    assert pred1_cost == pytest.approx(550.0, abs=0.01), (
+        f"Outside-class miss must cost true gap 550 s; got {pred1_cost:.2f} s"
+    )
+
+
+def test_assign_single_instance_miss_costs_true_gap():
+    """A SINGLE-INSTANCE miss must never be forgiven — regression guard for
+    the 746 s single-instance miss seen on 2026-07-17.
+
+    GT: one row at ref 10 s in a single-instance (n_instances=1) fiber.
+    Prediction: [756.0] — 746 s away.
+    Expected cost: 746.0 s (the true gap), never 0.
+
+    This test fails if singletons are incorrectly treated as a within-class
+    forgiven swap.
+    """
+    gt_row = _row("tid_single", 10.0)
+    gt_rows = [gt_row]
+
+    # n_instances=1 → NOT a validated fiber → singleton class
+    fibers: dict[str, list[tuple[float, float, int, int]]] = {
+        "tid_single": [
+            (5.0, 20.0, 2, 1),  # fiber_id=2, n_instances=1 — unvalidated
+        ],
+    }
+    classes = equivalence_classes(gt_rows, fibers)
+
+    # Sanity: one row → one class id (trivially true for any single-row input;
+    # the real guard is the pytest.approx(746.0) cost assertion below, which
+    # fails if the singleton were incorrectly forgiven as a within-class swap).
+    assert len(set(classes.values())) == 1
+
+    pred_segments = [756.0]  # 746 s off
+
+    matches = assign(pred_segments, gt_rows, classes)
+
+    assert len(matches) == 1
+    _, _, cost = matches[0]
+    assert cost == pytest.approx(746.0, abs=0.01), (
+        f"Single-instance miss must cost true gap 746 s; got {cost:.2f} s — "
+        "singletons must NEVER be forgiven (regression guard 2026-07-17)"
+    )
+
+
+def test_assign_rectangular_returns_min_count():
+    """Rectangular cost matrix (n_pred != n_gt) returns exactly min(n_pred, n_gt) triples.
+
+    linear_sum_assignment operates on the matrix as-is and returns a partial
+    matching of size min(n_pred, n_gt) — it does NOT pad or trim.  With 3
+    predictions and 2 GT rows the result must have exactly 2 triples, with
+    the unmatched third prediction absent.
+    """
+    gt_row_a = _row("tid_rect", 10.0)
+    gt_row_b = _row("tid_rect", 50.0)
+    gt_rows = [gt_row_a, gt_row_b]
+
+    # No fibers → both rows are singletons
+    classes = equivalence_classes(gt_rows, fibers={})
+
+    # 3 predictions, only 2 GT rows → one prediction will be unmatched
+    pred_segments = [10.0, 50.0, 200.0]
+
+    matches = assign(pred_segments, gt_rows, classes)
+
+    # Must return exactly min(3, 2) = 2 triples
+    assert len(matches) == 2, (
+        f"Expected 2 matches (min(3 preds, 2 GT rows)); got {len(matches)}"
+    )
+
+    # Every returned triple must have valid in-range indices
+    n_pred = len(pred_segments)
+    n_gt = len(gt_rows)
+    for pred_idx, gt_idx, cost in matches:
+        assert 0 <= pred_idx < n_pred, f"pred_idx {pred_idx} out of range [0, {n_pred})"
+        assert 0 <= gt_idx < n_gt, f"gt_idx {gt_idx} out of range [0, {n_gt})"
+        assert cost >= 0.0, f"cost must be non-negative; got {cost}"
+
+
+# ---------------------------------------------------------------------------
+# Tests for trajectory_acc(fiber_consistent=True) — F0.3
+# ---------------------------------------------------------------------------
+
+
+def _make_straight_row(
+    track_id: str,
+    ref_start_s: float,
+    set_start_s: float,
+    set_end_s: float,
+    *,
+    tempo_ratio: float = 1.0,
+) -> dict:
+    """Build a minimal straight-clip GT row for trajectory_acc testing.
+
+    No ref_segments → trajectory_acc takes the linear-span branch (whole-envelope
+    sampling), which requires ref_start_s and ref_end_s at top level.
+    """
+    duration = set_end_s - set_start_s
+    return {
+        "track_id": track_id,
+        "ref_start_s": ref_start_s,
+        "ref_end_s": ref_start_s + duration * tempo_ratio,
+        "set_start_s": set_start_s,
+        "set_end_s": set_end_s,
+        "tempo_ratio": tempo_ratio,
+    }
+
+
+def test_trajectory_acc_fiber_consistent_wrong_occurrence_forgiven():
+    """fiber_consistent=True scores HIGHER than strict when the prediction lands
+    on the WRONG occurrence of a VALIDATED fiber (n_instances >= 2).
+
+    Setup:
+    - GT row: track plays 0..20 s in the mix; GT ref_start = 30 s (occurrence A).
+    - The ref track has a validated fiber 0 that covers BOTH 30..60 s (occ A)
+      AND 90..120 s (occ B); n_instances=2.
+    - Prediction: pred ref_start = 90 s — wrong occurrence (B), but same fiber.
+    - strict_acc must be 0.0 (|90 - 30| = 60 >> tol=2).
+    - fiber_consistent fiber_acc must be > strict (the wrong occurrence is forgiven
+      because it belongs to the SAME validated class as GT).
+    """
+    from workspaces.alignment_prototype.path_decode import trajectory_acc
+
+    row = _make_straight_row(
+        "tid_chorus", ref_start_s=30.0, set_start_s=0.0, set_end_s=20.0
+    )
+
+    # pred_segs format: list of (mix_offset_s, ref_start_s, ref_end_s)
+    # trajectory_acc adds set_start_s (0.0) to mix_offset internally.
+    # Prediction lands at ref_start=90 s — wrong occurrence B of fiber 0.
+    pred_segs = [(0.0, 90.0, 110.0)]
+
+    # Fiber (labels, hz) covering the ref track.
+    # fiber_intervals(labels, hz, min_len_s=3.0) must produce intervals that
+    # encompass BOTH 30 s (occ A) and 90 s (occ B) under the SAME fiber id.
+    # We construct a compact label array:
+    #   labels[0..29] = 0 (fiber 0, occ A: 30..60 s at 1 Hz → frames 30..60)
+    #   labels[30..89] = -1 (silence)
+    #   labels[60..119] = 0 (fiber 0, occ B: 90..120 s at 1 Hz → frames 90..120)
+    # Actually simpler at 1 Hz: frame i covers second [i, i+1).
+    n_frames = 130
+    labels = -np.ones(n_frames, dtype=np.int32)
+    labels[30:60] = 0  # fiber 0, occurrence A — covers ref_start 30..60 s
+    labels[90:120] = 0  # fiber 0, occurrence B — covers ref_start 90..120 s
+    hz = 1.0
+
+    fiber = (labels, hz)
+
+    strict, n_pred, fiber_acc_old = trajectory_acc(pred_segs, row, fiber=fiber)
+    _, _, fiber_acc_new = trajectory_acc(
+        pred_segs, row, fiber=fiber, fiber_consistent=True
+    )
+
+    # strict must be 0 — prediction is 60 s off GT, >> tol=2
+    assert strict == pytest.approx(0.0, abs=0.01), (
+        f"strict must be 0.0 for a 60-s miss; got {strict:.3f}"
+    )
+
+    # fiber_consistent must credit the wrong-occurrence hit
+    assert fiber_acc_new > strict, (
+        f"fiber_consistent=True must score > strict when pred lands on the wrong "
+        f"occurrence of a validated fiber; got fiber_acc={fiber_acc_new:.3f}, "
+        f"strict={strict:.3f}"
+    )
+
+
+def test_trajectory_acc_fiber_consistent_single_instance_not_forgiven():
+    """fiber_consistent=True scores IDENTICALLY to strict when the GT row is a
+    SINGLE-INSTANCE span (n_instances=1 — singleton fiber, never forgiven).
+
+    Setup:
+    - GT row: track plays 0..20 s; GT ref_start = 10 s (only one occurrence).
+    - Fiber interval covers only 5..20 s with n_instances=1 (unvalidated).
+    - Prediction: ref_start = 756 s — 746 s off.
+    - Both strict_acc and fiber_acc must equal 0.0.
+    """
+    from workspaces.alignment_prototype.path_decode import trajectory_acc
+
+    row = _make_straight_row(
+        "tid_single", ref_start_s=10.0, set_start_s=0.0, set_end_s=20.0
+    )
+
+    pred_segs = [(0.0, 756.0, 776.0)]
+
+    # Single-instance fiber: n_instances=1 → unvalidated → singleton class.
+    n_frames = 800
+    labels = -np.ones(n_frames, dtype=np.int32)
+    labels[5:20] = 2  # fiber_id=2, only ONE interval → n_instances=1 after detect
+    hz = 1.0
+    fiber = (labels, hz)
+
+    strict, _, fiber_acc_old = trajectory_acc(pred_segs, row, fiber=fiber)
+    _, _, fiber_acc_new = trajectory_acc(
+        pred_segs, row, fiber=fiber, fiber_consistent=True
+    )
+
+    # strict must be 0 (746 s off)
+    assert strict == pytest.approx(0.0, abs=0.01), (
+        f"strict must be 0.0 for a 746-s miss; got {strict:.3f}"
+    )
+
+    # fiber_consistent must NOT forgive a single-instance miss
+    assert fiber_acc_new == pytest.approx(strict, abs=0.01), (
+        f"fiber_consistent=True must equal strict for single-instance miss; "
+        f"got fiber_acc={fiber_acc_new:.3f}, strict={strict:.3f}"
+    )
+
+
+def test_trajectory_acc_default_behavior_unchanged():
+    """Default fiber_consistent=False leaves the return value byte-identical.
+
+    A simple straight-span prediction exactly on GT must return the same
+    (strict, n_pred, fiber_acc) with or without fiber_consistent=False.
+
+    Also pins a concrete numeric expectation: on a perfect exact-hit case,
+    strict == fiber_acc == 1.0.  This catches any regression to the
+    pre-F0.3 strict path or the same_fiber greedy path.
+    """
+    from workspaces.alignment_prototype.path_decode import trajectory_acc
+
+    row = _make_straight_row(
+        "tid_ref", ref_start_s=0.0, set_start_s=0.0, set_end_s=30.0
+    )
+
+    # Perfect prediction: pred ref_start=0.0, ref_end=30.0 exactly matches GT.
+    pred_segs = [(0.0, 0.0, 30.0)]
+
+    n_frames = 50
+    labels = np.zeros(n_frames, dtype=np.int32)
+    hz = 1.0
+    fiber = (labels, hz)
+
+    result_default = trajectory_acc(pred_segs, row, fiber=fiber)
+    result_explicit_false = trajectory_acc(
+        pred_segs, row, fiber=fiber, fiber_consistent=False
+    )
+
+    assert result_default == result_explicit_false, (
+        "fiber_consistent=False must produce byte-identical output to the default call"
+    )
+
+    # Numeric pin: exact-hit case must yield strict=1.0 and fiber_acc=1.0.
+    strict, n_pred, fiber_acc = result_default
+    assert strict == pytest.approx(1.0), (
+        f"Exact-hit strict must be 1.0 (pre-F0.3 path regression guard); got {strict:.4f}"
+    )
+    assert fiber_acc == pytest.approx(1.0), (
+        f"Exact-hit fiber_acc must be 1.0 (same_fiber greedy path regression guard); "
+        f"got {fiber_acc:.4f}"
+    )
+    assert n_pred == 1, f"Expected 1 pred segment; got {n_pred}"

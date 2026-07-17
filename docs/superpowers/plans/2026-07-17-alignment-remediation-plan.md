@@ -110,10 +110,13 @@ guard is lifted out of `experiments/bb_baselines.py` into a shared helper the ma
 - Test: `workspaces/alignment_prototype/test_fiber_assignment.py`
 
 **Interfaces:**
-- Produces: `equivalence_classes(gt_rows: list[dict], fibers) -> dict[str, int]`
-  — maps each GT `(track_id, ref_start bucket)` to a fiber-class id; single
-  occurrences get a unique singleton class. Low-recall caveat: only VALIDATED
-  fibers (`n_instances>=2`) collapse; everything else stays singleton.
+- Produces: `equivalence_classes(gt_rows: list[dict], fibers) -> dict[int, int]`
+  — maps each GT row's **0-based index** to a fiber-class id (row-index keying
+  chosen over a `(track_id, ref_start bucket)` string during F0.1: no unspecified
+  bucket resolution, no silent collisions, and it feeds F0.2's `assign` which is
+  already in `gt_idx` terms); single occurrences get a unique singleton class.
+  Low-recall caveat: only VALIDATED fibers (`fiber_id>=0` AND `n_instances>=2`)
+  collapse; everything else stays singleton.
 
 - [ ] **Step 1: failing test** — two GT rows of the same recording whose
   ref-starts fall in one validated fiber share a class; a third, unflagged
