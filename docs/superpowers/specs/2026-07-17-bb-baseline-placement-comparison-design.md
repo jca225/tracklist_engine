@@ -2,6 +2,20 @@
 
 **Date:** 2026-07-17
 **Status:** design (approved) — implementation plan to follow
+
+> **Amendment 2026-07-17 (post-feasibility check).** NMF (André) and DTW build
+> dense matrices sized to the mix length; they were built for UnmixDB *excerpts*
+> (short, ~3 candidate tracks) and **do not scale to full-length BB mixes**
+> (~3,581 s, ~150 spans) without windowing adaptations that change the method
+> (DTW ≈ 12 GB/span cost matrix; NMF ≈ 2.2 GB/track and loses its joint-
+> superposition purpose per-track). Decision: **do not run NMF/DTW on BB.** The
+> writeup instead states that André's line optimizes a different regime (short
+> synthetic excerpts) and does not mesh with full-length real mixes. The BB table
+> compares the **tractable full-mix matched-filter baselines** (`no_warp`,
+> `grid_mf`, `fused` — `fftconvolve`, O(N log N), run unchanged) against
+> `classical` + `agentic`. The claim narrows from "beats André on real mixes" to
+> "naive full-mix placement → the agent on real mixes" (a legitimate ablation).
+> §3/§4/§6 below read through this amendment.
 **Author:** alignment session
 **Topic owner note:** distinct from `2026-07-17-synthetic-transfer-spike-design.md` (parallel agent); no file overlap.
 
