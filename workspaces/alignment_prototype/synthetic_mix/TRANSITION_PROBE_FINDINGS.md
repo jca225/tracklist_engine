@@ -53,26 +53,72 @@ refs and accel/decel), steep genuinely fails (~20 s)**. This SUPERSEDES the earl
 "steep is stem-dependent" hedge — the one BB12-steep-easy case was ref-specific luck;
 across refs, ±18% rides are not recoverable by the windowed chroma decoder.
 
+## Canonical decoder (production `path_decode.decode_path`, NOT the proxy)
+
+`transition_pathdecode.py` re-runs the same rides through the **shipping Viterbi**
+(`decode_path`) — the decoder the aligner actually uses on real spans — and
+reconstructs the curve from its segment list via `core.timebase.Trajectory`. This
+replaces the LNDS proxy with the real thing (the "route rides through the real
+path_decode" next-step). Both BB stems, 90 s ride, 12 s window, 2 s hop, lam 0.15:
+
+```
+          |  BB11 median  |  BB12 median  |  (proxy median, for contrast)
+   flat   |     0.00s     |     0.00s     |     0.01s
+  gentle  |     0.17s     |     0.17s     |     0.05s
+  medium  |    30.47s     |     0.41s     |     0.14s   <- proxy was optimistic
+   steep  |    37.32s     |    11.54s     |    17.67s
+```
+
+**The production decoder is worse than the proxy on medium+, and this is
+structural, not noise.** `decode_path` searches `for s in stretches` and keeps the
+single best-scoring stretch for the WHOLE span — so it is piecewise-linear in
+*offset* (it can jump sections) but **constant-slope across the span**. It has no
+per-window/per-segment tempo freedom. The proxy's `windowed_recover` searched a
+local stretch *per window*, which is why the proxy recovered medium and the real
+decoder does not.
+
+Consequence for the scope decision:
+- **Gentle rides (±4%, the realistic DJ transition band) recover on BOTH stems at
+  ~0.17 s median through the ACTUAL decoder** — transitions stay IN Aug-1 scope,
+  no decoder change needed for the common case.
+- **Medium+ rides expose a concrete decoder lever, not a representation gap:** the
+  single-global-stretch assumption is the wall. To follow a curved ride the Viterbi
+  must carry stretch in its state (or re-decode each decoded segment with a local
+  stretch). That is the upgrade if medium rides prove common enough to matter; until
+  then the honest behavior on medium+ is **abstain** (BB11 medium 30 s median is a
+  lie the decoder must not emit as a confident straight line).
+
 ## Verdict
-- **Gentle–medium rides (±4–10%, the realistic DJ transition range) are recoverable**
-  to **sub-0.2 s median** — inside the ±2 s alignment tolerance. Keep the transition
-  regime IN Aug-1 scope with a **windowed + path-constrained** decoder.
+- **Gentle rides (±4%, the realistic DJ transition range) are recoverable by the
+  PRODUCTION decoder** to **~0.17 s median on both stems** — inside the ±2 s
+  tolerance. Keep the transition regime IN Aug-1 scope.
+- **Medium rides (±10%) are recoverable in principle** (the per-window proxy gets
+  sub-0.2 s) **but the shipping decoder's constant-slope-per-span assumption fails
+  them** (BB11 30 s / BB12 0.4 s, stem-dependent). Lever = stretch-in-state Viterbi
+  or per-segment local stretch; NOT a representation change.
 - The **constant-warp decoder structurally fails** on rides (0.7 s → 43 s as curvature
   grows) — confirms the representation must carry continuous tempo (already #12).
-- **Steep rides (±18%) stay hard (~18 s)** — within-window tempo smear breaks the
-  chroma match → **abstain** there (consistent with the "open tail → abstain" rule).
+- **Steep rides (±18%) stay hard (~12–37 s)** — within-window tempo smear breaks the
+  chroma match → **abstain** (consistent with the "open tail → abstain" rule).
 
 ## Caveats (do not over-read)
 - One instrumental stem, chroma-only, **varispeed** (pitch rides with tempo); a
   keylocked ride would behave differently — a v2.
 - `windowed_recover` + `monotonic_filter` is a **proxy** for the real `path_decode`
   Viterbi, not path_decode itself. Median is the fair number; MAE is inflated by the
-  residual outliers LNDS doesn't catch.
+  residual outliers LNDS doesn't catch. **The canonical section above supersedes the
+  proxy's medium median** — the real decoder is single-global-stretch and does worse.
 - Numbers here are a **probe result, not a headline** — deliberately NOT in
   `alignment_status.md` (that owns scorer-regenerated numbers only).
 
 ## Next
-Route real rendered rides through the actual `path_decode`/`joint_ref_decode`
-(instead of the proxy) for a canonical number; add a keylocked-ride variant;
-generate ride spans inside the `generate_v2` curriculum so the learned decoder can
-train on them.
+- ~~Route rendered rides through the actual `path_decode`~~ **DONE** (canonical
+  section above; `transition_pathdecode.py`). It surfaced the single-global-stretch
+  wall — the concrete decoder lever.
+- If medium rides prove common: prototype **stretch-in-state** (Viterbi state =
+  (offset, stretch)) or **per-segment local-stretch re-decode**, and re-run
+  `transition_pathdecode` to confirm it lifts BB11 medium off 30 s.
+- Add a **keylocked-ride** variant (pitch-preserving; the varispeed here rides pitch
+  with tempo — a keylocked ride behaves differently for chroma).
+- Generate ride spans inside the `generate_v2` curriculum so the learned
+  (`trajectory/`) decoder can train on the regime the classical decoder can't follow.
