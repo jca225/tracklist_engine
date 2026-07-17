@@ -174,14 +174,20 @@ def baseline_timeline(set_id: str, rows: list[dict], preds: dict[str, float]) ->
 
 
 # ------------------------------------------------------------------- scoring/agg
-# median >= this many concurrent GT layers = a sustained medley pileup, where
-# placement is inherently ambiguous (many tracks packed in a short window). The
-# scorecard already excludes these for its trajectory HEADLINE; we mirror the
-# threshold so the placement metric does NOT penalize the aligner for landing
-# one-neighbour-off inside a pileup — the instance-ambiguity is a property of the
-# mix, not an error the actor can resolve. (`unalignable` GT rows need no handling
-# here: they are the mix/mix_instrumental placeholders with no track_id, so
-# score_spans never matches them to a span.)
+# INVARIANT (design law, not an option): fibers / instance-ambiguity are NOT
+# error. A placement that lands on a valid instance of repeated / equivalent
+# content is correct — landing "one occurrence off" among interchangeable
+# instances is a property of the mix, not a mistake the actor can resolve. Every
+# algorithm we evaluate is scored this way; the fiber-fair axis is CANONICAL,
+# strict is diagnostic only. Two mechanisms enforce it, uniformly for all methods:
+#   1. score_spans matches each span to its NEAREST same-recording GT instance —
+#      so landing on any real instance of a repeated recording already scores ~0
+#      (fiber crediting at the recording level).
+#   2. medley pileups (>= PILEUP_DENSITY concurrent GT layers, mirroring the
+#      scorecard) are dropped from the placement metric — interchangeable
+#      concurrent tracks must not be penalized for one-neighbour-off assignment.
+# (`unalignable` GT rows need no handling: they are the mix/mix_instrumental
+# placeholders with no track_id, so score_spans never matches them to a span.)
 PILEUP_DENSITY = 4
 
 
@@ -372,10 +378,13 @@ def main(argv: list[str] | None = None) -> int:
             print(line)
 
     print("\nNMF/DTW omitted: different regime (short synthetic excerpts), see spec.")
-    _print_block("strict", "STRICT — all spans")
+    # CANONICAL error first: fibers/instance-ambiguity are NOT error by design, so
+    # the fiber-fair (pileup-excluded) axis is THE number. strict is diagnostic only.
     _print_block(
-        "noPile", f"noPile — medley pileups (density>={PILEUP_DENSITY}) excluded"
+        "noPile",
+        f"CANONICAL (fiber-fair) — medley pileups (density>={PILEUP_DENSITY}) not scored",
     )
+    _print_block("strict", "diagnostic only — strict, all spans (fibers penalized)")
     print(
         "\nCaveats: n=2 real sets (no cross-set CI); baselines get correct identity"
         " for free (favors them); baselines assume ref_start=0 single-instance."
@@ -410,6 +419,7 @@ def main(argv: list[str] | None = None) -> int:
                     timespec="seconds"
                 ),
                 "git_sha": sha,
+                "canonical_axis": "noPile",  # fiber/instance-ambiguity is NOT error
                 "sets": sets,
                 "methods": methods,
                 "results": results,
