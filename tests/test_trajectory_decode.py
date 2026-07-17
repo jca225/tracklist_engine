@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
-import torch
+import pytest
 
-from workspaces.alignment_prototype.trajectory.decode import viterbi_segments
-from workspaces.alignment_prototype.trajectory.model import diag_mean
+# torch is not installed in the lightweight guardrails CI; import-skip so we
+# skip gracefully rather than break collection. The workspaces imports below
+# pull torch transitively, so skip BEFORE them.
+pytest.importorskip("torch")
+
+import torch  # noqa: E402
+
+from workspaces.alignment_prototype.trajectory.decode import viterbi_segments  # noqa: E402
+from workspaces.alignment_prototype.trajectory.model import diag_mean  # noqa: E402
 
 BIN = 0.5
 
