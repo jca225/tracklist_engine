@@ -174,31 +174,34 @@ def baseline_timeline(set_id: str, rows: list[dict], preds: dict[str, float]) ->
 
 
 # ------------------------------------------------------------------- scoring/agg
-# INVARIANT (design law, not an option): fibers / instance-ambiguity are NOT
-# error. A placement that lands on a valid instance of repeated / equivalent
-# content is correct — landing "one occurrence off" among interchangeable
-# instances is a property of the mix, not a mistake the actor can resolve. Every
-# algorithm we evaluate is scored this way; the fiber-fair axis is CANONICAL,
-# strict is diagnostic only. Two mechanisms enforce it, uniformly for all methods:
-#   1. score_spans matches each span to its NEAREST same-recording GT instance —
-#      so landing on any real instance of a repeated recording already scores ~0
-#      (fiber crediting at the recording level).
-#   2. medley pileups (>= PILEUP_DENSITY concurrent GT layers, mirroring the
-#      scorecard) are dropped from the placement metric — interchangeable
-#      concurrent tracks must not be penalized for one-neighbour-off assignment.
-# (`unalignable` GT rows need no handling: they are the mix/mix_instrumental
-# placeholders with no track_id, so score_spans never matches them to a span.)
-PILEUP_DENSITY = 4
+# FIBER-FAIRNESS, done on the right axis. "Fibers = no error" means landing on a
+# valid instance of repeated content is correct. For PLACEMENT (set_start, mix
+# time) this is ALREADY hard-coded, for every method: `score_spans` matches each
+# span to its NEAREST same-recording GT instance, so landing on any real mix
+# occurrence scores ~0 — and a span placed far from ALL instances is still a real
+# miss (correctly kept). This nearest-instance placement is THE canonical number.
+#
+# We deliberately do NOT exclude "pileup"/fibered spans from placement:
+#   - density-based exclusion is blunt — it hid genuine single-instance misses
+#     (BB12 33w3: acappella placed 746 s off, n_instances=1) while forgiving real
+#     ones; it flatters the result.
+#   - ref-fiber ambiguity (a chorus that repeats *within* a song, n_instances>=2)
+#     is a TRAJECTORY-axis question (which repeat did the decode traverse) — it is
+#     forgiven by the scorecard's fiber-aware trajectory metric (headF%/facc),
+#     NOT by the placement number. Mixing it into placement double-credits.
+# Caveat (disclosed, not hidden): fibers are precise but LOW-RECALL (SALAMI R.06),
+# so nearest-instance may over-penalize an UNFLAGGED repeat — placement is thus a
+# conservative LOWER BOUND. The principled fix is a DP that assigns spans to GT
+# instances optimally under the fiber structure (roadmap). `unalignable` GT rows
+# need no handling (mix placeholders, no track_id -> never matched).
 
 
-def place_pairs(scores) -> list[tuple[float, int | None]]:
-    """(placement_error_s, overlay_density) for spans with a finite place_err."""
-    return [
-        (float(s.place_err_s), s.density) for s in scores if s.place_err_s is not None
-    ]
+def place_errs(scores) -> list[float]:
+    """Nearest-instance placement errors (fiber-fair on the placement axis)."""
+    return [float(s.place_err_s) for s in scores if s.place_err_s is not None]
 
 
-def _stats(errs: list[float]) -> dict:
+def summarize(errs: list[float]) -> dict:
     if not errs:
         return dict(n=0, mae=None, median=None, lt15_pct=None, p90=None)
     a = np.array(errs, dtype=float)
@@ -211,20 +214,11 @@ def _stats(errs: list[float]) -> dict:
     )
 
 
-def summarize(pairs: list[tuple[float, int | None]]) -> dict:
-    """Strict placement over ALL spans, AND pileup-excluded placement (drop spans
-    whose overlay density >= PILEUP_DENSITY). Report both — never silently
-    penalize the aligner for medley-pileup instance-ambiguity."""
-    strict = [e for e, _ in pairs]
-    nopile = [e for e, d in pairs if d is None or d < PILEUP_DENSITY]
-    return {"strict": _stats(strict), "noPile": _stats(nopile)}
-
-
 def score_driver(set_id: str, template: str, gt_path: Path) -> dict:
     tl = OUT_DIR / template.format(sid=set_id)
     if not tl.is_file():
-        return {"strict": _stats([]), "noPile": _stats([]), "missing": str(tl)}
-    return summarize(place_pairs(score_spans(set_id, tl, gt_path=gt_path)))
+        return {**summarize([]), "missing": str(tl)}
+    return summarize(place_errs(score_spans(set_id, tl, gt_path=gt_path)))
 
 
 def score_baseline(
@@ -237,7 +231,7 @@ def score_baseline(
         json.dump(tl, fh)
         tmp = Path(fh.name)
     try:
-        return summarize(place_pairs(score_spans(set_id, tmp, gt_path=gt_path)))
+        return summarize(place_errs(score_spans(set_id, tmp, gt_path=gt_path)))
     finally:
         tmp.unlink(missing_ok=True)
 
@@ -356,40 +350,32 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[{sid}] scoring {methods} …", file=sys.stderr)
         results[sid] = run_set(sid, methods)
 
-    # table: two blocks — STRICT (all spans) and noPile (medley pileups excluded,
-    # density<4) — so the aligner is never silently penalized for pileup ambiguity.
-    def _print_block(variant: str, label: str) -> None:
-        print(
-            f"\nplacement set_start error [{label}] — baselines (identity GIVEN) vs drivers"
-        )
-        hdr = f"{'method':<10}"
-        for sid in sets:
-            hdr += f" | {sid}: med / <15s / p90 / n"
-        print(hdr)
-        print("-" * len(hdr))
-        for m in methods:
-            line = f"{m:<10}"
-            for sid in sets:
-                r = results[sid].get(m, {}).get(variant, {})
-                line += (
-                    f" | {_fmt(r.get('median'))} / {_fmt(r.get('lt15_pct'))}%"
-                    f" / {_fmt(r.get('p90'))} / {_fmt(r.get('n'))}"
-                )
-            print(line)
-
-    print("\nNMF/DTW omitted: different regime (short synthetic excerpts), see spec.")
-    # CANONICAL error first: fibers/instance-ambiguity are NOT error by design, so
-    # the fiber-fair (pileup-excluded) axis is THE number. strict is diagnostic only.
-    _print_block(
-        "noPile",
-        f"CANONICAL (fiber-fair) — medley pileups (density>={PILEUP_DENSITY}) not scored",
+    # table: nearest-instance placement (fiber-fair on the placement axis).
+    print(
+        "\nplacement set_start error (nearest-instance = fiber-fair) — baselines"
+        " (identity GIVEN) vs drivers"
     )
-    _print_block("strict", "diagnostic only — strict, all spans (fibers penalized)")
+    print("NMF/DTW omitted: different regime (short synthetic excerpts), see spec.")
+    hdr = f"{'method':<10}"
+    for sid in sets:
+        hdr += f" | {sid}: med / <15s / p90 / n"
+    print(hdr)
+    print("-" * len(hdr))
+    for m in methods:
+        line = f"{m:<10}"
+        for sid in sets:
+            r = results[sid].get(m, {})
+            line += (
+                f" | {_fmt(r.get('median'))} / {_fmt(r.get('lt15_pct'))}%"
+                f" / {_fmt(r.get('p90'))} / {_fmt(r.get('n'))}"
+            )
+        print(line)
     print(
         "\nCaveats: n=2 real sets (no cross-set CI); baselines get correct identity"
         " for free (favors them); baselines assume ref_start=0 single-instance."
-        " noPile is the fair placement axis: it drops medley-pileup spans where"
-        " instance-ambiguity is the mix's property, not the actor's error."
+        " Placement is fiber-fair by nearest-instance match; ref-fiber (which-repeat)"
+        " ambiguity is scored on the TRAJECTORY axis (headF%), not here. Low fiber"
+        " recall makes this a conservative lower bound (see module header; DP fix = roadmap)."
     )
 
     # --- provenance + cohort-coherence guard (see the block above run_set) ---
@@ -419,7 +405,7 @@ def main(argv: list[str] | None = None) -> int:
                     timespec="seconds"
                 ),
                 "git_sha": sha,
-                "canonical_axis": "noPile",  # fiber/instance-ambiguity is NOT error
+                "canonical_axis": "nearest_instance",  # fiber-fair on placement axis
                 "sets": sets,
                 "methods": methods,
                 "results": results,
