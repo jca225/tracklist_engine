@@ -32,9 +32,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 import tempfile
 import warnings
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -215,6 +217,58 @@ def score_baseline(
         tmp.unlink(missing_ok=True)
 
 
+# ---------------------------------------------------- provenance / cohort guard
+# The 2026-07-17 scare: this harness silently scored `out/` driver timelines from
+# DIFFERENT dates (classical 07-11 vs agentic 07-14) as if they were one run, and
+# compared them to a superseded race-board snapshot. Same scorer, mismatched
+# artifacts. These functions make that impossible: every driver timeline's mtime
+# is captured, printed, and gated — a within-set cohort that spans too much time
+# fails LOUDLY instead of masquerading as a clean comparison. (Baselines are
+# recomputed from audio each run, so they carry no staleness risk.)
+def _git_sha() -> str:
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=_REPO,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        ).stdout.strip()
+        return out or "unknown"
+    except Exception:
+        return "unknown"
+
+
+def driver_provenance(set_id: str, methods: list[str]) -> dict[str, dict]:
+    """Per DRIVER method: the timeline file's path, existence, and mtime."""
+    prov: dict[str, dict] = {}
+    for name in methods:
+        if name not in DRIVERS:
+            continue
+        tl = OUT_DIR / DRIVERS[name].format(sid=set_id)
+        if tl.is_file():
+            mt = tl.stat().st_mtime
+            prov[name] = {
+                "path": DRIVERS[name].format(sid=set_id),
+                "mtime_epoch": mt,
+                "mtime": datetime.fromtimestamp(mt, timezone.utc).isoformat(
+                    timespec="minutes"
+                ),
+                "exists": True,
+            }
+        else:
+            prov[name] = {"path": str(tl), "exists": False}
+    return prov
+
+
+def cohort_spread_s(prov: dict[str, dict]) -> float | None:
+    """Max mtime spread (seconds) among a set's EXISTING driver timelines, or None
+    if fewer than two exist. Driver timelines compared WITHIN one set must come
+    from one coherent run; a large spread means mismatched vintages (the bug)."""
+    mts = [p["mtime_epoch"] for p in prov.values() if p.get("exists")]
+    return (max(mts) - min(mts)) if len(mts) >= 2 else None
+
+
 # --------------------------------------------------------------------------- run
 def run_set(set_id: str, methods: list[str]) -> dict[str, dict]:
     gt_path = gt_fixture_for(set_id)
@@ -256,6 +310,18 @@ def main(argv: list[str] | None = None) -> int:
         default="no_warp,grid_mf,classical,agentic",
         help="ordered subset of no_warp,grid_mf,classical,agentic",
     )
+    p.add_argument(
+        "--max-cohort-spread-hours",
+        type=float,
+        default=6.0,
+        help="within a set, driver timelines whose mtimes span more than this are "
+        "an incoherent cohort (mismatched vintages) — fails unless --allow-stale",
+    )
+    p.add_argument(
+        "--allow-stale",
+        action="store_true",
+        help="downgrade the cohort-incoherence gate to a warning (explicit opt-in)",
+    )
     args = p.parse_args(argv)
     sets = [s.strip() for s in args.sets.split(",") if s.strip()]
     methods = [m.strip() for m in args.methods.split(",") if m.strip()]
@@ -288,13 +354,61 @@ def main(argv: list[str] | None = None) -> int:
         " the heavy tail is the real-mix difficulty, not a bug."
     )
 
+    # --- provenance + cohort-coherence guard (see the block above run_set) ---
+    sha = _git_sha()
+    max_spread = args.max_cohort_spread_hours * 3600.0
+    provenance = {sid: driver_provenance(sid, methods) for sid in sets}
+    incoherent: dict[str, float] = {}
+    print(f"\ndriver-timeline provenance (git {sha}):")
+    for sid in sets:
+        spread = cohort_spread_s(provenance[sid])
+        tag = ""
+        if spread is not None and spread > max_spread:
+            incoherent[sid] = spread
+            tag = f"  ⚠ INCOHERENT COHORT (mtimes span {spread / 3600:.1f} h)"
+        print(f"  [{sid}]{tag}")
+        for name, pr in provenance[sid].items():
+            when = pr["mtime"] if pr.get("exists") else "MISSING"
+            print(f"    {name:<10} {when}  {pr['path']}")
+
     res_dir = Path(__file__).resolve().parent / "results"
     res_dir.mkdir(exist_ok=True)
     out_path = res_dir / "bb_baselines_placement.json"
     out_path.write_text(
-        json.dumps({"sets": sets, "methods": methods, "results": results}, indent=2)
+        json.dumps(
+            {
+                "generated_at": datetime.now(timezone.utc).isoformat(
+                    timespec="seconds"
+                ),
+                "git_sha": sha,
+                "sets": sets,
+                "methods": methods,
+                "results": results,
+                "provenance": provenance,
+                "incoherent_cohorts": {
+                    k: round(v / 3600, 2) for k, v in incoherent.items()
+                },
+            },
+            indent=2,
+        )
     )
     print(f"\nwrote {out_path}")
+
+    if incoherent and not args.allow_stale:
+        print(
+            f"\nERROR: {len(incoherent)} set(s) have a stale/mismatched driver cohort "
+            f"{sorted(incoherent)} — the classical-vs-agentic comparison is NOT valid.\n"
+            "Regenerate them in ONE run (e.g. `make race SETS=<id> DRIVERS=classical,agentic"
+            ' EXTRA="--reuse-base <id>=<base>"`) and re-score, or pass --allow-stale to '
+            "override with eyes open.",
+            file=sys.stderr,
+        )
+        return 2
+    if incoherent:
+        print(
+            "\nWARNING: proceeding with stale cohort(s) per --allow-stale.",
+            file=sys.stderr,
+        )
     return 0
 
 

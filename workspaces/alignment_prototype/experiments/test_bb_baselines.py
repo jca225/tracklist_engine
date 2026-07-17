@@ -11,8 +11,31 @@ import numpy as np
 from core.contracts import load_timeline
 from workspaces.alignment_prototype.experiments.bb_baselines import (
     baseline_timeline,
+    cohort_spread_s,
     summarize,
 )
+
+
+def test_cohort_spread_flags_mismatched_vintages():
+    # the exact 2026-07-17 bug: classical 07-11, agentic 07-14 -> ~3-day spread
+    prov = {
+        "classical": {"exists": True, "mtime_epoch": 1_000_000.0},
+        "agentic": {"exists": True, "mtime_epoch": 1_000_000.0 + 3 * 86400},
+    }
+    spread = cohort_spread_s(prov)
+    assert spread == 3 * 86400
+    assert spread > 6 * 3600  # would trip the default gate
+
+
+def test_cohort_spread_none_when_single_or_absent():
+    assert cohort_spread_s({"classical": {"exists": True, "mtime_epoch": 1.0}}) is None
+    assert cohort_spread_s({"agentic": {"exists": False}}) is None
+    # a coherent same-run cohort is a tiny spread, well under the gate
+    prov = {
+        "classical": {"exists": True, "mtime_epoch": 500.0},
+        "agentic": {"exists": True, "mtime_epoch": 560.0},
+    }
+    assert cohort_spread_s(prov) == 60.0
 
 
 def test_summarize_basic_stats():
