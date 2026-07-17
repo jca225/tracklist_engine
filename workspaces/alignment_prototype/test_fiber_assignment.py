@@ -1,11 +1,13 @@
-"""Tests for fiber_assignment.equivalence_classes.
+"""Tests for fiber_assignment.equivalence_classes and fiber_assignment.assign.
 
 Table-driven, no audio, no I/O — plain hand-constructable inputs only.
 """
 
 from __future__ import annotations
 
-from workspaces.alignment_prototype.fiber_assignment import equivalence_classes
+import pytest
+
+from workspaces.alignment_prototype.fiber_assignment import assign, equivalence_classes
 
 
 def _row(track_id: str, ref_start_s: float) -> dict:
@@ -146,4 +148,109 @@ def test_multiseg_row_uses_first_ref_start():
         f"(ref_start_s=30.0) must share the same fiber class id; "
         f"got {result[0]} and {result[1]} — likely _ref_start returned the "
         f"top-level 999.0 instead of the first segment's 30.0"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Tests for assign() — F0.2
+# ---------------------------------------------------------------------------
+
+
+def test_assign_within_class_swap_costs_zero():
+    """A prediction landing on the WRONG occurrence of a validated fiber costs 0.
+
+    GT has two rows at ref 30 s and 90 s, both in validated fiber 0.
+    Prediction: [90.0, 30.0] — each pred is on a member of the class but
+    "swapped" relative to GT order.  Hungarian should assign pred 0 → gt 1
+    and pred 1 → gt 0, both at cost 0 (within-class swap is free).
+    """
+    gt_row_a = _row("tid_chorus", 30.0)
+    gt_row_b = _row("tid_chorus", 90.0)
+    gt_rows = [gt_row_a, gt_row_b]
+
+    fibers: dict[str, list[tuple[float, float, int, int]]] = {
+        "tid_chorus": [
+            (25.0, 55.0, 0, 2),  # covers 30 s — validated fiber 0
+            (85.0, 115.0, 0, 2),  # covers 90 s — same fiber 0
+        ],
+    }
+    classes = equivalence_classes(gt_rows, fibers)
+
+    # Predictions: ref_start floats in the same order as pred_segments list.
+    # Pred 0 → 90.0 (hits gt row 1's class member), pred 1 → 30.0 (hits gt row 0).
+    pred_segments = [90.0, 30.0]
+
+    matches = assign(pred_segments, gt_rows, classes)
+
+    # Each match is (pred_idx, gt_idx, cost).  All swapped costs must be 0.
+    costs = {(p, g): c for p, g, c in matches}
+    assert len(costs) == 2, f"Expected 2 matches, got {len(costs)}"
+    for (p, g), c in costs.items():
+        assert c == 0.0, (
+            f"Within-class swap must cost 0; pred {p} → gt {g} cost {c:.2f} s"
+        )
+
+
+def test_assign_outside_class_costs_true_gap():
+    """A prediction landing OUTSIDE the correct class costs the true ref-time gap.
+
+    GT: two rows in separate singleton classes (ref 30 s and 200 s).
+    Prediction: [30.0, 750.0].  Pred 1 (750 s) is far from GT row 1 (200 s) — the
+    cost should be |750 - 200| = 550 s, not 0.
+    """
+    gt_row_a = _row("tid_a", 30.0)
+    gt_row_b = _row("tid_b", 200.0)
+    gt_rows = [gt_row_a, gt_row_b]
+
+    # No fibers → both rows are singletons
+    classes = equivalence_classes(gt_rows, fibers={})
+
+    pred_segments = [30.0, 750.0]
+
+    matches = assign(pred_segments, gt_rows, classes)
+
+    costs = {(p, g): c for p, g, c in matches}
+    assert len(costs) == 2
+
+    # Find the match for pred 1
+    pred1_cost = next(c for (p, _), c in costs.items() if p == 1)
+    assert pred1_cost == pytest.approx(550.0, abs=0.01), (
+        f"Outside-class miss must cost true gap 550 s; got {pred1_cost:.2f} s"
+    )
+
+
+def test_assign_single_instance_miss_costs_true_gap():
+    """A SINGLE-INSTANCE miss must never be forgiven — regression guard for
+    the 746 s single-instance miss seen on 2026-07-17.
+
+    GT: one row at ref 10 s in a single-instance (n_instances=1) fiber.
+    Prediction: [756.0] — 746 s away.
+    Expected cost: 746.0 s (the true gap), never 0.
+
+    This test fails if singletons are incorrectly treated as a within-class
+    forgiven swap.
+    """
+    gt_row = _row("tid_single", 10.0)
+    gt_rows = [gt_row]
+
+    # n_instances=1 → NOT a validated fiber → singleton class
+    fibers: dict[str, list[tuple[float, float, int, int]]] = {
+        "tid_single": [
+            (5.0, 20.0, 2, 1),  # fiber_id=2, n_instances=1 — unvalidated
+        ],
+    }
+    classes = equivalence_classes(gt_rows, fibers)
+
+    # Sanity: must be a singleton (unique class, no sharing partner)
+    assert len(set(classes.values())) == 1  # one entry, one class
+
+    pred_segments = [756.0]  # 746 s off
+
+    matches = assign(pred_segments, gt_rows, classes)
+
+    assert len(matches) == 1
+    _, _, cost = matches[0]
+    assert cost == pytest.approx(746.0, abs=0.01), (
+        f"Single-instance miss must cost true gap 746 s; got {cost:.2f} s — "
+        "singletons must NEVER be forgiven (regression guard 2026-07-17)"
     )
