@@ -346,11 +346,29 @@ def test_proposed_correction_is_flagged_dry_run():
 
 
 def test_real_probe_scorer_abstains_without_audio(tmp_path):
+    # A nonexistent aligning dir → _mix_audio_path finds no mix → all routed
+    # probes abstain (safe offline no-op), never crash.
     scorer = real_probe_scorer(
-        mix_audio_path=tmp_path / "missing_mix.wav",
+        aligning_dir=tmp_path / "no_such_set",
         ref_audio_root=tmp_path / "refs",
     )
     results = scorer(_cand(), _span())
+    assert results  # routed probes present (as abstains), not empty
     assert all(r.abstain for r in results)
     # and the banding of an all-abstain result is ABSTAIN (no signal)
     assert band_agreement(results).band is Band.ABSTAIN
+
+
+def test_real_probe_scorer_routes_probes_by_stem(tmp_path):
+    # Stem routing is honored even in the all-abstain (no-audio) path: an
+    # acappella candidate gets the vocal-axis probe set (hubert/continuity/chroma),
+    # a regular candidate gets fp/chroma. Sources are the routed probe names.
+    from workspaces.pws_aligner.cotrain_seam import RefCandidate
+
+    scorer = real_probe_scorer(aligning_dir=tmp_path / "no_such_set")
+    acap = RefCandidate(recording_id="r", source_url="yt://x", stem="acappella")
+    reg = RefCandidate(recording_id="r", source_url="yt://x", stem="regular")
+    acap_sources = {r.source for r in scorer(acap, _span())}
+    reg_sources = {r.source for r in scorer(reg, _span())}
+    assert acap_sources == {"hubert", "continuity", "chroma"}
+    assert reg_sources == {"fp", "chroma"}

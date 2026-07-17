@@ -28,9 +28,15 @@ CLI only *reports* precision/recall on the BB GT sets and prints the proposals.
 Substrate: imports ``core`` (identity, acquisition-case types) + the alignment
 contract's ``AlignmentResult`` shape. The real probes are injected as a scorer
 callable (``RefMixScorer``) so all banding logic is unit-testable offline with a
-FAKE scorer; the real-probe path is gated behind a flag and is a no-op when the
-audio isn't present. This module does NOT import or mutate ``ingest/`` /
-``analysis/`` — it reads their outputs (``ingest.identity_gate.VerifyResult``).
+FAKE scorer. The real-probe scorer (``real_probe_scorer``) is now wired: it
+delegates to the SAME harness-probe machinery ``capture_votes`` runs (context
+construction, axis routing, per-probe error absorption, and the load-bearing
+ABSOLUTE→RELATIVE offset-frame normalization), and is a safe all-abstain no-op
+when the set/ref audio isn't present. Per-probe confidence *calibration* to a
+shared [0,1] scale is the remaining open work — banding leans first on offset
+*agreement*, only secondarily on confidence. This module does NOT import or
+mutate ``ingest/`` / ``analysis/`` — it reads their outputs
+(``ingest.identity_gate.VerifyResult``).
 """
 
 from __future__ import annotations
@@ -533,47 +539,122 @@ def evaluate_banding(
 # ── real-probe scorer (gated no-op when audio absent) ─────────────────────────
 
 
+# NOTE on offset frames: the banding compares offsets across channels, so every
+# channel must be in ONE frame. The absolute→relative conversion (chroma/hubert/
+# continuity are absolute ref-time; fp is already the relative diagonal) is the
+# single load-bearing convention, owned by ``capture_votes._ABSOLUTE_FRAME_PROBES``
+# / ``_run_probe_safe``. This scorer delegates there rather than keeping a second
+# copy — getting it wrong makes the absolute-frame probes agree in the WRONG frame
+# and outvote fp (the documented catastrophe).
+
+
 def real_probe_scorer(
-    mix_audio_path: Path,
-    ref_audio_root: Path,
+    aligning_dir: Path,
+    ref_audio_root: Path | None = None,
 ) -> RefMixScorer:
-    """Build a scorer that runs the REAL probes (fp + HuBERT + chroma).
+    """Build a scorer that runs the REAL harness probes (fp + HuBERT + chroma).
 
-    Gated: if the mix or ref audio is absent, every call returns all-abstain, so
-    the dry-run is a safe no-op offline. The three probes are INDEPENDENT
-    channels (landmark fingerprint, HuBERT self-similarity, chroma matched
-    filter) — exactly the cross-channel agreement the banding requires.
+    Delegates to the SAME probe machinery ``capture_votes`` exercises — context
+    construction, axis-routed probe selection, per-probe error absorption, and
+    (crucially) the ABSOLUTE→RELATIVE offset-frame normalization — rather than
+    reimplementing the catastrophic-if-wrong parts. The three probes are
+    INDEPENDENT channels (landmark fingerprint / HuBERT self-similarity / chroma
+    matched filter) — exactly the cross-channel agreement the banding requires.
 
-    NOTE: the actual probe invocation is deliberately deferred (no audio in CI).
-    This documents the wiring; the offset-frame convention and per-probe
-    confidence calibration are the open work (see module summary).
+    ``aligning_dir`` is the set's ``~/aligning/<set_id>__*`` folder (holds
+    ``mix_vocals.flac`` / ``mix_instrumental.flac`` / ``mix.*``, routed per
+    candidate stem). ``ref_audio_root`` is a fallback root for ref audio when a
+    ``RefCandidate`` carries no ``source_path`` (``<root>/<recording_id>``).
+
+    Gated + robust: absent mix or ref audio → all routed probes abstain (a safe
+    no-op offline), and any probe exception is absorbed into an abstain (never
+    crashes the scorer). Per-probe confidence calibration to a shared [0,1]
+    scale remains the open work — the banding leans first on offset *agreement*
+    (frame-normalized consensus) and only secondarily on confidence.
     """
+    from workspaces.pws_aligner.capture_votes import (
+        _STEM_TO_PROBES,
+        _build_probes,
+        _mix_audio_path,
+        _run_probe_safe,
+    )
+
+    # Build probe instances once (lazy import inside _build_probes); a failed
+    # import yields a None instance that _run_probe_safe turns into an abstain.
+    _probe_cache: dict[str, object] = {}
+
+    def _instances(names: tuple[str, ...]) -> dict[str, object]:
+        missing = tuple(n for n in names if n not in _probe_cache)
+        if missing:
+            _probe_cache.update(_build_probes(missing))
+        return {n: _probe_cache.get(n) for n in names}
 
     def _scorer(candidate: RefCandidate, span: MixSpan) -> Sequence[AlignmentResult]:
-        if not mix_audio_path.is_file():
-            return [AlignmentResult.abstained(source="fp")]
+        from workspaces.alignment_prototype.harness.contract import (
+            CandidatePool,
+            MixContext,
+            RefContext,
+        )
+        from workspaces.alignment_prototype.records import SlotCandidate
+
+        stem = candidate.stem or "regular"
+        probe_names = _STEM_TO_PROBES.get(stem, _STEM_TO_PROBES["regular"])
+
+        mix_audio = _mix_audio_path(aligning_dir, stem) or _mix_audio_path(
+            aligning_dir, "regular"
+        )
         ref_path = (
             Path(candidate.source_path)
             if candidate.source_path
-            else ref_audio_root / candidate.recording_id
+            else (ref_audio_root / candidate.recording_id if ref_audio_root else None)
         )
-        if not ref_path.exists():
-            return [
-                AlignmentResult.abstained(source="fp"),
-                AlignmentResult.abstained(source="hubert"),
-                AlignmentResult.abstained(source="chroma"),
-            ]
-        # Real wiring (deliberately deferred — see summary):
-        #   import librosa; load mix span [set_start_s, +span_dur_s] and ref.
-        #   fp:     fp_probe.fp_offset(mix, ref, stretches) -> (off, votes, st)
-        #   hubert: stem_placement.place_joint(mix_feat, ref_feat, prior_ss, dur)
-        #   chroma: refine_ref_offsets.detect_offset(win_f, ref_f, stretches)
-        # Each mapped into an AlignmentResult(offset_s, confidence in [0,1],
-        # source=<probe>). Confidence calibration per probe is the open work.
-        raise NotImplementedError(
-            "real-probe scoring not wired; use an injected scorer or run --dry-run "
-            "with fixtures. See cotrain_seam summary for the calibration TODO."
+        if (
+            mix_audio is None
+            or not mix_audio.is_file()
+            or ref_path is None
+            or not ref_path.is_file()
+        ):
+            return [AlignmentResult.abstained(source=p) for p in probe_names]
+
+        set_start = span.set_start_s
+        mix_ctx = MixContext(
+            audio_path=mix_audio,
+            set_id=span.set_id,
+            span_start_s=set_start,
+            span_end_s=set_start + span.span_dur_s,
         )
+        ref_ctx = RefContext(
+            recording_id=candidate.recording_id, audio_path=ref_path, stem=stem
+        )
+        pool = CandidatePool(
+            candidates=(
+                SlotCandidate(recording_id=candidate.recording_id, claimed_stem=stem),
+            )
+        )
+
+        instances = _instances(probe_names)
+        results: list[AlignmentResult] = []
+        for name in probe_names:
+            entry = _run_probe_safe(
+                name,
+                instances.get(name),
+                mix_ctx,
+                ref_ctx,
+                pool,
+                span_set_start_s=set_start,
+            )
+            # _run_probe_safe already frame-normalized offset_s to RELATIVE; we
+            # rebuild an AlignmentResult from its entry (source = probe name).
+            results.append(
+                AlignmentResult(
+                    recording_id=entry["recording_id"],
+                    offset_s=entry["offset_s"],
+                    confidence=entry["confidence"],
+                    abstain=entry["abstain"],
+                    source=name,
+                )
+            )
+        return results
 
     return _scorer
 
