@@ -265,6 +265,7 @@ def test_run_harvest_instrumental_needs_three_channels(tmp_path):
         slots, stems_root=tmp_path, out=out, scorer_factory=two_channel
     )
     assert summary.n_harvested == 0  # instrumental banded < ACCEPT at 2 channels
+    assert summary.n_written == 0  # gate test: nothing reaches the ledger
     assert not out.exists() or out.read_text().strip() == ""
 
     def three_channel(mix_full_path, mix_stem_dir):
