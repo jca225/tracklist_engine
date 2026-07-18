@@ -32,7 +32,8 @@ Off the alignment DAG. Off the canonical `music_database.db`. Mirrors how
 | Module home | **New top-level `soundcloud/`** — the general primitive; `personalization/` and `lab/` become consumers. |
 | First payload | Profile `user-327506308` |
 | Crawl scope | **Frontier primitive, depth-1 default** (approach B) — general crawler whose depth is a parameter; first run = depth-1 from John's profile |
-| Storage | Dedicated off-canonical **`sc_lake.db`** (SQLite) + append-only raw JSONL |
+| Storage | Dedicated off-canonical **`sc_lake.db`** (SQLite) + append-only raw JSONL, hosted **on pi-storage** under `/mnt/storage/data/soundcloud/` (durable + capacity), queried from Mac over SSH — mirrors how the corpus keeps canonical state off the Mac |
+| Run location | Crawler runs **pi-side** (network + cheap CPU; long-running-capable), writing to the canonical pi-storage store. Mac is dev/query only. Systemd service still deferred. |
 
 ## 2. Architecture
 
@@ -49,8 +50,21 @@ soundcloud/
   analysis/
     first_look.py  # thin validation analysis over the pulled library
   schema.sql       # sc_lake.db DDL
-  data/            # gitignored: raw/ JSONL + sc_lake.db
+  deploy/          # pi-storage deploy notes / (future) systemd unit — deferred
 ```
+
+**Physical data location (pi-storage, canonical):**
+
+```
+/mnt/storage/data/soundcloud/
+  sc_lake.db                          # normalized nodes + edges + crawl checkpoints
+  raw/{entity}/{id}/{fetched_at}.jsonl  # append-only API snapshots
+```
+
+The Python package `soundcloud/` is code only — it holds **no** local `data/`
+dir. All persistence targets the pi-storage paths above (config-driven root, e.g.
+`SC_LAKE_ROOT`, defaulting to `/mnt/storage/data/soundcloud`). Mac runs read via
+SSH, matching the `pi-storage-query` pattern used across the corpus.
 
 ### 2.1 `client.py` — auth + transport
 
@@ -85,18 +99,19 @@ Functions are pure over their inputs and return raw dicts — **no DB writes, no
 parsing decisions baked in** (parsing lives in `store.py`). A resource that
 returns a `SKIP_STATUS_CODES` status yields nothing rather than aborting.
 
-### 2.3 Raw lake — `soundcloud/data/raw/{entity}/{id}/{fetched_at}.jsonl`
+### 2.3 Raw lake — `{SC_LAKE_ROOT}/raw/{entity}/{id}/{fetched_at}.jsonl`
 
 Append-only snapshots of every API response before parsing. Enables reprocessing
 without refetching and gives an audit trail. `{fetched_at}` is an ISO timestamp
 passed in by the caller (scripts stamp time at the edge; core stays clock-free
-per repo style). Gitignored.
+per repo style). Lives on pi-storage (`SC_LAKE_ROOT` default
+`/mnt/storage/data/soundcloud`), never committed.
 
 ### 2.4 `store.py` + `schema.sql` — `sc_lake.db`
 
-Dedicated SQLite, off-canonical, off-DAG, gitignored. Normalized nodes + edges,
-keyed on SC ids, every row stamped `fetched_at` and `raw_ref` (path into the raw
-lake).
+Dedicated SQLite at `{SC_LAKE_ROOT}/sc_lake.db` on pi-storage, off-canonical
+(not `music_database.db`), off-DAG. Normalized nodes + edges, keyed on SC ids,
+every row stamped `fetched_at` and `raw_ref` (path into the raw lake).
 
 **Nodes:**
 - `sc_users` (sc_user_id PK, permalink, username, followers_count, followings_count, verified, city, country, description, ...)
@@ -178,8 +193,10 @@ main sync-user 327506308
 ## 6. Explicitly deferred (YAGNI now)
 
 Audio download; MERT embeddings for SC tracks; `work`/`recording` identity
-mapping (seam is stubbed only); systemd deployment on pi-worker; migrating
-`personalization` off the shim; any crawl past depth-1; OAuth / private items /
+mapping (seam is stubbed only); a **systemd unit** for the crawler (first runs are
+invoked manually pi-side via `make deploy` + SSH — the always-on service comes
+later); migrating `personalization` off the shim; any crawl past depth-1; OAuth /
+private items /
 reposts stream.
 
 ## 7. Open questions
