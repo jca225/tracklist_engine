@@ -9,21 +9,9 @@ ledger is idempotent, and that the census classifies blockers correctly.
 
 from __future__ import annotations
 
-import json
 import sqlite3
-from pathlib import Path
 
-from workspaces.alignment_prototype.harness.contract import AlignmentResult
-from workspaces.pws_aligner.corpus_harvest import (
-    DEFAULT_SPAN_S,
-    CensusReport,
-    CorpusSlot,
-    HarvestSummary,
-    build_corpus_cases,
-    census,
-    query_corpus_slots,
-    run_corpus_harvest,
-)
+from workspaces.pws_aligner.corpus_harvest import query_corpus_slots
 
 
 def _make_db() -> sqlite3.Connection:
