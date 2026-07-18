@@ -90,6 +90,15 @@ race:
 	venvs/audio/bin/python -m workspaces.alignment_prototype.drivers.race \
 		--sets $(SETS) --drivers $(DRIVERS) $(EXTRA)
 
+# Staged pipeline + ablation framework (docs/pipeline_ablation_framework.md).
+# Compose grain reproduces `make race` with auto baseline-injection + a
+# reproducible JSONL ledger; CONFIG selects the matrix. Isolate-grain (decoder
+# bake-off) ships with the TRM build (docs/trm_decoder_bakeoff.md).
+CONFIG ?= workspaces/alignment_prototype/pipeline/configs/race_default.yaml
+ablate:
+	venvs/audio/bin/python -m workspaces.alignment_prototype.pipeline.cli \
+		--config $(CONFIG) $(EXTRA)
+
 align-ablate:
 	venvs/audio/bin/python -m workspaces.alignment_prototype.experiments.cli $(EXTRA)
 

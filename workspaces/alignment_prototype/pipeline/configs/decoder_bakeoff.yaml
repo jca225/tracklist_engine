@@ -1,0 +1,13 @@
+# Stage-isolation grain — the Actor/Decode bake-off. Control (raw match-sim
+# argmax) + conv_viterbi baseline are auto-injected; `trm` is the candidate.
+# Referee: path_decode.trajectory_acc (strict, no fibers) on the cross-set
+# holdout. Backend/scorer for this grain ship with the TRM build
+# (docs/trm_decoder_bakeoff.md) — this config is the target, runnable once the
+# skeleton is filled.
+grain: isolate
+sets: [2nvzlh2k]   # eval on BB11; LOSO trains on BB12
+actors: [trm]      # control + conv_viterbi injected automatically
+base: classical
+bridge: linear
+split: set
+seed: 0
