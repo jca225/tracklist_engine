@@ -536,6 +536,43 @@ def evaluate_banding(
     return score, proposals
 
 
+# ── mix-audio resolution (injectable: aligning-dir vs pi-storage corpus) ──────
+
+# The scorer needs the mix-side audio for a routed stem. Two layouts exist:
+#   - GT sets: ``~/aligning/<set>/`` (mix_vocals.flac / mix_instrumental.flac /
+#     mix.*), resolved by ``capture_votes._mix_audio_path``.
+#   - corpus sets: pi-storage ``/mnt/storage/stems/set/<set_audio_id>/`` for the
+#     separated stems + the full mix at ``set_audio.path``.
+# A MixResolver decouples the scorer from the layout so the SAME probes harvest
+# both (the corpus flywheel needs the pi-storage layout — GT sets have no
+# analog on the 1,011 downloaded corpus).
+MixResolver = Callable[[str], "Path | None"]
+
+
+def corpus_mix_resolver(mix_full_path: Path, mix_stem_dir: Path) -> MixResolver:
+    """Mix-audio resolver for the pi-storage corpus layout.
+
+    ``mix_stem_dir`` = ``/mnt/storage/stems/set/<set_audio_id>/`` (holds
+    ``vocals.flac`` / ``instrumental.flac`` from the RoFormer mix-side pass);
+    ``mix_full_path`` = the full mix (``set_audio.path``). Mirrors
+    ``_mix_audio_path``'s stem routing, so a corpus scorer agrees channel-for-
+    channel with the aligning-dir scorer.
+    """
+    mix_stem_dir = Path(mix_stem_dir)
+    mix_full_path = Path(mix_full_path)
+
+    def resolve(stem: str) -> Path | None:
+        if stem == "acappella":
+            p = mix_stem_dir / "vocals.flac"
+            return p if p.is_file() else None
+        if stem == "instrumental":
+            p = mix_stem_dir / "instrumental.flac"
+            return p if p.is_file() else None
+        return mix_full_path if mix_full_path.is_file() else None
+
+    return resolve
+
+
 # ── real-probe scorer (gated no-op when audio absent) ─────────────────────────
 
 
@@ -549,8 +586,10 @@ def evaluate_banding(
 
 
 def real_probe_scorer(
-    aligning_dir: Path,
+    aligning_dir: Path | None = None,
     ref_audio_root: Path | None = None,
+    *,
+    mix_resolver: MixResolver | None = None,
 ) -> RefMixScorer:
     """Build a scorer that runs the REAL harness probes (fp + HuBERT + chroma).
 
@@ -579,6 +618,20 @@ def real_probe_scorer(
     )
     from workspaces.pws_aligner.mix_feature_cache import MixFeatureCache
 
+    # Resolve mix-side audio via the injected resolver, or default to the
+    # aligning-dir layout (backward compatible with every existing caller).
+    resolve_mix: MixResolver
+    if mix_resolver is not None:
+        resolve_mix = mix_resolver
+    elif aligning_dir is not None:
+        _adir = aligning_dir
+
+        def resolve_mix(stem: str) -> Path | None:
+            return _mix_audio_path(_adir, stem) or _mix_audio_path(_adir, "regular")
+
+    else:
+        raise ValueError("real_probe_scorer needs aligning_dir or mix_resolver")
+
     # One feature cache for the whole scorer: a span's positive + decoys share the
     # identical mix window, so the full-mix fingerprint / chroma / HuBERT compute
     # ONCE per span instead of once per candidate (the ~1 min/case perf fix — see
@@ -605,9 +658,7 @@ def real_probe_scorer(
         stem = candidate.stem or "regular"
         probe_names = _STEM_TO_PROBES.get(stem, _STEM_TO_PROBES["regular"])
 
-        mix_audio = _mix_audio_path(aligning_dir, stem) or _mix_audio_path(
-            aligning_dir, "regular"
-        )
+        mix_audio = resolve_mix(stem)
         ref_path = (
             Path(candidate.source_path)
             if candidate.source_path
