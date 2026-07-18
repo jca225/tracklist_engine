@@ -350,6 +350,12 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="score an arbitrary timeline JSON (default: out/<set-id>_predicted_timeline.json)",
     )
+    p.add_argument(
+        "--emit-never-matched",
+        type=str,
+        default=None,
+        help="write never-matched GT recordings to this JSON path",
+    )
     args = p.parse_args(argv)
 
     if args.gt is None:
@@ -605,6 +611,13 @@ def main(argv: list[str] | None = None) -> int:
             f"  GT acappella rows: {len(gt_aca)}; recording matched by SOME timeline span: "
             f"{len(gt_aca) - len(unmatched)}; NEVER matched (invisible to metric): {len(unmatched)}"
         )
+        if getattr(args, "emit_never_matched", None):
+            from workspaces.alignment_prototype.never_matched import write_never_matched
+            from pathlib import Path as _Path
+
+            write_never_matched(
+                args.set_id, gt_rows, spans, _Path(args.emit_never_matched)
+            )
 
     print("\nworst placement:")
     for err, slot, pred, gt_v, name in sorted(place_errs, reverse=True)[:8]:
