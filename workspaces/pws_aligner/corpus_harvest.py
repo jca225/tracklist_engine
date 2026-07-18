@@ -66,6 +66,7 @@ def query_corpus_slots(
     *,
     policy_stems: Iterable[str],
     limit: int | None = None,
+    set_ids: Sequence[str] | None = None,
 ) -> list[CorpusSlot]:
     """Inner-join eligibility: sole mix + MIN-id ref @ claimed_stem + a valid cue
     time (``cue_time_seconds > 0``) + a certified axis. ``conn.row_factory`` must
@@ -84,6 +85,15 @@ def query_corpus_slots(
     if not stems:
         return []
     placeholders = ",".join("?" for _ in stems)
+    set_filter = ""
+    set_params: list[object] = []
+    if set_ids is not None:
+        ids = tuple(set_ids)
+        if not ids:
+            return []
+        set_ph = ",".join("?" for _ in ids)
+        set_filter = f"          AND s.set_id IN ({set_ph})\n"
+        set_params = list(ids)
     sql = f"""
         SELECT s.set_id AS set_id, sa.set_audio_id AS set_audio_id,
                s.slot_label AS slot_label, s.recording_id AS recording_id,
@@ -104,9 +114,9 @@ def query_corpus_slots(
           AND s.recording_id IS NOT NULL
           AND s.cue_time_seconds IS NOT NULL
           AND s.cue_time_seconds > 0
-        ORDER BY s.set_id, s.row_index
+{set_filter}        ORDER BY s.set_id, s.row_index
     """
-    params: list[object] = list(stems)
+    params: list[object] = list(stems) + set_params
     if limit is not None:
         sql += " LIMIT ?"
         params.append(limit)
@@ -382,6 +392,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="report eligibility without running probes (no --out needed)",
     )
+    ap.add_argument(
+        "--set-ids-file",
+        default=None,
+        help="restrict harvest to set_ids listed one-per-line in this file "
+        "(disjoint files across workers = sharded parallel harvest)",
+    )
     args = ap.parse_args(argv)
 
     policy: dict[str, BandThresholds] = CERTIFIED_POLICY
@@ -394,6 +410,14 @@ def main(argv: list[str] | None = None) -> int:
     set_audio_root = Path(args.set_audio_root) if args.set_audio_root else None
     ref_audio_root = Path(args.ref_audio_root) if args.ref_audio_root else None
     stems_root = Path(args.stems_root)
+
+    set_ids: list[str] | None = None
+    if args.set_ids_file:
+        set_ids = [
+            ln.strip()
+            for ln in Path(args.set_ids_file).read_text().splitlines()
+            if ln.strip()
+        ]
 
     if not args.census and not args.out:
         ap.error("--out is required unless --census")
@@ -412,7 +436,9 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(report.to_json()))
             return 0
 
-        slots = query_corpus_slots(conn, policy_stems=policy_stems, limit=args.limit)
+        slots = query_corpus_slots(
+            conn, policy_stems=policy_stems, limit=args.limit, set_ids=set_ids
+        )
         summary = run_corpus_harvest(
             slots,
             stems_root=stems_root,

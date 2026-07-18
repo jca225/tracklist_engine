@@ -756,3 +756,25 @@ def test_census_rows_includes_blocked_slots_via_left_join():
     rows2 = census_rows(conn, policy_stems=("regular",))
     r54 = next(r for r in rows2 if r["set_id"] == "S54")
     assert r54["cue_time_s"] is None  # NULLIF(cue_time_seconds, 0) must return NULL
+
+
+def test_query_set_ids_restricts_to_given_sets():
+    """--set-ids-file sharding: set_ids filters query_corpus_slots to those sets;
+    empty list yields nothing (a worker with no assigned sets harvests nothing).
+    """
+    conn = _make_db()
+    _add_slot(conn, set_id="SA", row_index=0, recording_id="RA")
+    _add_set_audio(conn, set_audio_id=1, set_id="SA", path="/a.m4a")
+    _add_track_audio(conn, recording_id="RA", stem="regular", path="/ra.flac")
+    _add_slot(conn, set_id="SB", row_index=0, recording_id="RB")
+    _add_set_audio(conn, set_audio_id=2, set_id="SB", path="/b.m4a")
+    _add_track_audio(conn, recording_id="RB", stem="regular", path="/rb.flac")
+
+    both = query_corpus_slots(conn, policy_stems=("regular",))
+    assert {s.set_id for s in both} == {"SA", "SB"}
+
+    only_a = query_corpus_slots(conn, policy_stems=("regular",), set_ids=["SA"])
+    assert [s.set_id for s in only_a] == ["SA"]
+    assert only_a[0].ref_path == "/ra.flac"
+
+    assert query_corpus_slots(conn, policy_stems=("regular",), set_ids=[]) == []
