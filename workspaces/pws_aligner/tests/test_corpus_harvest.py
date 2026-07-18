@@ -11,41 +11,42 @@ from __future__ import annotations
 
 import json
 import sqlite3
-
 from pathlib import Path
 
-from workspaces.pws_aligner.corpus_harvest import query_corpus_slots
-from workspaces.pws_aligner.corpus_harvest import (  # noqa: E402
+from workspaces.alignment_prototype.harness.contract import AlignmentResult
+from workspaces.pws_aligner.corpus_harvest import (
     DEFAULT_SPAN_S,
     CorpusSlot,
     build_corpus_cases,
+    census,
+    census_rows,
+    main,
+    query_corpus_slots,
+    run_corpus_harvest,
 )
-from workspaces.alignment_prototype.harness.contract import AlignmentResult  # noqa: E402
-from workspaces.pws_aligner.corpus_harvest import run_corpus_harvest  # noqa: E402
-from workspaces.pws_aligner.corpus_harvest import census, census_rows  # noqa: E402
-from workspaces.pws_aligner.corpus_harvest import main  # noqa: E402
+
+
+_SCHEMA = """
+CREATE TABLE set_track_slots (
+    set_id TEXT, row_index INTEGER, recording_id TEXT, slot_label TEXT,
+    cue_seconds INTEGER, cue_time_seconds INTEGER,
+    claimed_version TEXT, claimed_stem TEXT, claimed_variant TEXT,
+    duration_seconds INTEGER
+);
+CREATE TABLE set_audio (
+    set_audio_id INTEGER, set_id TEXT, path TEXT, sha256 TEXT, is_reference INTEGER
+);
+CREATE TABLE track_audio (
+    track_audio_id INTEGER, recording_id TEXT, stem TEXT,
+    path TEXT, is_reference INTEGER
+);
+"""
 
 
 def _make_db() -> sqlite3.Connection:
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
-    conn.executescript(
-        """
-        CREATE TABLE set_track_slots (
-            set_id TEXT, row_index INTEGER, recording_id TEXT, slot_label TEXT,
-            cue_seconds INTEGER, cue_time_seconds INTEGER,
-            claimed_version TEXT, claimed_stem TEXT, claimed_variant TEXT,
-            duration_seconds INTEGER
-        );
-        CREATE TABLE set_audio (
-            set_audio_id INTEGER, set_id TEXT, path TEXT, sha256 TEXT, is_reference INTEGER
-        );
-        CREATE TABLE track_audio (
-            track_audio_id INTEGER, recording_id TEXT, stem TEXT,
-            path TEXT, is_reference INTEGER
-        );
-        """
-    )
+    conn.executescript(_SCHEMA)
     return conn
 
 
@@ -422,22 +423,9 @@ def test_census_rows_excludes_uncertified_axis(tmp_path):
 
 def _write_fixture_db(path: Path) -> None:
     conn = sqlite3.connect(str(path))
+    conn.executescript(_SCHEMA)
     conn.executescript(
         """
-        CREATE TABLE set_track_slots (
-            set_id TEXT, row_index INTEGER, recording_id TEXT, slot_label TEXT,
-            cue_seconds INTEGER, cue_time_seconds INTEGER,
-            claimed_version TEXT, claimed_stem TEXT, claimed_variant TEXT,
-            duration_seconds INTEGER
-        );
-        CREATE TABLE set_audio (
-            set_audio_id INTEGER, set_id TEXT, path TEXT, sha256 TEXT,
-            is_reference INTEGER
-        );
-        CREATE TABLE track_audio (
-            track_audio_id INTEGER, recording_id TEXT, stem TEXT,
-            path TEXT, is_reference INTEGER
-        );
         INSERT INTO set_track_slots VALUES
             ('A',0,'R1','001',NULL,100,'original','regular','regular',42),
             ('A',1,'R2','002',NULL,NULL,'original','regular','regular',42);
@@ -481,3 +469,30 @@ def test_main_harvest_mode_requires_out(tmp_path):
         assert False, "expected SystemExit when --out missing"
     except SystemExit as e:
         assert e.code != 0
+
+
+def test_census_first_missing_priority(tmp_path):
+    """A slot missing both cue_time AND ref audio must be classified no-cue-time
+    (the first-missing priority chain)."""
+    conn = _make_db()
+    stems_root = tmp_path / "stems"
+    mix = tmp_path / "mix.m4a"
+    mix.write_bytes(b"x")
+    # Add slot with no cue time AND no track_audio row
+    _add_slot(
+        conn,
+        set_id="X",
+        row_index=0,
+        recording_id="RX",
+        claimed_stem="regular",
+        cue_time_seconds=None,
+    )
+    _add_set_audio(conn, set_audio_id=99, set_id="X", path=str(mix))
+    # Intentionally no _add_track_audio call → no ref audio
+
+    report = census(
+        conn, stems_root=stems_root, policy_stems=("regular", "instrumental")
+    )
+
+    assert report.by_axis["regular"]["no-cue-time"] == 1
+    assert report.by_axis["regular"].get("no-ref-audio", 0) == 0

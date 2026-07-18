@@ -298,6 +298,7 @@ def _classify(
     if not mix.is_file():
         return "no-mix-audio"
     if row["claimed_stem"] == "instrumental":
+        # set_audio_id is non-NULL here: mix_full_path NULL + is_file() guards above passed.
         stem_file = Path(stems_root) / str(row["set_audio_id"]) / "instrumental.flac"
         if not stem_file.is_file():
             return "no-mix-stem"
@@ -366,6 +367,9 @@ def main(argv: list[str] | None = None) -> int:
     ref_audio_root = Path(args.ref_audio_root) if args.ref_audio_root else None
     stems_root = Path(args.stems_root)
 
+    if not args.census and not args.out:
+        ap.error("--out is required unless --census")
+
     conn = sqlite3.connect(args.db)
     conn.row_factory = sqlite3.Row
     try:
@@ -380,8 +384,6 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(report.to_json()))
             return 0
 
-        if not args.out:
-            ap.error("--out is required unless --census")
         slots = query_corpus_slots(conn, policy_stems=policy_stems, limit=args.limit)
         summary = run_corpus_harvest(
             slots,
