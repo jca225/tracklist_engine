@@ -126,13 +126,21 @@ def vote_sharpness(votes: dict[int, int]) -> float:
 
 
 def fp_offset(
-    mix_y: np.ndarray,
+    mix_y: np.ndarray | None,
     ref_y: np.ndarray | None = None,
     *,
     ref_fp: LandmarkFingerprint | None = None,
+    mix_fp: LandmarkFingerprint | None = None,
     stretches: tuple[float, ...] = (0.98, 1.0, 1.02),
 ) -> tuple[float, int, float, float]:
-    """(ref_start_s, votes, stretch, sharpness)."""
+    """(ref_start_s, votes, stretch, sharpness).
+
+    ``mix_fp`` is a precomputed full-mix fingerprint — symmetric with ``ref_fp``.
+    When given, the mix constellation+hashes are reused instead of recomputed
+    (``mix_y`` may then be None). Purely a speed knob: the result is identical to
+    passing ``mix_y``. This is what lets the ACCEPT-precision harness fingerprint
+    the mix once per span and reuse it across the positive + all decoys.
+    """
     import librosa
 
     if ref_fp is None:
@@ -140,8 +148,13 @@ def fp_offset(
             raise ValueError("ref_y or ref_fp required")
         ref_fp = fingerprint_from_audio(ref_y)
 
-    tfm, fbm = constellation(mix_y)
-    hm = hashes(tfm, fbm)
+    if mix_fp is not None:
+        hm = mix_fp.hashes
+    else:
+        if mix_y is None:
+            raise ValueError("mix_y or mix_fp required")
+        tfm, fbm = constellation(mix_y)
+        hm = hashes(tfm, fbm)
     best = (0.0, 0, 1.0, 0.0)
     for st in stretches:
         if ref_y is not None and abs(st - 1.0) > 1e-3:

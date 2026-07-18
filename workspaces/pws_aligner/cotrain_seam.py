@@ -574,19 +574,24 @@ def real_probe_scorer(
     """
     from workspaces.pws_aligner.capture_votes import (
         _STEM_TO_PROBES,
-        _build_probes,
         _mix_audio_path,
         _run_probe_safe,
     )
+    from workspaces.pws_aligner.mix_feature_cache import MixFeatureCache
 
-    # Build probe instances once (lazy import inside _build_probes); a failed
-    # import yields a None instance that _run_probe_safe turns into an abstain.
+    # One feature cache for the whole scorer: a span's positive + decoys share the
+    # identical mix window, so the full-mix fingerprint / chroma / HuBERT compute
+    # ONCE per span instead of once per candidate (the ~1 min/case perf fix — see
+    # [[project_accept_precision_gate]]). Probe instances built from the cache carry
+    # cache-injected mix/ref extractors; a failed import yields a None instance that
+    # _run_probe_safe turns into an abstain.
+    feat_cache = MixFeatureCache()
     _probe_cache: dict[str, object] = {}
 
     def _instances(names: tuple[str, ...]) -> dict[str, object]:
         missing = tuple(n for n in names if n not in _probe_cache)
         if missing:
-            _probe_cache.update(_build_probes(missing))
+            _probe_cache.update(feat_cache.build_probes(missing))
         return {n: _probe_cache.get(n) for n in names}
 
     def _scorer(candidate: RefCandidate, span: MixSpan) -> Sequence[AlignmentResult]:
