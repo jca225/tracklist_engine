@@ -590,6 +590,7 @@ def real_probe_scorer(
     ref_audio_root: Path | None = None,
     *,
     mix_resolver: MixResolver | None = None,
+    compute_mix_fp: Callable[[object], object] | None = None,
 ) -> RefMixScorer:
     """Build a scorer that runs the REAL harness probes (fp + HuBERT + chroma).
 
@@ -638,7 +639,7 @@ def real_probe_scorer(
     # [[project_accept_precision_gate]]). Probe instances built from the cache carry
     # cache-injected mix/ref extractors; a failed import yields a None instance that
     # _run_probe_safe turns into an abstain.
-    feat_cache = MixFeatureCache()
+    feat_cache = MixFeatureCache(compute_mix_fp=compute_mix_fp)
     _probe_cache: dict[str, object] = {}
 
     def _instances(names: tuple[str, ...]) -> dict[str, object]:

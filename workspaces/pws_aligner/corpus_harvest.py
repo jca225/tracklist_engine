@@ -210,15 +210,19 @@ class HarvestSummary:
         }
 
 
-# A ScorerFactory builds a per-set scorer from (mix_full_path, mix_stem_dir).
-# Injected so the batch loop is testable with a fake scorer offline.
-ScorerFactory = Callable[[Path, Path], RefMixScorer]
+# A ScorerFactory builds a per-set scorer from (mix_full_path, mix_stem_dir,
+# compute_mix_fp). compute_mix_fp (or None) is injected into the mix feature cache
+# so the full-mix fingerprint is read from the persistent cache instead of recomputed.
+ScorerFactory = Callable[[Path, Path, "object | None"], RefMixScorer]
 
 
-def _default_scorer_factory(mix_full_path: Path, mix_stem_dir: Path) -> RefMixScorer:
+def _default_scorer_factory(
+    mix_full_path: Path, mix_stem_dir: Path, compute_mix_fp: object | None = None
+) -> RefMixScorer:
     """Real corpus scorer: certified probes over the pi-storage layout."""
     return real_probe_scorer(
-        mix_resolver=corpus_mix_resolver(mix_full_path, mix_stem_dir)
+        mix_resolver=corpus_mix_resolver(mix_full_path, mix_stem_dir),
+        compute_mix_fp=compute_mix_fp,
     )
 
 
@@ -231,6 +235,7 @@ def run_corpus_harvest(
     set_audio_root: Path | None = None,
     ref_audio_root: Path | None = None,
     scorer_factory: ScorerFactory = _default_scorer_factory,
+    mix_fp_cache_root: Path | None = None,
 ) -> HarvestSummary:
     """Group slots by ``set_audio_id``, build ONE scorer per set (so the mix
     feature cache is reused across the set's slots), harvest under ``policy``, and
@@ -245,7 +250,17 @@ def run_corpus_harvest(
     for set_audio_id, set_slots in by_set.items():
         mix_full = _resolve(set_slots[0].mix_full_path, set_audio_root)
         mix_stem_dir = stems_root / str(set_audio_id)
-        scorer = scorer_factory(mix_full, mix_stem_dir)
+        compute_mix_fp = None
+        if mix_fp_cache_root is not None:
+            _root = Path(mix_fp_cache_root)
+            _key = str(set_audio_id)
+
+            def compute_mix_fp(mix, _root=_root, _key=_key):
+                from workspaces.pws_aligner.mix_fp_store import load_or_build
+
+                return load_or_build(_root, _key, mix.audio_path)
+
+        scorer = scorer_factory(mix_full, mix_stem_dir, compute_mix_fp)
         cases = build_corpus_cases(set_slots, ref_audio_root=ref_audio_root)
         n_cases += len(cases)
         records = harvest(cases, scorer, policy=policy)
@@ -398,6 +413,12 @@ def main(argv: list[str] | None = None) -> int:
         help="restrict harvest to set_ids listed one-per-line in this file "
         "(disjoint files across workers = sharded parallel harvest)",
     )
+    ap.add_argument(
+        "--mix-fp-cache",
+        default=None,
+        help="dir of persistent per-mix fingerprint blobs "
+        "({root}/{set_audio_id}.fp); read instead of recomputing the full-mix STFT",
+    )
     args = ap.parse_args(argv)
 
     policy: dict[str, BandThresholds] = CERTIFIED_POLICY
@@ -450,6 +471,7 @@ def main(argv: list[str] | None = None) -> int:
             policy=policy,
             set_audio_root=set_audio_root,
             ref_audio_root=ref_audio_root,
+            mix_fp_cache_root=Path(args.mix_fp_cache) if args.mix_fp_cache else None,
         )
         print(json.dumps(summary.to_json()))
         print(f"ledger={args.out}")

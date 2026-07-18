@@ -369,7 +369,7 @@ def test_run_harvest_writes_only_accepts(tmp_path):
         _slot(recording_id="R2", slot_label="002", cue_time_s=200.0),
     ]
 
-    def factory(mix_full_path, mix_stem_dir):
+    def factory(mix_full_path, mix_stem_dir, compute_mix_fp=None):
         def scorer(cand, span):
             return _agree(cand.recording_id, ("fp", "chroma"))
 
@@ -391,7 +391,7 @@ def test_run_harvest_writes_only_accepts(tmp_path):
 def test_run_harvest_instrumental_needs_three_channels(tmp_path):
     slots = [_slot(recording_id="RI", slot_label="003", claimed_stem="instrumental")]
 
-    def two_channel(mix_full_path, mix_stem_dir):
+    def two_channel(mix_full_path, mix_stem_dir, compute_mix_fp=None):
         def scorer(cand, span):
             return _agree(cand.recording_id, ("fp", "chroma"))  # only 2 agree
 
@@ -405,7 +405,7 @@ def test_run_harvest_instrumental_needs_three_channels(tmp_path):
     assert summary.n_written == 0  # gate test: nothing reaches the ledger
     assert not out.exists() or out.read_text().strip() == ""
 
-    def three_channel(mix_full_path, mix_stem_dir):
+    def three_channel(mix_full_path, mix_stem_dir, compute_mix_fp=None):
         def scorer(cand, span):
             return _agree(cand.recording_id, ("fp", "chroma", "continuity"))
 
@@ -421,7 +421,7 @@ def test_run_harvest_instrumental_needs_three_channels(tmp_path):
 def test_run_harvest_is_idempotent(tmp_path):
     slots = [_slot(recording_id="R1", slot_label="001", cue_time_s=100.0)]
 
-    def factory(mix_full_path, mix_stem_dir):
+    def factory(mix_full_path, mix_stem_dir, compute_mix_fp=None):
         return lambda cand, span: _agree(cand.recording_id, ("fp", "chroma"))
 
     out = tmp_path / "ledger.jsonl"
@@ -456,7 +456,7 @@ def test_run_harvest_builds_one_scorer_per_set(tmp_path):
     ]
     calls = []
 
-    def factory(mix_full_path, mix_stem_dir):
+    def factory(mix_full_path, mix_stem_dir, compute_mix_fp=None):
         calls.append((Path(mix_full_path), Path(mix_stem_dir)))
         return lambda cand, span: _agree(cand.recording_id, ("fp", "chroma"))
 
@@ -646,7 +646,9 @@ def test_query_relaxes_is_reference_joins():
     """
     conn = _make_db()
     # mix is_reference=0
-    _add_set_audio(conn, set_audio_id=50, set_id="S50", path="/mix50.m4a", is_reference=0)
+    _add_set_audio(
+        conn, set_audio_id=50, set_id="S50", path="/mix50.m4a", is_reference=0
+    )
     # ref is_reference=0 (explicit insert to set track_audio_id)
     conn.execute(
         "INSERT INTO track_audio VALUES (?,?,?,?,?)",
@@ -668,7 +670,9 @@ def test_query_deterministic_min_id_ref_pick():
     one slot and the ref_path comes from the row with the smaller track_audio_id.
     """
     conn = _make_db()
-    _add_set_audio(conn, set_audio_id=51, set_id="S51", path="/mix51.m4a", is_reference=1)
+    _add_set_audio(
+        conn, set_audio_id=51, set_id="S51", path="/mix51.m4a", is_reference=1
+    )
     _add_slot(conn, set_id="S51", row_index=0, recording_id="R51", cue_time_seconds=30)
     # Insert two track_audio rows: id=100 (low → chosen) and id=200 (high → ignored)
     conn.execute(
@@ -787,7 +791,72 @@ def test_main_accepts_file_uri_db(tmp_path, capsys):
     db = tmp_path / "fix.db"
     _write_fixture_db(db)
     rc = main(
-        ["--db", f"file:{db}?mode=ro", "--stems-root", str(tmp_path / "stems"), "--census"]
+        [
+            "--db",
+            f"file:{db}?mode=ro",
+            "--stems-root",
+            str(tmp_path / "stems"),
+            "--census",
+        ]
     )
     assert rc == 0
     assert "eligibility census" in capsys.readouterr().out
+
+
+def test_harvest_uses_cached_fp_when_cache_root_set(tmp_path):
+    # Pre-warm a cache file for set_audio_id 77; harvest must read it, not build live.
+    from workspaces.alignment_prototype.landmark_fp import LandmarkFingerprint
+    from workspaces.pws_aligner import mix_fp_store
+
+    cache_root = tmp_path / "fpcache"
+    cache_root.mkdir()
+    (cache_root / "77.fp").write_bytes(
+        LandmarkFingerprint(
+            fps=43.0, duration_s=10.0, hashes={(1, 1, 1): (5,)}
+        ).to_blob()
+    )
+    builds = {"n": 0}
+
+    def spy_build(mix_path, **kw):
+        builds["n"] += 1
+        return LandmarkFingerprint(fps=43.0, duration_s=1.0, hashes={})
+
+    # capture the compute_mix_fp the factory receives and exercise it
+    seen = {}
+
+    def factory(mix_full_path, mix_stem_dir, compute_mix_fp=None):
+        seen["fn"] = compute_mix_fp
+        return lambda cand, span: _agree(cand.recording_id, ("fp", "chroma"))
+
+    slots = [_slot(set_id="S", set_audio_id=77, recording_id="R1", cue_time_s=100.0)]
+    out = tmp_path / "ledger.jsonl"
+    run_corpus_harvest(
+        slots,
+        stems_root=tmp_path,
+        out=out,
+        scorer_factory=factory,
+        mix_fp_cache_root=cache_root,
+    )
+    assert seen["fn"] is not None, "compute_mix_fp not threaded to the factory"
+
+    # invoking it resolves the cached fp (from_blob) without calling spy_build
+    class _Mix:  # minimal MixContext stand-in with .audio_path
+        audio_path = "/mnt/storage/sets/S/mix.m4a"
+
+    fp = seen["fn"](_Mix())
+    assert fp.hashes == {(1, 1, 1): (5,)}
+    assert builds["n"] == 0  # cache hit, no live build
+
+
+def test_harvest_no_cache_root_passes_none(tmp_path):
+    seen = {}
+
+    def factory(mix_full_path, mix_stem_dir, compute_mix_fp=None):
+        seen["fn"] = compute_mix_fp
+        return lambda cand, span: []
+
+    slots = [_slot(set_id="S", set_audio_id=88, recording_id="R1", cue_time_s=100.0)]
+    run_corpus_harvest(
+        slots, stems_root=tmp_path, out=tmp_path / "l.jsonl", scorer_factory=factory
+    )
+    assert seen["fn"] is None  # default behavior unchanged
