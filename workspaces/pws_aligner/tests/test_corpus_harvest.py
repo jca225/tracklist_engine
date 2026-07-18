@@ -37,7 +37,7 @@ CREATE TABLE set_audio (
     set_audio_id INTEGER, set_id TEXT, path TEXT, sha256 TEXT, is_reference INTEGER
 );
 CREATE TABLE track_audio (
-    track_audio_id INTEGER, recording_id TEXT, stem TEXT,
+    track_audio_id INTEGER PRIMARY KEY, recording_id TEXT, stem TEXT,
     path TEXT, is_reference INTEGER
 );
 """
@@ -137,20 +137,154 @@ def test_query_returns_only_eligible_slots():
     assert s.mix_full_path == "/mix1.m4a"
 
 
-def test_query_excludes_non_reference_mix_and_ref():
+def test_query_includes_slot_when_neither_mix_nor_ref_is_reference():
+    """Fix 1: is_reference=0 on BOTH mix and ref must not block harvest.
+
+    The real corpus has set_audio.is_reference=1 on only 2/1016 sets and
+    track_audio.is_reference=1 on 0 instrumental refs; strict joins returned ~0.
+    The fix uses deterministic MIN-id picks instead of is_reference filters.
+    """
     conn = _make_db()
     _add_slot(conn, set_id="S2", row_index=0, recording_id="R1")
+    # mix is_reference=0 — OLD code would have excluded this slot
     _add_set_audio(conn, set_audio_id=20, set_id="S2", path="/mix.m4a", is_reference=0)
-    _add_track_audio(conn, recording_id="R1", stem="regular", is_reference=1)
-    _add_slot(conn, set_id="S2", row_index=1, recording_id="R2", slot_label="002")
-    _add_set_audio(conn, set_audio_id=21, set_id="S2", path="/mix.m4a", is_reference=1)
-    _add_track_audio(conn, recording_id="R2", stem="regular", is_reference=0)
+    # ref is_reference=0 — OLD code would have excluded this slot
+    conn.execute(
+        "INSERT INTO track_audio VALUES (?,?,?,?,?)",
+        (50, "R1", "regular", "/r1.flac", 0),
+    )
 
     slots = query_corpus_slots(conn, policy_stems=("regular", "instrumental"))
-    # S2 has a reference mix (id 21) but R1's row_index-0 slot: R1 ref is_reference=1
-    # yet its set's reference mix is id 21 → R1 IS eligible; R2 ref is non-reference → excluded.
+    # NEW: slot IS returned even though both is_reference=0
     assert [s.recording_id for s in slots] == ["R1"]
-    assert slots[0].set_audio_id == 21
+    assert slots[0].set_audio_id == 20
+    assert slots[0].ref_path == "/r1.flac"
+
+
+def test_query_deterministic_ref_pick_uses_min_track_audio_id():
+    """Fix 1: two track_audio rows for same (recording_id, stem) → exactly one slot
+    using the MIN(track_audio_id) row, not a fan-out.
+    """
+    conn = _make_db()
+    _add_slot(conn, set_id="S3", row_index=0, recording_id="R1")
+    _add_set_audio(conn, set_audio_id=30, set_id="S3", path="/mix.m4a")
+    # Two track_audio rows — id 200 (later) and id 100 (earlier/lower)
+    conn.execute(
+        "INSERT INTO track_audio VALUES (?,?,?,?,?)",
+        (200, "R1", "regular", "/r1_v2.flac", 0),
+    )
+    conn.execute(
+        "INSERT INTO track_audio VALUES (?,?,?,?,?)",
+        (100, "R1", "regular", "/r1_v1.flac", 0),
+    )
+
+    slots = query_corpus_slots(conn, policy_stems=("regular", "instrumental"))
+    # Exactly one slot (not a fan-out)
+    assert len(slots) == 1
+    # Picks the MIN(track_audio_id) = 100 row
+    assert slots[0].ref_path == "/r1_v1.flac"
+
+
+def test_query_excludes_zero_cue_seconds_without_cue_time_seconds():
+    """Fix 2: cue_seconds=0 with cue_time_seconds=NULL → slot must be EXCLUDED.
+
+    Old code used COALESCE(cue_time_seconds, cue_seconds) which resolved to 0,
+    a truthy integer that passed the IS NOT NULL filter. Zero is not a valid
+    placement anchor — cue_time_seconds>0 is the real gate.
+    """
+    conn = _make_db()
+    _add_slot(
+        conn,
+        set_id="S4",
+        row_index=0,
+        recording_id="R1",
+        cue_time_seconds=None,  # no real cue
+    )
+    # Manually insert with cue_seconds=0 (the sentinel)
+    conn.execute("UPDATE set_track_slots SET cue_seconds=0 WHERE set_id='S4'")
+    _add_set_audio(conn, set_audio_id=40, set_id="S4", path="/mix.m4a")
+    conn.execute(
+        "INSERT INTO track_audio VALUES (?,?,?,?,?)",
+        (400, "R1", "regular", "/r1.flac", 0),
+    )
+
+    slots = query_corpus_slots(conn, policy_stems=("regular", "instrumental"))
+    assert slots == [], "cue_seconds=0 with no cue_time_seconds must be excluded"
+
+
+def test_query_includes_slot_with_valid_cue_time_seconds():
+    """Fix 2: cue_time_seconds=90, cue_seconds=0 → slot IS included, cue_time_s=90.0."""
+    conn = _make_db()
+    _add_slot(
+        conn,
+        set_id="S5",
+        row_index=0,
+        recording_id="R1",
+        cue_time_seconds=90,
+    )
+    # Simulate cue_seconds=0 (old sentinel, should not poison the result)
+    conn.execute("UPDATE set_track_slots SET cue_seconds=0 WHERE set_id='S5'")
+    _add_set_audio(conn, set_audio_id=50, set_id="S5", path="/mix.m4a")
+    conn.execute(
+        "INSERT INTO track_audio VALUES (?,?,?,?,?)",
+        (500, "R1", "regular", "/r1.flac", 0),
+    )
+
+    slots = query_corpus_slots(conn, policy_stems=("regular", "instrumental"))
+    assert len(slots) == 1
+    assert slots[0].cue_time_s == 90.0
+
+
+def test_census_rows_left_join_preserves_slot_with_no_ref_audio():
+    """Fix 1 (census): slot with no matching track_audio still appears in census_rows
+    so the classifier can label it no-ref-audio (LEFT JOIN preserved).
+    """
+    conn = _make_db()
+    _add_slot(conn, set_id="S6", row_index=0, recording_id="RX", claimed_stem="regular")
+    _add_set_audio(conn, set_audio_id=60, set_id="S6", path="/mix.m4a")
+    # Intentionally NO track_audio for RX/regular — old LEFT JOIN already handled this,
+    # but the new MIN-id subquery form must not accidentally turn it into an INNER JOIN.
+
+    rows = census_rows(conn, policy_stems=("regular",))
+    assert len(rows) == 1, "slot with no ref audio must still appear in census_rows"
+    assert rows[0]["ref_path"] is None
+
+
+def test_census_classifies_zero_cue_seconds_as_no_cue_time():
+    """Fix 2 (census): cue_time_seconds=NULL, cue_seconds=0 → classified no-cue-time."""
+    conn = _make_db()
+    _add_slot(
+        conn,
+        set_id="S7",
+        row_index=0,
+        recording_id="R1",
+        claimed_stem="regular",
+        cue_time_seconds=None,
+    )
+    conn.execute("UPDATE set_track_slots SET cue_seconds=0 WHERE set_id='S7'")
+    # Add mix audio so the mix-file check doesn't mask the cue check
+    import tempfile, os
+
+    with tempfile.NamedTemporaryFile(suffix=".m4a", delete=False) as f:
+        mix_path = f.name
+        f.write(b"x")
+    try:
+        _add_set_audio(
+            conn, set_audio_id=70, set_id="S7", path=mix_path, is_reference=0
+        )
+        conn.execute(
+            "INSERT INTO track_audio VALUES (?,?,?,?,?)",
+            (700, "R1", "regular", "/r1.flac", 0),
+        )
+        from pathlib import Path
+        import tempfile as tf
+
+        stems = Path(tf.mkdtemp())
+        report = census(conn, stems_root=stems, policy_stems=("regular",))
+        assert report.by_axis["regular"]["no-cue-time"] == 1
+        assert report.by_axis["regular"].get("eligible-now", 0) == 0
+    finally:
+        os.unlink(mix_path)
 
 
 def test_query_respects_limit_and_order():
@@ -496,3 +630,129 @@ def test_census_first_missing_priority(tmp_path):
 
     assert report.by_axis["regular"]["no-cue-time"] == 1
     assert report.by_axis["regular"].get("no-ref-audio", 0) == 0
+
+
+# ---------------------------------------------------------------------------
+# NEW TESTS: three data-vs-assumption mismatches fixed in corpus_harvest
+# ---------------------------------------------------------------------------
+
+
+def test_query_relaxes_is_reference_joins():
+    """Fix 1: is_reference=0 on both mix and ref does NOT block a slot.
+
+    A set with only a non-reference set_audio row and a recording with only a
+    non-reference track_audio row should still be returned by query_corpus_slots
+    now that the is_reference=1 filter is replaced by deterministic MIN-id picks.
+    """
+    conn = _make_db()
+    # mix is_reference=0
+    _add_set_audio(conn, set_audio_id=50, set_id="S50", path="/mix50.m4a", is_reference=0)
+    # ref is_reference=0 (explicit insert to set track_audio_id)
+    conn.execute(
+        "INSERT INTO track_audio VALUES (?,?,?,?,?)",
+        (50, "R50", "regular", "/ref50.flac", 0),
+    )
+    _add_slot(conn, set_id="S50", row_index=0, recording_id="R50", cue_time_seconds=60)
+
+    slots = query_corpus_slots(conn, policy_stems=("regular", "instrumental"))
+
+    assert len(slots) == 1
+    assert slots[0].recording_id == "R50"
+    assert slots[0].set_audio_id == 50
+    assert slots[0].ref_path == "/ref50.flac"
+    assert slots[0].mix_full_path == "/mix50.m4a"
+
+
+def test_query_deterministic_min_id_ref_pick():
+    """Fix 1b: two track_audio rows for the same (recording_id, stem) yield exactly
+    one slot and the ref_path comes from the row with the smaller track_audio_id.
+    """
+    conn = _make_db()
+    _add_set_audio(conn, set_audio_id=51, set_id="S51", path="/mix51.m4a", is_reference=1)
+    _add_slot(conn, set_id="S51", row_index=0, recording_id="R51", cue_time_seconds=30)
+    # Insert two track_audio rows: id=100 (low → chosen) and id=200 (high → ignored)
+    conn.execute(
+        "INSERT INTO track_audio VALUES (?,?,?,?,?)",
+        (100, "R51", "regular", "/ref_low.flac", 1),
+    )
+    conn.execute(
+        "INSERT INTO track_audio VALUES (?,?,?,?,?)",
+        (200, "R51", "regular", "/ref_high.flac", 0),
+    )
+
+    slots = query_corpus_slots(conn, policy_stems=("regular",))
+
+    assert len(slots) == 1, f"Expected 1 slot, got {len(slots)}"
+    assert slots[0].ref_path == "/ref_low.flac"
+
+
+def test_query_cue_time_seconds_anchor():
+    """Fix 2: cue_time_seconds=NULL with cue_seconds=0 is EXCLUDED (no cue).
+    A slot with cue_time_seconds=90 and cue_seconds=0 IS INCLUDED, and
+    cue_time_s == 90.0 (not the coalesced cue_seconds fallback).
+    """
+    conn = _make_db()
+    _add_set_audio(conn, set_audio_id=52, set_id="S52", path="/mix52.m4a")
+    # Slot with cue_time_seconds=NULL, cue_seconds=0 → should be EXCLUDED
+    conn.execute(
+        "INSERT INTO set_track_slots VALUES (?,?,?,?,?,?,?,?,?,?)",
+        ("S52", 0, "R52a", "001", 0, None, "original", "regular", "regular", 40),
+    )
+    conn.execute(
+        "INSERT INTO track_audio VALUES (?,?,?,?,?)",
+        (None, "R52a", "regular", "/ref52a.flac", 1),
+    )
+    # Slot with cue_time_seconds=90, cue_seconds=0 → should be INCLUDED with cue_time_s=90.0
+    conn.execute(
+        "INSERT INTO set_track_slots VALUES (?,?,?,?,?,?,?,?,?,?)",
+        ("S52", 1, "R52b", "002", 0, 90, "original", "regular", "regular", 40),
+    )
+    conn.execute(
+        "INSERT INTO track_audio VALUES (?,?,?,?,?)",
+        (None, "R52b", "regular", "/ref52b.flac", 1),
+    )
+
+    slots = query_corpus_slots(conn, policy_stems=("regular",))
+
+    assert len(slots) == 1, (
+        f"Expected 1 slot, got {len(slots)}: {[s.recording_id for s in slots]}"
+    )
+    assert slots[0].recording_id == "R52b"
+    assert slots[0].cue_time_s == 90.0
+
+
+def test_census_rows_includes_blocked_slots_via_left_join():
+    """Fix 4: census_rows uses LEFT JOIN so a slot with no set_audio row still
+    appears in the result (mix_full_path = NULL), and cue_time_seconds=NULL with
+    cue_seconds=0 yields cue_time_s=NULL (classified no-cue-time by _classify).
+    """
+    conn = _make_db()
+    # Slot with no set_audio row → blocked (no-mix-audio); should still appear
+    _add_slot(
+        conn,
+        set_id="S53",
+        row_index=0,
+        recording_id="R53",
+        claimed_stem="regular",
+        cue_time_seconds=50,
+    )
+    _add_track_audio(conn, recording_id="R53", stem="regular", path="/ref53.flac")
+    # No _add_set_audio → set_audio LEFT JOIN yields NULL columns for this slot
+
+    rows = census_rows(conn, policy_stems=("regular",))
+
+    assert len(rows) == 1
+    assert rows[0]["mix_full_path"] is None
+    assert rows[0]["claimed_stem"] == "regular"
+
+    # Also verify: cue_time_seconds=NULL, cue_seconds=0 → cue_time_s must be NULL
+    conn.execute(
+        "INSERT INTO set_track_slots VALUES (?,?,?,?,?,?,?,?,?,?)",
+        ("S54", 0, "R54", "001", 0, None, "original", "regular", "regular", 40),
+    )
+    _add_set_audio(conn, set_audio_id=54, set_id="S54", path="/mix54.m4a")
+    _add_track_audio(conn, recording_id="R54", stem="regular", path="/ref54.flac")
+
+    rows2 = census_rows(conn, policy_stems=("regular",))
+    r54 = next(r for r in rows2 if r["set_id"] == "S54")
+    assert r54["cue_time_s"] is None  # NULLIF(cue_time_seconds, 0) must return NULL

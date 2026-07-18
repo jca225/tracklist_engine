@@ -6,11 +6,11 @@ pseudo-labelled (ref ↔ mix-span) training pairs. It is GLUE: a corpus case-bui
 machinery (``harvest.harvest`` / ``harvest.write_ledger`` /
 ``cotrain_seam.real_probe_scorer`` / ``cotrain_seam.corpus_mix_resolver``).
 
-Placement anchor = the scraped 1001TL cue time
-(``set_track_slots.cue_time_seconds`` / ``cue_seconds``) — the corpus has no GT
-window. A noisy window costs RECALL not PRECISION: bad window → certified probes
-disagree → ABSTAIN → not harvested, so the 2026-07-18 ACCEPT-precision
-certification (regular @2-channel, instrumental @3-channel-unanimity) transfers.
+Placement anchor = ``set_track_slots.cue_time_seconds`` (must be > 0); ``cue_seconds``
+is a 0-sentinel and is never used as an anchor. The corpus has no GT window; a noisy
+window costs RECALL not PRECISION: bad window → certified probes disagree → ABSTAIN →
+not harvested, so the 2026-07-18 ACCEPT-precision certification (regular @2-channel,
+instrumental @3-channel-unanimity) transfers.
 Only the certified axes are harvestable (CERTIFIED_POLICY); acappella is never
 harvested and needs no HuBERT, so this runs CPU-only on pi-storage.
 
@@ -67,16 +67,18 @@ def query_corpus_slots(
     policy_stems: Iterable[str],
     limit: int | None = None,
 ) -> list[CorpusSlot]:
-    """Strict inner-join eligibility: reference mix + reference ref @ claimed_stem
-    + a scraped cue time + a certified axis. ``conn.row_factory`` must be
-    ``sqlite3.Row``. On-disk audio existence is NOT checked here (disk is truth;
+    """Inner-join eligibility: sole mix + MIN-id ref @ claimed_stem + a valid cue
+    time (``cue_time_seconds > 0``) + a certified axis. ``conn.row_factory`` must
+    be ``sqlite3.Row``. On-disk audio existence is NOT checked here (disk is truth;
     the scorer abstains when absent) — see ``census`` for the disk funnel.
 
-    Precondition: at most one ``is_reference=1`` row per set (mix) and per
-    ``(recording_id, stem)`` (ref). ``is_reference`` is not UNIQUE in the schema,
-    so a set with duplicate reference rows would fan a slot out into multiple
-    cases; the ledger still dedupes by ``span_key`` (no double-harvest), but
-    ``n_cases`` would inflate and the scorer would run redundantly.
+    Mix and ref are chosen deterministically: one ``set_audio`` row per set (the
+    MIN ``set_audio_id`` for that set) and one ``track_audio`` row per
+    ``(recording_id, stem)`` (the MIN ``track_audio_id``). This works correctly
+    whether or not ``is_reference`` is populated — the real corpus has
+    ``set_audio.is_reference=1`` on only ~2/1016 sets and
+    ``track_audio.is_reference=1`` on 0 instrumental refs, so filtering on
+    ``is_reference`` would return ~0 rows.
     """
     stems = tuple(policy_stems)
     if not stems:
@@ -87,16 +89,21 @@ def query_corpus_slots(
                s.slot_label AS slot_label, s.recording_id AS recording_id,
                ta.path AS ref_path, s.claimed_version AS claimed_version,
                s.claimed_stem AS claimed_stem, s.claimed_variant AS claimed_variant,
-               COALESCE(s.cue_time_seconds, s.cue_seconds) AS cue_time_s,
+               s.cue_time_seconds AS cue_time_s,
                s.duration_seconds AS duration_s, sa.path AS mix_full_path
         FROM set_track_slots s
-        JOIN set_audio sa ON sa.set_id = s.set_id AND sa.is_reference = 1
-        JOIN track_audio ta ON ta.recording_id = s.recording_id
-                            AND ta.stem = s.claimed_stem
-                            AND ta.is_reference = 1
+        JOIN set_audio sa ON sa.set_audio_id = (
+            SELECT MIN(sa2.set_audio_id) FROM set_audio sa2
+            WHERE sa2.set_id = s.set_id
+        )
+        JOIN track_audio ta ON ta.track_audio_id = (
+            SELECT MIN(t2.track_audio_id) FROM track_audio t2
+            WHERE t2.recording_id = s.recording_id AND t2.stem = s.claimed_stem
+        )
         WHERE s.claimed_stem IN ({placeholders})
           AND s.recording_id IS NOT NULL
-          AND COALESCE(s.cue_time_seconds, s.cue_seconds) IS NOT NULL
+          AND s.cue_time_seconds IS NOT NULL
+          AND s.cue_time_seconds > 0
         ORDER BY s.set_id, s.row_index
     """
     params: list[object] = list(stems)
@@ -273,7 +280,11 @@ def census_rows(
     conn: sqlite3.Connection, *, policy_stems: Iterable[str]
 ) -> list[sqlite3.Row]:
     """LEFT-join funnel over certified-axis slots: every slot with its DB pieces
-    (cue / ref audio / reference mix), so the classifier can name what blocks it.
+    (cue / ref audio / sole mix), so the classifier can name what blocks it.
+    Uses the same deterministic MIN-id picks as ``query_corpus_slots``, but as
+    LEFT JOINs so blocked slots still appear (ref_path / mix_full_path = NULL).
+    ``cue_time_s`` is NULLIF(cue_time_seconds, 0) so the zero-sentinel becomes
+    NULL and ``_classify`` correctly buckets it ``no-cue-time``.
     """
     stems = tuple(policy_stems)
     if not stems:
@@ -282,14 +293,18 @@ def census_rows(
     sql = f"""
         SELECT s.set_id AS set_id, s.slot_label AS slot_label,
                s.claimed_stem AS claimed_stem,
-               COALESCE(s.cue_time_seconds, s.cue_seconds) AS cue_time_s,
+               NULLIF(s.cue_time_seconds, 0) AS cue_time_s,
                sa.set_audio_id AS set_audio_id, sa.path AS mix_full_path,
                ta.path AS ref_path
         FROM set_track_slots s
-        LEFT JOIN set_audio sa ON sa.set_id = s.set_id AND sa.is_reference = 1
-        LEFT JOIN track_audio ta ON ta.recording_id = s.recording_id
-                                 AND ta.stem = s.claimed_stem
-                                 AND ta.is_reference = 1
+        LEFT JOIN set_audio sa ON sa.set_audio_id = (
+            SELECT MIN(sa2.set_audio_id) FROM set_audio sa2
+            WHERE sa2.set_id = s.set_id
+        )
+        LEFT JOIN track_audio ta ON ta.track_audio_id = (
+            SELECT MIN(t2.track_audio_id) FROM track_audio t2
+            WHERE t2.recording_id = s.recording_id AND t2.stem = s.claimed_stem
+        )
         WHERE s.claimed_stem IN ({placeholders})
           AND s.recording_id IS NOT NULL
         ORDER BY s.set_id, s.row_index
