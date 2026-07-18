@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from core.acquisition_case import open_worklist, ProblemClass
 from ingest.scan_source import open_cases_for_suspect, _klass_to_problem
 

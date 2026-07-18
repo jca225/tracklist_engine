@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 from pathlib import Path
 from core.acquisition_case import open_worklist, ProblemClass
@@ -33,6 +35,10 @@ def test_residual_source_opens_one_case_per_entry(tmp_path):
     wl = open_worklist(root=root)
     assert len(wl) == 2
     assert all(ProblemClass.MISSING_ASSET in c.problem_classes for c in wl)
+    # claimed_stem must be forwarded — layer_role depends on it
+    by_slot = {c.slot_label: c for c in wl}
+    assert by_slot["097"].claim.stem == "acappella"
+    assert by_slot["121"].claim.stem == "instrumental"
 
 
 def test_residual_source_is_idempotent(tmp_path):
