@@ -77,6 +77,10 @@ class TRMCore(nn.Module):
         self.T = T
         self.y_mode = y_mode
         self.net = _Block(d_model, n_heads=n_heads)
+        # normalize the answer latent before projecting to the (large) vocab —
+        # the residual stream grows across ~n_sup*T*n_inner net applications;
+        # without this the logits explode (v0 saw CE ~8e7). Bounds logit scale.
+        self.head_norm = nn.LayerNorm(d_model)
         self.head = nn.Linear(d_model, vocab_size)
         self.q_head = nn.Linear(d_model, 1)
         self.y0 = nn.Parameter(torch.zeros(1, 1, d_model))
@@ -110,8 +114,9 @@ class TRMCore(nn.Module):
         qs: list[torch.Tensor] = []
         for _ in range(self.n_sup):
             y, z = self._deep_recursion(x, y, z)
-            logits.append(self.head(y))
-            qs.append(self.q_head(y.mean(dim=1)).squeeze(-1))
+            yn = self.head_norm(y)
+            logits.append(self.head(yn))
+            qs.append(self.q_head(yn.mean(dim=1)).squeeze(-1))
             y, z = y.detach(), z.detach()  # carry detached between steps
         return TRMOutput(logits=logits, q=qs, y=y, z=z)
 
@@ -187,4 +192,68 @@ def sim_to_offset_evidence(sim: torch.Tensor, vocab: OffsetVocab) -> torch.Tenso
     return ev * valid.view(1, 1, Tm, n_off)
 
 
-__all__ = ["TRMCore", "TRMDecoder", "TRMOutput", "sim_to_offset_evidence"]
+def trm_offset_targets(
+    target_idx: torch.Tensor,  # (B, Tm) ref-bin index per frame, -1 = ignore
+    target_null: torch.Tensor,  # (B, Tm) bool
+    mix_valid: torch.Tensor,  # (B, Tm) bool
+    vocab: OffsetVocab,
+) -> torch.Tensor:
+    """Convert the conv path's ref-bin targets to per-frame OFFSET-class labels
+    (offset = ref_bin - frame). NULL frames -> null_index; ignore / invalid ->
+    IGNORE_INDEX; positions clamped into the fixed vocab."""
+    from .offset_coords import IGNORE_INDEX
+
+    B, Tm = target_idx.shape
+    t = torch.arange(Tm, device=target_idx.device).view(1, Tm)
+    off_bin = target_idx - t
+    idx = (off_bin - vocab.lo_bin).clamp(0, vocab.n_offsets - 1)
+    labels = torch.full(
+        (B, Tm), IGNORE_INDEX, dtype=torch.long, device=target_idx.device
+    )
+    pos = (target_idx >= 0) & mix_valid & ~target_null
+    labels[pos] = idx[pos]
+    labels[target_null & mix_valid] = vocab.null_index
+    return labels
+
+
+def trm_offset_ce(out: TRMOutput, labels: torch.Tensor) -> torch.Tensor:
+    """Deep-supervision cross-entropy over offset labels: mean CE across every
+    improvement step's logits (IGNORE_INDEX frames excluded)."""
+    from .offset_coords import IGNORE_INDEX
+
+    V = out.logits[-1].shape[-1]
+    terms = [
+        F.cross_entropy(
+            lg.reshape(-1, V), labels.reshape(-1), ignore_index=IGNORE_INDEX
+        )
+        for lg in out.logits
+    ]
+    return torch.stack(terms).mean()
+
+
+def trm_decode_segments(
+    out: TRMOutput, bin_s: float, vocab: OffsetVocab
+) -> list[tuple[float, float, float]]:
+    """Argmax the final improvement step's offset logits and collapse runs of
+    equal offset into `(mix_start, ref_start, ref_end)` segments — the same
+    coordinate `trajectory_acc` consumes."""
+    import numpy as np
+
+    from .offset_coords import offset_labels_to_ref_bins
+    from .targets import frames_to_segments
+
+    logits = out.logits[-1]  # (B, Tm, V)
+    labels = logits[0].argmax(dim=-1).cpu().numpy().astype(np.int64)
+    ref_bin, null_mask = offset_labels_to_ref_bins(labels, vocab)
+    return frames_to_segments(ref_bin, null_mask, bin_s)
+
+
+__all__ = [
+    "TRMCore",
+    "TRMDecoder",
+    "TRMOutput",
+    "sim_to_offset_evidence",
+    "trm_offset_targets",
+    "trm_offset_ce",
+    "trm_decode_segments",
+]

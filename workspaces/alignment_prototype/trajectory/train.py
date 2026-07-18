@@ -53,6 +53,15 @@ from workspaces.alignment_prototype.trajectory.decode import (  # noqa: E402
 from workspaces.alignment_prototype.trajectory.targets import (  # noqa: E402
     frames_to_segments,
 )
+from workspaces.alignment_prototype.trajectory.offset_coords import (  # noqa: E402
+    OffsetVocab,
+)
+from workspaces.alignment_prototype.trajectory.trm import (  # noqa: E402
+    TRMDecoder,
+    trm_decode_segments,
+    trm_offset_ce,
+    trm_offset_targets,
+)
 
 CKPT_DIR = Path(__file__).resolve().parents[1] / ".cache" / "trajectory"
 
@@ -165,16 +174,25 @@ def evaluate(
             continue
         sim = x["sim"][None].to(device)
         tr = sim.shape[-1]
-        if model is None:
-            grid = sim[0, 0]  # (Tm, Tr) raw match similarity
-            logits = torch.cat([grid, torch.full_like(grid[:, :1], -1e9)], dim=-1)
-        else:
+        if isinstance(model, TRMDecoder):
+            # TRM emits offset-coord logits; argmax-collapse to segments (no
+            # Viterbi/lam — the offset run-length IS the segmentation).
             rv = torch.ones(1, tr, dtype=torch.bool, device=device)
-            logits = model(sim, x["feat_kind"][None].to(device), rv)[0]
-        if lam is None:
-            segs = decode_segments(logits, tr, ds.bin_s)
+            out = model(sim, x["feat_kind"][None].to(device), rv)
+            segs = trm_decode_segments(out, ds.bin_s, model.vocab)
         else:
-            segs = viterbi_segments(logits, ds.bin_s, lam=lam, back_ratio=back_ratio)
+            if model is None:
+                grid = sim[0, 0]  # (Tm, Tr) raw match similarity
+                logits = torch.cat([grid, torch.full_like(grid[:, :1], -1e9)], dim=-1)
+            else:
+                rv = torch.ones(1, tr, dtype=torch.bool, device=device)
+                logits = model(sim, x["feat_kind"][None].to(device), rv)[0]
+            if lam is None:
+                segs = decode_segments(logits, tr, ds.bin_s)
+            else:
+                segs = viterbi_segments(
+                    logits, ds.bin_s, lam=lam, back_ratio=back_ratio
+                )
         fiber = _fibers_for(str(ds.specs[i].audio.ref_path)) if fibers else None
         acc, _, fib_acc = trajectory_acc(segs, ds.specs[i].row, fiber=fiber)
         alls.append(acc)
@@ -262,6 +280,31 @@ def main(argv: list[str] | None = None) -> int:
         help="fiber-aware scoring on the FINAL eval-set evaluations (sweep stays "
         "strict); one HuBERT pass per ref on first use",
     )
+    ap.add_argument(
+        "--model",
+        choices=("conv", "trm"),
+        default="conv",
+        help="decoder: conv+Viterbi baseline, or the TRM recursive refiner over "
+        "offset coordinates (docs/trm_decoder_bakeoff.md)",
+    )
+    ap.add_argument("--trm-dmodel", type=int, default=64)
+    ap.add_argument("--trm-nsup", type=int, default=3, help="deep-supervision steps")
+    ap.add_argument("--trm-ninner", type=int, default=6, help="inner recursion n")
+    ap.add_argument(
+        "--trm-T", type=int, default=3, help="recursion rounds (all backprop)"
+    )
+    ap.add_argument("--trm-ymode", choices=("once", "every"), default="once")
+    ap.add_argument("--trm-off-lo", type=int, default=-256, help="offset-vocab low bin")
+    ap.add_argument(
+        "--trm-off-hi", type=int, default=1408, help="offset-vocab high bin"
+    )
+    ap.add_argument(
+        "--max-train",
+        type=int,
+        default=0,
+        help="truncate the train split to the first N spans (0 = all); for the "
+        "v0 overfit sanity (few spans, many epochs)",
+    )
     args = ap.parse_args(argv)
 
     device = pick_device(args.device)
@@ -313,6 +356,17 @@ def main(argv: list[str] | None = None) -> int:
         )
         args.epochs = 2
 
+    if args.max_train and len(train_ds) > args.max_train:
+        base = train_ds.base if isinstance(train_ds, SpanSubset) else train_ds
+        idxs = (
+            train_ds.indices
+            if isinstance(train_ds, SpanSubset)
+            else list(range(len(train_ds)))
+        )
+        train_ds = SpanSubset(base, idxs[: args.max_train])
+        eval_ds = train_ds  # overfit sanity: eval == train, watch it memorize
+        print(f"max-train: overfitting {len(train_ds)} spans (eval == train)")
+
     # Synthetic mashups augment the gradient path only — never train_ds itself,
     # so the lam-sweep and train-eval below still report on real GT.
     loader_ds = train_ds
@@ -342,7 +396,21 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     slopes = tuple(float(v) for v in args.slopes.split(",") if v.strip())
-    model = TrajectoryDecoder(stretch_slopes=slopes).to(device)
+    if args.model == "trm":
+        vocab = OffsetVocab(lo_bin=args.trm_off_lo, hi_bin=args.trm_off_hi)
+        model = TRMDecoder(
+            vocab,
+            d_model=args.trm_dmodel,
+            n_sup=args.trm_nsup,
+            n_inner=args.trm_ninner,
+            T=args.trm_T,
+            y_mode=args.trm_ymode,
+        ).to(device)
+        print(
+            f"TRM: offset-vocab {vocab.size} classes ({vocab.lo_bin}..{vocab.hi_bin})"
+        )
+    else:
+        model = TrajectoryDecoder(stretch_slopes=slopes).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     print(f"model params: {n_params}")
 
@@ -388,27 +456,47 @@ def main(argv: list[str] | None = None) -> int:
         n_batches = 0
         for batch in loader:
             sim = batch["sim"].to(device)
-            logits = model(
-                sim, batch["feat_kind"].to(device), batch["ref_valid"].to(device)
-            )
-            ce = trajectory_ce(
-                logits,
-                batch["target_idx"].to(device),
-                batch["target_null"].to(device),
-                batch["mix_valid"].to(device),
-                batch["ref_valid"].to(device),
-            )
-            rc = reconstruction_loss(
-                logits,
-                batch["ref_mel"].to(device),
-                batch["mix_mel"].to(device),
-                batch["mix_valid"].to(device),
-                batch["ref_valid"].to(device),
-                batch["recon_ok"].to(device),
-            )
+            if isinstance(model, TRMDecoder):
+                out = model(
+                    sim,
+                    batch["feat_kind"].to(device),
+                    batch["ref_valid"].to(device),
+                )
+                labels = trm_offset_targets(
+                    batch["target_idx"].to(device),
+                    batch["target_null"].to(device),
+                    batch["mix_valid"].to(device),
+                    model.vocab,
+                )
+                ce = trm_offset_ce(out, labels)
+                rc = torch.zeros((), device=device)  # recon aux deferred (v1)
+            else:
+                logits = model(
+                    sim,
+                    batch["feat_kind"].to(device),
+                    batch["ref_valid"].to(device),
+                )
+                ce = trajectory_ce(
+                    logits,
+                    batch["target_idx"].to(device),
+                    batch["target_null"].to(device),
+                    batch["mix_valid"].to(device),
+                    batch["ref_valid"].to(device),
+                )
+                rc = reconstruction_loss(
+                    logits,
+                    batch["ref_mel"].to(device),
+                    batch["mix_mel"].to(device),
+                    batch["mix_valid"].to(device),
+                    batch["ref_valid"].to(device),
+                    batch["recon_ok"].to(device),
+                )
             loss = ce + args.recon_weight * rc
             opt.zero_grad()
             loss.backward()
+            if isinstance(model, TRMDecoder):
+                # the recursion blows up unclipped (bake-off trap)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
             ce_sum += float(ce.detach())
             rc_sum += float(rc.detach())

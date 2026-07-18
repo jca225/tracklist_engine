@@ -97,6 +97,48 @@ def test_trm_decoder_is_a_dropin_over_sim_emitting_offset_logits():
     assert torch.isfinite(loss)
 
 
+def test_logits_stay_bounded_at_init_despite_deep_recursion():
+    # regression: v0 saw CE ~8e7 from an exploding residual stream over
+    # n_sup*T*n_inner net applications; the answer-latent LayerNorm bounds it.
+    _seed()
+    core = trm.TRMCore(d_model=64, vocab_size=1666, n_sup=3, n_inner=6, T=3)
+    x = torch.randn(2, 40, 64)
+    out = core(x)
+    assert torch.isfinite(out.logits[-1]).all()
+    assert out.logits[-1].abs().max().item() < 50.0
+
+
+def test_offset_targets_from_ref_bin_targets():
+    # frame t plays ref bin (t + 10) -> offset 10; one null; one ignore(-1)
+    Tm = 5
+    target_idx = torch.tensor([[10, 11, -1, 13, 14]])  # ref bins; -1 = ignore
+    target_null = torch.tensor([[False, False, False, True, False]])
+    mix_valid = torch.ones(1, Tm, dtype=torch.bool)
+    vocab = OffsetVocab(lo_bin=-4, hi_bin=60, res_bin=1)
+    labels = trm.trm_offset_targets(target_idx, target_null, mix_valid, vocab)
+    # frames 0,1 -> offset 10 -> class (10 - lo_bin)
+    assert labels[0, 0].item() == 10 - vocab.lo_bin
+    assert labels[0, 1].item() == 11 - 1 - vocab.lo_bin  # 11-frame1=10
+    from workspaces.alignment_prototype.trajectory.offset_coords import IGNORE_INDEX
+
+    assert labels[0, 2].item() == IGNORE_INDEX
+    assert labels[0, 3].item() == vocab.null_index  # null wins over position
+
+
+def test_trm_decode_segments_from_a_peaked_offset_logit():
+    Tm = 12
+    vocab = OffsetVocab(lo_bin=-4, hi_bin=40, res_bin=1)
+    logits = torch.full((1, Tm, vocab.size), -10.0)
+    off_idx = 20 - vocab.lo_bin  # constant offset 20
+    logits[0, :, off_idx] = 10.0
+    out = trm.TRMOutput(logits=[logits], q=[torch.zeros(1)], y=logits, z=logits)
+    segs = trm.trm_decode_segments(out, bin_s=0.5, vocab=vocab)
+    assert len(segs) == 1
+    mix0, ref0, _ = segs[0]
+    assert mix0 == 0.0
+    assert abs(ref0 - 20 * 0.5) < 0.5  # offset 20 bins == 10 s ref start
+
+
 def test_sim_to_offset_evidence_gathers_the_diagonal():
     # a sim grid with a bright diagonal at ref = t + 4 should light up the
     # offset column for off_bin == 4 in the fixed offset-evidence grid.
