@@ -155,6 +155,7 @@ class AcquisitionCase:
     resolution: Resolution | None = None
     training: TrainingSignal = field(default_factory=TrainingSignal)
     notes: str = ""
+    impact_score: int = 0  # estimated metric cost (affected spans); worklist rank
 
     @property
     def case_id(self) -> str:
@@ -256,6 +257,7 @@ def case_to_dict(case: AcquisitionCase) -> dict[str, Any]:
             "preference_pairs": [list(p) for p in case.training.preference_pairs],
         },
         "notes": case.notes,
+        "impact_score": case.impact_score,
     }
 
 
@@ -310,6 +312,7 @@ def case_from_dict(d: Mapping[str, Any]) -> AcquisitionCase:
         resolution=resolution,
         training=training,
         notes=str(d.get("notes") or ""),
+        impact_score=int(d.get("impact_score") or 0),
     )
 
 

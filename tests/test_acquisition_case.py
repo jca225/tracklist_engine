@@ -261,3 +261,23 @@ def test_bb12_backfill_serializes_cleanly():
     # Every BB12 case must survive a dict round-trip (schema completeness).
     for c in _bb12_cases():
         assert case_from_dict(case_to_dict(c)) == c
+
+
+def test_impact_score_round_trips():
+    case = AcquisitionCase(
+        set_id="1fsnxchk",
+        slot_label="097",
+        layer_role="solo",
+        claim=CaseClaim(recording_id="1jz334x5"),
+        impact_score=3,
+    )
+    back = case_from_dict(case_to_dict(case))
+    assert back.impact_score == 3
+
+
+def test_impact_score_defaults_zero_when_absent():
+    # legacy dict with no impact_score key
+    back = case_from_dict(
+        {"set_id": "x", "slot_label": "1", "claim": {"recording_id": "r"}}
+    )
+    assert back.impact_score == 0
