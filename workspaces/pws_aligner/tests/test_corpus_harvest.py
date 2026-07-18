@@ -778,3 +778,16 @@ def test_query_set_ids_restricts_to_given_sets():
     assert only_a[0].ref_path == "/ra.flac"
 
     assert query_corpus_slots(conn, policy_stems=("regular",), set_ids=[]) == []
+
+
+def test_main_accepts_file_uri_db(tmp_path, capsys):
+    """A ``file:...`` --db is opened as a URI (uri=True) so ``?immutable=1`` /
+    ``?mode=ro`` work — required to read the canonical WAL DB over read-only NFS.
+    """
+    db = tmp_path / "fix.db"
+    _write_fixture_db(db)
+    rc = main(
+        ["--db", f"file:{db}?mode=ro", "--stems-root", str(tmp_path / "stems"), "--census"]
+    )
+    assert rc == 0
+    assert "eligibility census" in capsys.readouterr().out

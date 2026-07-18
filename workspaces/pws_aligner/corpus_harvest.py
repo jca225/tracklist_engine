@@ -422,7 +422,11 @@ def main(argv: list[str] | None = None) -> int:
     if not args.census and not args.out:
         ap.error("--out is required unless --census")
 
-    conn = sqlite3.connect(args.db)
+    # A ``file:...`` --db value is opened as a URI (uri=True), enabling
+    # ``?immutable=1`` — the only mode that reads the canonical WAL DB over a
+    # read-only NFS mount (a plain connect needs to write -wal/-shm and fails).
+    # A plain path keeps default behavior (WAL-concurrent reads on pi-storage).
+    conn = sqlite3.connect(args.db, uri=args.db.startswith("file:"))
     conn.row_factory = sqlite3.Row
     try:
         if args.census:
