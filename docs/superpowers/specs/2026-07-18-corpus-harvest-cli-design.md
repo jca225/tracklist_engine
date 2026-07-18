@@ -109,8 +109,11 @@ precision *gate*, not for harvesting):
   `cotrain_seam` when a candidate differs from the claim — here they match by
   construction, so correction is None; kept for symmetry).
 
-`DEFAULT_SPAN_S` (e.g. 40.0s) is used when the slot has no scraped duration —
-matches the BB smoke default and the typical play-span length.
+`duration_s` = `set_track_slots.duration_seconds`, which the tokenizer fills from
+the scraped *track* length — an **upper bound** on the play span, not the play-span
+length itself, so the window is typically wider than the DJ's play (a recall cost,
+not a precision cost — see §2). `DEFAULT_SPAN_S` (40.0s) is the fallback when a slot
+has no scraped duration.
 
 ### 5.4 `run_corpus_harvest(slots, *, stems_root, out, policy=CERTIFIED_POLICY) -> HarvestSummary`
 The batch loop. Groups slots by `set_audio_id`; for each set builds **one**

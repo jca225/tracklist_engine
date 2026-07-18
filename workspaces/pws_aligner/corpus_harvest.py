@@ -71,6 +71,12 @@ def query_corpus_slots(
     + a scraped cue time + a certified axis. ``conn.row_factory`` must be
     ``sqlite3.Row``. On-disk audio existence is NOT checked here (disk is truth;
     the scorer abstains when absent) — see ``census`` for the disk funnel.
+
+    Precondition: at most one ``is_reference=1`` row per set (mix) and per
+    ``(recording_id, stem)`` (ref). ``is_reference`` is not UNIQUE in the schema,
+    so a set with duplicate reference rows would fan a slot out into multiple
+    cases; the ledger still dedupes by ``span_key`` (no double-harvest), but
+    ``n_cases`` would inflate and the scorer would run redundantly.
     """
     stems = tuple(policy_stems)
     if not stems:
@@ -136,6 +142,13 @@ def build_corpus_cases(
     agreements; decoys were only for the precision gate). ``claim_axes`` mirrors
     the slot claim so ``cotrain_seam`` can propose a correction if the accepted
     candidate ever differs (here they match by construction → correction None).
+
+    ``span_dur_s`` comes from ``set_track_slots.duration_seconds``, which the
+    tokenizer fills from the scraped *track* length — an UPPER BOUND on the
+    actual play span, not the play-span length itself. The window is therefore
+    typically wider than the DJ's play; per the design's abstain-heavy argument
+    this is a RECALL cost (more to scan) not a PRECISION cost (certified banding
+    still requires cross-channel offset agreement), so the certification holds.
     """
     cases: list[tuple[RefCandidate, MixSpan, dict[str, str]]] = []
     for s in slots:
