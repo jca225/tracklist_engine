@@ -140,7 +140,7 @@ def build_corpus_cases(
             set_id=s.set_id,
             slot_label=s.slot_label,
             set_start_s=s.cue_time_s,
-            span_dur_s=s.duration_s if s.duration_s else DEFAULT_SPAN_S,
+            span_dur_s=s.duration_s if s.duration_s is not None else DEFAULT_SPAN_S,
         )
         claim_axes = {
             "version": s.claimed_version,
