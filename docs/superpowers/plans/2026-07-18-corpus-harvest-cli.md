@@ -71,17 +71,13 @@ import json
 import sqlite3
 from pathlib import Path
 
-from workspaces.alignment_prototype.harness.contract import AlignmentResult
-from workspaces.pws_aligner.corpus_harvest import (
-    DEFAULT_SPAN_S,
-    CensusReport,
-    CorpusSlot,
-    HarvestSummary,
-    build_corpus_cases,
-    census,
-    query_corpus_slots,
-    run_corpus_harvest,
-)
+from workspaces.pws_aligner.corpus_harvest import query_corpus_slots
+
+# NOTE: imports are added incrementally per task, so each task's test file
+# collects with only the names defined so far. Do NOT import later-task names
+# here (no stubs) — Task 2 adds CorpusSlot/DEFAULT_SPAN_S/build_corpus_cases,
+# Task 3 adds AlignmentResult/run_corpus_harvest, Task 4 adds census/census_rows,
+# Task 5 adds main.
 
 
 def _make_db() -> sqlite3.Connection:
@@ -96,7 +92,8 @@ def _make_db() -> sqlite3.Connection:
             duration_seconds INTEGER
         );
         CREATE TABLE set_audio (
-            set_audio_id INTEGER, set_id TEXT, path TEXT, is_reference INTEGER
+            set_audio_id INTEGER, set_id TEXT, path TEXT, sha256 TEXT,
+            is_reference INTEGER
         );
         CREATE TABLE track_audio (
             track_audio_id INTEGER, recording_id TEXT, stem TEXT,
@@ -122,9 +119,8 @@ def _add_slot(
 def _add_set_audio(conn, *, set_audio_id, set_id, path, is_reference=1):
     conn.execute(
         "INSERT INTO set_audio VALUES (?,?,?,?,?)",
-        (set_audio_id, set_id, path, None, is_reference),
+        (set_audio_id, set_id, path, None, is_reference),  # sha256=None
     )
-    # sha256 column omitted: fixture table has only the 5 columns above.
 
 
 def _add_track_audio(conn, *, recording_id, stem="regular", path="/ref.flac", is_reference=1):
@@ -325,7 +321,7 @@ def query_corpus_slots(
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_corpus_harvest.py -v`
-Expected: PASS for the 3 `test_query_*` tests (later tests will error on missing imports — that is expected until their tasks land; run with `-k query` to isolate: `... -k query -v` → 3 passed).
+Expected: PASS — 3 passed (the file contains only the `test_query_*` functions at this task; later tasks append more). Do NOT add stubs for later-task names — imports are incremental per task.
 
 - [ ] **Step 5: Commit**
 
@@ -351,9 +347,16 @@ git commit -m "feat(cotrain): corpus_harvest CorpusSlot + query_corpus_slots (DB
 
 - [ ] **Step 1: Write the failing test**
 
-Append to `test_corpus_harvest.py`:
+Append to `test_corpus_harvest.py` (the import goes with the other imports near the top of the file; the rest is appended at the end):
 
 ```python
+from workspaces.pws_aligner.corpus_harvest import (  # noqa: E402
+    DEFAULT_SPAN_S,
+    CorpusSlot,
+    build_corpus_cases,
+)
+
+
 def _slot(**kw) -> CorpusSlot:
     base = dict(
         set_id="S1", set_audio_id=10, slot_label="001", recording_id="R1",
@@ -480,9 +483,13 @@ git commit -m "feat(cotrain): build_corpus_cases (cue-anchored positive-only cas
 
 - [ ] **Step 1: Write the failing test**
 
-Append to `test_corpus_harvest.py`:
+Append to `test_corpus_harvest.py` (imports with the others near the top; helpers/tests at the end):
 
 ```python
+from workspaces.alignment_prototype.harness.contract import AlignmentResult  # noqa: E402
+from workspaces.pws_aligner.corpus_harvest import run_corpus_harvest  # noqa: E402
+
+
 def _agree(rec_id, sources, *, offset=12.0, conf=0.8):
     return [
         AlignmentResult(recording_id=rec_id, offset_s=offset, confidence=conf, source=src)
@@ -673,10 +680,10 @@ git commit -m "feat(cotrain): run_corpus_harvest batch loop (per-set scorer, ide
 
 - [ ] **Step 1: Write the failing test**
 
-Append to `test_corpus_harvest.py`:
+Append to `test_corpus_harvest.py` (imports with the others near the top; tests at the end):
 
 ```python
-from workspaces.pws_aligner.corpus_harvest import census_rows  # noqa: E402
+from workspaces.pws_aligner.corpus_harvest import census, census_rows  # noqa: E402
 
 
 def test_census_classifies_blockers_per_axis(tmp_path):
@@ -887,7 +894,8 @@ def _write_fixture_db(path: Path) -> None:
             duration_seconds INTEGER
         );
         CREATE TABLE set_audio (
-            set_audio_id INTEGER, set_id TEXT, path TEXT, is_reference INTEGER
+            set_audio_id INTEGER, set_id TEXT, path TEXT, sha256 TEXT,
+            is_reference INTEGER
         );
         CREATE TABLE track_audio (
             track_audio_id INTEGER, recording_id TEXT, stem TEXT,
