@@ -219,3 +219,100 @@ def run_corpus_harvest(
         n_harvested += len(records)
         n_written += write_ledger(records, out)
     return HarvestSummary(len(by_set), n_cases, n_harvested, n_written)
+
+
+_CENSUS_CATEGORIES: tuple[str, ...] = (
+    "eligible-now",
+    "no-cue-time",
+    "no-ref-audio",
+    "no-mix-audio",
+    "no-mix-stem",
+)
+
+
+@dataclass(frozen=True)
+class CensusReport:
+    """Per-axis eligibility funnel — the flywheel's recall ceiling today."""
+
+    by_axis: dict[str, dict[str, int]]
+
+    def total(self) -> int:
+        return sum(sum(cats.values()) for cats in self.by_axis.values())
+
+    def to_json(self) -> dict:
+        return {"by_axis": self.by_axis, "total": self.total()}
+
+    def render(self) -> str:
+        lines = ["=== corpus-harvest eligibility census ==="]
+        for axis in sorted(self.by_axis):
+            cats = self.by_axis[axis]
+            lines.append(f"[{axis}] total={sum(cats.values())}")
+            for cat in _CENSUS_CATEGORIES:
+                lines.append(f"    {cat:<14} {cats.get(cat, 0)}")
+        lines.append(f"TOTAL slots (certified axes): {self.total()}")
+        return "\n".join(lines)
+
+
+def census_rows(
+    conn: sqlite3.Connection, *, policy_stems: Iterable[str]
+) -> list[sqlite3.Row]:
+    """LEFT-join funnel over certified-axis slots: every slot with its DB pieces
+    (cue / ref audio / reference mix), so the classifier can name what blocks it.
+    """
+    stems = tuple(policy_stems)
+    if not stems:
+        return []
+    placeholders = ",".join("?" for _ in stems)
+    sql = f"""
+        SELECT s.set_id AS set_id, s.slot_label AS slot_label,
+               s.claimed_stem AS claimed_stem,
+               COALESCE(s.cue_time_seconds, s.cue_seconds) AS cue_time_s,
+               sa.set_audio_id AS set_audio_id, sa.path AS mix_full_path,
+               ta.path AS ref_path
+        FROM set_track_slots s
+        LEFT JOIN set_audio sa ON sa.set_id = s.set_id AND sa.is_reference = 1
+        LEFT JOIN track_audio ta ON ta.recording_id = s.recording_id
+                                 AND ta.stem = s.claimed_stem
+                                 AND ta.is_reference = 1
+        WHERE s.claimed_stem IN ({placeholders})
+          AND s.recording_id IS NOT NULL
+        ORDER BY s.set_id, s.row_index
+    """
+    return list(conn.execute(sql, list(stems)).fetchall())
+
+
+def _classify(
+    row: sqlite3.Row, *, stems_root: Path, set_audio_root: Path | None
+) -> str:
+    """First-missing wins: cue → ref → mix(row/file) → mix-stem(instrumental) → ok."""
+    if row["cue_time_s"] is None:
+        return "no-cue-time"
+    if row["ref_path"] is None:
+        return "no-ref-audio"
+    if row["mix_full_path"] is None:
+        return "no-mix-audio"
+    mix = _resolve(row["mix_full_path"], set_audio_root)
+    if not mix.is_file():
+        return "no-mix-audio"
+    if row["claimed_stem"] == "instrumental":
+        stem_file = Path(stems_root) / str(row["set_audio_id"]) / "instrumental.flac"
+        if not stem_file.is_file():
+            return "no-mix-stem"
+    return "eligible-now"
+
+
+def census(
+    conn: sqlite3.Connection,
+    *,
+    stems_root: Path,
+    policy_stems: Iterable[str],
+    set_audio_root: Path | None = None,
+) -> CensusReport:
+    """Classify every certified-axis slot by what blocks harvest, disk-checked."""
+    by_axis: dict[str, dict[str, int]] = {}
+    for row in census_rows(conn, policy_stems=policy_stems):
+        axis = row["claimed_stem"]
+        cat = _classify(row, stems_root=stems_root, set_audio_root=set_audio_root)
+        bucket = by_axis.setdefault(axis, {c: 0 for c in _CENSUS_CATEGORIES})
+        bucket[cat] += 1
+    return CensusReport(by_axis)

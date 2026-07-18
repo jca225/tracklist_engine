@@ -22,6 +22,7 @@ from workspaces.pws_aligner.corpus_harvest import (  # noqa: E402
 )
 from workspaces.alignment_prototype.harness.contract import AlignmentResult  # noqa: E402
 from workspaces.pws_aligner.corpus_harvest import run_corpus_harvest  # noqa: E402
+from workspaces.pws_aligner.corpus_harvest import census, census_rows  # noqa: E402
 
 
 def _make_db() -> sqlite3.Connection:
@@ -329,3 +330,90 @@ def test_run_harvest_builds_one_scorer_per_set(tmp_path):
     )
     assert len(calls) == 1
     assert calls[0][1] == tmp_path / "stems" / "77"
+
+
+def test_census_classifies_blockers_per_axis(tmp_path):
+    conn = _make_db()
+    stems_root = tmp_path / "stems"
+    # 1) eligible-now regular: mix file present, ref present, cue present
+    mix1 = tmp_path / "mix1.m4a"
+    mix1.write_bytes(b"x")
+    _add_slot(conn, set_id="A", row_index=0, recording_id="R1", claimed_stem="regular")
+    _add_set_audio(conn, set_audio_id=1, set_id="A", path=str(mix1))
+    _add_track_audio(conn, recording_id="R1", stem="regular")
+    # 2) no-cue-time regular
+    _add_slot(
+        conn,
+        set_id="A",
+        row_index=1,
+        recording_id="R2",
+        slot_label="002",
+        claimed_stem="regular",
+        cue_time_seconds=None,
+    )
+    _add_track_audio(conn, recording_id="R2", stem="regular")
+    # 3) no-ref-audio regular (no track_audio row)
+    _add_slot(
+        conn,
+        set_id="A",
+        row_index=2,
+        recording_id="R3",
+        slot_label="003",
+        claimed_stem="regular",
+    )
+    # 4) no-mix-audio regular (set B has no set_audio row)
+    _add_slot(conn, set_id="B", row_index=0, recording_id="R4", claimed_stem="regular")
+    _add_track_audio(conn, recording_id="R4", stem="regular")
+    # 5) instrumental, mix present but no instrumental.flac on disk → no-mix-stem
+    mix2 = tmp_path / "mix2.m4a"
+    mix2.write_bytes(b"x")
+    _add_slot(
+        conn, set_id="C", row_index=0, recording_id="R5", claimed_stem="instrumental"
+    )
+    _add_set_audio(conn, set_audio_id=5, set_id="C", path=str(mix2))
+    _add_track_audio(conn, recording_id="R5", stem="instrumental")
+    # 6) instrumental eligible-now: instrumental.flac present
+    mix3 = tmp_path / "mix3.m4a"
+    mix3.write_bytes(b"x")
+    (stems_root / "6").mkdir(parents=True)
+    (stems_root / "6" / "instrumental.flac").write_bytes(b"x")
+    _add_slot(
+        conn, set_id="D", row_index=0, recording_id="R6", claimed_stem="instrumental"
+    )
+    _add_set_audio(conn, set_audio_id=6, set_id="D", path=str(mix3))
+    _add_track_audio(conn, recording_id="R6", stem="instrumental")
+    # excluded entirely: acappella (uncertified) — must not appear in any axis bucket
+    _add_slot(
+        conn,
+        set_id="D",
+        row_index=1,
+        recording_id="R7",
+        slot_label="002",
+        claimed_stem="acappella",
+    )
+    _add_track_audio(conn, recording_id="R7", stem="acappella")
+
+    report = census(
+        conn, stems_root=stems_root, policy_stems=("regular", "instrumental")
+    )
+
+    assert set(report.by_axis) == {"regular", "instrumental"}
+    assert report.by_axis["regular"]["eligible-now"] == 1
+    assert report.by_axis["regular"]["no-cue-time"] == 1
+    assert report.by_axis["regular"]["no-ref-audio"] == 1
+    assert report.by_axis["regular"]["no-mix-audio"] == 1
+    assert report.by_axis["instrumental"]["no-mix-stem"] == 1
+    assert report.by_axis["instrumental"]["eligible-now"] == 1
+    assert report.total() == 6
+    # to_json + render are well-formed
+    assert report.to_json()["total"] == 6
+    assert "eligible-now" in report.render()
+
+
+def test_census_rows_excludes_uncertified_axis(tmp_path):
+    conn = _make_db()
+    _add_slot(
+        conn, set_id="A", row_index=0, recording_id="R1", claimed_stem="acappella"
+    )
+    rows = census_rows(conn, policy_stems=("regular", "instrumental"))
+    assert rows == []
