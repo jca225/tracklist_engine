@@ -70,9 +70,8 @@ def _add_slot(
 def _add_set_audio(conn, *, set_audio_id, set_id, path, is_reference=1):
     conn.execute(
         "INSERT INTO set_audio VALUES (?,?,?,?,?)",
-        (set_audio_id, set_id, path, None, is_reference),
+        (set_audio_id, set_id, path, None, is_reference),  # sha256=None
     )
-    # sha256 column omitted: fixture table has only the 5 columns above.
 
 
 def _add_track_audio(
