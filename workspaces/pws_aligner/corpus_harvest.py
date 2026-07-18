@@ -1,0 +1,180 @@
+"""Corpus-harvest CLI — co-training flywheel step 2 (batch runner over the corpus).
+
+Turns already-downloaded+analyzed pi-storage corpus sets into a harvest-ledger of
+pseudo-labelled (ref ↔ mix-span) training pairs. It is GLUE: a corpus case-builder
+(pi DB → cases) + a batch loop, delegating all alignment logic to the tested
+machinery (``harvest.harvest`` / ``harvest.write_ledger`` /
+``cotrain_seam.real_probe_scorer`` / ``cotrain_seam.corpus_mix_resolver``).
+
+Placement anchor = the scraped 1001TL cue time
+(``set_track_slots.cue_time_seconds`` / ``cue_seconds``) — the corpus has no GT
+window. A noisy window costs RECALL not PRECISION: bad window → certified probes
+disagree → ABSTAIN → not harvested, so the 2026-07-18 ACCEPT-precision
+certification (regular @2-channel, instrumental @3-channel-unanimity) transfers.
+Only the certified axes are harvestable (CERTIFIED_POLICY); acappella is never
+harvested and needs no HuBERT, so this runs CPU-only on pi-storage.
+
+Invariant (inherited from cotrain_seam/harvest): ZERO canonical mutation — writes
+ONLY the harvest-ledger JSONL, idempotent by span_key.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sqlite3
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable, Iterable, Sequence
+
+from workspaces.pws_aligner.cotrain_seam import (
+    BandThresholds,
+    MixSpan,
+    RefCandidate,
+    RefMixScorer,
+    corpus_mix_resolver,
+    real_probe_scorer,
+)
+from workspaces.pws_aligner.harvest import (
+    CERTIFIED_POLICY,
+    harvest,
+    write_ledger,
+)
+
+# Canonical pi-storage defaults (all overridable via CLI args for tests/other hosts).
+DEFAULT_DB = Path("/mnt/storage/data/db/music_database.db")
+DEFAULT_STEMS_ROOT = Path("/mnt/storage/stems/set")
+DEFAULT_SPAN_S = 40.0
+
+
+@dataclass(frozen=True)
+class CorpusSlot:
+    """A DB-projected harvest-eligible slot (decouples SQL from case-building)."""
+
+    set_id: str
+    set_audio_id: int
+    slot_label: str
+    recording_id: str
+    ref_path: str
+    claimed_version: str
+    claimed_stem: str
+    claimed_variant: str
+    cue_time_s: float
+    duration_s: float | None
+    mix_full_path: str
+
+
+def query_corpus_slots(
+    conn: sqlite3.Connection,
+    *,
+    policy_stems: Iterable[str],
+    limit: int | None = None,
+) -> list[CorpusSlot]:
+    """Strict inner-join eligibility: reference mix + reference ref @ claimed_stem
+    + a scraped cue time + a certified axis. ``conn.row_factory`` must be
+    ``sqlite3.Row``. On-disk audio existence is NOT checked here (disk is truth;
+    the scorer abstains when absent) — see ``census`` for the disk funnel.
+    """
+    stems = tuple(policy_stems)
+    if not stems:
+        return []
+    placeholders = ",".join("?" for _ in stems)
+    sql = f"""
+        SELECT s.set_id AS set_id, sa.set_audio_id AS set_audio_id,
+               s.slot_label AS slot_label, s.recording_id AS recording_id,
+               ta.path AS ref_path, s.claimed_version AS claimed_version,
+               s.claimed_stem AS claimed_stem, s.claimed_variant AS claimed_variant,
+               COALESCE(s.cue_time_seconds, s.cue_seconds) AS cue_time_s,
+               s.duration_seconds AS duration_s, sa.path AS mix_full_path
+        FROM set_track_slots s
+        JOIN set_audio sa ON sa.set_id = s.set_id AND sa.is_reference = 1
+        JOIN track_audio ta ON ta.recording_id = s.recording_id
+                            AND ta.stem = s.claimed_stem
+                            AND ta.is_reference = 1
+        WHERE s.claimed_stem IN ({placeholders})
+          AND s.recording_id IS NOT NULL
+          AND COALESCE(s.cue_time_seconds, s.cue_seconds) IS NOT NULL
+        ORDER BY s.set_id, s.row_index
+    """
+    params: list[object] = list(stems)
+    if limit is not None:
+        sql += " LIMIT ?"
+        params.append(limit)
+    out: list[CorpusSlot] = []
+    for r in conn.execute(sql, params).fetchall():
+        out.append(
+            CorpusSlot(
+                set_id=r["set_id"],
+                set_audio_id=int(r["set_audio_id"]),
+                slot_label=r["slot_label"] or "",
+                recording_id=r["recording_id"],
+                ref_path=r["ref_path"],
+                claimed_version=r["claimed_version"] or "original",
+                claimed_stem=r["claimed_stem"],
+                claimed_variant=r["claimed_variant"] or "regular",
+                cue_time_s=float(r["cue_time_s"]),
+                duration_s=float(r["duration_s"])
+                if r["duration_s"] is not None
+                else None,
+                mix_full_path=r["mix_full_path"],
+            )
+        )
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Stubs for later tasks (imported by the test module at collection time).
+# These will be replaced by real implementations in Tasks 2–4.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CensusReport:
+    """Placeholder — filled out in Task 3 (census)."""
+
+    total_slots: int = 0
+    eligible: int = 0
+    no_mix_audio: int = 0
+    no_ref_audio: int = 0
+    no_cue: int = 0
+    uncertified_stem: int = 0
+
+
+@dataclass(frozen=True)
+class HarvestSummary:
+    """Placeholder — filled out in Task 4 (run_corpus_harvest)."""
+
+    harvested: int = 0
+    abstained: int = 0
+    skipped: int = 0
+
+
+def build_corpus_cases(
+    slots: Sequence[CorpusSlot],
+    span_s: float = DEFAULT_SPAN_S,
+) -> list[object]:
+    """Placeholder — filled out in Task 2 (case-building)."""
+    raise NotImplementedError("build_corpus_cases: implemented in Task 2")
+
+
+def census(
+    conn: sqlite3.Connection,
+    *,
+    policy_stems: Iterable[str],
+) -> CensusReport:
+    """Placeholder — filled out in Task 3."""
+    raise NotImplementedError("census: implemented in Task 3")
+
+
+def run_corpus_harvest(
+    conn: sqlite3.Connection,
+    ledger: Path,
+    scorer: RefMixScorer,
+    *,
+    policy_stems: Iterable[str],
+    span_s: float = DEFAULT_SPAN_S,
+    limit: int | None = None,
+) -> HarvestSummary:
+    """Placeholder — filled out in Task 4."""
+    raise NotImplementedError("run_corpus_harvest: implemented in Task 4")
