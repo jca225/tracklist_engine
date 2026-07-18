@@ -20,7 +20,10 @@ ONLY the harvest-ledger JSONL, idempotent by span_key.
 
 from __future__ import annotations
 
+import argparse
+import json
 import sqlite3
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Sequence
@@ -316,3 +319,84 @@ def census(
         bucket = by_axis.setdefault(axis, {c: 0 for c in _CENSUS_CATEGORIES})
         bucket[cat] += 1
     return CensusReport(by_axis)
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(
+        description="Corpus-harvest CLI — co-training flywheel step 2."
+    )
+    ap.add_argument("--db", default=str(DEFAULT_DB), help="canonical DB path")
+    ap.add_argument(
+        "--stems-root",
+        default=str(DEFAULT_STEMS_ROOT),
+        help="mix-side stems root: <root>/<set_audio_id>/instrumental.flac",
+    )
+    ap.add_argument(
+        "--set-audio-root",
+        default=None,
+        help="prefix for relative set_audio.path values (optional)",
+    )
+    ap.add_argument(
+        "--ref-audio-root",
+        default=None,
+        help="prefix for relative track_audio.path values (optional)",
+    )
+    ap.add_argument(
+        "--out", default=None, help="harvest-ledger JSONL (required unless --census)"
+    )
+    ap.add_argument(
+        "--limit", type=int, default=None, help="cap eligible slots (harvest mode)"
+    )
+    ap.add_argument("--stem", default=None, help="restrict to one certified axis")
+    ap.add_argument(
+        "--census",
+        action="store_true",
+        help="report eligibility without running probes (no --out needed)",
+    )
+    args = ap.parse_args(argv)
+
+    policy: dict[str, BandThresholds] = CERTIFIED_POLICY
+    if args.stem:
+        if args.stem not in CERTIFIED_POLICY:
+            ap.error(f"uncertified stem {args.stem!r} — not in CERTIFIED_POLICY")
+        policy = {args.stem: CERTIFIED_POLICY[args.stem]}
+    policy_stems = tuple(policy)
+
+    set_audio_root = Path(args.set_audio_root) if args.set_audio_root else None
+    ref_audio_root = Path(args.ref_audio_root) if args.ref_audio_root else None
+    stems_root = Path(args.stems_root)
+
+    conn = sqlite3.connect(args.db)
+    conn.row_factory = sqlite3.Row
+    try:
+        if args.census:
+            report = census(
+                conn,
+                stems_root=stems_root,
+                policy_stems=policy_stems,
+                set_audio_root=set_audio_root,
+            )
+            print(report.render())
+            print(json.dumps(report.to_json()))
+            return 0
+
+        if not args.out:
+            ap.error("--out is required unless --census")
+        slots = query_corpus_slots(conn, policy_stems=policy_stems, limit=args.limit)
+        summary = run_corpus_harvest(
+            slots,
+            stems_root=stems_root,
+            out=Path(args.out),
+            policy=policy,
+            set_audio_root=set_audio_root,
+            ref_audio_root=ref_audio_root,
+        )
+        print(json.dumps(summary.to_json()))
+        print(f"ledger={args.out}")
+        return 0
+    finally:
+        conn.close()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -23,6 +23,7 @@ from workspaces.pws_aligner.corpus_harvest import (  # noqa: E402
 from workspaces.alignment_prototype.harness.contract import AlignmentResult  # noqa: E402
 from workspaces.pws_aligner.corpus_harvest import run_corpus_harvest  # noqa: E402
 from workspaces.pws_aligner.corpus_harvest import census, census_rows  # noqa: E402
+from workspaces.pws_aligner.corpus_harvest import main  # noqa: E402
 
 
 def _make_db() -> sqlite3.Connection:
@@ -417,3 +418,66 @@ def test_census_rows_excludes_uncertified_axis(tmp_path):
     )
     rows = census_rows(conn, policy_stems=("regular", "instrumental"))
     assert rows == []
+
+
+def _write_fixture_db(path: Path) -> None:
+    conn = sqlite3.connect(str(path))
+    conn.executescript(
+        """
+        CREATE TABLE set_track_slots (
+            set_id TEXT, row_index INTEGER, recording_id TEXT, slot_label TEXT,
+            cue_seconds INTEGER, cue_time_seconds INTEGER,
+            claimed_version TEXT, claimed_stem TEXT, claimed_variant TEXT,
+            duration_seconds INTEGER
+        );
+        CREATE TABLE set_audio (
+            set_audio_id INTEGER, set_id TEXT, path TEXT, sha256 TEXT,
+            is_reference INTEGER
+        );
+        CREATE TABLE track_audio (
+            track_audio_id INTEGER, recording_id TEXT, stem TEXT,
+            path TEXT, is_reference INTEGER
+        );
+        INSERT INTO set_track_slots VALUES
+            ('A',0,'R1','001',NULL,100,'original','regular','regular',42),
+            ('A',1,'R2','002',NULL,NULL,'original','regular','regular',42);
+        INSERT INTO set_audio VALUES (1,'A','/nope/mix.m4a',NULL,1);
+        INSERT INTO track_audio VALUES (NULL,'R1','regular','/nope/r1.flac',1);
+        INSERT INTO track_audio VALUES (NULL,'R2','regular','/nope/r2.flac',1);
+        """
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_main_census_mode_runs_on_fixture_db(tmp_path, capsys):
+    db = tmp_path / "fix.db"
+    _write_fixture_db(db)
+    rc = main(["--db", str(db), "--stems-root", str(tmp_path / "stems"), "--census"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "eligibility census" in out
+    # R1 has cue+ref but mix file absent → no-mix-audio; R2 no cue → no-cue-time
+    payload = json.loads(out.strip().splitlines()[-1])
+    assert payload["by_axis"]["regular"]["no-mix-audio"] == 1
+    assert payload["by_axis"]["regular"]["no-cue-time"] == 1
+
+
+def test_main_rejects_uncertified_stem(tmp_path):
+    db = tmp_path / "fix.db"
+    _write_fixture_db(db)
+    try:
+        main(["--db", str(db), "--stem", "acappella", "--census"])
+        assert False, "expected SystemExit on uncertified stem"
+    except SystemExit as e:
+        assert e.code != 0
+
+
+def test_main_harvest_mode_requires_out(tmp_path):
+    db = tmp_path / "fix.db"
+    _write_fixture_db(db)
+    try:
+        main(["--db", str(db)])  # no --out, no --census
+        assert False, "expected SystemExit when --out missing"
+    except SystemExit as e:
+        assert e.code != 0
