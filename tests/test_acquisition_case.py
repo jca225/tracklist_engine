@@ -329,3 +329,39 @@ def test_open_case_is_idempotent_and_merges(tmp_path):
     assert ProblemClass.MISSING_ASSET in cases[0].problem_classes
     assert ProblemClass.WRONG_VERSION in cases[0].problem_classes
     assert cases[0].impact_score == 3  # takes the max
+
+
+# ── global queries: load_all_cases + open_worklist ────────────────────────────
+
+
+def test_open_worklist_spans_sets_and_ranks_by_impact(tmp_path):
+    from core.acquisition_case import open_case, open_worklist, ProblemClass
+
+    open_case(
+        set_id="A", slot_label="1", recording_id="r1", impact_score=1, root=tmp_path
+    )
+    open_case(
+        set_id="B", slot_label="2", recording_id="r2", impact_score=5, root=tmp_path
+    )
+    wl = open_worklist(root=tmp_path)
+    assert [c.set_id for c in wl] == ["B", "A"]  # higher impact first
+
+
+def test_open_worklist_excludes_non_open(tmp_path):
+    from core.acquisition_case import (
+        open_case,
+        open_worklist,
+        load_cases,
+        save_cases,
+        default_path,
+        CaseStatus,
+    )
+    from dataclasses import replace
+
+    open_case(set_id="A", slot_label="1", recording_id="r1", root=tmp_path)
+    cases = load_cases(default_path("A", root=tmp_path))
+    save_cases(
+        default_path("A", root=tmp_path),
+        [replace(cases[0], status=CaseStatus.RESOLVED)],
+    )
+    assert open_worklist(root=tmp_path) == []

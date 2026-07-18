@@ -462,3 +462,22 @@ def open_case(
     cases[idx] = case
     save_cases(path, cases)
     return case
+
+
+def load_all_cases(
+    root: str | Path = "data/acquisition_cases",
+) -> list[AcquisitionCase]:
+    """Load every case across all ``{set_id}.jsonl`` files under ``root``."""
+    r = Path(root)
+    if not r.exists():
+        return []
+    out: list[AcquisitionCase] = []
+    for p in sorted(r.glob("*.jsonl")):
+        out.extend(load_cases(p))
+    return out
+
+
+def open_worklist(root: str | Path = "data/acquisition_cases") -> list[AcquisitionCase]:
+    """All OPEN cases corpus-wide, highest ``impact_score`` first."""
+    opens = [c for c in load_all_cases(root) if c.status == CaseStatus.OPEN]
+    return sorted(opens, key=lambda c: (-c.impact_score, c.set_id, c.slot_label))
