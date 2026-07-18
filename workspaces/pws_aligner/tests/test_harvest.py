@@ -130,54 +130,49 @@ def test_write_ledger_dedups_by_span_key(tmp_path):
 # ── harvest: end-to-end over mixed proposals ─────────────────────────────────
 
 
-def test_harvest_only_keeps_allowed_accepts():
-    span_reg = MixSpan("s", "001", 100.0, 40.0)
-    span_ins = MixSpan("s", "002", 200.0, 40.0)
-    span_rev = MixSpan("s", "003", 300.0, 40.0)
+def _agree(rid, sources, off=12.0):
+    from workspaces.alignment_prototype.harness.contract import AlignmentResult
+
+    return [
+        AlignmentResult(
+            recording_id=rid, offset_s=off + 0.1 * i, confidence=0.8, source=s
+        )
+        for i, s in enumerate(sources)
+    ]
+
+
+def test_harvest_regular_kept_on_two_channel_agreement():
+    # regular is certified at 2-channel agreement (fp+chroma).
+    span = MixSpan("s", "001", 100.0, 40.0)
     reg = RefCandidate(
         recording_id="Rreg", source_url="a", source_path="/r.flac", stem="regular"
     )
+    scorer = lambda cand, sp: _agree("Rreg", ("fp", "chroma"))
+    records = harvest([(reg, span, None)], scorer)
+    assert [r.recording_id for r in records] == ["Rreg"]
+
+
+def test_harvest_instrumental_requires_unanimous_three_channels():
+    # CERTIFIED_POLICY bands instrumental at min_agreeing=3 (the poison-free band,
+    # 2026-07-18). Two agreeing channels is NOT enough; three is.
+    span = MixSpan("s", "002", 200.0, 40.0)
     ins = RefCandidate(
         recording_id="Rins", source_url="b", source_path="/i.flac", stem="instrumental"
     )
-    rev = RefCandidate(
-        recording_id="Rrev", source_url="c", source_path="/v.flac", stem="regular"
+
+    two = lambda cand, sp: _agree("Rins", ("fp", "chroma"))
+    assert harvest([(ins, span, None)], two) == []  # 2/3 → REVIEW, not harvested
+
+    three = lambda cand, sp: _agree("Rins", ("fp", "chroma", "continuity"))
+    recs = harvest([(ins, span, None)], three)
+    assert [r.recording_id for r in recs] == ["Rins"]
+
+
+def test_harvest_drops_uncertified_stem():
+    # acappella is not in CERTIFIED_POLICY → never harvested, even if it agrees.
+    span = MixSpan("s", "003", 300.0, 40.0)
+    aca = RefCandidate(
+        recording_id="Raca", source_url="c", source_path="/a.flac", stem="acappella"
     )
-
-    def fake_scorer(cand, span):
-        from workspaces.alignment_prototype.harness.contract import AlignmentResult
-
-        if cand.recording_id in ("Rreg", "Rins"):  # 2 agreeing → ACCEPT
-            return [
-                AlignmentResult(
-                    recording_id=cand.recording_id,
-                    offset_s=12.0,
-                    confidence=0.8,
-                    source="fp",
-                ),
-                AlignmentResult(
-                    recording_id=cand.recording_id,
-                    offset_s=12.3,
-                    confidence=0.7,
-                    source="chroma",
-                ),
-            ]
-        return [  # disagree → ABSTAIN
-            AlignmentResult(
-                recording_id=cand.recording_id,
-                offset_s=1.0,
-                confidence=0.5,
-                source="fp",
-            ),
-            AlignmentResult(
-                recording_id=cand.recording_id,
-                offset_s=90.0,
-                confidence=0.5,
-                source="chroma",
-            ),
-        ]
-
-    cases = [(reg, span_reg, None), (ins, span_ins, None), (rev, span_rev, None)]
-    records = harvest(cases, fake_scorer)
-    # regular ACCEPT kept; instrumental ACCEPT gated out; regular ABSTAIN dropped
-    assert [r.recording_id for r in records] == ["Rreg"]
+    scorer = lambda cand, sp: _agree("Raca", ("hubert", "chroma", "continuity"))
+    assert harvest([(aca, span, None)], scorer) == []

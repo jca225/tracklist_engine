@@ -34,15 +34,34 @@ ACCEPTed; placement of even the correct accepts degrades (bb12 median 15.2s).
 
 ## Verdict for the co-training flywheel
 
-- **GO on `regular`.** ACCEPT band harvests ~55–60% of true spans (rest → REVIEW,
-  not poison) with **zero** false-accepts. Safe to auto-harvest.
-- **NO-GO on `instrumental`** at the current fp+chroma 2-channel gate. ~42% of its
-  accepts are wrong refs. Rescue levers (not yet run): add the stem-to-stem
-  mix_instr↔ref_instr fp channel (a stronger instrumental-identity discriminator,
-  see memory `project_instrumental_stem_fp`) as a required 3rd agreeing channel, or
-  a confidence floor beyond offset-agreement. Do not turn the flywheel on
-  instrumental until re-certified.
-- **`acappella`** untested here (off-Mac). Remains held.
+- **GO on `regular`** at 2-channel agreement (`min_agreeing=2`, the default). ACCEPT
+  band harvests ~55–60% of true spans (rest → REVIEW, not poison) with **zero**
+  false-accepts. regular runs only 2 probes (fp+chroma), so 2 is its ceiling.
+- **GO on `instrumental`** at UNANIMOUS 3-channel agreement (`min_agreeing=3`) — see
+  the rescue below. Held at the default 2-channel band it is a NO-GO.
+- **`acappella`** untested here (off-Mac HuBERT/MPS hang). Remains held.
 
-Raw logs: scratchpad `gate_logs/{set}_{stem}.log`. Rerun:
-`python -m workspaces.pws_aligner.validate_accept_precision --set bb12 --stem regular --n-decoys 3`
+## Instrumental rescue — the lever is unanimity, not tolerance
+
+The 2-channel failure is NOT a bug (decoys are distinct recordings; §diagnosis) and
+NOT fixable by adding the stem-to-stem fp channel — instrumental's `fp` probe is
+*already* stem-to-stem (`mix_instrumental ↔ ref_instrumental`). The real lever is
+**requiring all three independent channels (fp + chroma + continuity) to agree**,
+not just two. A confusable EDM instrumental can fool 2 of 3 sensors; rarely all 3.
+
+Threshold sweep (both BB sets, 196 instrumental cases, probes scored once then
+re-banded offline; firing histogram: 142 cases fire 3 channels, 53 fire 2, 1 fires 1):
+
+| min_agreeing | precision | accept_correct | accept_wrong | review |
+|--------------|-----------|----------------|--------------|--------|
+| 2 (default)  | 0.585     | 40             | 28           | 125    |
+| **3**        | **1.000** | **15**         | **0**        | 178    |
+
+At `min_agreeing=3` the result is poison-free at *every* tolerance/confidence in the
+grid (1.0/0.5/0.3 s × 0.55/0.70/0.80) — the lever is the channel count. Recall
+falls (40→15 accepts) but for training data precision >> recall, so this is the
+right trade. Encoded in `harvest.CERTIFIED_POLICY` (`regular`@2ch, `instrumental`@3ch).
+
+Raw logs: scratchpad `gate_logs/{set}_{stem}.log`. Reruns:
+- regular: `python -m workspaces.pws_aligner.validate_accept_precision --set bb12 --stem regular --n-decoys 3`
+- instrumental (certified band): `... --set bb12 --stem instrumental --n-decoys 3 --min-agreeing 3`

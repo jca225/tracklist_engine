@@ -3,11 +3,14 @@
 Turns ACCEPTed candidate→mix agreements (from ``cotrain_seam.propose_from_candidate``)
 into a **harvest ledger** of pseudo-labelled (ref ↔ mix-span) training pairs.
 
-Gated by the ACCEPT-precision certification (2026-07-18): only ACCEPTs whose stem
-is in ``allowed_stems`` are kept. The default is ``{"regular"}`` — the only axis
-certified poison-free (1.000 precision on both BB sets). instrumental (~0.59
-precision) and acappella (untested) are structurally excluded until re-certified,
-so a mis-tuned caller cannot silently harvest a poisoned axis.
+Gated by the ACCEPT-precision certification (2026-07-18) via ``CERTIFIED_POLICY``,
+a per-stem band map: keys are the certified axes, each value is the band that made
+that axis poison-free (1.000 precision, 0 false-accepts) on both BB GT sets —
+``regular`` at 2-channel agreement, ``instrumental`` at UNANIMOUS 3-channel (at
+2-channel it was ~0.59, fooled by confusable EDM textures). acappella (untested)
+is absent → never harvested. Coupling axis→band in one object means a caller
+cannot enable instrumental without also getting its stricter band, so a mis-tuned
+caller cannot silently harvest a poisoned axis.
 
 Invariant (inherited from ``cotrain_seam``): ZERO autonomous canonical mutation.
 This writes ONLY to the harvest-ledger JSONL (training data) and carries any
@@ -37,9 +40,26 @@ from workspaces.pws_aligner.cotrain_seam import (
     propose_from_candidate,
 )
 
-# The certified-safe axis allowlist. Only stems in here are auto-harvested.
-# regular: certified poison-free (2026-07-18). See ACCEPT_PRECISION_RESULTS.md.
+# The certified-safe axis allowlist for the low-level record helper. Only stems
+# here are harvestable by ``record_from_proposal``. regular: certified poison-free
+# (2026-07-18). Conservative default; ``harvest()`` uses CERTIFIED_POLICY below.
 DEFAULT_ALLOWED_STEMS: frozenset[str] = frozenset({"regular"})
+
+# Certified per-stem banding policy (rigorous ACCEPT-precision run, 2026-07-18;
+# see ACCEPT_PRECISION_RESULTS.md). Keys = the axes cleared for auto-harvest;
+# each value is the band that made THAT axis poison-free (1.000 precision, 0
+# false-accepts) on both BB GT sets. Coupling axis→band in one object closes a
+# footgun: you cannot enable instrumental without also getting its stricter band.
+#   - regular:      2-channel agreement (fp+chroma) — it only runs 2 probes, so
+#                   3-channel is physically impossible; 2 was already poison-free.
+#   - instrumental: UNANIMOUS 3-channel (fp+chroma+continuity). At 2-channel it
+#                   was ~0.59 precision (confusable EDM textures fool 2 sensors);
+#                   requiring all 3 to agree drives false-accepts to 0.
+# acappella is absent (untested off-Mac) → never auto-harvested.
+CERTIFIED_POLICY: dict[str, BandThresholds] = {
+    "regular": BandThresholds(),
+    "instrumental": BandThresholds(min_agreeing=3),
+}
 
 
 @dataclass(frozen=True)
@@ -130,16 +150,27 @@ def harvest(
     cases: Iterable[tuple[RefCandidate, MixSpan, dict | None]],
     scorer: RefMixScorer,
     *,
-    allowed_stems: frozenset[str] = DEFAULT_ALLOWED_STEMS,
-    thresholds: BandThresholds = DEFAULT_THRESHOLDS,
+    policy: dict[str, BandThresholds] = CERTIFIED_POLICY,
 ) -> list[HarvestRecord]:
-    """Score each (candidate, span, claim_axes) case and keep harvestable ACCEPTs."""
+    """Score each (candidate, span, claim_axes) case and keep certified ACCEPTs.
+
+    A case is harvestable iff its stem is a key in ``policy`` (the certified
+    allowlist) AND it banded ACCEPT under THAT stem's certified thresholds. The
+    per-stem band is the safety mechanism: instrumental is banded at its stricter
+    3-channel-unanimity threshold, regular at 2-channel — a stem outside the
+    policy is skipped before scoring.
+    """
+    allowed = frozenset(policy)
     out: list[HarvestRecord] = []
     for candidate, span, claim_axes in cases:
+        stem = candidate.stem or "regular"
+        thresholds = policy.get(stem)
+        if thresholds is None:
+            continue  # uncertified axis — never harvested
         prop = propose_from_candidate(
             candidate, span, scorer, thresholds=thresholds, claim_axes=claim_axes
         )
-        rec = record_from_proposal(prop, allowed_stems=allowed_stems)
+        rec = record_from_proposal(prop, allowed_stems=allowed)
         if rec is not None:
             out.append(rec)
     return out
@@ -180,19 +211,22 @@ def write_ledger(records: Sequence[HarvestRecord], ledger: Path) -> int:
     return written
 
 
-# ── CLI: harvest a BB set's regular spans (integration smoke on real audio) ───
+# ── CLI: harvest a BB set's certified spans (integration smoke on real audio) ─
 #
 # Real flywheel input is acquisition-proposed candidate refs on the ~1,016
 # downloaded corpus sets — BLOCKED on the mix-side analysis pass (set_measures=0,
 # set_stems=4 as of 2026-07-17). This CLI runs the write-side on a BB GT set,
 # using each span's GT-correct ref as the candidate, so the executor is
-# exercised on real audio + produces a real ledger. It stays regular-only by
-# default (the certified axis); pass --allow-stems to override (e.g. after
-# instrumental is re-certified).
+# exercised on real audio + produces a real ledger. Banding uses CERTIFIED_POLICY
+# (regular@2ch, instrumental@3ch); acappella is never harvested.
 
 
 def _harvest_set(
-    set_arg: str, *, stem: str | None, allowed: frozenset[str], out: Path
+    set_arg: str,
+    *,
+    stem: str | None,
+    policy: dict[str, BandThresholds],
+    out: Path,
 ) -> int:
     from workspaces.pws_aligner import validate_accept_precision as vap
     from workspaces.pws_aligner.capture_votes import (
@@ -215,12 +249,11 @@ def _harvest_set(
         for c in cases
     ]
     scorer = real_probe_scorer(set_dir)
-    records = harvest(tuples, scorer, allowed_stems=allowed)
+    records = harvest(tuples, scorer, policy=policy)
     n = write_ledger(records, out)
+    bands = {s: t.min_agreeing for s, t in policy.items()}
     print(f"=== harvest {set_arg} ({set_id}) stem={stem or 'all'} ===")
-    print(
-        f"cases={len(tuples)} harvested={len(records)} written={n} allowed={sorted(allowed)}"
-    )
+    print(f"cases={len(tuples)} harvested={len(records)} written={n} policy={bands}")
     print(f"ledger={out}")
     return 0
 
@@ -228,16 +261,24 @@ def _harvest_set(
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Harvest ACCEPTed spans into a ledger.")
     ap.add_argument("--set", required=True, help="bb11 | bb12 | <set_id>")
-    ap.add_argument("--stem", default="regular", help="restrict to one claimed_stem")
+    ap.add_argument(
+        "--stem", default=None, help="restrict to one claimed_stem (default: all)"
+    )
     ap.add_argument(
         "--allow-stems",
-        default="regular",
-        help="comma-list of stems eligible for harvest (default: regular = certified)",
+        default=None,
+        help="comma-list subset of the certified axes to harvest (default: all certified)",
     )
     ap.add_argument("--out", required=True, help="harvest-ledger JSONL path (appended)")
     args = ap.parse_args(argv)
-    allowed = frozenset(s.strip() for s in args.allow_stems.split(",") if s.strip())
-    return _harvest_set(args.set, stem=args.stem, allowed=allowed, out=Path(args.out))
+    policy = CERTIFIED_POLICY
+    if args.allow_stems:
+        want = {s.strip() for s in args.allow_stems.split(",") if s.strip()}
+        unknown = want - set(CERTIFIED_POLICY)
+        if unknown:
+            ap.error(f"uncertified stem(s) {sorted(unknown)} — not in CERTIFIED_POLICY")
+        policy = {s: CERTIFIED_POLICY[s] for s in want}
+    return _harvest_set(args.set, stem=args.stem, policy=policy, out=Path(args.out))
 
 
 if __name__ == "__main__":

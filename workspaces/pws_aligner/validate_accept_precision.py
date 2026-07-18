@@ -227,6 +227,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--accept-conf", type=float, default=DEFAULT_THRESHOLDS.accept_conf)
     ap.add_argument(
+        "--min-agreeing",
+        type=int,
+        default=DEFAULT_THRESHOLDS.min_agreeing,
+        help="channels that must agree to ACCEPT (instrumental certified at 3, 2026-07-18)",
+    )
+    ap.add_argument(
         "--offset-tol-s",
         type=float,
         default=2.0,
@@ -256,7 +262,9 @@ def main(argv: list[str] | None = None) -> int:
         max_spans=args.max_spans,
     )
     thresholds = BandThresholds(
-        accept_tol_s=args.accept_tol_s, accept_conf=args.accept_conf
+        accept_tol_s=args.accept_tol_s,
+        accept_conf=args.accept_conf,
+        min_agreeing=args.min_agreeing,
     )
     scorer = real_probe_scorer(set_dir)
 
