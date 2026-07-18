@@ -305,6 +305,19 @@ def main(argv: list[str] | None = None) -> int:
         help="truncate the train split to the first N spans (0 = all); for the "
         "v0 overfit sanity (few spans, many epochs)",
     )
+    ap.add_argument(
+        "--max-eval",
+        type=int,
+        default=0,
+        help="truncate the eval split to the first N spans (0 = all); keeps the "
+        "feature pass cheap when smoke-testing wiring on a slow (CPU) box",
+    )
+    ap.add_argument(
+        "--synthetic-only",
+        action="store_true",
+        help="train ONLY on --synthetic-root windows (no real span in the loader); "
+        "real BB stays eval-only (bake-off §3, the honest sim2real test)",
+    )
     args = ap.parse_args(argv)
 
     device = pick_device(args.device)
@@ -366,10 +379,20 @@ def main(argv: list[str] | None = None) -> int:
         train_ds = SpanSubset(base, idxs[: args.max_train])
         eval_ds = train_ds  # overfit sanity: eval == train, watch it memorize
         print(f"max-train: overfitting {len(train_ds)} spans (eval == train)")
+    elif args.max_eval and len(eval_ds) > args.max_eval:
+        base = eval_ds.base if isinstance(eval_ds, SpanSubset) else eval_ds
+        idxs = (
+            eval_ds.indices
+            if isinstance(eval_ds, SpanSubset)
+            else list(range(len(eval_ds)))
+        )
+        eval_ds = SpanSubset(base, idxs[: args.max_eval])
+        print(f"max-eval: eval on first {len(eval_ds)} spans (cheap feature pass)")
 
     # Synthetic mashups augment the gradient path only — never train_ds itself,
     # so the lam-sweep and train-eval below still report on real GT.
     loader_ds = train_ds
+    fit_ds = train_ds  # what the periodic "train-fit" eval scores (real by default)
     if args.synthetic_root:
         from torch.utils.data import ConcatDataset
 
@@ -385,7 +408,14 @@ def main(argv: list[str] | None = None) -> int:
             f"synthetic: +{len(synth_ds)} train spans from {len(syn_sets)} windows; "
             f"skipped:\n{synth_ds.report_skipped()}"
         )
-        loader_ds = ConcatDataset([train_ds, synth_ds])
+        if args.synthetic_only:
+            # bake-off §3: synthetic is the TRAIN volume; real BB stays eval-only.
+            # No real span enters the loader; the fit-eval watches synthetic fit.
+            loader_ds = synth_ds
+            fit_ds = SpanSubset(synth_ds, list(range(min(len(synth_ds), 8))))
+            print("synthetic-only: real train set excluded from the loader")
+        else:
+            loader_ds = ConcatDataset([train_ds, synth_ds])
 
     loader = DataLoader(
         loader_ds,
@@ -507,7 +537,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         if epoch % args.eval_every == 0 or epoch == args.epochs:
             evaluate(model, eval_ds, device, f"eval {eval_tag} ep{epoch}")
-            evaluate(model, train_ds, device, f"train ep{epoch}")
+            evaluate(model, fit_ds, device, f"train-fit ep{epoch}")
 
     CKPT_DIR.mkdir(parents=True, exist_ok=True)
     ckpt = CKPT_DIR / f"decoder_{ckpt_tag}.pt"
