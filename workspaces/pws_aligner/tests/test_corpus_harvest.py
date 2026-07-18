@@ -11,7 +11,14 @@ from __future__ import annotations
 
 import sqlite3
 
+from pathlib import Path
+
 from workspaces.pws_aligner.corpus_harvest import query_corpus_slots
+from workspaces.pws_aligner.corpus_harvest import (  # noqa: E402
+    DEFAULT_SPAN_S,
+    CorpusSlot,
+    build_corpus_cases,
+)
 
 
 def _make_db() -> sqlite3.Connection:
@@ -150,3 +157,57 @@ def test_query_respects_limit_and_order():
         _add_track_audio(conn, recording_id=f"R{i}", stem="regular")
     slots = query_corpus_slots(conn, policy_stems=("regular",), limit=2)
     assert [s.recording_id for s in slots] == ["R0", "R1"]
+
+
+def _slot(**kw) -> CorpusSlot:
+    base = dict(
+        set_id="S1",
+        set_audio_id=10,
+        slot_label="001",
+        recording_id="R1",
+        ref_path="/ref/r1.flac",
+        claimed_version="original",
+        claimed_stem="regular",
+        claimed_variant="regular",
+        cue_time_s=120.0,
+        duration_s=55.0,
+        mix_full_path="/mix/s1.m4a",
+    )
+    base.update(kw)
+    return CorpusSlot(**base)
+
+
+def test_build_cases_maps_slot_to_candidate_span_axes():
+    cases = build_corpus_cases([_slot()])
+    assert len(cases) == 1
+    cand, span, axes = cases[0]
+    assert cand.recording_id == "R1"
+    assert cand.source_path == "/ref/r1.flac"
+    assert cand.stem == "regular"
+    assert cand.version == "original"
+    assert cand.variant == "regular"
+    assert cand.source_url.startswith("corpus://")
+    assert span.set_id == "S1"
+    assert span.slot_label == "001"
+    assert span.set_start_s == 120.0
+    assert span.span_dur_s == 55.0
+    assert axes == {"version": "original", "stem": "regular", "variant": "regular"}
+
+
+def test_build_cases_defaults_span_when_no_duration():
+    cases = build_corpus_cases([_slot(duration_s=None)])
+    _, span, _ = cases[0]
+    assert span.span_dur_s == DEFAULT_SPAN_S
+
+
+def test_build_cases_applies_ref_audio_root_to_relative_paths():
+    cases = build_corpus_cases(
+        [_slot(ref_path="rel/r1.flac")], ref_audio_root=Path("/root")
+    )
+    cand, _, _ = cases[0]
+    assert cand.source_path == "/root/rel/r1.flac"
+    # absolute paths untouched
+    cases2 = build_corpus_cases(
+        [_slot(ref_path="/abs/r1.flac")], ref_audio_root=Path("/root")
+    )
+    assert cases2[0][0].source_path == "/abs/r1.flac"

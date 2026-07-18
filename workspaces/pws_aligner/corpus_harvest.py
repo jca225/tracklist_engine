@@ -23,7 +23,9 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Sequence
+
+from workspaces.pws_aligner.cotrain_seam import MixSpan, RefCandidate
 
 # Canonical pi-storage defaults (all overridable via CLI args for tests/other hosts).
 DEFAULT_DB = Path("/mnt/storage/data/db/music_database.db")
@@ -104,3 +106,46 @@ def query_corpus_slots(
             )
         )
     return out
+
+
+def _resolve(path: str, root: Path | None) -> Path:
+    """Join ``root`` to ``path`` only when ``path`` is relative; else pass through."""
+    p = Path(path)
+    if root is not None and not p.is_absolute():
+        return Path(root) / p
+    return p
+
+
+def build_corpus_cases(
+    slots: Sequence[CorpusSlot],
+    *,
+    ref_audio_root: Path | None = None,
+) -> list[tuple[RefCandidate, MixSpan, dict[str, str]]]:
+    """One positive case per slot (no decoys — harvesting keeps confident
+    agreements; decoys were only for the precision gate). ``claim_axes`` mirrors
+    the slot claim so ``cotrain_seam`` can propose a correction if the accepted
+    candidate ever differs (here they match by construction → correction None).
+    """
+    cases: list[tuple[RefCandidate, MixSpan, dict[str, str]]] = []
+    for s in slots:
+        candidate = RefCandidate(
+            recording_id=s.recording_id,
+            source_url=f"corpus://{s.set_id}/{s.slot_label}",
+            source_path=str(_resolve(s.ref_path, ref_audio_root)),
+            version=s.claimed_version,
+            stem=s.claimed_stem,
+            variant=s.claimed_variant,
+        )
+        span = MixSpan(
+            set_id=s.set_id,
+            slot_label=s.slot_label,
+            set_start_s=s.cue_time_s,
+            span_dur_s=s.duration_s if s.duration_s else DEFAULT_SPAN_S,
+        )
+        claim_axes = {
+            "version": s.claimed_version,
+            "stem": s.claimed_stem,
+            "variant": s.claimed_variant,
+        }
+        cases.append((candidate, span, claim_axes))
+    return cases
