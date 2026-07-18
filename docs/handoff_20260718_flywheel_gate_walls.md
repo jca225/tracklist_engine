@@ -26,11 +26,16 @@ now hinges on **proving the flywheel is safe** (ACCEPT precision) and building t
   based on `cotrain-grammar-coverage`).
 - **Result:** instrumental smoke (3 spans) = **precision 1.000, 0 false-accepts**
   → strong axis looks **poison-free** (tiny sample, NOT certified).
-- **⚠ PERF BUG (blocks full run):** the harness re-loads + re-fingerprints the FULL
-  mix per candidate per probe (BB12 mix_instrumental=771MB/~1hr) ⇒ **~1 min/case**
-  ⇒ a 69-case run is **~70 min on ANY machine**. **Fix = cache mix-side features
-  once per span** (positive + decoys share the identical mix window). Until then,
-  run the rigorous per-axis validation **OFF-MAC** (pi-worker / Vast batch).
+- **✅ PERF BUG FIXED (commit `6929b4d`, this branch).** `MixFeatureCache`
+  (`workspaces/pws_aligner/mix_feature_cache.py`) memoizes all mix-side features
+  (full-mix landmark fp, whole-mix chroma, windowed mix chroma/HuBERT) + ref
+  features per run; the full-mix work now runs ONCE per span, not per candidate.
+  New seams: `fp_offset(mix_fp=…)` + `FingerprintProbe(mix_fp=…)` (both symmetric
+  with existing `ref_fp` / `ChromaProbe.mix_chroma`, default-None-preserve). Real
+  BB12 instrumental smoke (2 spans/4 cases): **40.7s, precision 1.000 / 0
+  false-accepts, ~6× faster** (grows with span/candidate count). **Peak RSS 9.5GB**
+  — the rigorous instrumental/regular run is now feasible **on-Mac**; acappella
+  still off-Mac (HuBERT/MPS hangs) and watch pi-worker RAM.
 - **⚠ Acappella hangs:** the HuBERT/MPS path ran **15h then hung** on the Mac —
   killed. Acappella ACCEPT needs off-Mac + the caching fix. reg/instr = fp+chroma
   (no HuBERT).
@@ -96,10 +101,12 @@ now hinges on **proving the flywheel is safe** (ACCEPT precision) and building t
   agent. Commit by pathspec; scan `git log` before touching shared branches.
 
 ## Next steps (prioritized)
-1. **Fix the ACCEPT harness perf bug** (cache mix features per span) — unblocks the
-   rigorous gate AND pays off in the harvest executor. Then run the per-axis
-   validation **off-Mac**. If instrumental/regular certify clean → turn the flywheel
-   on those axes.
+1. **✅ DONE — ACCEPT harness perf bug fixed** (commit `6929b4d`, `MixFeatureCache`).
+   **Now do the rigorous per-axis run:** instrumental + regular are feasible on-Mac
+   (fp+chroma, no HuBERT) — run `validate_accept_precision --set bb12 --stem
+   instrumental` (and `--set bb11`, and `--stem regular`) at full span count, no
+   `--max-spans`. If instrumental/regular certify clean → turn the flywheel on those
+   axes. Acappella stays off-Mac (HuBERT/MPS hangs); mind the 9.5GB RSS on pi-worker.
 2. **Build the harvest executor** — run the seam on the ~1,016 downloaded sets →
    keep confident pseudo-labels → retrain. The actual path to 40k. (Coordinate with
    the F3 agent.)
