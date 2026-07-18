@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import warnings
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -97,6 +98,57 @@ def fingerprint_from_audio(y: np.ndarray, *, sr: int = SR) -> LandmarkFingerprin
         duration_s=float(len(y) / SR),
         hashes=hashes(tf, fb),
     )
+
+
+def fingerprint_from_file_streaming(
+    path: str | Path, *, chunk_s: float = 120.0, overlap_s: float = 3.0
+) -> LandmarkFingerprint:
+    """Memory-bounded ``fingerprint_from_audio``: fingerprint the file in
+    ``chunk_s``-second windows (each loaded with ``overlap_s`` extra so landmark
+    pairs straddling a boundary — up to ``dt_max``≈1.86 s — form inside a chunk),
+    offset each chunk's anchor times by the chunk start, and merge the hash dicts.
+
+    Because a fingerprint is ``{hash: (anchor_time_frames, ...)}``, this reproduces
+    ``fingerprint_from_audio`` except for a few STFT-edge frames per boundary. Peak
+    RAM is ONE chunk's audio + STFT, not the whole signal.
+    """
+    import librosa
+
+    # Snap step and overlap to integer hop multiples so the chunk STFT frame grid
+    # aligns with the full-signal STFT grid.  Without this, a fractional-hop offset
+    # shifts every peak's frame index, causing near-zero Jaccard even on identical
+    # audio.  The snapping nudges chunk_s by at most one hop (≈23 ms) — immaterial
+    # for corpus harvesting.
+    step_hops = round(chunk_s * SR / FHOP)  # integer hops per step
+    ovl_hops = round(overlap_s * SR / FHOP)  # integer overlap hops
+    step_samp = step_hops * FHOP  # samples per step (multiple of FHOP)
+    win_samp = (step_hops + ovl_hops) * FHOP  # window samples (multiple of FHOP)
+    win_s = win_samp / SR  # window duration in seconds
+
+    merged: dict[tuple[int, int, int], set[int]] = {}
+    total_dur = 0.0
+    off_samp = 0  # current offset in samples; always a multiple of FHOP
+
+    while True:
+        y, _ = librosa.load(
+            str(path), sr=SR, mono=True, offset=off_samp / SR, duration=win_s
+        )
+        if y.size == 0:
+            break
+        chunk_dur = y.size / SR
+        total_dur = max(total_dur, off_samp / SR + chunk_dur)
+        tf, fb = constellation(y)
+        if tf.size:
+            frame_off = off_samp // FHOP  # exact integer frame offset
+            for key, times in hashes(tf, fb).items():
+                bucket = merged.setdefault(key, set())
+                for tt in times:
+                    bucket.add(int(tt) + frame_off)
+        if y.size < win_samp:  # file ended within this window
+            break
+        off_samp += step_samp
+    hashes_out = {k: tuple(sorted(v)) for k, v in merged.items()}
+    return LandmarkFingerprint(fps=FPS, duration_s=total_dur, hashes=hashes_out)
 
 
 def _vote_histogram(
