@@ -58,6 +58,10 @@ class SpanScore:
     fiber: float | None
     ref_err_s: float | None  # straight clips only
     density: int | None
+    # version-aware identity: True when a strict miss still shares a `work` with an
+    # overlapping GT recording (right song, wrong version). == id_correct without a
+    # work map. Reported ALONGSIDE strict identity, never replacing it.
+    id_versionaware: bool | None = None
 
 
 def norm_slot(s: str) -> str:
@@ -156,6 +160,7 @@ def score_spans(
     fibers: bool = False,
     hubert_layer: int = 9,
     gt_path: Path | None = None,
+    work_of: dict[str, str] | None = None,
 ) -> list[SpanScore]:
     """Score every span in *timeline_path* against GT; return one SpanScore per span.
 
@@ -244,6 +249,15 @@ def score_spans(
         else:
             id_correct = None
 
+        # version-aware identity: a strict miss that shares a `work` with an
+        # overlapping GT recording is the right song, wrong version (a near-miss),
+        # not a full identity miss. No work map -> identical to id_correct.
+        id_versionaware = id_correct
+        if id_correct is False and work_of:
+            pw = work_of.get(recording_id)
+            if pw and any(work_of.get(str(r["track_id"])) == pw for r in overlapping):
+                id_versionaware = True
+
         # placement + ref: nearest same-recording GT row
         rows = gt_by_tid.get(recording_id)
         if not rows:
@@ -259,6 +273,7 @@ def score_spans(
                     fiber=None,
                     ref_err_s=None,
                     density=None,
+                    id_versionaware=id_versionaware,
                 )
             )
             continue
@@ -311,6 +326,7 @@ def score_spans(
                 fiber=fiber_val,
                 ref_err_s=ref_err_s,
                 density=density,
+                id_versionaware=id_versionaware,
             )
         )
 
@@ -346,7 +362,20 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="score an arbitrary timeline JSON (default: out/<set-id>_predicted_timeline.json)",
     )
+    p.add_argument(
+        "--work-map",
+        type=Path,
+        default=_REPO / "labeling" / "fixtures" / "work_map.json",
+        help="recording_id->work_id JSON (from the canonical `work` grouping). When "
+        "present, a second 'identity (version-aware)' number credits a strict miss "
+        "that shares a work with an overlapping GT recording (right song, wrong "
+        "version). Absent -> only strict identity is reported.",
+    )
     args = p.parse_args(argv)
+
+    work_of: dict[str, str] | None = None
+    if args.work_map and Path(args.work_map).exists():
+        work_of = json.loads(Path(args.work_map).read_text())
 
     if args.gt is None:
         # Resolve GT by set_id — a hardcoded default once scored BB11 against
@@ -391,6 +420,7 @@ def main(argv: list[str] | None = None) -> int:
         fibers=args.fibers,
         hubert_layer=args.hubert_layer,
         gt_path=args.gt,
+        work_of=work_of,
     )
 
     # Reconstruct aggregates from span_scores + raw timeline (display only).
@@ -513,6 +543,13 @@ def main(argv: list[str] | None = None) -> int:
         f"identity: {id_ok}/{nid} ({100 * id_ok / max(nid, 1):.0f}%)  "
         f"[{no_gt} spans had no same-slot GT row]"
     )
+    if work_of is not None:
+        id_va = sum(1 for sc in span_scores if sc.id_versionaware is True)
+        print(
+            f"identity (version-aware): {id_va}/{nid} "
+            f"({100 * id_va / max(nid, 1):.0f}%)  "
+            f"[+{id_va - id_ok} strict miss(es) were right-song/wrong-version]"
+        )
     pe = np.array([r[0] for r in place_errs])
     print(
         f"set placement |pred-gt|: median={np.median(pe):.1f}s  "

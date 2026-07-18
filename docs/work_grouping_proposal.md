@@ -1,6 +1,9 @@
 # Work-grouping: link sibling recordings under one `work` (proposal)
 
-**Status:** DRY-RUN proposal produced 2026-07-18; **not applied to canonical DB.**
+**Status:** **APPLIED to canonical DB 2026-07-18** (1922 clusters, 3150 recordings
+re-parented; works 18810→15662). Revert map:
+`pi:/mnt/storage/data/db/recording_work_id_pre_grouping.csv` (single-column change).
+The scorer follow-up (§Applying step 5) is also done on this branch.
 **Tool:** [scripts/propose_work_grouping.py](../scripts/propose_work_grouping.py)
 **Origin:** [eda/alignment/failure_analysis/IDENTITY_MISS_DECOMPOSITION.md](../eda/alignment/failure_analysis/IDENTITY_MISS_DECOMPOSITION.md)
 (the `work` layer being unpopulated surfaced there).
@@ -60,10 +63,14 @@ blind `--apply`):
 3. Back up `music_database.db`, then apply the reviewed SQL on pi-storage.
 4. Orphaned `work` rows (the absorbed singletons) can be left (harmless) or GC'd in a
    follow-up; FK cascade behaviour must be checked before deleting.
-5. **Scorer follow-up:** once applied, update `score_timeline_vs_gt.py` to credit a
-   predicted recording whose `work_id` matches the GT row's `work_id` as a
-   *version-near-miss* (reported separately from strict identity), so "right song,
-   wrong version" stops scoring as a full miss.
+5. **Scorer follow-up — DONE (this branch):** `score_timeline_vs_gt.py` now reads
+   `--work-map` (default `labeling/fixtures/work_map.json`, a snapshot exported from
+   canonical) and prints a second `identity (version-aware)` number crediting a strict
+   miss that shares a `work` with an overlapping GT recording. Strict identity is
+   unchanged (additive). Effect is small by design — **BB11 +1, BB12 +2** rescued (e.g.
+   Chainsmokers "Roses" ↔ "Roses (Acappella)"), matching the finding that version-
+   linking touches only ~2 identity misses. Snapshot drifts as the DB changes;
+   regenerate via `ssh pi-storage 'sqlite3 <DB> "SELECT json_group_object(recording_id, work_id) FROM recording;"'`.
 
 ## Caveats
 
