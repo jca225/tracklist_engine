@@ -410,3 +410,55 @@ def record_attempt(
     cases[idx] = case
     save_cases(path, cases)
     return case
+
+
+def open_case(
+    *,
+    set_id: str,
+    slot_label: str,
+    recording_id: str,
+    problem_classes: Iterable[ProblemClass] = (),
+    impact_score: int = 0,
+    claim: CaseClaim | None = None,
+    layer_role: LayerRole | None = None,
+    notes: str = "",
+    root: str | Path = "data/acquisition_cases",
+) -> AcquisitionCase:
+    """Find-or-create the ``(set_id, slot_label, recording_id)`` case in OPEN.
+
+    The detection-time counterpart of ``record_attempt``: opens a case with *no*
+    attempt when a problem is first spotted. Idempotent — an existing case (any
+    status) is merged (problem_classes union, ``impact_score`` max, ``notes``
+    appended) and returned; a case is never duplicated.
+    """
+    from core.slot_inventory import derive_layer_role
+
+    path = default_path(set_id, root=root)
+    cases = load_cases(path)
+    idx = find_case_index(cases, slot_label, recording_id)
+    if idx is None:
+        seed_claim = claim or CaseClaim(recording_id=recording_id)
+        role = layer_role or derive_layer_role(slot_label, claimed_stem=seed_claim.stem)
+        cases.append(
+            AcquisitionCase(
+                set_id=set_id,
+                slot_label=slot_label,
+                layer_role=role,
+                claim=seed_claim,
+                status=CaseStatus.OPEN,
+            )
+        )
+        idx = len(cases) - 1
+
+    case = cases[idx]
+    if problem_classes:
+        case = with_problem_classes(case, *problem_classes)
+    if impact_score > case.impact_score:
+        case = replace(case, impact_score=impact_score)
+    if notes and notes not in case.notes:
+        case = replace(
+            case, notes=(f"{case.notes}\n{notes}".strip() if case.notes else notes)
+        )
+    cases[idx] = case
+    save_cases(path, cases)
+    return case

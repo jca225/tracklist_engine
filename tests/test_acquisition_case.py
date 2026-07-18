@@ -281,3 +281,51 @@ def test_impact_score_defaults_zero_when_absent():
         {"set_id": "x", "slot_label": "1", "claim": {"recording_id": "r"}}
     )
     assert back.impact_score == 0
+
+
+# ── open_case: detection-time find-or-create ──────────────────────────────────
+
+
+def test_open_case_creates_open_case(tmp_path):
+    from core.acquisition_case import default_path, open_case
+
+    c = open_case(
+        set_id="1fsnxchk",
+        slot_label="097",
+        recording_id="1jz334x5",
+        problem_classes=(ProblemClass.MISSING_ASSET,),
+        impact_score=1,
+        notes="never matched",
+        root=tmp_path,
+    )
+    assert c.status is CaseStatus.OPEN
+    assert ProblemClass.MISSING_ASSET in c.problem_classes
+    assert c.impact_score == 1
+    on_disk = load_cases(default_path("1fsnxchk", root=tmp_path))
+    assert len(on_disk) == 1
+
+
+def test_open_case_is_idempotent_and_merges(tmp_path):
+    from core.acquisition_case import default_path, open_case
+
+    open_case(
+        set_id="s",
+        slot_label="1",
+        recording_id="r",
+        problem_classes=(ProblemClass.MISSING_ASSET,),
+        impact_score=1,
+        root=tmp_path,
+    )
+    open_case(
+        set_id="s",
+        slot_label="1",
+        recording_id="r",
+        problem_classes=(ProblemClass.WRONG_VERSION,),
+        impact_score=3,
+        root=tmp_path,
+    )
+    cases = load_cases(default_path("s", root=tmp_path))
+    assert len(cases) == 1  # dedup guarantee
+    assert ProblemClass.MISSING_ASSET in cases[0].problem_classes
+    assert ProblemClass.WRONG_VERSION in cases[0].problem_classes
+    assert cases[0].impact_score == 3  # takes the max
