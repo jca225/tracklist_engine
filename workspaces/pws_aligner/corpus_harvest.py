@@ -23,9 +23,17 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Callable, Iterable, Sequence
 
-from workspaces.pws_aligner.cotrain_seam import MixSpan, RefCandidate
+from workspaces.pws_aligner.cotrain_seam import (
+    BandThresholds,
+    MixSpan,
+    RefCandidate,
+    RefMixScorer,
+    corpus_mix_resolver,
+    real_probe_scorer,
+)
+from workspaces.pws_aligner.harvest import CERTIFIED_POLICY, harvest, write_ledger
 
 # Canonical pi-storage defaults (all overridable via CLI args for tests/other hosts).
 DEFAULT_DB = Path("/mnt/storage/data/db/music_database.db")
@@ -149,3 +157,65 @@ def build_corpus_cases(
         }
         cases.append((candidate, span, claim_axes))
     return cases
+
+
+@dataclass(frozen=True)
+class HarvestSummary:
+    """Counts from one batch harvest run."""
+
+    n_sets: int
+    n_cases: int
+    n_harvested: int
+    n_written: int
+
+    def to_json(self) -> dict:
+        return {
+            "n_sets": self.n_sets,
+            "n_cases": self.n_cases,
+            "n_harvested": self.n_harvested,
+            "n_written": self.n_written,
+        }
+
+
+# A ScorerFactory builds a per-set scorer from (mix_full_path, mix_stem_dir).
+# Injected so the batch loop is testable with a fake scorer offline.
+ScorerFactory = Callable[[Path, Path], RefMixScorer]
+
+
+def _default_scorer_factory(mix_full_path: Path, mix_stem_dir: Path) -> RefMixScorer:
+    """Real corpus scorer: certified probes over the pi-storage layout."""
+    return real_probe_scorer(
+        mix_resolver=corpus_mix_resolver(mix_full_path, mix_stem_dir)
+    )
+
+
+def run_corpus_harvest(
+    slots: Sequence[CorpusSlot],
+    *,
+    stems_root: Path,
+    out: Path,
+    policy: dict[str, BandThresholds] = CERTIFIED_POLICY,
+    set_audio_root: Path | None = None,
+    ref_audio_root: Path | None = None,
+    scorer_factory: ScorerFactory = _default_scorer_factory,
+) -> HarvestSummary:
+    """Group slots by ``set_audio_id``, build ONE scorer per set (so the mix
+    feature cache is reused across the set's slots), harvest under ``policy``, and
+    append incrementally to the idempotent ledger (crash-safe + resumable).
+    """
+    stems_root = Path(stems_root)
+    by_set: dict[int, list[CorpusSlot]] = {}
+    for s in slots:
+        by_set.setdefault(s.set_audio_id, []).append(s)
+
+    n_cases = n_harvested = n_written = 0
+    for set_audio_id, set_slots in by_set.items():
+        mix_full = _resolve(set_slots[0].mix_full_path, set_audio_root)
+        mix_stem_dir = stems_root / str(set_audio_id)
+        scorer = scorer_factory(mix_full, mix_stem_dir)
+        cases = build_corpus_cases(set_slots, ref_audio_root=ref_audio_root)
+        n_cases += len(cases)
+        records = harvest(cases, scorer, policy=policy)
+        n_harvested += len(records)
+        n_written += write_ledger(records, out)
+    return HarvestSummary(len(by_set), n_cases, n_harvested, n_written)

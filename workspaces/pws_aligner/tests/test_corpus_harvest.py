@@ -9,6 +9,7 @@ ledger is idempotent, and that the census classifies blockers correctly.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 
 from pathlib import Path
@@ -19,6 +20,8 @@ from workspaces.pws_aligner.corpus_harvest import (  # noqa: E402
     CorpusSlot,
     build_corpus_cases,
 )
+from workspaces.alignment_prototype.harness.contract import AlignmentResult  # noqa: E402
+from workspaces.pws_aligner.corpus_harvest import run_corpus_harvest  # noqa: E402
 
 
 def _make_db() -> sqlite3.Connection:
@@ -211,3 +214,117 @@ def test_build_cases_applies_ref_audio_root_to_relative_paths():
         [_slot(ref_path="/abs/r1.flac")], ref_audio_root=Path("/root")
     )
     assert cases2[0][0].source_path == "/abs/r1.flac"
+
+
+def _agree(rec_id, sources, *, offset=12.0, conf=0.8):
+    return [
+        AlignmentResult(
+            recording_id=rec_id, offset_s=offset, confidence=conf, source=src
+        )
+        for src in sources
+    ]
+
+
+def test_run_harvest_writes_only_accepts(tmp_path):
+    # two regular slots in one set; scorer agrees (2 channels) → both ACCEPT.
+    slots = [
+        _slot(recording_id="R1", slot_label="001", cue_time_s=100.0),
+        _slot(recording_id="R2", slot_label="002", cue_time_s=200.0),
+    ]
+
+    def factory(mix_full_path, mix_stem_dir):
+        def scorer(cand, span):
+            return _agree(cand.recording_id, ("fp", "chroma"))
+
+        return scorer
+
+    out = tmp_path / "ledger.jsonl"
+    summary = run_corpus_harvest(
+        slots, stems_root=tmp_path, out=out, scorer_factory=factory
+    )
+    assert summary.n_sets == 1
+    assert summary.n_cases == 2
+    assert summary.n_harvested == 2
+    assert summary.n_written == 2
+    lines = [json.loads(x) for x in out.read_text().splitlines() if x.strip()]
+    assert {r["recording_id"] for r in lines} == {"R1", "R2"}
+    assert all(r["stem"] == "regular" for r in lines)
+
+
+def test_run_harvest_instrumental_needs_three_channels(tmp_path):
+    slots = [_slot(recording_id="RI", slot_label="003", claimed_stem="instrumental")]
+
+    def two_channel(mix_full_path, mix_stem_dir):
+        def scorer(cand, span):
+            return _agree(cand.recording_id, ("fp", "chroma"))  # only 2 agree
+
+        return scorer
+
+    out = tmp_path / "ledger.jsonl"
+    summary = run_corpus_harvest(
+        slots, stems_root=tmp_path, out=out, scorer_factory=two_channel
+    )
+    assert summary.n_harvested == 0  # instrumental banded < ACCEPT at 2 channels
+    assert not out.exists() or out.read_text().strip() == ""
+
+    def three_channel(mix_full_path, mix_stem_dir):
+        def scorer(cand, span):
+            return _agree(cand.recording_id, ("fp", "chroma", "continuity"))
+
+        return scorer
+
+    out2 = tmp_path / "ledger2.jsonl"
+    summary2 = run_corpus_harvest(
+        slots, stems_root=tmp_path, out=out2, scorer_factory=three_channel
+    )
+    assert summary2.n_harvested == 1
+
+
+def test_run_harvest_is_idempotent(tmp_path):
+    slots = [_slot(recording_id="R1", slot_label="001", cue_time_s=100.0)]
+
+    def factory(mix_full_path, mix_stem_dir):
+        return lambda cand, span: _agree(cand.recording_id, ("fp", "chroma"))
+
+    out = tmp_path / "ledger.jsonl"
+    first = run_corpus_harvest(
+        slots, stems_root=tmp_path, out=out, scorer_factory=factory
+    )
+    second = run_corpus_harvest(
+        slots, stems_root=tmp_path, out=out, scorer_factory=factory
+    )
+    assert first.n_written == 1
+    assert second.n_written == 0  # span_key already present
+    assert len([x for x in out.read_text().splitlines() if x.strip()]) == 1
+
+
+def test_run_harvest_builds_one_scorer_per_set(tmp_path):
+    # two slots share set_audio_id → factory called once; stem dir routed by id.
+    slots = [
+        _slot(
+            set_id="S1",
+            set_audio_id=77,
+            recording_id="R1",
+            slot_label="001",
+            cue_time_s=100.0,
+        ),
+        _slot(
+            set_id="S1",
+            set_audio_id=77,
+            recording_id="R2",
+            slot_label="002",
+            cue_time_s=200.0,
+        ),
+    ]
+    calls = []
+
+    def factory(mix_full_path, mix_stem_dir):
+        calls.append((Path(mix_full_path), Path(mix_stem_dir)))
+        return lambda cand, span: _agree(cand.recording_id, ("fp", "chroma"))
+
+    out = tmp_path / "ledger.jsonl"
+    run_corpus_harvest(
+        slots, stems_root=tmp_path / "stems", out=out, scorer_factory=factory
+    )
+    assert len(calls) == 1
+    assert calls[0][1] == tmp_path / "stems" / "77"
