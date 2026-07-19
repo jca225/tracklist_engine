@@ -219,6 +219,45 @@ def test_rewires_poisoned_local_path_to_proxy(tmp_path: Path, monkeypatch):
     assert "AFROJACK" not in row["local_path"]
 
 
+def test_collision_report_flags_orphan_and_manifest(tmp_path: Path):
+    set_dir = tmp_path / "1fsnxchk__x"
+    tracks = set_dir / "tracks"
+    tracks.mkdir(parents=True)
+    good = tracks / "037__Dune - Heiress.m4a"
+    orphan = tracks / "037__Breathe Carolina - Blackout.m4a"
+    tagged = tracks / "037__Breathe Carolina - Blackout [123bpm 2A].m4a"
+    for p in (good, orphan, tagged):
+        _touch_audio(p)
+    (set_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "set_id": "1fsnxchk",
+                "tracks": [
+                    {
+                        "track_id": "94tc2y5",
+                        "slot_label": "037",
+                        "local_path": str(good),
+                        "stems": {},
+                    }
+                ],
+            }
+        )
+    )
+
+    from labeling.reconcile_aligning_manifest import scan_slot_collisions
+
+    report = scan_slot_collisions(set_dir)
+    assert len(report.groups) == 1
+    group = report.groups[0]
+    assert group.slot == "037"
+    by_name = {e.path.name: e for e in group.entries}
+    assert by_name[good.name].in_manifest
+    assert by_name[tagged.name].tagged
+    assert not by_name[tagged.name].quarantine_candidate
+    assert by_name[orphan.name].quarantine_candidate
+    assert len(report.quarantine_candidates) == 1
+
+
 def test_inventory_enrichment_warning_on_ssh_failure(tmp_path: Path, monkeypatch):
     set_dir = tmp_path / "1fsnxchk__x"
     (set_dir / "tracks").mkdir(parents=True)

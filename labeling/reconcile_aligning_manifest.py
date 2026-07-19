@@ -30,7 +30,11 @@ from labeling.inventory_check import (  # noqa: E402
     fetch_slot_rows,
     satisfaction_to_manifest_fields,
 )
-from labeling.pull_set_for_alignment import fetch_tracks, ssh_sqlite  # noqa: E402
+from labeling.pull_set_for_alignment import (  # noqa: E402
+    _user_tagged,
+    fetch_tracks,
+    ssh_sqlite,
+)
 
 # (set_id, slot_label) -> filename under set_dir (not under tracks/)
 PROXY_SLOT_AUDIO: dict[tuple[str, str], str] = {
@@ -39,6 +43,8 @@ PROXY_SLOT_AUDIO: dict[tuple[str, str], str] = {
 
 _AUDIO_EXT = frozenset({".m4a", ".mp3", ".flac", ".wav", ".ogg", ".opus", ".aac"})
 _STEM_NAMES = ("vocals", "instrumental")
+_SLOT_PREFIX_RE = re.compile(r"^(\d{3}(?:w\d+)?)__")
+_ORPHAN_QUARANTINE_DIR = "_orphan_slot_collisions"
 _TITLE_STOP = frozenset(
     {
         "a",
@@ -65,6 +71,35 @@ class ReconcileReport:
     unresolved: list[str]
     backed_up: Path | None
     warnings: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class SlotCollisionEntry:
+    kind: str  # "track" | "stem_dir"
+    path: Path
+    slot: str
+    tagged: bool
+    in_manifest: bool
+
+    @property
+    def quarantine_candidate(self) -> bool:
+        return not self.tagged and not self.in_manifest
+
+
+@dataclass(frozen=True)
+class SlotCollisionGroup:
+    slot: str
+    entries: tuple[SlotCollisionEntry, ...]
+
+    @property
+    def is_collision(self) -> bool:
+        return len(self.entries) > 1
+
+
+@dataclass(frozen=True)
+class CollisionScanReport:
+    groups: tuple[SlotCollisionGroup, ...]
+    quarantine_candidates: tuple[SlotCollisionEntry, ...]
 
 
 def _slot_variants(slot_label: str) -> list[str]:
@@ -408,6 +443,135 @@ def reconcile_manifest(set_dir: Path, *, dry_run: bool = True) -> ReconcileRepor
     )
 
 
+def _resolve_under_set(set_dir: Path, path_str: str) -> Path | None:
+    raw = Path(path_str)
+    if raw.is_file():
+        return raw.resolve()
+    candidate = set_dir / raw
+    if candidate.is_file():
+        return candidate.resolve()
+    for marker in ("tracks", "stems"):
+        if marker in raw.parts:
+            i = raw.parts.index(marker)
+            candidate = set_dir.joinpath(*raw.parts[i:])
+            if candidate.is_file():
+                return candidate.resolve()
+    return None
+
+
+def manifest_keep_paths(set_dir: Path, manifest: dict[str, Any]) -> set[Path]:
+    """Paths (files + stem parent dirs) owned by the manifest."""
+    keep: set[Path] = set()
+    set_id = str(manifest.get("set_id") or "")
+    for track in manifest.get("tracks") or []:
+        lp = track.get("local_path")
+        if lp:
+            resolved = _resolve_under_set(set_dir, str(lp))
+            if resolved is not None:
+                keep.add(resolved)
+        for stem_path in (track.get("stems") or {}).values():
+            if not stem_path:
+                continue
+            resolved = _resolve_under_set(set_dir, str(stem_path))
+            if resolved is not None:
+                keep.add(resolved)
+                keep.add(resolved.parent)
+    for (sid, _slot), rel in PROXY_SLOT_AUDIO.items():
+        if sid == set_id:
+            proxy = (set_dir / rel).resolve()
+            if proxy.is_file():
+                keep.add(proxy)
+    return keep
+
+
+def _path_in_manifest(path: Path, keep: set[Path]) -> bool:
+    resolved = path.resolve()
+    if resolved in keep:
+        return True
+    if path.is_dir():
+        return resolved in keep
+    return resolved.parent in keep
+
+
+def _iter_slot_collision_entries(
+    set_dir: Path, keep: set[Path]
+) -> list[SlotCollisionEntry]:
+    entries: list[SlotCollisionEntry] = []
+    tracks_dir = set_dir / "tracks"
+    if tracks_dir.is_dir():
+        for hit in sorted(tracks_dir.iterdir()):
+            m = _SLOT_PREFIX_RE.match(hit.name)
+            if not m or not hit.is_file():
+                continue
+            if hit.suffix.lower() not in _AUDIO_EXT:
+                continue
+            entries.append(
+                SlotCollisionEntry(
+                    kind="track",
+                    path=hit,
+                    slot=m.group(1),
+                    tagged=_user_tagged(hit.name),
+                    in_manifest=_path_in_manifest(hit, keep),
+                )
+            )
+    stems_dir = set_dir / "stems"
+    if stems_dir.is_dir():
+        for hit in sorted(stems_dir.iterdir()):
+            m = _SLOT_PREFIX_RE.match(hit.name)
+            if not m or not hit.is_dir():
+                continue
+            entries.append(
+                SlotCollisionEntry(
+                    kind="stem_dir",
+                    path=hit,
+                    slot=m.group(1),
+                    tagged=_user_tagged(hit.name),
+                    in_manifest=_path_in_manifest(hit, keep),
+                )
+            )
+    return entries
+
+
+def scan_slot_collisions(set_dir: Path) -> CollisionScanReport:
+    """Find slot-prefix collisions under tracks/ and stems/."""
+    set_dir = Path(set_dir)
+    manifest_path = set_dir / MANIFEST_FILENAME
+    manifest = json.loads(manifest_path.read_text()) if manifest_path.is_file() else {}
+    keep = manifest_keep_paths(set_dir, manifest)
+    entries = _iter_slot_collision_entries(set_dir, keep)
+    by_slot: dict[str, list[SlotCollisionEntry]] = {}
+    for entry in entries:
+        by_slot.setdefault(entry.slot, []).append(entry)
+    groups = tuple(
+        SlotCollisionGroup(
+            slot=slot, entries=tuple(sorted(items, key=lambda e: e.path.name))
+        )
+        for slot, items in sorted(by_slot.items())
+        if len(items) > 1
+    )
+    candidates = tuple(e for e in entries if e.quarantine_candidate)
+    return CollisionScanReport(groups=groups, quarantine_candidates=candidates)
+
+
+def _print_collision_report(report: CollisionScanReport, set_dir: Path) -> None:
+    print(f"collision scan {set_dir.name}")
+    print(f"collision_slots: {len(report.groups)}")
+    print(f"quarantine_candidates: {len(report.quarantine_candidates)}")
+    for group in report.groups:
+        print(f"  slot {group.slot}:")
+        for entry in group.entries:
+            flags: list[str] = []
+            if entry.in_manifest:
+                flags.append("manifest")
+            if entry.tagged:
+                flags.append("tagged")
+            if entry.quarantine_candidate:
+                flags.append("quarantine")
+            flag_str = f" [{', '.join(flags)}]" if flags else ""
+            rel = entry.path.relative_to(set_dir)
+            print(f"    {entry.kind:8} {rel}{flag_str}")
+
+
 def _find_set_dir(dest: Path, set_id: str) -> Path:
     hits = sorted(dest.glob(f"{set_id}__*"))
     if not hits:
@@ -450,9 +614,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Write manifest after backup (default: dry-run report only)",
     )
+    parser.add_argument(
+        "--report-collisions",
+        action="store_true",
+        help="Report slot-prefix collisions under tracks/ and stems/",
+    )
     args = parser.parse_args(argv)
 
     set_dir = _find_set_dir(Path(args.dest).expanduser(), args.set_id)
+    if args.report_collisions:
+        _print_collision_report(scan_slot_collisions(set_dir), set_dir)
+        return 0
     report = reconcile_manifest(set_dir, dry_run=not args.apply)
     mode = "APPLY" if args.apply else "DRY-RUN"
     print(f"reconcile {set_dir.name} [{mode}]")
