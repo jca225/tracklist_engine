@@ -32,12 +32,17 @@ if str(_REPO) not in sys.path:
 
 from workspaces.alignment_prototype.path_decode import (
     FPS,
+    _audible_intervals,
     _gt_pieces,
     _pieces,
     _ref_at,
     _span_class,
     gt_placement_onset,
     trajectory_acc,
+)
+from workspaces.alignment_prototype.identity_bridge import (
+    canonicalize_gt_rows,
+    load_identity_map,
 )
 from workspaces.alignment_prototype.refine_ref_offsets import (
     _STEM_FILE,
@@ -65,6 +70,34 @@ def norm_slot(s: str) -> str:
     """'006w2' -> '6w2', '013' -> '13' — GT zero-pads, set_track_slots doesn't."""
     m = re.match(r"^0*(\d+)(w\d+)?$", str(s).strip())
     return f"{m.group(1)}{m.group(2) or ''}" if m else str(s).strip()
+
+
+def _row_overlaps(row: dict, lo: float, hi: float) -> bool:
+    """Whether any actually-played GT interval overlaps ``[lo, hi]``."""
+    return any(a < hi and b > lo for a, b in _audible_intervals(row))
+
+
+def _row_active_at(row: dict, t: float) -> bool:
+    return any(a <= t < b for a, b in _audible_intervals(row))
+
+
+def _sample_played_times(row: dict, n: int = 15) -> np.ndarray:
+    """Even samples over played time, excluding multisegment silent gaps."""
+    intervals = _audible_intervals(row)
+    lengths = [max(0.0, b - a) for a, b in intervals]
+    total = sum(lengths)
+    if total <= 0:
+        return np.array([], dtype=float)
+    offsets = np.linspace(0.0, total, n, endpoint=False) + total / (2 * n)
+    out: list[float] = []
+    for off in offsets:
+        cursor = off
+        for (a, _b), length in zip(intervals, lengths):
+            if cursor < length - 1e-9:
+                out.append(a + cursor)
+                break
+            cursor -= length
+    return np.asarray(out, dtype=float)
 
 
 def _decompose_span(pred_segs, row) -> tuple[int, int, int]:
@@ -194,17 +227,11 @@ def score_spans(
 
     gt_doc = yaml.safe_load(gt_path.read_text())
     join_guard(tl_record.sid, gt_doc.get("set_id") or "", context="timeline vs GT yaml")
-    gt_rows = [r for r in gt_doc["tracks"] if str(r.get("slot_label")) != "mix"]
-
-    id_map_path = _REPO / "labeling" / "fixtures" / "id_maps" / f"{set_id}.json"
-    id_map: dict[str, str] = (
-        json.loads(id_map_path.read_text()) if id_map_path.exists() else {}
-    )
-    if id_map:
-        for r in gt_rows:
-            tid = str(r.get("track_id") or "")
-            if tid in id_map and id_map[tid] != tid:
-                r["track_id"] = id_map[tid]
+    gt_rows = [
+        r
+        for r in canonicalize_gt_rows(set_id, gt_doc["tracks"])
+        if str(r.get("slot_label")) != "mix"
+    ]
 
     gt_by_tid: dict[str, list[dict]] = {}
     for r in gt_rows:
@@ -235,8 +262,9 @@ def score_spans(
             r
             for r in gt_rows
             if r.get("track_id")
-            and float(r["set_start_s"]) < s["set_end_s"] + 5
-            and float(r["set_end_s"]) > s["set_start_s"] - 5
+            and _row_overlaps(
+                r, float(s["set_start_s"]) - 5.0, float(s["set_end_s"]) + 5.0
+            )
         ]
         if overlapping:
             id_correct: bool | None = any(
@@ -278,19 +306,15 @@ def score_spans(
         fiber_val = facc if fibers else strict
 
         # overlay density
-        g0, g1 = float(g["set_start_s"]), float(g["set_end_s"])
+        density_times = _sample_played_times(g)
         density = int(
             np.median(
                 [
-                    sum(
-                        1
-                        for r in gt_rows
-                        if float(r["set_start_s"]) <= t < float(r["set_end_s"])
-                    )
-                    for t in np.linspace(g0, max(g0 + 0.1, g1 - 0.1), 15)
+                    sum(1 for r in gt_rows if _row_active_at(r, float(t)))
+                    for t in density_times
                 ]
             )
-        )
+        ) if density_times.size else 0
 
         # ref_err_s: straight clips only (same exclusion logic as main())
         ref_err_s: float | None = None
@@ -379,8 +403,8 @@ def main(argv: list[str] | None = None) -> int:
 
     # Print id-map normalization count before score_spans (mirrors old behaviour).
     id_map_path = _REPO / "labeling" / "fixtures" / "id_maps" / f"{args.set_id}.json"
-    if id_map_path.exists():
-        id_map: dict[str, str] = json.loads(id_map_path.read_text())
+    id_map = load_identity_map(args.set_id)
+    if id_map:
         gt_doc_pre = yaml.safe_load(args.gt.read_text())
         gt_rows_pre = [
             r for r in gt_doc_pre["tracks"] if str(r.get("slot_label")) != "mix"
@@ -409,13 +433,11 @@ def main(argv: list[str] | None = None) -> int:
 
     # Reload GT rows (with id-map applied) for decompose + identity-miss display.
     gt_doc = yaml.safe_load(args.gt.read_text())
-    gt_rows = [r for r in gt_doc["tracks"] if str(r.get("slot_label")) != "mix"]
-    if id_map_path.exists():
-        id_map2: dict[str, str] = json.loads(id_map_path.read_text())
-        for r in gt_rows:
-            tid = str(r.get("track_id") or "")
-            if tid in id_map2 and id_map2[tid] != tid:
-                r["track_id"] = id_map2[tid]
+    gt_rows = [
+        r
+        for r in canonicalize_gt_rows(args.set_id, gt_doc["tracks"])
+        if str(r.get("slot_label")) != "mix"
+    ]
     gt_by_tid2: dict[str, list[dict]] = {}
     for r in gt_rows:
         if r.get("track_id"):
@@ -431,8 +453,11 @@ def main(argv: list[str] | None = None) -> int:
                     str(r["track_id"])
                     for r in gt_rows
                     if r.get("track_id")
-                    and float(r["set_start_s"]) < s["set_end_s"] + 5
-                    and float(r["set_end_s"]) > s["set_start_s"] - 5
+                    and _row_overlaps(
+                        r,
+                        float(s["set_start_s"]) - 5.0,
+                        float(s["set_end_s"]) + 5.0,
+                    )
                 }
             )[:3]
             id_bad.append((sc.slot, sc.recording_id, overlapping_tids, s["name"][:36]))

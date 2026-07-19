@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from labeling.audio_index import (
     build_audio_index,
     load_audio_index,
@@ -35,7 +37,10 @@ def test_build_prefers_manifest_paths(tmp_path: Path) -> None:
     ]
     index = build_audio_index(tmp_path, tracks)
     assert index["by_track_audio_id"]["42"]["local_path"] == str(local)
+    assert index["by_track_audio_id"]["42"]["local_sha256"]
+    assert index["by_track_audio_id"]["42"]["recording_id"] is None
     assert index["by_track_audio_id"]["42"]["stems"]["vocals"] == str(vocals)
+    assert index["by_track_audio_id"]["42"]["stem_sha256"]["vocals"]
 
 
 def test_build_fills_unique_disk_fallback(tmp_path: Path) -> None:
@@ -84,6 +89,45 @@ def test_resolve_stem_uses_audio_index(tmp_path: Path) -> None:
     )
     track = {"track_audio_id": 42, "stems": {}}
     assert resolve_stem(tmp_path, "001w1", track, "vocals") == indexed
+
+
+def test_existing_index_fails_closed_instead_of_using_stale_manifest_stem(
+    tmp_path: Path,
+) -> None:
+    stale = _touch(tmp_path / "stems" / "stale" / "vocals.flac")
+    write_audio_index(
+        tmp_path,
+        {"version": 2, "by_track_audio_id": {"42": {"stems": {}}}},
+    )
+    track = {"track_audio_id": 42, "stems": {"vocals": str(stale)}}
+    assert resolve_stem(tmp_path, "001w1", track, "vocals") is None
+
+
+def test_trajectory_ref_resolution_uses_audio_index(tmp_path: Path) -> None:
+    pytest.importorskip("librosa")
+    from workspaces.alignment_prototype.trajectory.features import resolve_span_audio
+
+    indexed = _touch(tmp_path / "tracks" / "indexed.m4a")
+    stale = _touch(tmp_path / "tracks" / "stale.m4a")
+    mix = _touch(tmp_path / "mix.m4a")
+    write_audio_index(
+        tmp_path,
+        {
+            "version": 2,
+            "by_track_audio_id": {
+                "42": {"local_path": str(indexed), "stems": {}}
+            },
+        },
+    )
+    audio = resolve_span_audio(
+        tmp_path,
+        {"rec42": {"track_audio_id": 42, "local_path": str(stale), "stems": {}}},
+        {},
+        mix,
+        {"track_id": "rec42", "claimed_stem": "regular", "slot_label": "001"},
+    )
+    assert not isinstance(audio, str)
+    assert audio.ref_path == indexed
 
 
 def test_lookup_helpers_and_refresh_roundtrip(tmp_path: Path) -> None:
