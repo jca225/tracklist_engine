@@ -4,7 +4,9 @@ import json
 
 from workspaces.alignment_prototype.candidate_arbiter.adapters import (
     candidates_from_timeline,
+    fp_candidates_for_span,
 )
+from workspaces.alignment_prototype.mix_fp_hits import FpCandidateEvidence
 
 
 def test_serialized_proposals_become_shadow_candidates() -> None:
@@ -17,6 +19,7 @@ def test_serialized_proposals_become_shadow_candidates() -> None:
                 "claimed_stem": "instrumental",
                 "set_start_s": 100.0,
                 "ref_start_s": 4.0,
+                "start_source": "agentic:lyrics",
                 "probe_proposals": {
                     "cue_prior": 98.0,
                     "mert_decode": {"set_start_s": 101.0, "confidence": 0.6},
@@ -39,6 +42,7 @@ def test_serialized_proposals_become_shadow_candidates() -> None:
     assert by_source["fp"].set_start_s == 140.0
     assert by_source["fp"].evidence.baseline_delta_s == 40.0
     assert by_source["mert_decode"].native_confidence == 0.6
+    assert by_source["mert_decode"].evidence.baseline_source == "agentic:lyrics"
     assert set(by_source["mert_decode"].evidence.agreeing_sources) == {
         "baseline",
         "cue_prior",
@@ -84,3 +88,33 @@ def test_missing_or_abstained_proposals_are_not_candidates() -> None:
     candidates = candidates_from_timeline(timeline)
 
     assert [candidate.source for candidate in candidates] == ["baseline"]
+
+
+def test_fp_native_evidence_maps_to_candidate_contract() -> None:
+    span = {
+        "slot_label": "001",
+        "recording_id": "rid",
+        "claimed_stem": "instrumental",
+        "set_start_s": 100.0,
+    }
+    native = (
+        FpCandidateEvidence(
+            rank=0,
+            set_start_s=90.0,
+            set_end_s=110.0,
+            offset_s=4.0,
+            votes=120,
+            vote_density=6.0,
+            runner_up_ratio=2.5,
+        ),
+    )
+
+    candidates = fp_candidates_for_span("set", span, native)
+
+    candidate = candidates[0]
+    assert candidate.rank == 0
+    assert candidate.ref_start_s == 94.0
+    assert candidate.evidence.baseline_delta_s == -10.0
+    assert candidate.evidence.vote_count == 120
+    assert candidate.evidence.vote_density == 6.0
+    assert candidate.evidence.runner_up_ratio == 2.5

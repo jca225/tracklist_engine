@@ -24,6 +24,15 @@ SOURCES = (
     "other",
 )
 STEMS = ("regular", "acappella", "instrumental")
+BASELINE_SOURCES = (
+    "mert",
+    "fp",
+    "lyrics",
+    "instr_fp",
+    "agentic",
+    "synthetic_coarse",
+    "other",
+)
 OPTIONAL_NUMERIC = (
     "native_confidence",
     "ridge_peak",
@@ -57,6 +66,7 @@ class CandidateVectorizer:
             *OPTIONAL_NUMERIC,
             *(f"missing:{name}" for name in OPTIONAL_NUMERIC),
             *(f"source:{source}" for source in SOURCES),
+            *(f"baseline_source:{source}" for source in BASELINE_SOURCES),
             *(f"stem:{stem}" for stem in STEMS),
         )
 
@@ -89,6 +99,19 @@ class CandidateVectorizer:
             row.extend(1.0 if value is None else 0.0 for value in values)
             source = candidate.source if candidate.source in SOURCES else "other"
             row.extend(1.0 if source == name else 0.0 for name in SOURCES)
+            raw_baseline_source = candidate.evidence.baseline_source or "other"
+            baseline_source = next(
+                (
+                    name
+                    for name in BASELINE_SOURCES
+                    if name != "other" and name in raw_baseline_source
+                ),
+                "other",
+            )
+            row.extend(
+                1.0 if baseline_source == name else 0.0
+                for name in BASELINE_SOURCES
+            )
             row.extend(
                 1.0 if candidate.claimed_stem == stem else 0.0 for stem in STEMS
             )

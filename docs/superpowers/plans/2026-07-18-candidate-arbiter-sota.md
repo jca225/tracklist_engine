@@ -20,9 +20,13 @@ Completed on branch `fp-hit-decoder-clean`:
 The candidate oracle clears the placement gate on both held-out boards, so
 existing proposer recall is sufficient for this milestone and a learned
 arbiter is earned. The real-only single-set-to-single-set logistic critic does
-not transfer, so it must not be integrated into a driver. Current active work
-is Phase 1 evidence enrichment plus Phase 2 synthetic hard-negative generation.
-The mashup-invariant encoder remains deferred.
+not transfer. Native top-K FP strength, synthetic instrumental hard negatives,
+and baseline-source provenance were subsequently added; the critic still
+failed bidirectional held-out acceptance and remains disconnected from every
+driver. The v0 tabular critic is closed in the attic ledger. Candidate
+arbitration should resume only with a third real GT set or audio-pair
+verification features. The mashup-invariant encoder remains deferred pending a
+new representation-wall gate.
 
 This plan does not introduce another probe first. The ridge diagnostic and the
 instrumental-FP delta proof showed that existing proposers often contain useful

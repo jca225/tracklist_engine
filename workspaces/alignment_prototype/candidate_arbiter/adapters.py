@@ -9,9 +9,40 @@ from workspaces.alignment_prototype.agentic.belief import (
     CLUSTER_TOL_S,
     INDEPENDENCE_GROUP,
 )
+from workspaces.alignment_prototype.mix_fp_hits import FpCandidateEvidence
 
 from .io import baseline_candidates
 from .schema import CandidateEvidence, PlacementCandidate
+
+
+def fp_candidates_for_span(
+    set_id: str,
+    span: dict,
+    candidates: tuple[FpCandidateEvidence, ...],
+) -> tuple[PlacementCandidate, ...]:
+    """Map native top-K FP diagonals into the common shadow candidate contract."""
+    baseline_start = float(span["set_start_s"])
+    return tuple(
+        PlacementCandidate(
+            set_id=set_id,
+            slot_label=str(span["slot_label"]),
+            recording_id=str(span["recording_id"]),
+            claimed_stem=str(span.get("claimed_stem") or "regular"),
+            source="fp",
+            rank=candidate.rank,
+            set_start_s=candidate.set_start_s,
+            ref_start_s=candidate.set_start_s + candidate.offset_s,
+            native_confidence=None,
+            evidence=CandidateEvidence(
+                baseline_delta_s=candidate.set_start_s - baseline_start,
+                baseline_source=str(span.get("start_source") or "unknown"),
+                vote_count=candidate.votes,
+                vote_density=candidate.vote_density,
+                runner_up_ratio=candidate.runner_up_ratio,
+            ),
+        )
+        for candidate in candidates
+    )
 
 
 def _proposal_value(value: object) -> tuple[float, float | None, float | None] | None:
@@ -85,6 +116,9 @@ def candidates_from_timeline(timeline: dict) -> tuple[PlacementCandidate, ...]:
                     native_confidence=confidence,
                     evidence=CandidateEvidence(
                         baseline_delta_s=set_start - baseline.set_start_s,
+                        baseline_source=str(
+                            span.get("start_source") or "unknown"
+                        ),
                         agreeing_sources=agreeing,
                         independent_groups=_groups(agreeing),
                         cue_delta_s=(set_start - cue[0]) if cue else None,

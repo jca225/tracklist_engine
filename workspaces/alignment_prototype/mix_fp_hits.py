@@ -29,6 +29,19 @@ class MixFpHit:
     sharpness: float
 
 
+@dataclass(frozen=True)
+class FpCandidateEvidence:
+    """One ranked FP diagonal with the native evidence needed by an arbiter."""
+
+    rank: int
+    set_start_s: float
+    set_end_s: float
+    offset_s: float
+    votes: int
+    vote_density: float
+    runner_up_ratio: float
+
+
 def score_mix_window(
     mix_y: np.ndarray,
     *,
@@ -173,6 +186,37 @@ def candidate_density(cand: tuple[float, float, int, float]) -> float:
     return float(votes) / max(float(se - ss), 0.1)
 
 
+def fp_candidate_evidence(
+    candidates: list[tuple[float, float, int, float]],
+) -> tuple[FpCandidateEvidence, ...]:
+    """Expose ranked diagonal evidence without changing legacy selection.
+
+    ``candidates`` must be in the exact order returned by
+    :func:`offset_candidates`. This adapter is intentionally pure so shadow
+    candidate materialization and parity tests cannot perturb the decoder.
+    """
+    out: list[FpCandidateEvidence] = []
+    for rank, candidate in enumerate(candidates):
+        ss, se, votes, offset = candidate
+        others = [
+            other[2] for other_rank, other in enumerate(candidates) if other_rank != rank
+        ]
+        runner_up = max(others) if others else 0
+        ratio = float(votes) / float(runner_up) if runner_up else float(votes)
+        out.append(
+            FpCandidateEvidence(
+                rank=rank,
+                set_start_s=float(ss),
+                set_end_s=float(se),
+                offset_s=float(offset),
+                votes=int(votes),
+                vote_density=candidate_density(candidate),
+                runner_up_ratio=ratio,
+            )
+        )
+    return tuple(out)
+
+
 def pick_dense_competitive(
     cands: list[tuple[float, float, int, float]],
     *,
@@ -304,6 +348,7 @@ def decode_placements(
     min_step: int = 0,
     with_offset: bool = False,
     with_strength: bool = False,
+    candidate_evidence_out: list[tuple[FpCandidateEvidence, ...]] | None = None,
 ) -> list[tuple[float, ...] | None]:
     """Set-level fingerprint placement: per-span top-K diagonal candidates ->
     monotonic decode over tracklist order. ``ref_fps`` are LandmarkFingerprints
@@ -326,6 +371,11 @@ def decode_placements(
         offset_candidates(mix_hashes, fp, topk=topk, gap_s=gap_s, tol=tol)
         for fp in ref_fps
     ]
+    if candidate_evidence_out is not None:
+        candidate_evidence_out.clear()
+        candidate_evidence_out.extend(
+            fp_candidate_evidence(candidates) for candidates in cand_lists
+        )
     out: list[tuple[float, float] | None] = [None] * len(ref_fps)
     keep = [i for i, c in enumerate(cand_lists) if c]
     if not keep:

@@ -22,6 +22,7 @@ def _validate_optional_floats(value: object, *, owner: str) -> None:
 @dataclass(frozen=True)
 class CandidateEvidence:
     baseline_delta_s: float
+    baseline_source: str | None = None
     ridge_peak: float | None = None
     ridge_second: float | None = None
     ridge_margin: float | None = None

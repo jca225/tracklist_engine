@@ -38,6 +38,27 @@ Scripts still run in place (`python -m workspaces.alignment_prototype.attic.<nam
 | `transition_probe` | do regular/instrumental placement errors concentrate in transition zones? | Probe; findings folded into the failure-analysis placement bucket. |
 | `sic_phase0_probe` | can informed successive cancellation (spectral SIC) make missed medley layers identifiable? | CLOSED 2026-07-10 — cancellation works (−4 dB, physics gate passed) but adds nothing to identification: fp-visible layers were never masked (Honest 1.4k/2.8k votes in raw mix, mis-placed by decision logic = bug lead), fp-invisible layers are invisible from keylock warp geometry, not masking (lever = warp-tolerant hashing, not separation). See docs/medley_sic_plan.md. |
 
+## Candidate critic v0 (2026-07-19) — ORACLE POSITIVE, CRITIC NO-GO
+
+**Question:** can a baseline-aware logistic critic select the best existing
+placement candidate using serialized proposal agreement, baseline provenance,
+native top-K FP strength, and synthetic instrumental-FP hard negatives?
+
+**Verdict:** the candidate oracle clears the two-set placement gate, confirming
+that proposer recall is sufficient. The learned critic does not transfer
+bidirectionally under set-level holdout. Adding baseline-source provenance
+improves ranking in one direction, but calibrated acceptance remains
+low-precision and accepted regressions dominate in the reverse direction.
+Threshold tuning is closed because only two real GT sets exist and further
+held-out adjustment would be leakage.
+
+**Do not re-test** this same small tabular critic on BB11/BB12 with more
+thresholds. Revisit candidate arbitration only after one of: (a) a third
+independent real GT set, (b) proposer-native evidence for MERT/lyrics/HuBERT
+rather than mostly serialized argmax positions, or (c) a critic trained on
+audio-pair verification features. Reusable contracts remain in
+`candidate_arbiter/`; no critic is wired into a driver.
+
 ## PWS categorical label model over offset bins (2026-07-14) — REFUTED
 **Question:** can a Dawid–Skene label model (learned per-probe accuracy, no GT)
 beat hand-tuned `source_priority` fusion, aggregating genuine per-probe votes

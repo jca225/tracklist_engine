@@ -100,6 +100,9 @@ class LiveContext:
     rid_vocal_path: dict[str, str] = field(default_factory=dict)
     _ref_hub_cache: dict[str, np.ndarray | None] = field(default_factory=dict)
     _ref_fiber_cache: dict[str, tuple | None] = field(default_factory=dict)
+    # Shadow-only candidates for the learned arbiter; never read by the current
+    # agentic decision path.
+    shadow_candidates: list[object] = field(default_factory=list)
     # down-weight instance-ambiguous ref placements (B3 fiber abstain). OPT-IN:
     # on BB11 it demotes ~4 vocal spans auto->suggest at unchanged set_start
     # cleanliness (the ambiguity is in ref_start/which-instance, which the rung
@@ -211,6 +214,9 @@ class LiveContext:
                 decode_placements,
                 load_mix_mono,
             )
+            from workspaces.alignment_prototype.candidate_arbiter.adapters import (
+                fp_candidates_for_span,
+            )
 
             mix_file = set_dir / "mix.m4a"
             if not mix_file.is_file():
@@ -238,6 +244,7 @@ class LiveContext:
                     log.info("live fp: mix hashes from cache %s", cp)
             if hm is None:
                 hm = hashes(*constellation(load_mix_mono(mix_file)))
+            native_candidates = []
             placements = decode_placements(
                 hm,
                 [fps[i] for i in keep],
@@ -245,7 +252,16 @@ class LiveContext:
                 topk=6,
                 gap_s=6.0,
                 with_offset=True,
+                candidate_evidence_out=native_candidates,
             )
+            for local_index, span_index in enumerate(keep):
+                ctx.shadow_candidates.extend(
+                    fp_candidates_for_span(
+                        ctx.set_id,
+                        spans[span_index],
+                        native_candidates[local_index],
+                    )
+                )
             for r, i in enumerate(keep):
                 pl = placements[r]
                 if pl is None:

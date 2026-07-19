@@ -51,7 +51,10 @@ def baseline_candidates(timeline: dict) -> tuple[PlacementCandidate, ...]:
                 else None
             ),
             native_confidence=None,
-            evidence=CandidateEvidence(baseline_delta_s=0.0),
+            evidence=CandidateEvidence(
+                baseline_delta_s=0.0,
+                baseline_source=str(span.get("start_source") or "unknown"),
+            ),
         )
         for span in timeline["spans"]
     )
