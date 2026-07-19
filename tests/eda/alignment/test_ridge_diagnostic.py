@@ -8,6 +8,7 @@ from eda.alignment.ridge_diagnostic.features import (
     _clamp_crop_bounds,
     cosine_sim_matrix,
 )
+from eda.alignment.ridge_diagnostic.ridge import gt_diagonal_mask, ridge_contrast
 
 
 def test_rank_candidates_prefers_large_place_err_with_id_correct() -> None:
@@ -37,6 +38,22 @@ def test_align_bin_grid_crops_and_pads() -> None:
     assert out.shape == (2, 5)
     assert float(out[1, 2]) == 0.5
     assert float(out[0, 4]) == 0.0
+
+
+def test_gt_diagonal_mask_multiseg_two_offsets() -> None:
+    mask = gt_diagonal_mask((40, 40), offsets_s=(0.0, 10.0), bin_s=1.0, band_bins=0)
+    assert mask[5, 5]
+    assert mask[5, 15]
+    assert not mask[5, 25]
+
+
+def test_ridge_contrast_high_on_planted_diagonal() -> None:
+    m = np.zeros((30, 30), dtype=np.float32)
+    for i in range(30):
+        m[i, i] = 1.0
+    mask = gt_diagonal_mask(m.shape, offsets_s=(0.0,), bin_s=1.0, band_bins=1)
+    c = ridge_contrast(m, mask)
+    assert c > 5.0
 
 
 def test_clamp_crop_bounds_respects_file_duration() -> None:
