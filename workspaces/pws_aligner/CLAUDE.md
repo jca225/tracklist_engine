@@ -40,6 +40,10 @@ self-consistent — the absolute-frame probes outvote fp in the wrong frame.
 
 ## What's reusable (why this module is kept)
 
+- `corpus_harvest.py` — flywheel step-2 batch CLI: pi DB → cue-anchored
+  positive-only cases → certified-probe scorer (`corpus_mix_resolver`) → harvest
+  ledger; `--census` reports eligibility (recall ceiling) before the GPU stem
+  pass. CPU-only for the certified axes (regular/instrumental); runs on pi-storage.
 - `capture_votes.py` — genuine per-probe vote capture: runs the real harness
   probes per span, records every `AlignmentResult` verbatim (frame-normalized).
 - `verifier.py` — Confident-Learning joint estimator + the **GT calibration

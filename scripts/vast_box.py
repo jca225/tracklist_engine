@@ -56,6 +56,10 @@ API_BASE = "https://console.vast.ai/api/v0"
 KEY_PATH = Path.home() / ".config" / "vastai" / "vast_api_key"
 LEDGER_PATH = Path.home() / ".config" / "vastai" / "vast_box_ledger.json"
 SSH_CONFIG_PATH = Path.home() / ".ssh" / "config"
+# Session-scoped blocklist of Vast machine_ids that failed a race probe (never
+# booted / no port 22). `race` skips them so a known-dud machine isn't re-rented.
+# Plain text, one id per line; safe to delete any time (it refills itself).
+QUARANTINE_PATH = Path.home() / ".config" / "vastai" / "vast_quarantine"
 
 TEMPLATE_ID = 405071  # "PyTorch (Vast)" — /venv/main + sshd baked in
 DEFAULT_DISK_GB = 60
@@ -296,6 +300,35 @@ def advance(
     return state, "wait"
 
 
+def race_step(
+    states: dict[int, WaitState],
+    observations: dict[int, tuple[str | None, bool]],
+    *,
+    now: float,
+    dud_after: float = 600.0,
+    boot_timeout: float = 1800.0,
+) -> tuple[dict[int, WaitState], dict[int, Verdict]]:
+    """One concurrent poll across a racing pool. Runs the per-box `advance`
+    state machine and returns updated states + a verdict per box. The caller
+    takes the first ``ready`` as the winner (destroy the rest) and quarantines
+    any ``dud``/``boot_timeout`` machine. Pure — every box advances
+    independently from its own ``WaitState``."""
+    new_states: dict[int, WaitState] = {}
+    verdicts: dict[int, Verdict] = {}
+    for iid, (status, listening) in observations.items():
+        st, v = advance(
+            states[iid],
+            status=status,
+            port_listening=listening,
+            now=now,
+            dud_after=dud_after,
+            boot_timeout=boot_timeout,
+        )
+        new_states[iid] = st
+        verdicts[iid] = v
+    return new_states, verdicts
+
+
 # ---------------------------------------------------------------------------
 # Pure core — ~/.ssh/config rewrite
 # ---------------------------------------------------------------------------
@@ -481,6 +514,26 @@ def load_ledger() -> dict[str, dict[str, object]]:
 def save_ledger(ledger: dict[str, dict[str, object]]) -> None:
     LEDGER_PATH.parent.mkdir(parents=True, exist_ok=True)
     LEDGER_PATH.write_text(json.dumps(ledger, indent=2) + "\n")
+
+
+def load_quarantine() -> frozenset[int]:
+    """Machine ids the `race` command should skip (failed a recent probe)."""
+    if not QUARANTINE_PATH.exists():
+        return frozenset()
+    return frozenset(
+        int(line.strip())
+        for line in QUARANTINE_PATH.read_text().splitlines()
+        if line.strip().isdigit()
+    )
+
+
+def add_quarantine(machine_ids: set[int]) -> None:
+    ids = {m for m in machine_ids if m}
+    if not ids:
+        return
+    merged = set(load_quarantine()) | ids
+    QUARANTINE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    QUARANTINE_PATH.write_text("\n".join(str(m) for m in sorted(merged)) + "\n")
 
 
 def ssh_run(
@@ -719,6 +772,94 @@ def cmd_wait_ssh(args: argparse.Namespace, http: HttpFn, probe: ProbeFn) -> None
     )
 
 
+def cmd_race(args: argparse.Namespace, http: HttpFn, probe: ProbeFn) -> None:
+    """Rent N boxes at once, keep the first to open port 22, destroy the losers
+    and quarantine any dud machine. Faster and more robust than the sequential
+    wait-ssh dud re-rent: you don't discover a bad box only after staging code
+    on it. (Port-22-listening is the health signal — it catches the common
+    never-boot/no-map dud; a deeper post-SSH GPU/CUDA probe is a future add.)"""
+    if args.n < 1:
+        sys.exit("vast_box: --n must be >= 1")
+    query = build_query(args.gpu, args.max_dph)
+    active: dict[int, int] = {}  # instance_id -> machine_id (only boxes WE rented)
+
+    def destroy_all(ids: list[int]) -> None:
+        for iid in ids:  # KEEP-guard: only ids in `active`, which we rented
+            try:
+                destroy_instance(http, iid)
+            except SystemExit:
+                pass  # already gone / API hiccup — don't abort the sweep
+
+    for rnd in range(args.rounds):
+        offers = eligible_offers(fetch_offers(http, query), load_quarantine())
+        need = args.n - len(active)
+        if need > 0:
+            if len(offers) < need and not active:
+                sys.exit(
+                    f"vast_box: only {len(offers)} eligible offers (need {need}) — "
+                    "widen --gpu/--max-dph or clear the quarantine"
+                )
+            for off in offers[:need]:
+                iid = rent_offer(http, off.offer_id, args.label, args.disk)
+                active[iid] = off.machine_id
+                print(
+                    f"==> race round {rnd + 1}: rented {iid} "
+                    f"(machine {off.machine_id}, ${off.dph_total:.3f}/hr, {off.geolocation})"
+                )
+        states = {
+            iid: WaitState(started=time.monotonic(), running_since=None)
+            for iid in active
+        }
+        while active:
+            instances = fetch_instances(http)
+            obs: dict[int, tuple[str | None, bool]] = {}
+            for iid in active:
+                inst = find_instance(instances, iid)
+                listening = bool(
+                    inst is not None
+                    and inst.direct is not None
+                    and probe(inst.direct.host, inst.direct.port)
+                )
+                obs[iid] = (inst.actual_status if inst else None, listening)
+            states, verdicts = race_step(
+                states,
+                obs,
+                now=time.monotonic(),
+                dud_after=args.dud_after,
+                boot_timeout=args.boot_timeout,
+            )
+            print("  " + "  ".join(f"{iid}:{verdicts[iid]}" for iid in sorted(active)))
+            winner = next((iid for iid, v in verdicts.items() if v == "ready"), None)
+            if winner is not None:
+                losers = [iid for iid in active if iid != winner]
+                print(f"==> WINNER {winner} — destroying {len(losers)} loser(s)")
+                destroy_all(losers)
+                inst = find_instance(fetch_instances(http), winner)
+                if inst is not None and inst.direct is not None:
+                    _apply_ssh_config(args.alias, inst.direct)
+                    if inst.proxy:
+                        print(
+                            f"(proxy fallback: root@{inst.proxy.host} -p {inst.proxy.port})"
+                        )
+                print(f"Ready: ssh {args.alias}")
+                print(f"Winner instance id: {winner}")
+                return
+            duds = {iid for iid, v in verdicts.items() if v in ("dud", "boot_timeout")}
+            if duds:
+                add_quarantine({active[iid] for iid in duds})
+                print(
+                    f"==> {len(duds)} dud(s) {sorted(duds)} — destroyed + machines quarantined"
+                )
+                destroy_all(list(duds))
+                for iid in duds:
+                    active.pop(iid, None)
+                    states.pop(iid, None)
+            if not active:
+                break  # whole pool died — outer loop re-rents a fresh batch
+            time.sleep(args.poll)
+    sys.exit(f"vast_box: no healthy box after {args.rounds} race round(s)")
+
+
 def cmd_provision(args: argparse.Namespace) -> None:
     for desc, remote_cmd in provision_plan(args.branch, args.roformer):
         out = ssh_run_or_die(args.alias, desc, remote_cmd)
@@ -866,6 +1007,23 @@ def build_parser() -> argparse.ArgumentParser:
     wp.add_argument("--boot-timeout", type=float, default=1800.0)
     wp.add_argument("--max-rerents", type=int, default=2)
 
+    rc = sub.add_parser(
+        "race",
+        help="rent N boxes at once, keep the first healthy one, destroy+quarantine duds",
+    )
+    rc.add_argument("--label", required=True, help="purpose label (shared by the pool)")
+    rc.add_argument("--n", type=int, default=3, help="boxes to race (default 3)")
+    rc.add_argument("--gpu", default=None, help='GPU name filter (default "RTX 4090")')
+    rc.add_argument("--max-dph", type=float, default=None, help="max $/hr")
+    rc.add_argument("--disk", type=int, default=DEFAULT_DISK_GB)
+    rc.add_argument("--alias", default=DEFAULT_SSH_ALIAS)
+    rc.add_argument("--poll", type=float, default=15.0)
+    rc.add_argument("--dud-after", type=float, default=600.0)
+    rc.add_argument("--boot-timeout", type=float, default=1800.0)
+    rc.add_argument(
+        "--rounds", type=int, default=2, help="re-rent rounds if a whole pool duds"
+    )
+
     pp = sub.add_parser("provision", help="GitHub clone + vast_bootstrap.sh on the box")
     pp.add_argument("--alias", default=DEFAULT_SSH_ALIAS)
     pp.add_argument("--branch", default="main")
@@ -904,6 +1062,8 @@ def main(argv: list[str] | None = None) -> None:
         cmd_rent(args, real_http)
     elif args.cmd == "wait-ssh":
         cmd_wait_ssh(args, real_http, real_probe)
+    elif args.cmd == "race":
+        cmd_race(args, real_http, real_probe)
     elif args.cmd == "provision":
         cmd_provision(args)
     elif args.cmd == "link-pi":

@@ -24,6 +24,12 @@ with `eda/` a cross-cutting consumer that reads from multiple stages.
   no working aligner yet — the ML model is not built; it will incubate in
   `workspaces/`.
 
+**BEFORE ANY ALIGNMENT WORK, read [docs/alignment_state_of_record.md](docs/alignment_state_of_record.md)** —
+the single *living* record of the aligner's current best solution + settled
+decisions (what to build ON, what not to re-litigate) + open fronts. A new
+session reads it first; a finishing session updates it last via `/align-checkpoint`
+instead of writing a new dated handoff.
+
 **Alignment north star (target Aug 1):** the aligner consumes `{tokenized tracklist,
 track audios, set audio}` → an Ableton-round-trippable structure, trained on manual
 Ableton GT. Stem discovery and version/variant QA are **ingest**, *not* the aligner.
@@ -64,10 +70,16 @@ Everything outside this chain is one of:
 generalizes across ~40,000 DJ sets with as close to 100% accuracy as humanly
 possible — the gate. *North-north (deferred, in `lab/`):* the
 research lab above. Alignment is the necessary-but-not-sufficient foundation.
-Full stock-take: [docs/alignment_bearings_20260712.md](docs/alignment_bearings_20260712.md).
+Current state: [docs/alignment_state_of_record.md](docs/alignment_state_of_record.md)
+(prior stock-take [docs/alignment_bearings_20260712.md](docs/alignment_bearings_20260712.md)
+is a superseded 2026-07-12 snapshot).
 
 New features land inside one of the chain modules. New top-level folders
 require explicit justification.
+
+Standing design/plan/research docs (not dated snapshots) are indexed in
+[docs/design_docs_index.md](docs/design_docs_index.md); dated handoffs age out to
+`docs/archive/` via `scripts/docs_gc.py` (`make docs-gc`).
 
 ## Track identity (three axes)
 

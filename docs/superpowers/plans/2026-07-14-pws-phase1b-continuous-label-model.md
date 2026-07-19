@@ -886,7 +886,7 @@ git commit -m "feat(pws): operation-LF runner — keylock/varispeed histogram on
 
 ### Task 7: File the two aligner bug tickets (independent of PWS lane)
 
-From the failure tables (`docs/failure_tables_bb11_bb12_20260714.md`) — worth tickets regardless of how the gate goes.
+From the failure tables (`docs/archive/failure_tables_bb11_bb12_20260714.md`) — worth tickets regardless of how the gate goes.
 
 **Files:** none (GitHub issues via `gh`).
 
@@ -895,7 +895,7 @@ From the failure tables (`docs/failure_tables_bb11_bb12_20260714.md`) — worth 
 ```bash
 gh issue create \
   --title "aligner: 'ref≈0:00 intro-grab' decode collapse" \
-  --body "Biggest failure pattern in docs/failure_tables_bb11_bb12_20260714.md: decode locks onto the ref intro (offset ≈ 0:00) regardless of the true position. Hypothesis: low-information/self-similar intro frames let matched filters peak at 0. Candidate fixes: (a) penalize offset≈0 unless corroborated by a second channel; (b) exclude low-novelty ref intro region from peak search; (c) require fp corroboration for offsets < 10s. Acceptance: re-score the failure-table rows tagged intro-grab on BB11/BB12."
+  --body "Biggest failure pattern in docs/archive/failure_tables_bb11_bb12_20260714.md: decode locks onto the ref intro (offset ≈ 0:00) regardless of the true position. Hypothesis: low-information/self-similar intro frames let matched filters peak at 0. Candidate fixes: (a) penalize offset≈0 unless corroborated by a second channel; (b) exclude low-novelty ref intro region from peak search; (c) require fp corroboration for offsets < 10s. Acceptance: re-score the failure-table rows tagged intro-grab on BB11/BB12."
 ```
 
 - [ ] **Step 2: File ticket 2**
@@ -903,13 +903,13 @@ gh issue create \
 ```bash
 gh issue create \
   --title "aligner: repeated-track instance disambiguation (BB12 'Slide' −746s)" \
-  --body "From docs/failure_tables_bb11_bb12_20260714.md: when a track (or its self-similar fiber) appears multiple times, decode attributes all spans to ONE anchor — BB12 'Slide' produced four spans from one anchor with a −746s error. Needs instance-aware assignment: per-span independent offset hypotheses, fiber-aware anchor splitting (fibers/ already classifies self-repeats), or a decode-level constraint that distinct mix spans may map to distinct ref instances. Acceptance: BB12 Slide spans resolve to their own anchors."
+  --body "From docs/archive/failure_tables_bb11_bb12_20260714.md: when a track (or its self-similar fiber) appears multiple times, decode attributes all spans to ONE anchor — BB12 'Slide' produced four spans from one anchor with a −746s error. Needs instance-aware assignment: per-span independent offset hypotheses, fiber-aware anchor splitting (fibers/ already classifies self-repeats), or a decode-level constraint that distinct mix spans may map to distinct ref instances. Acceptance: BB12 Slide spans resolve to their own anchors."
 ```
 
-- [ ] **Step 3: Note the issue numbers** in `docs/failure_tables_bb11_bb12_20260714.md` (one line at top: "Tracked: #N, #M") and commit that one-liner.
+- [ ] **Step 3: Note the issue numbers** in `docs/archive/failure_tables_bb11_bb12_20260714.md` (one line at top: "Tracked: #N, #M") and commit that one-liner.
 
 ```bash
-git add docs/failure_tables_bb11_bb12_20260714.md
+git add docs/archive/failure_tables_bb11_bb12_20260714.md
 git commit -m "docs: link failure tables to filed aligner tickets"
 ```
 

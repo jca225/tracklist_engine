@@ -14,7 +14,7 @@ REPO         := ~/tracklist_engine
 PIP          := $(REPO)/venvs/web_crawler/bin/pip
 DB           := /mnt/storage/data/db/music_database.db
 
-.PHONY: help check check-corpus check-inventory audit-gt scorecard race align-ablate deploy deploy-storage deploy-worker \
+.PHONY: help check check-corpus check-inventory docs-gc docs-gc-apply audit-gt scorecard race align-ablate deploy deploy-storage deploy-worker \
         restart-jobqueue start-scraper stop-scraper restart-retry \
         install-taste-scrape restart-taste-scrape logs-taste-scrape \
         install-corpus-integrity logs-corpus-integrity \
@@ -55,6 +55,14 @@ check:
 
 typecheck:
 	bash scripts/typecheck.sh
+
+# Docs garbage collection — classify docs/ by reachability; archive dead dated
+# snapshots. Dry-run by default; `make docs-gc-apply` sweeps COLLECTABLE.
+docs-gc:
+	venvs/audio/bin/python scripts/docs_gc.py
+
+docs-gc-apply:
+	venvs/audio/bin/python scripts/docs_gc.py --apply
 
 # Corpus data-integrity: identity/reference invariants over the CANONICAL DB
 # (the data analogue of `make check`, which polices the source tree). ERROR
