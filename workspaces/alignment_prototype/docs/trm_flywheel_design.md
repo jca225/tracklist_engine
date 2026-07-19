@@ -167,6 +167,10 @@ as `content`, surprise grouped with mert). Require the AUTO_COMMIT cluster to
 contain ≥2 independent groups OR one ≥0.9-precision probe. Agreement of correlated
 probes does not count — this is the guard against a single systematically-wrong
 channel (e.g. fp on a wrong diagonal) minting a confident-but-wrong label.
+The general driver currently uses `Ladder(combine=False)` for backward-compatible
+scoring; the E1 pseudo-label path MUST construct `Ladder(combine=True)` explicitly
+and apply a final acceptance predicate: the winning cluster has at least two
+`INDEPENDENCE_GROUP`s, or one member probe has calibrated precision ≥0.9.
 
 **G3 — fiber-instance abstain.** `belief.fiber_gate` down-weights a placement that
 lands in a self-repeat class (chorus ×2–3, content-undecidable). The
@@ -175,6 +179,9 @@ wrong-but-confident. Gate: if the accepted span's `ref_start_s` falls in an
 ambiguous fiber, route to REVIEW (drop from training) — do NOT pseudo-label the
 instance. This is the belief-layer expression of the standing abstain-on-instance
 stance and directly prevents the flywheel from amplifying the which-chorus error.
+`LiveContext.apply_fiber_gate` currently defaults to `False`; the E1 path MUST
+enable it explicitly rather than assuming the general runtime default is safe for
+pseudo-label production.
 
 **G4 — segment-shape sanity (cheap structural filter, in the pure fn).** Reject
 spans whose `ref_segments` imply an impossible trajectory: negative played
@@ -319,3 +326,95 @@ where student ≈ teacher is already a win over synthetic-flat.
 `_gt_pieces`). New code: `trajectory/pseudo_labels.py` (pure `pseudo_gt_row` +
 `pseudo_span_to_offset_labels`), tested in
 `trajectory/tests/test_pseudo_labels.py`.
+
+---
+
+## 7. E1 implementation design (approved 2026-07-18)
+
+E1 uses an **artifact-first pipeline**. The agentic timeline and pseudo-GT YAML
+are explicit, restartable boundaries; training never consumes transient
+in-memory labels. This makes starvation, gate leakage, provenance, and set
+leakage inspectable before expensive feature extraction.
+
+### 7.1 Unlabeled agentic refinement
+
+Extract the set-independent refinement logic from `drivers/agentic.py` into a
+shared function that accepts a base timeline, a stem lookup, live runners, a
+ladder, and an event log. The existing supervised driver calls it with GT stem
+overrides and preserves current behavior. The E1 path calls it without GT:
+
+- preflight the pulled set and validate the base timeline;
+- route stems from timeline/manifest claims;
+- run live probes with `Ladder(combine=True)` and fiber gating enabled;
+- enforce the G2 independent-group/single-high-precision predicate before a
+  resolved span is eligible for pseudo-label materialization;
+- emit the normal agentic timeline with `driver_mode`, `agentic_quality`, and
+  unchanged ref-content mapping.
+
+Unknown unlabeled sets MUST NOT be added to `GT_BY_SET`; absence of GT is the
+point of this path. The unlabeled runner does not score or calibrate against
+BB10.
+
+### 7.2 Pseudo-GT materializer
+
+Add a CLI under `trajectory/` that consumes the validated agentic timeline and
+the pulled manifest, converts accepted spans with `pseudo_gt_row`, and atomically
+writes `out/<set_id>_pseudo_gt.yaml`.
+
+The YAML contains `set_id`, `tracks`, source timeline path and SHA-256,
+the ladder thresholds/fiber-gate setting, and per-gate drop counts. `track_id`
+is resolved from the timeline first and then by recording/slot identity from
+the manifest; unresolved audio identity is a counted rejection, never a row
+with `track_id: null`.
+
+The materializer reports accepted/total coverage but does not optimize coverage.
+Only AUTO_COMMIT spans surviving G0–G4 are emitted. Generated timelines, event
+logs, YAML, and checkpoints remain local artifacts and are not committed.
+
+### 7.3 Training boundary and leakage guard
+
+Extend `trajectory.train` with `--train-yaml PATH`. In set-split mode this
+replaces the training fixture only; `--eval-set` continues to resolve through
+the hand-GT fixture registry. The command fails before feature loading when:
+
+- the pseudo YAML set ID equals the eval set ID;
+- the YAML lacks pseudo-label provenance;
+- no trainable rows survive dataset/audio resolution.
+
+The existing synthetic and hand-GT paths remain unchanged. E1 first runs a smoke
+fit, then the full TRM fit. The same invocation reports the raw-similarity
+control; a paired conv invocation supplies the conv+Viterbi baseline. All
+comparisons use the unchanged strict `trajectory_acc` referee.
+
+### 7.4 E1 orchestration and failure behavior
+
+A thin command composes existing stages:
+
+1. preflight BB10 and required caches;
+2. produce or reuse the unlabeled agentic timeline;
+3. materialize pseudo-GT and print gate accounting;
+4. stop with a distinct starvation result if no usable training mass remains;
+5. run smoke training;
+6. run full conv and TRM comparisons against BB11.
+
+The command performs no canonical DB writes and never mutates pi-storage.
+Missing caches fail with an actionable prerequisite message. A failed stage
+preserves prior artifacts so the next run resumes from the last valid boundary.
+
+### 7.5 Verification
+
+Tests cover:
+
+- supervised and unlabeled callers sharing one refinement function without
+  changing existing driver output;
+- explicit G2/G3 safety configuration on the pseudo-label path;
+- manifest-backed `track_id` resolution and rejection accounting;
+- deterministic, atomic pseudo-GT YAML materialization;
+- YAML round-trip through `TrajectorySpanDataset`;
+- train/eval set leakage and empty-dataset rejection;
+- CLI smoke orchestration with expensive probes and training stubbed.
+
+The runtime experiment is successful only if it completes the BB10 pseudo-train
+→ BB11 GT-eval comparison and prints all same-protocol baselines. Any metric
+verdict is recorded in the experiment ledger and canonical status workflow, not
+hand-copied into this design.
