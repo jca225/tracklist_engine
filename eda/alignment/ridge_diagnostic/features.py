@@ -47,6 +47,38 @@ def cosine_sim_matrix(mix_bins: np.ndarray, ref_bins: np.ndarray) -> np.ndarray:
     return (mix_bins @ ref_bins.T).astype(np.float32)
 
 
+def _align_bin_grid(m: np.ndarray, target: tuple[int, int]) -> np.ndarray:
+    """Crop or zero-pad a similarity matrix to ``target`` (Tm, Tr).
+
+    Bin-grid contract: hubert/chroma/instr_stem use ``pool_bins`` (floor over
+    feature frames). fp_hit counts bins from audio duration with the same floor
+    rule, then this helper forces all channels to share one (Tm, Tr) grid.
+    """
+    tm, tr = target
+    out = np.zeros((tm, tr), dtype=np.float32)
+    cm, cr = m.shape
+    out[: min(tm, cm), : min(tr, cr)] = m[: min(tm, cm), : min(tr, cr)]
+    return out
+
+
+def _audio_duration_s(path: Path) -> float:
+    import soundfile as sf
+
+    try:
+        return float(sf.info(str(path)).duration)
+    except (RuntimeError, OSError):
+        import librosa
+
+        return float(librosa.get_duration(path=str(path)))
+
+
+def _clamp_crop_bounds(lo: float, hi: float, duration_s: float) -> tuple[float, float]:
+    duration_s = max(duration_s, 0.0)
+    lo = max(0.0, min(lo, duration_s))
+    hi = max(lo, min(hi, duration_s))
+    return lo, hi
+
+
 def fp_hit_matrix(
     mix_y: np.ndarray,
     ref_y: np.ndarray,
@@ -59,8 +91,10 @@ def fp_hit_matrix(
     ref_fp = fingerprint_from_audio(ref_y, sr=sr)
     mix_dur = float(len(mix_y) / sr)
     ref_dur = float(len(ref_y) / sr)
-    tm = max(1, int(np.ceil(mix_dur / bin_s)))
-    tr = max(1, int(np.ceil(ref_dur / bin_s)))
+    # Floor matches pool_bins row count from duration; compute_panel may still
+    # crop/pad via _align_bin_grid when feature-frame counts differ slightly.
+    tm = max(1, int(mix_dur / bin_s))
+    tr = max(1, int(ref_dur / bin_s))
     m = np.zeros((tm, tr), dtype=np.float32)
     for key, mix_frames in mix_fp.hashes.items():
         ref_frames = ref_fp.hashes.get(key)
@@ -216,7 +250,9 @@ def compute_panel(
 
     mix_lo = max(0.0, case.gt_audible_onset_s - pad_s)
     mix_hi = case.gt_set_end_s + pad_s
+    mix_lo, mix_hi = _clamp_crop_bounds(mix_lo, mix_hi, _audio_duration_s(mix_full))
     ref_lo, ref_hi = _ref_crop_bounds(case, pad_s)
+    ref_lo, ref_hi = _clamp_crop_bounds(ref_lo, ref_hi, _audio_duration_s(ref_path))
 
     mix_crop, _ = _prepare_crop_audio(
         case, mix_full, mix_lo, mix_hi, role="mix", tempo_ratio=1.0
@@ -247,7 +283,11 @@ def compute_panel(
     mix_y = _load_crop(mix_full, mix_lo, mix_hi, sr=FP_SR)
     ref_y_raw = _load_crop(ref_path, ref_lo, ref_hi, sr=FP_SR)
     ref_y = _tempo_stretch(ref_y_raw, case.tempo_ratio)
-    fp_m = fp_hit_matrix(mix_y, ref_y, FP_SR, bin_s=bin_s)
+    hubert_shape = out["hubert"].M.shape
+    fp_m = _align_bin_grid(
+        fp_hit_matrix(mix_y, ref_y, FP_SR, bin_s=bin_s),
+        hubert_shape,
+    )
     out["fp_hit"] = SimMatrix(
         channel="fp_hit",
         M=fp_m,
