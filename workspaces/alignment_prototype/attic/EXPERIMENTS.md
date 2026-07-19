@@ -301,11 +301,13 @@ fp-only / no exportable 330M MERT; `accepted=0` at G0. Infra (Tasks 1–4) was f
 `24` (HuBERT↔lyrics corroboration: snap set_start to lyrics when |Δ|≤30s so
 G2 CLUSTER_TOL_S=8 can pair; tighter band_s=45 when prior=lyrics). Smoke TRM
 at n=24 still underfits held-out vs control (expected); mass lever only.
-**Verdict (BB10 full E1 @ n=3 and @ n=16, 2026-07-19): noise-floor** — drop
-`--smoke-only`, `--reuse-agentic`. Pseudo-TRM overfits train and does **not**
-beat raw control on held-out BB11. Do **not** regenerate
-`docs/alignment_status.md` until a held-out win. Next: full E1 @ n=24, then
-BB10 fp landmarks for regulars (0/25 had pool-set fps) if still thin.
+**Verdict (BB10 full E1 @ n=3 / n=16 / n=24, 2026-07-19): noise-floor** —
+drop `--smoke-only`, `--reuse-agentic`. At n=24: pseudo-TRM train-fit ~0.86
+but held-out HEADLINE ~0.05 � n=24: pseudo-TRM train-fit ~0.86
+but held-out HEADLINE ~0.05 ≪ control ~0.31 (same shape as n=3/16). Do
+**not** regenerate `docs/alignment_status.md`. Mass alone is not enough at
+this n — next lever: BB10 fp landmarks for regulars (pool had 0/25 rid fps
+in earlier audit) without loosening G1/G2/G3.
 **Fixes that unblocked BB10 (do not weaken G1/G2/G3):** (1) prefer `mix.wav`
 over `mix.m4a` for fp load; (2) `resolve(require_independence=True)` in
 pseudo-safe so lyrics-alone auto does not skip HuBERT; (3) HuBERT prior falls
