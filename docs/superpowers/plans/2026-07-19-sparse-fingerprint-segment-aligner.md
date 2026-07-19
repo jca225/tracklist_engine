@@ -85,6 +85,16 @@ Next instrumental lever (honest slice): second observation (chroma) for
 ridge-absent BB12 misses; false-run rejection for BB11-style near-misses.
 Do not re-introduce slot-norm GT overrides for BB12.
 
+**Instrumental chroma + secondary-run filter (same day):**
+`--observation chroma` on the instrumental lane (mix_instrumental ↔ ref
+instrumental chroma peaks → same decoder) is wired. Shadow recall@15 with
+recording-id overrides: BB12 landmark 0.60 → chroma **0.65**; BB11 landmark
+0.77 → chroma **0.64**. Mixed — chroma helps the weaker set, regresses the
+stronger; not earned as the default observation. Raising
+`min_run_evidence_fraction` from 0.05 → 0.25 (false-run rejection) regressed
+both sets (BB12 0.45 / BB11 0.64); default stays 0.05 with an opt-in fraction
+tested synthetically. Canonical SOTA unchanged.
+
 ## Runnable shadow command
 
 ```bash

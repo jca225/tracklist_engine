@@ -35,6 +35,11 @@ def decode_constituent(
     The input is the raw sparse match cloud. Hough candidates and the
     NULL-aware cover DP decide both the active diagonal and its explicit
     boundaries. Multiple non-NULL runs preserve gaps, jumps, and re-entries.
+
+    ``min_run_evidence_fraction`` drops weak secondary collision runs relative
+    to the strongest kept path. Default 0.05 is the synthetic-fixture floor;
+    raising it (e.g. 0.25) rejects more false extras but regressed real-set
+    recall on both BB11 and BB12 — do not retune on those sets alone.
     """
     if not matches:
         return ()
@@ -65,9 +70,7 @@ def decode_constituent(
             config,
             weights=weights,
         )
-        legacy = [
-            (run.mix_start_s, run.song_start_s, run.song_end_s) for run in runs
-        ]
+        legacy = [(run.mix_start_s, run.song_start_s, run.song_end_s) for run in runs]
         inliers = path_inlier_evidence(
             points,
             legacy,

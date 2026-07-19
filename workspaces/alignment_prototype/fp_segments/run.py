@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import pickle
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -38,7 +39,12 @@ from workspaces.alignment_prototype.fp_index import DEFAULT_CACHE_DIR, FpKey
 from workspaces.alignment_prototype.fp_index import load as load_ref_fp
 from workspaces.alignment_prototype.fp_placement_refine import find_aligning_dir
 from workspaces.alignment_prototype.infer import _manifest_by_tid, _vocal_ref_path
+from workspaces.alignment_prototype.instrumental_probe import (
+    _instr_stem,
+    _resolve_stem_by_slot,
+)
 
+from .chroma_retrieve import load_chroma_feat, retrieve_chroma_matches
 from .hubert_retrieve import load_hubert_feat, retrieve_hubert_matches
 from .local_decode import decode_constituent
 from .retrieve import retrieve_matches
@@ -48,7 +54,11 @@ from .stem_overrides import norm_slot as _norm_slot
 from .stem_overrides import timeline_stem_overrides
 
 _REPO = Path(__file__).resolve().parent.parent.parent.parent
-_OBSERVATIONS = frozenset({"landmark", "hubert"})
+_OBSERVATIONS = frozenset({"landmark", "hubert", "chroma"})
+_LANE_OBSERVATIONS = {
+    "instrumental": frozenset({"landmark", "chroma"}),
+    "vocal": frozenset({"hubert", "landmark"}),
+}
 
 
 def _producer_sha() -> str:
@@ -76,11 +86,36 @@ def _default_observation(lane_name: str) -> str:
 
 def _resolve_observation(lane_name: str, observation: str | None) -> str:
     chosen = observation or _default_observation(lane_name)
-    if chosen not in _OBSERVATIONS:
-        raise ValueError(f"unknown observation {chosen!r}")
-    if lane_name == "instrumental" and chosen != "landmark":
-        raise ValueError("instrumental lane only supports --observation landmark")
+    allowed = _LANE_OBSERVATIONS.get(lane_name)
+    if allowed is None:
+        raise ValueError(f"unknown lane {lane_name!r}")
+    if chosen not in allowed:
+        raise ValueError(
+            f"lane {lane_name!r} does not support --observation {chosen!r}; "
+            f"expected one of {sorted(allowed)}"
+        )
     return chosen
+
+
+def _resolve_ref_instrumental(
+    set_dir: Path,
+    by_tid: dict[str, dict],
+    recording_id: str,
+    slot_label: str,
+) -> Path | None:
+    path = _instr_stem(by_tid.get(recording_id))
+    if path and Path(path).is_file():
+        return Path(path)
+    # Timeline slots are unpadded; stem dirs on disk are often zero-padded.
+    candidates = [slot_label]
+    match = re.match(r"^(\d+)(.*)$", slot_label)
+    if match:
+        candidates.append(f"{int(match.group(1)):03d}{match.group(2)}")
+    for candidate in candidates:
+        resolved = _resolve_stem_by_slot(set_dir, candidate)
+        if resolved and Path(resolved).is_file():
+            return Path(resolved)
+    return None
 
 
 def _segment_rows(segments) -> list[dict[str, float]]:
@@ -157,6 +192,72 @@ def _decode_landmark_lane(
             ref_stem=route.reference_stem,
             mix_channel=route.mix_channel,
             pair_cap=pair_cap,
+        )
+        segments = decode_constituent(
+            matches,
+            mix_duration_s=mix_duration_s,
+            allowed_slopes=slopes,
+        )
+        rows.append(
+            _row(
+                slot=slot,
+                recording_id=recording_id,
+                stem=stem,
+                status="decoded" if segments else "abstained",
+                matches=matches,
+                segments=segments,
+            )
+        )
+    return rows
+
+
+def _decode_chroma_instrumental_lane(
+    *,
+    set_id: str,
+    route,
+    timeline: dict[str, Any],
+    overrides: dict[str, str],
+    slopes: tuple[float, ...],
+    mix_duration_s: float,
+) -> list[dict[str, Any]]:
+    set_dir = find_aligning_dir(set_id)
+    if set_dir is None:
+        raise FileNotFoundError(f"no aligning directory for {set_id}")
+    mix_path = set_dir / route.mix_file
+    if not mix_path.is_file():
+        raise FileNotFoundError(f"missing lane mix audio: {mix_path}")
+    mix_feat = load_chroma_feat(mix_path)
+    by_tid = _manifest_by_tid(set_dir, set_id)
+    ref_feat_cache: dict[str, np.ndarray] = {}
+
+    rows: list[dict[str, Any]] = []
+    for span in timeline["spans"]:
+        slot = str(span["slot_label"])
+        stem = overrides.get(
+            _norm_slot(slot), str(span.get("claimed_stem") or "regular")
+        )
+        if stem not in route.claimed_stems:
+            continue
+        recording_id = str(span["recording_id"])
+        audio = _resolve_ref_instrumental(set_dir, by_tid, recording_id, slot)
+        if audio is None:
+            rows.append(
+                _row(
+                    slot=slot,
+                    recording_id=recording_id,
+                    stem=stem,
+                    status="missing_instrumental_audio",
+                )
+            )
+            continue
+        if recording_id not in ref_feat_cache:
+            ref_feat_cache[recording_id] = load_chroma_feat(audio)
+        matches = retrieve_chroma_matches(
+            mix_feat,
+            ref_feat_cache[recording_id],
+            recording_id=recording_id,
+            ref_stem=route.reference_stem,
+            mix_channel=route.mix_channel,
         )
         segments = decode_constituent(
             matches,
@@ -281,6 +382,15 @@ def run_shadow(
             slopes=slopes,
             mix_duration_s=mix_duration_s,
         )
+    elif chosen == "chroma":
+        rows = _decode_chroma_instrumental_lane(
+            set_id=set_id,
+            route=route,
+            timeline=timeline,
+            overrides=overrides,
+            slopes=slopes,
+            mix_duration_s=mix_duration_s,
+        )
     else:
         rows = _decode_hubert_vocal_lane(
             set_id=set_id,
@@ -333,9 +443,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--observation",
-        choices=("landmark", "hubert"),
+        choices=("landmark", "hubert", "chroma"),
         default=None,
-        help="default: landmark for instrumental, hubert for vocal",
+        help="default: landmark for instrumental, hubert for vocal; "
+        "chroma is instrumental-only",
     )
     parser.add_argument("--ref-fp-cache", type=Path, default=DEFAULT_CACHE_DIR)
     args = parser.parse_args(argv)

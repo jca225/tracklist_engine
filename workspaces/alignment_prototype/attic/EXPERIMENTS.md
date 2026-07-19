@@ -145,6 +145,28 @@ at boundary/false-extra selection. Match counts are huge on both sets.
 second observation for ridge-absent misses; false-run rejection for
 BB11-style near-misses — still no threshold mining on these two sets alone.
 
+## Instrumental chroma peak segment lane (2026-07-19) — MIXED / NO DEFAULT
+
+**Question:** can peak-sparsified instrumental chroma (same vocal HuBERT
+adapter pattern) beat landmark FP on the honest recording-id instrumental
+slice?
+
+**Verdict:** mixed. BB12 recall@15 improved (0.60 → 0.65) with fewer
+false-only decodes; BB11 regressed (0.77 → 0.64). Keep `--observation chroma`
+as a shadow tool; do not make it the instrumental default. Landmark remains
+the default instrumental observation.
+
+**Do not** retune chroma peak_frac on BB11/BB12 to chase the asymmetry.
+
+## Instrumental secondary-run evidence floor 0.25 (2026-07-19) — REGRESSED
+
+**Question:** does raising `min_run_evidence_fraction` from 0.05 to 0.25 cut
+false extras without losing true paths?
+
+**Verdict:** no on these two sets. Landmark recall@15 fell on both (BB12
+0.60→0.45, BB11 0.77→0.64). Default remains 0.05; the stricter fraction stays
+available for synthetic/explicit calls only.
+
 ## Vocal-to-vocal HuBERT peak segment lane (2026-07-19) — REPRESENTATION NO-GO
 
 **Question:** with the same vocal-to-vocal route and NULL-aware decoder, can a

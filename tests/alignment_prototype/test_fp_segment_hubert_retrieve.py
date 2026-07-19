@@ -66,12 +66,14 @@ def test_matches_from_similarity_maps_bins_to_seconds():
     assert match.hash_frequency == 1
 
 
-def test_observation_defaults_and_instrumental_rejects_hubert():
+def test_observation_defaults_and_cross_lane_rejects():
     assert _resolve_observation("vocal", None) == "hubert"
     assert _resolve_observation("instrumental", None) == "landmark"
     assert _resolve_observation("vocal", "landmark") == "landmark"
-    with pytest.raises(ValueError, match="instrumental"):
+    with pytest.raises(ValueError, match="does not support"):
         _resolve_observation("instrumental", "hubert")
+    with pytest.raises(ValueError, match="does not support"):
+        _resolve_observation("vocal", "chroma")
 
 
 def test_retrieve_hubert_matches_from_synthetic_features():

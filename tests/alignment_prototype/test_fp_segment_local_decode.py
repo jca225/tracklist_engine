@@ -130,6 +130,23 @@ def test_sustained_path_rejects_short_repeated_pattern_distractor():
     assert segments[0].ref_start_s == pytest.approx(19.0, abs=1.0)
 
 
+def test_secondary_run_fraction_drops_mid_strength_false_path():
+    """A medium-evidence collision run loses under a stricter fraction."""
+    matches = [
+        *_line(4.0, 20.0, intercept=15.0, seed=8),
+        *_line(22.0, 26.0, intercept=80.0, seed=9),
+    ]
+    segments = decode_constituent(
+        matches,
+        mix_duration_s=30.0,
+        allowed_slopes=(1.0,),
+        config=CFG,
+        min_run_evidence_fraction=0.25,
+    )
+    assert len(segments) == 1
+    _assert_bounds(segments[0], 4.0, 20.0)
+
+
 def test_selects_correct_tempo_slope():
     matches = _line(4.0, 20.0, intercept=12.0, slope=1.05, seed=7)
     segments = _decode(matches, slopes=(0.95, 1.0, 1.05))
@@ -154,9 +171,7 @@ def test_returns_empty_when_no_hough_diagonal_exists():
 
 def test_rejects_mixed_recording_cloud():
     matches = _line(2.0, 8.0, intercept=10.0)
-    matches.append(
-        LandmarkMatch("track-b", "instrumental", "instrumental", 3.0, 7.0)
-    )
+    matches.append(LandmarkMatch("track-b", "instrumental", "instrumental", 3.0, 7.0))
     with pytest.raises(ValueError, match="one recording"):
         _decode(matches)
 
