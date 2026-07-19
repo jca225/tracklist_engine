@@ -1,0 +1,455 @@
+# Sparse Multi-Stem Fingerprint Segment Aligner
+
+**Status:** proposed implementation plan  
+**Objective:** turn whole-mix, stem-matched landmark correspondences into
+piecewise constituent timelines with explicit starts, ends, jumps, overlaps,
+and re-entries.
+
+Canonical benchmark values remain exclusively in
+[`docs/alignment_status.md`](../../alignment_status.md). This plan defines gates
+and artifacts, not new headline numbers.
+
+## Problem statement
+
+The current fingerprint path performs the right retrieval step but collapses
+too early:
+
+```text
+whole separated mix + one reference stem
+    -> matching landmark pairs
+    -> offset histogram
+    -> densest contiguous cluster
+    -> one placement per tracklist span
+```
+
+That loses the evidence needed to decide where an appearance begins and ends,
+whether the reference jumps, and whether the same constituent re-enters later.
+It also lets a short repeated drum or synth pattern win as a globally strong
+but musically false offset.
+
+The target path is:
+
+```text
+whole mix channels + indexed reference channels
+    -> sparse (mix_time, ref_time, channel, weight) correspondences
+    -> candidate diagonal segments
+    -> per-constituent NULL-aware local path decode
+    -> tracklist-aware structured selection
+    -> piecewise timeline
+```
+
+Fingerprinting remains the observation function. Dynamic programming becomes
+the actor that decides which observations form real appearances.
+
+## Existing code to reuse
+
+- `landmark_fp.py`: legacy constellation and exact landmark hashes.
+- `fp_index.py`: `(recording_id, stem)` reference fingerprint index.
+- `mix_fp_hits.py::_vote_pairs`: raw exact-hash correspondence generation.
+- `looptrace/landmarks.py`: pitch/tempo-tolerant landmark point clouds.
+- `looptrace/segments.py`: Hough diagonal extraction, background subtraction,
+  NULL state, segment-cover DP, and segment materialization.
+- `harness/contract.py::RefSegment`: normalized piecewise alignment output.
+- `candidate_arbiter/schema.py`: immutable placement/candidate provenance.
+- `drivers/` and `score_timeline_vs_gt.py`: end-to-end race and canonical
+  scorer.
+
+Do not create a second fingerprint implementation or a second timeline schema.
+
+## Load-bearing decisions
+
+1. **Fingerprint the whole mix once per channel.** Never repeatedly fingerprint
+   candidate windows during retrieval.
+2. **Compare like with like.**
+   - full mix against regular/full references;
+   - separated instrumental mix against instrumental references;
+   - separated vocals against acappella/vocal references.
+3. **Preserve raw correspondences.** Offset histograms may propose diagonals,
+   but may not discard the underlying `(mix_time, ref_time)` points.
+4. **Decode NULL explicitly.** No evidence must mean “not playing,” not the
+   least-bad track or diagonal.
+5. **Allow multiple local paths per recording.** A constituent may stop,
+   re-enter, loop, or jump within its reference.
+6. **Allow simultaneous constituents.** Track decodes are not mutually
+   exclusive; vocals and beds may overlap.
+7. **Use tracklist order as a soft global factor.** It corroborates and labels
+   audio evidence, but cannot manufacture an appearance with no audio support.
+8. **Fail closed.** The new decoder runs shadow-only until it improves both
+   held-out sets without regressing protected slices.
+9. **No BB11/BB12 threshold mining.** Configuration is set from synthetic data
+   and frozen before the bidirectional real-set evaluation.
+
+## Public contracts
+
+Create `workspaces/alignment_prototype/fp_segments/`.
+
+### `schema.py`
+
+```python
+@dataclass(frozen=True)
+class LandmarkMatch:
+    recording_id: str
+    ref_stem: str
+    mix_channel: str
+    mix_time_s: float
+    ref_time_s: float
+    weight: float
+    hash_frequency: int
+
+
+@dataclass(frozen=True)
+class DiagonalCandidate:
+    recording_id: str
+    ref_stem: str
+    mix_channel: str
+    slope: float
+    intercept_s: float
+    votes: int
+    support_s: float
+    background_margin: float
+
+
+@dataclass(frozen=True)
+class ConstituentSegment:
+    recording_id: str
+    slot_label: str | None
+    ref_stem: str
+    mix_channel: str
+    mix_start_s: float
+    mix_end_s: float
+    ref_start_s: float
+    ref_end_s: float
+    slope: float
+    evidence: float
+    confidence: float
+```
+
+All values are finite and time bounds are ordered. `slot_label` remains
+optional until tracklist attribution.
+
+### `retrieve.py`
+
+```python
+def index_mix_channels(paths: MixChannelPaths) -> MixFingerprintIndex:
+    """Fingerprint each available whole-mix channel exactly once."""
+
+
+def retrieve_matches(
+    mix_index: MixFingerprintIndex,
+    reference: ReferenceFingerprint,
+    *,
+    channel_route: ChannelRoute,
+) -> tuple[LandmarkMatch, ...]:
+    """Return sparse time correspondences; do not choose an offset."""
+```
+
+Each hash match receives inverse-frequency weighting so ubiquitous landmarks
+contribute less than rare landmarks. Keys whose Cartesian product exceeds a
+fixed cap abstain, following `looptrace.landmarks.match_points`.
+
+### `local_decode.py`
+
+```python
+def decode_constituent(
+    matches: Sequence[LandmarkMatch],
+    *,
+    mix_duration_s: float,
+    allowed_slopes: Sequence[float],
+    config: SegmentDecodeConfig,
+) -> tuple[ConstituentSegment, ...]:
+    """Decode diagonal runs and NULL gaps across the whole mix."""
+```
+
+For each allowed slope:
+
+1. Compute intercepts `b = ref_time - slope * mix_time`.
+2. Extract Hough peaks as candidate diagonals.
+3. Compute local support on a coarse mix-time grid.
+4. Subtract a random-intercept background floor.
+5. Run Viterbi over `{candidate diagonals, NULL}`.
+6. Convert non-NULL runs into segments.
+7. Split on reference jumps or slope changes.
+8. Keep the slope/path with the strongest normalized inlier evidence.
+
+Unlike the current `looptrace` call, the grid spans the complete set and can
+emit several disjoint appearances.
+
+### `tracklist_decode.py`
+
+```python
+def attribute_segments(
+    segments_by_recording: Mapping[str, Sequence[ConstituentSegment]],
+    slots: Sequence[TracklistSlot],
+    *,
+    config: TracklistDecodeConfig,
+) -> TracklistAlignment:
+    """Assign audio-backed segments to slots with soft order constraints."""
+```
+
+This is a second, sparse DP over slot order and segment proposals. Its state is
+`(slot_index, proposal_index | SKIP)`. It rewards:
+
+- local audio evidence and duration;
+- agreement between full, instrumental, and vocal channels;
+- plausible ordering of first appearances;
+- compatibility with cue/MERT placement priors;
+- adjacent-slot transition consistency.
+
+It penalizes:
+
+- assigning the same proposal to incompatible slots;
+- large backward first-appearance jumps;
+- unsupported slot assignments;
+- implausibly short isolated fragments.
+
+It must permit:
+
+- `SKIP` for tracklist rows not audibly recoverable;
+- multiple proposals for one slot;
+- overlapping time ranges across different slots;
+- zero ordering penalty for explicitly simultaneous/constituent rows.
+
+### `materialize.py`
+
+Convert attributed segments to the existing timeline contract:
+
+```python
+span["set_start_s"] = min(segment.mix_start_s)
+span["set_end_s"] = max(segment.mix_end_s)
+span["ref_segments"] = [
+    {
+        "mix_start_s": segment.mix_start_s,
+        "mix_end_s": segment.mix_end_s,
+        "ref_start_s": segment.ref_start_s,
+        "ref_end_s": segment.ref_end_s,
+    }
+]
+span["start_source"] = "fp_segment_dp"
+```
+
+If no accepted segment exists, preserve the baseline span byte-for-byte.
+
+## Phase 0 — freeze fixtures and parity
+
+**Files**
+
+- Create: `fp_segments/schema.py`
+- Create: `fp_segments/routes.py`
+- Create: `tests/alignment_prototype/test_fp_segment_schema.py`
+- Create: `tests/alignment_prototype/test_fp_segment_routes.py`
+
+**Tasks**
+
+- Define immutable contracts and validation.
+- Encode the three like-for-like channel routes.
+- Add explicit missing-channel abstention.
+- Create tiny deterministic point-cloud fixtures for:
+  linear play, two re-entries, reference jump, overlap, repeated-pattern
+  distractor, and no-match.
+- Prove exact-hash correspondences are identical to `_vote_pairs` before any
+  weighting or filtering.
+
+**Gate**
+
+- Contract and route tests pass.
+- Whole-mix hashing occurs once per available channel.
+- Missing stems cannot silently fall back to an unlike channel.
+
+**Commit**
+
+`feat(fp-segments): add correspondence and routing contracts`
+
+## Phase 1 — expose raw whole-mix correspondences
+
+**Files**
+
+- Create: `fp_segments/retrieve.py`
+- Modify: `mix_fp_hits.py` only to expose a public, typed wrapper around raw
+  pairs; retain legacy behavior unchanged.
+- Modify: `fp_index.py` only if bulk/index iteration is missing.
+- Create: `tests/alignment_prototype/test_fp_segment_retrieve.py`
+
+**Tasks**
+
+- Build one mix fingerprint index per channel.
+- Retrieve matches for every tracklist reference on its routed channel.
+- Attach inverse hash-frequency weights.
+- Cap combinatorial/common-key explosions.
+- Serialize correspondence banks under ignored
+  `out/fp_segments/<set_id>/matches/`.
+- Stamp schema version, producer SHA, audio identity, fingerprint mode, and
+  channel route.
+
+**Gate**
+
+- Deterministic byte-for-byte correspondence banks.
+- Legacy `offset_candidates` and `decode_placements` parity tests remain green.
+- Runtime and memory are measured on both complete mixes before proceeding.
+
+**Commit**
+
+`feat(fp-segments): preserve whole-mix landmark correspondences`
+
+## Phase 2 — local segment-cover decoder
+
+**Files**
+
+- Create: `fp_segments/local_decode.py`
+- Reuse/refactor shared primitives from `looptrace/segments.py`; do not copy
+  their implementation.
+- Create: `tests/alignment_prototype/test_fp_segment_local_decode.py`
+
+**Tasks**
+
+- Generalize Hough and support computation to absolute whole-mix time.
+- Add the explicit NULL state.
+- Decode multiple non-contiguous runs.
+- Recover start/end from support boundaries rather than the first/last raw hit.
+- Support a frozen tempo-slope grid.
+- Merge adjacent runs only when their diagonal and gap are compatible.
+- Emit path evidence, background margin, coverage, and boundary confidence.
+
+**Synthetic gates**
+
+- Recover each fixture’s segment count and boundaries within fixed tolerances.
+- Reject the repeated-pattern distractor when sustained context favors the
+  true path.
+- Return no segments for the no-match fixture.
+- Preserve two simultaneous constituents when decoded independently.
+
+**Commit**
+
+`feat(fp-segments): decode local diagonal paths with null gaps`
+
+## Phase 3 — multi-channel corroboration
+
+**Files**
+
+- Create: `fp_segments/fuse.py`
+- Create: `tests/alignment_prototype/test_fp_segment_fuse.py`
+
+**Tasks**
+
+- Keep each stem channel’s path independent.
+- Merge only time-compatible segments for the same recording/slot.
+- Increase confidence for independent full/instrumental/vocal agreement.
+- Preserve a strong single-channel path; absence of another stem is not
+  disagreement.
+- Penalize contradictory channel paths without averaging their locations.
+
+**Gate**
+
+- Synthetic full+stem agreement improves confidence without shifting correct
+  boundaries.
+- A corrupted channel cannot overturn two agreeing channels.
+- A missing channel and a negative channel remain distinguishable.
+
+**Commit**
+
+`feat(fp-segments): fuse corroborating stem paths`
+
+## Phase 4 — tracklist attribution DP
+
+**Files**
+
+- Create: `fp_segments/tracklist_decode.py`
+- Create: `tests/alignment_prototype/test_fp_segment_tracklist_decode.py`
+
+**Tasks**
+
+- Implement `SKIP`, assignment, re-entry, and simultaneous-layer transitions.
+- Use tracklist order only on first appearances and only as a soft factor.
+- Add cue/MERT priors as optional emissions, never hard windows.
+- Preserve multiple segments for one slot.
+- Produce a trace explaining every reward, penalty, skip, and attribution.
+
+**Gates**
+
+- An out-of-order high-vote distractor loses to a sustained in-order path.
+- Legitimate overlaps survive.
+- A later re-entry does not get mislabeled as a later track.
+- With all global-factor weights set to zero, output equals independent local
+  decodes.
+
+**Commit**
+
+`feat(fp-segments): add tracklist-aware segment attribution`
+
+## Phase 5 — shadow driver and scorer integration
+
+**Files**
+
+- Create: `drivers/fp_segment.py`
+- Create: `fp_segments/materialize.py`
+- Modify: `drivers/race.py` to register an explicit shadow driver.
+- Create: `tests/alignment_prototype/test_fp_segment_materialize.py`
+
+**Tasks**
+
+- Materialize existing `ref_segments` without changing identity.
+- Preserve the baseline byte-for-byte for abstained slots.
+- Record per-span provenance and decoder trace path.
+- Add an oracle report that separates:
+  candidate recall, boundary recovery, attribution, and acceptance failures.
+- Score strict and fiber-aware using the existing scorer.
+
+**Gate**
+
+- Output validates through `core.contracts.load_timeline`.
+- Identity is unchanged from the input baseline.
+- No accepted segment may be supported solely by a tracklist prior.
+- Shadow mode cannot affect the default driver.
+
+**Commit**
+
+`feat(drivers): add shadow fingerprint segment aligner`
+
+## Phase 6 — honest evaluation and promotion
+
+### Configuration protocol
+
+1. Tune decoder constants only on exact-label synthetic mixtures.
+2. Freeze the configuration and artifact SHA.
+3. Run bidirectional held-out evaluation on the two complete real GT sets.
+4. Inspect failures only after the pass/fail board is written.
+5. Do not change thresholds and rerun the same board as “validation.”
+
+### Required reports
+
+- candidate recall before decoding;
+- segment boundary precision/recall;
+- placement and trajectory results through the canonical scorer;
+- results by `regular`, `instrumental`, and `acappella`;
+- loops, jumps, overlaps, and re-entry slices;
+- false-positive duration in NULL regions;
+- baseline-regression list with provenance traces;
+- runtime, peak memory, and cache size.
+
+### Promotion gate
+
+Promote only if the frozen decoder:
+
+- improves the canonical board on both held-out sets;
+- does not regress protected identity or strong baseline slices;
+- improves or preserves instrumental and acappella slices independently;
+- keeps false-positive segments below the predeclared synthetic threshold;
+- passes `make check`.
+
+If the gate fails, record the result in `attic/EXPERIMENTS.md`, retain reusable
+correspondence/path artifacts, and leave the driver shadow-only.
+
+## Execution order
+
+```text
+P0 contracts + fixtures
+  -> P1 whole-mix correspondence banks
+  -> P2 per-recording segment DP
+  -> P3 multi-channel corroboration
+  -> P4 tracklist attribution DP
+  -> P5 shadow timeline driver
+  -> P6 frozen held-out race
+```
+
+The first decisive checkpoint is the end of Phase 2. If the local decoder
+cannot recover synthetic re-entries, jumps, boundaries, and NULL gaps from
+known correspondences, global tracklist logic is not yet earned.
