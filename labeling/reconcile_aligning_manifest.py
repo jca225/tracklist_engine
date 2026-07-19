@@ -198,6 +198,27 @@ def _wire_stem_paths(stem_dirs: list[Path]) -> dict[str, str]:
     return out
 
 
+def _proxy_manifest_fields(
+    set_id: str,
+    slot_label: str,
+    slot_name: str,
+    local_path: Path | None,
+    set_dir: Path,
+) -> dict[str, Any] | None:
+    """Manifest gap/stem/satisfaction when a slot uses ``PROXY_SLOT_AUDIO``."""
+    proxy_rel = PROXY_SLOT_AUDIO.get((set_id, slot_label))
+    if proxy_rel is None or local_path is None:
+        return None
+    if local_path.resolve() != (set_dir / proxy_rel).resolve():
+        return None
+    proxy_stem = Path(proxy_rel).stem
+    return {
+        "stem": "instrumental",
+        "satisfaction": "fallback",
+        "gap": f"proxy:{proxy_stem} — original unavailable ({slot_name})",
+    }
+
+
 def _effective_stem(
     claimed_stem: str, stems: dict[str, str], local_path: Path | None
 ) -> str:
@@ -336,11 +357,14 @@ def reconcile_manifest(set_dir: Path, *, dry_run: bool = True) -> ReconcileRepor
             unresolved.append(label)
 
         row["stems"] = stems
-        new_stem = _effective_stem(
-            claimed_stem,
-            stems,
-            Path(row["local_path"]) if row.get("local_path") else None,
+        local_path_obj = Path(row["local_path"]) if row.get("local_path") else None
+        proxy_fields = _proxy_manifest_fields(
+            set_id, label, slot_name, local_path_obj, set_dir
         )
+        if proxy_fields is not None:
+            new_stem = str(proxy_fields["stem"])
+        else:
+            new_stem = _effective_stem(claimed_stem, stems, local_path_obj)
         if new_stem != old_stem:
             stem_rewrites.append((label, old_stem, new_stem))
         row["stem"] = new_stem
@@ -354,6 +378,9 @@ def reconcile_manifest(set_dir: Path, *, dry_run: bool = True) -> ReconcileRepor
         elif row.get("local_path") is None:
             row["satisfaction"] = "unresolved"
             row["gap"] = row.get("gap") or "reconcile: no resolvable local audio"
+
+        if proxy_fields is not None:
+            row.update(proxy_fields)
 
         reconciled.append(row)
 

@@ -137,6 +137,43 @@ def test_clears_poisoned_existing_local_path(tmp_path: Path, monkeypatch):
     assert "AFROJACK" not in (row.get("local_path") or "")
 
 
+def test_lux_omega_proxy_uses_mix_instrumental(tmp_path: Path, monkeypatch):
+    set_dir = tmp_path / "1fsnxchk__x"
+    (set_dir / "tracks").mkdir(parents=True)
+    _touch_audio(set_dir / "mix_instrumental.flac")
+    _touch_audio(set_dir / "tracks" / "032__AFROJACK - Ten Feet Tall.wav")
+    (set_dir / "manifest.json").write_text(
+        json.dumps({"set_id": "1fsnxchk", "tracks": []})
+    )
+
+    _patch_pi(
+        monkeypatch,
+        [
+            {
+                "slot_label": "032",
+                "recording_id": "tlp2853023",
+                "claimed_stem": "regular",
+                "claimed_variant": "regular",
+                "name": "Lux Holm - Omega",
+            }
+        ],
+    )
+    from labeling.reconcile_aligning_manifest import (
+        PROXY_SLOT_AUDIO,
+        reconcile_manifest,
+    )
+
+    assert PROXY_SLOT_AUDIO[("1fsnxchk", "032")] == "mix_instrumental.flac"
+    report = reconcile_manifest(set_dir, dry_run=False)
+    doc = json.loads((set_dir / "manifest.json").read_text())
+    row = next(t for t in doc["tracks"] if t["track_id"] == "tlp2853023")
+    assert row["local_path"].endswith("mix_instrumental.flac")
+    assert row["stem"] == "instrumental"
+    assert row["satisfaction"] == "fallback"
+    assert "proxy:mix_instrumental" in (row.get("gap") or "")
+    assert "032" not in report.unresolved
+
+
 def test_rewires_poisoned_local_path_to_proxy(tmp_path: Path, monkeypatch):
     set_dir = tmp_path / "1fsnxchk__x"
     (set_dir / "tracks").mkdir(parents=True)
