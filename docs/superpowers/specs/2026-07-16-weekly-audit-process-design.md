@@ -200,4 +200,64 @@ Order:
 - AST/complexity analysis beyond grep counts (add only if a metric proves it needs it).
 - Auto-fixing findings (the routine reports; humans/sessions fix).
 - Human process ceremony beyond the one-page `AGENTS.md` (see 4b rationale).
-```
+
+## Implementation notes & amendments (2026-07-17)
+
+Built and merged to `main` (PRs #5, #6). Deviations from the design above and
+lessons the build surfaced — recorded so the design doc matches reality.
+
+### What shipped
+- **Phase 1 (fixes)** — A1/A2/B1/B2/B3/B5/C1/C2/C3 across `vast_loop`,
+  `mac_analyze_loop`, `set_mert_backfill_loop`, `mert_backfill_loop`,
+  `loop_prefetch`, `ingest_stem_url`, with shared primitives in
+  `scripts/loop_hardening.py`. (PR #5 + #6.)
+- **Phase 2/3 (fence)** — built as `scripts/entropy_audit.py`, an **AST** detector
+  for the precise bug classes (net-subprocess-without-`timeout`/`encoding`, bare
+  `except`), **called from `guardrails.py`** rather than wired separately into
+  `make check`/hook/CI. This is a cleaner realization of Component 1's fence: one
+  gate entry point, no new CI wiring. Baseline in `scripts/entropy_ratchet.json`,
+  ratcheted down as loops were fixed (35/29 → 30/25).
+- **Governance (4a/4b)** — `AGENTS.md` written; `main` branch protection enabled
+  (require PR + the `guardrails` check, strict, enforce_admins).
+
+### Still unbuilt (deferred, need explicit go-ahead)
+- The **entropy *metrics*** half of Component 1 (file-LOC / TODO-debt / test-ratio)
+  — only the bug-class *fences* were built.
+- The **semantic-audit agent + `waivers.yaml`** (Component 2).
+- The **`/schedule` weekly routine** (Component 3) — a billed, recurring cloud
+  cron; hold for explicit user sign-off on cadence/cost.
+- The one-time **`latin-1→utf-8` DB repair** (mutates canonical while services
+  write — coordinated op, not part of the code PRs).
+
+### Amendment 1 — worktree-per-agent isolation is mandatory, and needs a venv
+Two agents sharing one dirty checkout collided (a staged edit was swept into
+another agent's commit). Agents MUST work in a git worktree. A worktree has no
+`venvs/` (gitignored), so the gate can't run until `venvs` is symlinked to the
+main checkout's. Both rules are now in `AGENTS.md`. **Follow-up worth doing:**
+automate the `venvs` symlink on worktree creation so the gate is runnable by
+default.
+
+### Amendment 2 — the gate scanned ZERO files inside a worktree (fixed)
+`guardrails.py` (and the new `entropy_audit.py`) skipped files whose path parts
+intersected a skip set including `.claude`. Because worktrees live under
+`.claude/worktrees/`, every file was skipped → the guardrails half of the gate
+silently passed everything in any worktree for its entire existence. Fixed to
+skip on parts **relative to the repo root**. Lesson: a "gate is a no-op in
+worktrees" failure is invisible precisely when isolation is in use — the exact
+regime Amendment 1 mandates.
+
+### Amendment 3 — the gate is coupled; scope it to the diff
+`make check` (pre-commit + CI) runs the **entire** pytest suite on every commit,
+including docs-only commits. Consequences seen this session: (a) one agent's red
+WIP test blocked *every* agent's commits; (b) a docs-only spec commit was blocked
+by unrelated test failures. **Proposed:** scope the pre-commit test run to what a
+commit touches (and let docs-only commits skip pytest), keeping the full suite in
+CI. Not yet built.
+
+### Amendment 4 — verify a check is green BEFORE making it required
+Branch protection was enabled with the `guardrails` CI check required *before*
+confirming that check was green. It had been red on `main` since ~07-15 (two
+heavy-dep tests violating the `requirements-ci.txt` lazy-import convention), so
+enabling protection briefly froze all merges to `main`. It was traced and fixed
+(importorskip), but the correct order is: **make CI green first, then mark it
+required.** The `AGENTS.md` branch-protection recipe should note this precondition.

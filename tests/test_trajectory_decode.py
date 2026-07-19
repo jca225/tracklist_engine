@@ -2,10 +2,19 @@
 
 from __future__ import annotations
 
-import torch
+import pytest
 
-from workspaces.alignment_prototype.trajectory.decode import viterbi_segments
-from workspaces.alignment_prototype.trajectory.model import diag_mean
+# Heavy deps (torch) are excluded from requirements-ci.txt — this test must
+# skip gracefully in the lightweight CI rather than break collection. The
+# workspaces imports below pull torch transitively, so skip BEFORE them.
+pytest.importorskip("torch")
+
+import torch  # noqa: E402
+
+from workspaces.alignment_prototype.trajectory.decode import (  # noqa: E402
+    viterbi_segments,
+)
+from workspaces.alignment_prototype.trajectory.model import diag_mean  # noqa: E402
 
 BIN = 0.5
 

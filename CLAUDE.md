@@ -165,6 +165,9 @@ subtree — keep stage-specific detail there, not here. Index:
   in [lab/corpus_empirics/findings.md](lab/corpus_empirics/findings.md).
 - **[core/CLAUDE.md](core/CLAUDE.md)** — shared substrate; `core/identity.py`
   (three axes); the rule that `core` imports nothing upward.
+- **[soundcloud/CLAUDE.md](soundcloud/CLAUDE.md)** — SoundCloud data-lake
+  substrate (anon `client_id` fetch + `sc_lake.db` on pi-storage). General
+  ingestion primitive consumed by `personalization`/`lab`; off the alignment DAG.
 
 ## Database
 
@@ -227,6 +230,12 @@ Use [Makefile](Makefile) for cluster ops (`make deploy`, `make status`, `make ss
 
 > **Deploy caveat:** pi-storage systemd units that ran `python -m audio_pipeline.main` / `.vast_worker` must be repointed to `ingest.main` / `analysis.vast_worker` (renamed out of `audio_pipeline/`) before `make deploy`, or services won't restart.
 
+## How agents work here
+
+Process rules — worktree isolation, branch+PR through the gate, SSOT for numbers,
+coordinate before mutating live state — live in **[AGENTS.md](AGENTS.md)** (one page).
+Read it once. This section covers only the git specifics.
+
 ## Git workflow
 
 Use your best judgement on when to commit and push. The default Claude Code rule "only commit when explicitly asked" is **overridden for this project** — proactively commit logical units of work and push them so pi-storage / pi-worker can pick them up via `make deploy`. Group changes into reviewable commits (one feature per commit, not one-giant-blob). Don't push directly to `main` if a pending change is still unstable; otherwise keep it moving.
@@ -235,7 +244,7 @@ Use your best judgement on when to commit and push. The default Claude Code rule
 
 Mechanical checks catch rename drift, stale module names, and wrong adapter path depth:
 
-- **`make check`** — runs [scripts/guardrails.py](scripts/guardrails.py) + fast pytest subset before push
+- **`make check`** — runs [scripts/guardrails.py](scripts/guardrails.py) (stale-name/path/dead-flag + the [scripts/entropy_audit.py](scripts/entropy_audit.py) AST bug-class fences) + fast pytest subset before push
 - **Git hooks** — one-time per clone: `git config core.hooksPath .githooks`
 - **Cursor rules** — [.cursor/rules/](.cursor/rules/) (`identity-axes`, `repo-paths`) load when editing matching files
 - **Refactor checklist** — [.claude/skills/refactor-safety/SKILL.md](.claude/skills/refactor-safety/SKILL.md) for module renames and directory splits

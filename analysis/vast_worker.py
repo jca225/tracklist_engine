@@ -29,6 +29,7 @@ For batch / loop mode (poll DB for next unanalyzed track until empty):
         --stems-dir /mnt/pi-storage/stems \\
         --loop
 """
+
 from __future__ import annotations
 
 import argparse
@@ -48,52 +49,107 @@ from core.result import Err, Ok, Result
 _log = logging.getLogger("analysis.vast_worker")
 
 _BIG_BOOTIE_10_15: tuple[str, ...] = (
-    "w1mgcjt", "2nvzlh2k", "1fsnxchk", "qj4v0wt", "1yl70ql1", "237tdqmk",
+    "w1mgcjt",
+    "2nvzlh2k",
+    "1fsnxchk",
+    "qj4v0wt",
+    "1yl70ql1",
+    "237tdqmk",
 )
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--db", type=Path, required=True,
-                   help="SQLite DB path (canonical or sshfs-mounted pi-storage DB)")
-    p.add_argument("--stems-dir", type=Path, required=True,
-                   help="Where Demucs stems go. Layout: <stems-dir>/<track_audio_id>/<stem>.<ext>")
-    p.add_argument("--audio", type=Path,
-                   help="Single audio file to analyze (paired with --track-audio-id)")
-    p.add_argument("--track-audio-id", type=int,
-                   help="track_audio_id matching --audio (DB foreign key)")
-    p.add_argument("--audio-root", type=Path,
-                   help="In --loop mode: the root that <track_audio.path> is relative to or "
-                        "where audio is mirrored. Used as a join prefix when track_audio.path "
-                        "still references the obsolete laptop drive.")
-    p.add_argument("--loop", action="store_true",
-                   help="Poll DB for next unanalyzed track and process repeatedly until empty")
-    p.add_argument("--max-tracks", type=int, default=None,
-                   help="Stop after analyzing N tracks (smoke testing)")
-    p.add_argument("--set-ids", type=str, default=None,
-                   help="Comma-separated set_ids: only process tracks that "
-                        "appear in any of these sets. Useful for prioritizing "
-                        "a small subset (e.g. Big Bootie 10-15) before "
-                        "draining the rest of the corpus.")
-    p.add_argument("--bb-only", action="store_true",
-                   help="Shortcut for --set-ids matching the 6 Big Bootie "
-                        "10-15 set_ids.")
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument(
+        "--db",
+        type=Path,
+        required=True,
+        help="SQLite DB path (canonical or sshfs-mounted pi-storage DB)",
+    )
+    p.add_argument(
+        "--stems-dir",
+        type=Path,
+        required=True,
+        help="Where Demucs stems go. Layout: <stems-dir>/<track_audio_id>/<stem>.<ext>",
+    )
+    p.add_argument(
+        "--audio",
+        type=Path,
+        help="Single audio file to analyze (paired with --track-audio-id)",
+    )
+    p.add_argument(
+        "--track-audio-id",
+        type=int,
+        help="track_audio_id matching --audio (DB foreign key)",
+    )
+    p.add_argument(
+        "--audio-root",
+        type=Path,
+        help="In --loop mode: the root that <track_audio.path> is relative to or "
+        "where audio is mirrored. Used as a join prefix when track_audio.path "
+        "still references the obsolete laptop drive.",
+    )
+    p.add_argument(
+        "--loop",
+        action="store_true",
+        help="Poll DB for next unanalyzed track and process repeatedly until empty",
+    )
+    p.add_argument(
+        "--max-tracks",
+        type=int,
+        default=None,
+        help="Stop after analyzing N tracks (smoke testing)",
+    )
+    p.add_argument(
+        "--set-ids",
+        type=str,
+        default=None,
+        help="Comma-separated set_ids: only process tracks that "
+        "appear in any of these sets. Useful for prioritizing "
+        "a small subset (e.g. Big Bootie 10-15) before "
+        "draining the rest of the corpus.",
+    )
+    p.add_argument(
+        "--bb-only",
+        action="store_true",
+        help="Shortcut for --set-ids matching the 6 Big Bootie 10-15 set_ids.",
+    )
     p.add_argument("--device", default="auto", choices=("auto", "cuda", "mps", "cpu"))
-    p.add_argument("--separator", default="demucs", choices=("demucs", "uvr", "roformer"),
-                   help="Stem-separation backend (default: demucs).")
-    p.add_argument("--log-level", default="INFO",
-                   choices=("DEBUG", "INFO", "WARNING", "ERROR"))
+    p.add_argument(
+        "--separator",
+        default="demucs",
+        choices=("demucs", "uvr", "roformer"),
+        help="Stem-separation backend (default: demucs).",
+    )
+    p.add_argument(
+        "--log-level", default="INFO", choices=("DEBUG", "INFO", "WARNING", "ERROR")
+    )
     return p.parse_args(argv)
 
 
 def _next_unanalyzed(
-    db_path: Path, set_ids: tuple[str, ...] | None = None,
+    db_path: Path,
+    set_ids: tuple[str, ...] | None = None,
+    exclude: frozenset[int] | None = None,
 ) -> Result[tuple[int, str] | None, str]:
     """Return (track_audio_id, audio_path) for the next track that has
     a track_audio row but no track_analysis row. When set_ids is non-empty,
     restrict to tracks that appear in any of those sets (via
-    dj_set_track_media_links). Returns None when the queue is drained.
+    dj_set_track_media_links). ``exclude`` quarantines track_audio_ids that
+    already failed this run so a poison track can't be re-selected forever
+    (it has no track_analysis row, so the IS NULL predicate keeps returning
+    it otherwise — the infinite-spin class fixed in vast_loop.py). Returns
+    None when the queue is drained.
     """
+    exclude = exclude or frozenset()
+    excl_params = tuple(exclude)
+    excl_clause = (
+        f" AND ta.track_audio_id NOT IN ({','.join('?' * len(excl_params))})"
+        if excl_params
+        else ""
+    )
     try:
         conn = sqlite3.connect(db_path)
         try:
@@ -109,23 +165,24 @@ def _next_unanalyzed(
                       AND ta.track_id IN (
                           SELECT DISTINCT track_id FROM dj_set_track_media_links
                           WHERE set_id IN ({placeholders})
-                      )
+                      ){excl_clause}
                     ORDER BY ta.track_audio_id
                     LIMIT 1
                     """,
-                    set_ids,
+                    set_ids + excl_params,
                 ).fetchone()
             else:
                 row = conn.execute(
-                    """
+                    f"""
                     SELECT ta.track_audio_id, ta.path
                     FROM track_audio ta
                     LEFT JOIN track_analysis tan
                       ON tan.track_audio_id = ta.track_audio_id
-                    WHERE tan.track_audio_id IS NULL
+                    WHERE tan.track_audio_id IS NULL{excl_clause}
                     ORDER BY ta.track_audio_id
                     LIMIT 1
-                    """
+                    """,
+                    excl_params,
                 ).fetchone()
             return Ok((int(row[0]), str(row[1])) if row else None)
         finally:
@@ -156,19 +213,21 @@ def _load_audio_asset(db_path: Path, track_audio_id: int) -> Result[AudioAsset, 
     except sqlite3.DatabaseError as e:
         return Err(f"db query failed: {e}")
 
-    return Ok(AudioAsset(
-        track_audio_id=int(row[0]),
-        track_id=str(row[1]),
-        platform=str(row[2]),
-        source_url=str(row[3]) if row[3] else "",
-        player_id=str(row[4]) if row[4] else "",
-        path=str(row[5]),
-        sha256=str(row[6]) if row[6] else None,
-        duration_s=float(row[7]) if row[7] is not None else None,
-        sample_rate=int(row[8]) if row[8] is not None else None,
-        codec=str(row[9]) if row[9] else None,
-        bitrate_kbps=int(row[10]) if row[10] is not None else None,
-    ))
+    return Ok(
+        AudioAsset(
+            track_audio_id=int(row[0]),
+            track_id=str(row[1]),
+            platform=str(row[2]),
+            source_url=str(row[3]) if row[3] else "",
+            player_id=str(row[4]) if row[4] else "",
+            path=str(row[5]),
+            sha256=str(row[6]) if row[6] else None,
+            duration_s=float(row[7]) if row[7] is not None else None,
+            sample_rate=int(row[8]) if row[8] is not None else None,
+            codec=str(row[9]) if row[9] else None,
+            bitrate_kbps=int(row[10]) if row[10] is not None else None,
+        )
+    )
 
 
 def _process_one(
@@ -183,6 +242,7 @@ def _process_one(
     if audio_override_path is not None:
         # Replace the asset path so analyze_track reads the actual file we have.
         from dataclasses import replace
+
         asset = replace(asset, path=str(audio_override_path))
     if not Path(asset.path).exists():
         return Err(f"audio file missing: {asset.path}")
@@ -212,14 +272,20 @@ def _run(args: argparse.Namespace) -> int:
             _log.error("non-loop mode requires --audio and --track-audio-id")
             return 2
 
-    _log.info("loading analyzers (device=%s, separator=%s)…", args.device, args.separator)
+    _log.info(
+        "loading analyzers (device=%s, separator=%s)…", args.device, args.separator
+    )
     t0 = time.time()
     ar = load_analyzers(device=args.device, separator=args.separator)
     if not ar.is_ok():
         _log.error("load_analyzers failed: %s", ar.error)
         return 1
     a = ar.value
-    _log.info("analyzers loaded in %.1fs (with_essentia=%s)", time.time() - t0, a.with_essentia)
+    _log.info(
+        "analyzers loaded in %.1fs (with_essentia=%s)",
+        time.time() - t0,
+        a.with_essentia,
+    )
 
     if not args.loop:
         # Single-track mode
@@ -243,15 +309,25 @@ def _run(args: argparse.Namespace) -> int:
     if set_filter:
         _log.info("filtering to %d set_ids: %s", len(set_filter), ",".join(set_filter))
 
-    # Loop mode: drain unanalyzed tracks one at a time
+    # Loop mode: drain unanalyzed tracks one at a time.
+    # failed_tids quarantines tracks that error this run. Without it, a track
+    # that never lands a track_analysis row (bad audio, poison file) is re-
+    # selected by _next_unanalyzed every iteration — an infinite spin, the
+    # exact class that burned 496 consecutive failures in vast_loop.py before
+    # it grew the same skip set.
     n_done = 0
+    failed_tids: set[int] = set()
     while args.max_tracks is None or n_done < args.max_tracks:
-        nxt = _next_unanalyzed(args.db, set_filter)
+        nxt = _next_unanalyzed(args.db, set_filter, frozenset(failed_tids))
         if not nxt.is_ok():
             _log.error(nxt.error)
             return 1
         if nxt.value is None:
-            _log.info("no unanalyzed tracks remain — done (processed %d)", n_done)
+            _log.info(
+                "no unanalyzed tracks remain — done (processed %d, quarantined %d)",
+                n_done,
+                len(failed_tids),
+            )
             return 0
         track_audio_id, audio_path = nxt.value
 
@@ -262,7 +338,7 @@ def _run(args: argparse.Namespace) -> int:
             # track_audio.path looks like /mnt/storage/objects/<track_id>/<file>
             for candidate_prefix in ("/mnt/storage/", "/mnt/pi-storage/"):
                 if audio_path.startswith(candidate_prefix):
-                    rel = audio_path[len(candidate_prefix):]
+                    rel = audio_path[len(candidate_prefix) :]
                     candidate = args.audio_root / rel
                     if candidate.exists():
                         resolved = candidate
@@ -271,14 +347,19 @@ def _run(args: argparse.Namespace) -> int:
         ar2 = _load_audio_asset(args.db, track_audio_id)
         if not ar2.is_ok():
             _log.warning("skip track_audio_id=%s: %s", track_audio_id, ar2.error)
+            failed_tids.add(track_audio_id)
             continue
         r = _process_one(a, args.db, ar2.value, resolved, args.stems_dir)
         if not r.is_ok():
             _log.warning("FAIL track_audio_id=%s: %s", track_audio_id, r.error)
-            # Continue rather than abort — one bad file shouldn't kill the loop
+            # Continue rather than abort — one bad file shouldn't kill the loop —
+            # but quarantine it so we don't re-select the same poison track.
+            failed_tids.add(track_audio_id)
             n_done += 1
             continue
-        _log.info("OK [%d] track_audio_id=%s in %.1fs", n_done + 1, track_audio_id, r.value)
+        _log.info(
+            "OK [%d] track_audio_id=%s in %.1fs", n_done + 1, track_audio_id, r.value
+        )
         n_done += 1
 
     _log.info("hit --max-tracks=%d, stopping", args.max_tracks)

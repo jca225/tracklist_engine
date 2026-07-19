@@ -198,6 +198,7 @@ def _pi_git_sha() -> str | None:
             ["ssh", PI_HOST, f"cd {PI_REPO} && git rev-parse --short HEAD"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=30,
         )
     except (subprocess.TimeoutExpired, OSError):
@@ -217,6 +218,7 @@ def _materialize_warning() -> str | None:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=30,
         )
     except (subprocess.TimeoutExpired, OSError):
@@ -299,6 +301,7 @@ def _pi_sql(sql: str, timeout: int = 30) -> list[str] | None:
             ["ssh", PI_HOST, f"sqlite3 {CANONICAL_DB} {shlex.quote(sql)}"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=timeout,
         )
     except (subprocess.TimeoutExpired, OSError):
@@ -361,6 +364,7 @@ def _source_sha256(args: argparse.Namespace) -> str | None:
                 ["ssh", PI_HOST, f"sha256sum {shlex.quote(args.pi_file)}"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
                 timeout=120,
             )
         except (subprocess.TimeoutExpired, OSError):
@@ -444,6 +448,7 @@ def _post_flight(
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=30,
         )
     except (subprocess.TimeoutExpired, OSError) as e:
@@ -466,6 +471,7 @@ def _post_flight(
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=30,
         )
         if cr.stdout.strip():
@@ -603,7 +609,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     print(f"remote: {shell}")
-    r = subprocess.run(ssh_cmd, capture_output=True, text=True, errors="replace")
+    r = subprocess.run(
+        ssh_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace"
+    )
     if r.stdout:
         print(r.stdout, end="" if r.stdout.endswith("\n") else "\n")
     if r.stderr:

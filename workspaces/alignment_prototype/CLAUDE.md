@@ -166,8 +166,16 @@ hand-convention session, varying master tempo, unwarped mix);
   (predict→seed→correct→retrain) + batch selection.
 - **Acappella ref-offset instance selection** — the biggest modelling prize
   (34% of all loss; six decode-layer threads dead, see looptrace/NOTES.md).
-  Live lever: learned selector over {HuBERT diagonal evidence, fiber
-  μ/ambiguity, fp sharpness}; needs the third GT set for leave-one-set-out.
+  ~~Live lever: learned selector over {HuBERT diagonal, fiber μ/ambiguity, fp
+  sharpness}.~~ **MEASURED DEAD (n=2, 2026-07-18, `evals/instance_separability.py`
+  + INSTANCE_SEPARABILITY_FINDINGS.md):** those three content features do NOT
+  separate the correct instance from same-fiber rivals (at/below chance tie-fair;
+  fitted selector transfers *below* chance both directions, μ weight sign-flips
+  BB11↔BB12) — BB10 won't rescue it. **The real signal is positional:** the GT
+  instance is the *earliest* fiber member in ~0.93 of recoverable rows and this
+  transfers with no fit. Live lever = an **earliest-fiber-instance / ref-position
+  tie-break** in the acappella decoder (distinct from the current continuity/warp
+  tie-break), to be measured e2e via `make scorecard`. Needs no BB10.
 - Acappella set_start p90 tail; HuBERT confidence floor (the <4 s regression).
 - Per-stem instrumental set_start (chroma fails on instrumental presence;
   GT n=5 can't validate).
