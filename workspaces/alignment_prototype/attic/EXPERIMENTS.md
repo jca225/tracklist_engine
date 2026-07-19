@@ -295,20 +295,23 @@ enough audited labels to train a TRM that beats synthetic-only / conv on held-ou
 BB11?
 **Verdict (Disco Lines pool): starved** — `pool=1rfb0yl9` → `eval=2nvzlh2k`,
 fp-only / no exportable 330M MERT; `accepted=0` at G0. Infra (Tasks 1–4) was fine.
-**Verdict (BB10 smoke, 2026-07-19): viable** — `pool=w1mgcjt` → `eval=2nvzlh2k`,
-`--smoke-only`. Artifacts: `out/e1/e1_result.json` status `"completed"`,
-`accepted=3` (lyrics∩HuBERT G2 survivors after fixes below). Smoke TRM train ran
-(`out/e1/logs/smoke_trm.log`).
-**Verdict (BB10 full E1, 2026-07-19): noise-floor** — same pool/eval, drop
-`--smoke-only`, `--reuse-agentic`. Pipeline completed (`smoke_only: false`); logs
-under `out/e1/logs/{conv,synth_trm,pseudo_trm}.log`. Pseudo-TRM overfits the 3
-train spans and does **not** beat the raw control (or conv) on held-out BB11.
-Do **not** regenerate `docs/alignment_status.md` from this run. Next lever is
-more real pseudo mass (better lyrics∩HuBERT agreement / fp landmarks / a third
-labeled set), not more epochs on n=3.
-**Fixes that unblocked BB10 (do not weaken G1/G2):** (1) prefer `mix.wav` over
-`mix.m4a` for fp load; (2) `resolve(require_independence=True)` in pseudo-safe so
-lyrics-alone auto does not skip HuBERT; (3) HuBERT prior falls back to
-lyrics/timeline when mert/cue absent; (4) `resolve_track_id` accepts rid stored
-as manifest `track_id` when `recording_id` is null. Whisper long-mix checkpoint
-kept the lyrics cache warm. Disco Lines remains a dead pool for E1.
+**Verdict (BB10 smoke, 2026-07-19): viable → mass up** — `pool=w1mgcjt` →
+`eval=2nvzlh2k`, `--smoke-only`. Progression: `accepted=3` (infra unblock) →
+`16` (lyrics tracklist-slot fix: Ableton `slot_label` over timeline rid) →
+`24` (HuBERT↔lyrics corroboration: snap set_start to lyrics when |Δ|≤30s so
+G2 CLUSTER_TOL_S=8 can pair; tighter band_s=45 when prior=lyrics). Smoke TRM
+at n=24 still underfits held-out vs control (expected); mass lever only.
+**Verdict (BB10 full E1 @ n=3 and @ n=16, 2026-07-19): noise-floor** — drop
+`--smoke-only`, `--reuse-agentic`. Pseudo-TRM overfits train and does **not**
+beat raw control on held-out BB11. Do **not** regenerate
+`docs/alignment_status.md` until a held-out win. Next: full E1 @ n=24, then
+BB10 fp landmarks for regulars (0/25 had pool-set fps) if still thin.
+**Fixes that unblocked BB10 (do not weaken G1/G2/G3):** (1) prefer `mix.wav`
+over `mix.m4a` for fp load; (2) `resolve(require_independence=True)` in
+pseudo-safe so lyrics-alone auto does not skip HuBERT; (3) HuBERT prior falls
+back to lyrics/timeline when mert/cue absent; (4) `resolve_track_id` accepts
+rid stored as manifest `track_id` when `recording_id` is null; (5) lyrics
+decode prefers manifest Ableton `slot_label`; (6) HuBERT corroborates lyrics
+placement for clustering only (`live_runners.corroborate_hubert_with_lyrics`).
+Whisper long-mix checkpoint kept the lyrics cache warm. Disco Lines remains a
+dead pool for E1.

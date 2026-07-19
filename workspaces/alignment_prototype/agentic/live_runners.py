@@ -471,6 +471,39 @@ def _prior_ss(data: dict) -> float | None:
     return float(cue) if cue is not None else None
 
 
+# When HuBERT is banded on a lyrics prior, a peak within this many seconds is
+# treated as corroboration: report the lyrics set_start so belief clustering
+# (CLUSTER_TOL_S=8) can form a lyrics+hubert G2 pair. Does not change G1/G2/G3
+# thresholds — only aligns the reported placement when acoustic evidence is near.
+LYRICS_HUBERT_BAND_S = 45.0
+LYRICS_HUBERT_CORROBORATE_S = 30.0
+
+
+def corroborate_hubert_with_lyrics(
+    hubert_ss: float,
+    hubert_rs: float,
+    *,
+    prior_src: str,
+    lyrics_ss: float | None,
+    tol_s: float = LYRICS_HUBERT_CORROBORATE_S,
+) -> tuple[float, float, str]:
+    """Snap HuBERT set_start to lyrics when the peak is nearby.
+
+    Returns ``(set_start_s, ref_start_s, detail_suffix)``. ``ref_start`` stays
+    HuBERT's (instance evidence); only mix placement is aligned for clustering.
+    """
+    if prior_src != "lyrics" or lyrics_ss is None:
+        return hubert_ss, hubert_rs, ""
+    delta = float(hubert_ss) - float(lyrics_ss)
+    if abs(delta) > tol_s:
+        return hubert_ss, hubert_rs, ""
+    return (
+        float(lyrics_ss),
+        float(hubert_rs),
+        f" corroborate_lyricsΔ={delta:+.1f}s",
+    )
+
+
 def cue_prior_runner(ctx: LiveContext) -> Runner:
     """The scraped tracklist cue (0.0 on w-rows is fake — abstain there)."""
     spec = REGISTRY["cue_prior"]
@@ -604,18 +637,26 @@ def stem_hubert_runner(ctx: LiveContext) -> Runner:
             prior_src = "timeline"
         if prior is None:
             return _abstain("stem_hubert", "no prior set_start to band around")
+        band_s = LYRICS_HUBERT_BAND_S if prior_src == "lyrics" else 90.0
         try:
             se = data.get("set_end_s")
             span_dur = (
                 float(se) - float(data.get("set_start_s") or prior) if se else 45.0
             )
             span_dur = max(15.0, span_dur)
-            res = place_joint(ctx.mix_hub, ref_hub, prior, span_dur, band_s=90.0)
+            res = place_joint(ctx.mix_hub, ref_hub, prior, span_dur, band_s=band_s)
         except Exception as e:  # noqa: BLE001
             return _abstain("stem_hubert", f"place_joint failed ({type(e).__name__})")
         if res is None:
             return _abstain("stem_hubert", "no dominant HuBERT diagonal")
         ss, rs, peak = res
+        lyrics_ss = prior if prior_src == "lyrics" else None
+        ss, rs, corr = corroborate_hubert_with_lyrics(
+            float(ss),
+            float(rs),
+            prior_src=prior_src,
+            lyrics_ss=lyrics_ss,
+        )
         obs = Observation(
             probe="stem_hubert",
             set_start_s=float(ss),
@@ -625,7 +666,7 @@ def stem_hubert_runner(ctx: LiveContext) -> Runner:
             cost=spec.cost,
             detail=(
                 f"HuBERT place_joint set_start={ss:.1f}s peak={peak:.2f} "
-                f"prior={prior_src}"
+                f"prior={prior_src}{corr}"
             ),
         )
         return ctx.gate_instance(obs, rid)
