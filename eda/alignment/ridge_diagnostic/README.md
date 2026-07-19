@@ -35,7 +35,7 @@ venvs/audio/bin/python -m eda.alignment.ridge_diagnostic.run \
 
 Useful flags:
 
-- `--cases-json out/cases.json` — skip selection; replot from a saved case list
+- `--cases-json eda/alignment/ridge_diagnostic/out/cases.json` — skip selection; replot from a saved case list
 - `--sets 1fsnxchk,2nvzlh2k` — limit which sets contribute candidates
 - `--timeline SET=PATH` — override agentic/predicted timeline (repeatable)
 
@@ -79,6 +79,19 @@ representation counts). Human-written `FINDINGS.md` is a separate step.
 Reference audio is tempo-stretched by GT `tempo_ratio` before comparison. GT
 diagonal overlay uses crop origins from the same pad-based bounds as
 `compute_panel`.
+
+### Mix side: full mix vs `mix_vocals`
+
+For `hubert`, `chroma`, and `fp_hit`, the mix crop is taken from the first
+`mix.*` file in the aligning folder (full mix), **not** `mix_vocals.flac` —
+even when the case is acappella. The ref side still follows `ref_audio_for`
+(vocal stem for acappella, full ref for regular). `instr_stem` alone uses
+`mix_instrumental.flac` ↔ ref instrumental.
+
+This matches current `features._mix_full_path` behavior. Acappella
+representation_wall verdicts may be biased toward "no ridge" when vocals are
+buried in the full mix; a follow-up pass could re-run those channels on
+`mix_vocals` without changing the encoder/feature math here.
 
 ## Non-goals
 

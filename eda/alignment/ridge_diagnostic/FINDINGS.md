@@ -1,7 +1,7 @@
 # Ridge diagnostic findings
 
 Date: 2026-07-18
-SHA: 2d83ea2
+Study SHA: 2d83ea2 (CLI run); findings revised in this doc tree.
 Timelines used: `workspaces/alignment_prototype/out/1fsnxchk_agentic_timeline.json` (BB12), `workspaces/alignment_prototype/out/2nvzlh2k_agentic_timeline.json` (BB11)
 n cases: 12
 Contrast threshold (aid only): 2.0
@@ -50,3 +50,8 @@ The immediate next lever is **decoder/voting on fp_hit**, not a new encoder in t
 ## Non-claims
 No statistical generalization from n<50. No new aligner channel shipped.
 Headline alignment numbers: see [docs/alignment_status.md](../../docs/alignment_status.md) only.
+
+**Mix crop note:** `hubert`, `chroma`, and `fp_hit` currently crop full `mix.*`
+(not `mix_vocals`), even for acappella cases; ref may still be vocals via
+`ref_audio_for`. This may bias acappella cases toward representation_wall when
+vocals are buried in the full mix.

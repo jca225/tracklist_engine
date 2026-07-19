@@ -13,7 +13,6 @@ from workspaces.alignment_prototype.score_timeline_vs_gt import (
 )
 
 _REPO = Path(__file__).resolve().parents[3]
-_OUT = Path(__file__).resolve().parent / "out"
 _ALN_OUT = _REPO / "workspaces" / "alignment_prototype" / "out"
 
 SET_META = {
