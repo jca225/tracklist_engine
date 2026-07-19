@@ -65,6 +65,46 @@ def test_pseudo_acceptance_requires_independence_or_high_precision():
     assert pseudo_acceptance(fiber_ambiguous) == (False, "g3_fiber")
 
 
+def test_resolve_require_independence_continues_past_solo_auto(tmp_path):
+    """Lyrics at 0.76 clears the auto bar alone; pseudo-safe must still query
+    a second independent probe (stem_hubert) so G2 can pass."""
+    spans = [
+        SpanCtx("1", "r1", "acappella", _timeline_span("1", "r1", stem="acappella"))
+    ]
+    calls: list[str] = []
+
+    def lyrics(_):
+        calls.append("lyrics")
+        return _obs("lyrics", 30.0, prec=0.76)
+
+    def hubert(_):
+        calls.append("stem_hubert")
+        return _obs("stem_hubert", 31.0, prec=0.75)
+
+    runners = {"lyrics": lyrics, "stem_hubert": hubert}
+    ladder = Ladder(auto=0.75, combine=True)
+
+    resolve(
+        spans,
+        runners,
+        EventLog(tmp_path / "indep.jsonl"),
+        ladder=ladder,
+        require_independence=True,
+    )
+    assert calls == ["lyrics", "stem_hubert"]
+
+    # Without the flag, early-stop after lyrics alone.
+    calls.clear()
+    resolve(
+        spans,
+        runners,
+        EventLog(tmp_path / "early.jsonl"),
+        ladder=ladder,
+        require_independence=False,
+    )
+    assert calls == ["lyrics"]
+
+
 def test_refine_agentic_spans_demotes_unsafe_pseudo_commit(tmp_path):
     timeline = {
         "set_id": "pool",

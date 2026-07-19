@@ -121,6 +121,29 @@ def test_materialize_counts_each_rejection_and_resolves_track_id(tmp_path):
     assert doc["tracks"][0]["pseudo_label"] is True
 
 
+def test_materialize_resolves_rid_stored_as_track_id(tmp_path):
+    """BB10 manifests leave recording_id null; canonical rid lives in track_id."""
+    timeline = _write_timeline(
+        tmp_path,
+        spans=[_span("h5u3jtp", "h5u3jtp", driver_mode="auto_commit")],
+    )
+    manifest = _write_manifest(
+        tmp_path,
+        tracks=[
+            {
+                "slot_label": "001w2",
+                "recording_id": None,
+                "track_id": "h5u3jtp",
+            }
+        ],
+    )
+    report = materialize_pseudo_gt(timeline, manifest, tmp_path / "pseudo.yaml")
+    assert report.accepted == 1
+    assert report.dropped == {}
+    doc = yaml.safe_load(report.output.read_text())
+    assert doc["tracks"][0]["track_id"] == "h5u3jtp"
+
+
 def test_materialize_is_deterministic_and_atomic(tmp_path):
     timeline = _write_timeline(
         tmp_path,
@@ -204,9 +227,7 @@ def test_materialize_yaml_loads_into_dataset_when_audio_stubbed(tmp_path, monkey
     )
     monkeypatch.setattr(traj_data, "find_aligning_dir", lambda _sid: aligning)
     monkeypatch.setattr(traj_data, "find_mix_stems", lambda _d: {})
-    monkeypatch.setattr(
-        traj_data, "resolve_span_audio", lambda *_a, **_k: stub
-    )
+    monkeypatch.setattr(traj_data, "resolve_span_audio", lambda *_a, **_k: stub)
 
     ds = traj_data.TrajectorySpanDataset(
         [("w1mgcjt", report.output)],

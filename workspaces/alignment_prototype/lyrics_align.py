@@ -37,9 +37,11 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import gc
 import glob
 import hashlib
 import json
+import os
 import re
 import sys
 import warnings
@@ -54,6 +56,7 @@ if str(_REPO) not in sys.path:
 CACHE = Path(__file__).resolve().parent / ".cache" / "lyrics"
 MODEL = "openai/whisper-large-v3-turbo"
 BLOCK_S = 300.0
+LONG_AUDIO_CPU_S = 1800.0
 
 # VoiceFixer restore before ASR (coverage lever; --enhance-vocals). Off by
 # default; when on, mix + candidate vocals are restored (see vocal_enhance.py).
@@ -69,29 +72,57 @@ ABSTAIN_PEN = 0.6
 POS_SIGMA = 150.0
 
 _PIPE = None
+_PIPE_DEVICE: str | None = None
 
 
 # --- transcription (cached) ----------------------------------------------
-def _pipe():
-    global _PIPE
-    if _PIPE is None:
+def _whisper_device(duration_s: float) -> str:
+    """Choose a bounded-memory ASR device, with an explicit env override.
+
+    MPS graph compilation grows sharply on hour-long inputs and has caused a
+    16+ GiB runaway in the E1 BB10 smoke. Keep short candidate stems on the
+    fastest available device, but default long mixes to CPU.
+    """
+    override = os.environ.get("ALIGN_WHISPER_DEVICE", "").strip().lower()
+    if override:
+        if override not in {"auto", "cpu", "mps", "cuda"}:
+            raise ValueError(
+                "ALIGN_WHISPER_DEVICE must be one of auto,cpu,mps,cuda "
+                f"(got {override!r})"
+            )
+        if override != "auto":
+            return override
+    if duration_s >= LONG_AUDIO_CPU_S:
+        return "cpu"
+    import torch
+
+    return (
+        "cuda"
+        if torch.cuda.is_available()
+        else ("mps" if torch.backends.mps.is_available() else "cpu")
+    )
+
+
+def _pipe(device: str):
+    global _PIPE, _PIPE_DEVICE
+    if _PIPE is None or _PIPE_DEVICE != device:
         import torch
         from transformers import pipeline
 
-        dev = (
-            "cuda"
-            if torch.cuda.is_available()
-            else ("mps" if torch.backends.mps.is_available() else "cpu")
-        )
-        print(f"loading {MODEL} on {dev} …", file=sys.stderr)
+        _PIPE = None
+        gc.collect()
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+        print(f"loading {MODEL} on {device} …", file=sys.stderr)
         _PIPE = pipeline(
             "automatic-speech-recognition",
             model=MODEL,
-            device=dev,
-            dtype=torch.float16 if dev in ("mps", "cuda") else torch.float32,
+            device=device,
+            dtype=torch.float16 if device in ("mps", "cuda") else torch.float32,
             chunk_length_s=28,
             stride_length_s=4,
         )
+        _PIPE_DEVICE = device
     return _PIPE
 
 
@@ -106,6 +137,25 @@ def load_cached(path: str | Path) -> list[dict] | None:
 
     cf = _cache_file(resolve_for_cache(path, ENHANCE_VOCALS))
     return json.loads(cf.read_text()) if cf.is_file() else None
+
+
+def _partial_cache_file(cache_file: Path) -> Path:
+    return cache_file.with_suffix(".partial.json")
+
+
+def _load_partial(cache_file: Path) -> tuple[list[dict], float]:
+    partial = _partial_cache_file(cache_file)
+    if not partial.is_file():
+        return [], 0.0
+    payload = json.loads(partial.read_text())
+    return list(payload["words"]), float(payload["next_t0"])
+
+
+def _write_json_atomic(path: Path, payload: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(json.dumps(payload))
+    tmp.replace(path)
 
 
 def transcribe_words(path: str | Path, enhance: bool | None = None) -> list[dict]:
@@ -128,8 +178,14 @@ def transcribe_words(path: str | Path, enhance: bool | None = None) -> list[dict
     import librosa
 
     dur = librosa.get_duration(path=str(path))
-    words: list[dict] = []
-    t0 = 0.0
+    device = _whisper_device(dur)
+    words, t0 = _load_partial(cf)
+    if t0:
+        print(
+            f"resuming {Path(path).name} transcription at {t0:.0f}/{dur:.0f}s "
+            f"on {device} …",
+            file=sys.stderr,
+        )
     while t0 < dur:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -137,7 +193,7 @@ def transcribe_words(path: str | Path, enhance: bool | None = None) -> list[dict
                 str(path), sr=16000, mono=True, offset=t0, duration=BLOCK_S
             )
         if y.size:
-            out = _pipe()(
+            out = _pipe(device)(
                 y,
                 return_timestamps="word",
                 generate_kwargs={"language": "en", "task": "transcribe"},
@@ -154,8 +210,16 @@ def transcribe_words(path: str | Path, enhance: bool | None = None) -> list[dict
                         }
                     )
         t0 += BLOCK_S
-    CACHE.mkdir(parents=True, exist_ok=True)
-    cf.write_text(json.dumps(words))
+        _write_json_atomic(
+            _partial_cache_file(cf),
+            {"next_t0": t0, "words": words},
+        )
+        if device == "mps":
+            import torch
+
+            torch.mps.empty_cache()
+    _write_json_atomic(cf, words)
+    _partial_cache_file(cf).unlink(missing_ok=True)
     return words
 
 
@@ -248,6 +312,29 @@ def _slot_order(slot: str) -> tuple[int, int]:
         "".join(c for c in (s.split("w")[1] if "w" in s else "0") if c.isdigit()) or "0"
     )
     return int(base), int(sub)
+
+
+def resolve_tracklist_slot(
+    timeline_slot: str | None,
+    manifest_row: dict | None,
+) -> str:
+    """Ableton/manifest slot for tracklist order + lyrics position prior.
+
+    Unlabeled-pool timelines (BB10) often key spans by ``recording_id``
+    (``h5u3jtp``). Feeding that into ``_slot_order`` collapses expected mix
+    positions near 0 and starves monotonic decode. Prefer manifest
+    ``slot_label`` (``001w2``) when present; keep ``timeline_slot`` as the
+    lyrics_by_slot key separately.
+    """
+    if manifest_row:
+        ms = manifest_row.get("slot_label")
+        if ms not in (None, ""):
+            return str(ms)
+    return str(timeline_slot or "")
+
+
+def tracklist_max_slot(slot_labels: list[str]) -> int:
+    return max((_slot_order(s)[0] for s in slot_labels if s), default=1) or 1
 
 
 def monotonic_decode(spans):

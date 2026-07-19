@@ -23,8 +23,8 @@ import json
 from pathlib import Path
 
 from workspaces.alignment_prototype.agentic.belief import (
-    INDEPENDENCE_GROUP,
     SpanBelief,
+    independence_satisfied,
 )
 from workspaces.alignment_prototype.agentic.events import EventLog
 from workspaces.alignment_prototype.agentic.loop import Resolution, SpanCtx, resolve
@@ -44,8 +44,7 @@ def pseudo_acceptance(belief: SpanBelief) -> tuple[bool, str | None]:
     )
     if any("[fiber" in obs.detail for obs in members):
         return False, "g3_fiber"
-    groups = {INDEPENDENCE_GROUP.get(obs.probe, obs.probe) for obs in members}
-    if len(groups) >= 2 or max((obs.precision for obs in members), default=0.0) >= 0.9:
+    if independence_satisfied(belief):
         return True, None
     return False, "g2_independence"
 
@@ -59,7 +58,13 @@ def refine_agentic_spans(
     ladder: Ladder,
     pseudo_safe: bool = False,
 ) -> tuple[list[dict], Resolution]:
-    res = resolve(spans_ctx, runners, log, ladder=ladder)
+    res = resolve(
+        spans_ctx,
+        runners,
+        log,
+        ladder=ladder,
+        require_independence=pseudo_safe,
+    )
 
     mode_of: dict[str, str] = {}
     belief_of: dict[str, SpanBelief] = {}
