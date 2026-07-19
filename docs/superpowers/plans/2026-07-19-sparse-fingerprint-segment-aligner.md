@@ -1,9 +1,27 @@
 # Sparse Multi-Stem Fingerprint Segment Aligner
 
-**Status:** proposed implementation plan  
+**Status:** Phase 2 synthetic milestone complete; later phases proposed
 **Objective:** turn whole-mix, stem-matched landmark correspondences into
 piecewise constituent timelines with explicit starts, ends, jumps, overlaps,
 and re-entries.
+
+## Execution checkpoint
+
+Phase 2 synthetic proof completed on `fp-hit-decoder-clean`:
+
+- added typed raw landmark-match and bounded constituent-segment contracts;
+- refactored the existing looptrace cover DP to expose explicit mix end
+  boundaries while preserving its legacy return behavior;
+- added a whole-mix local decoder with Hough candidates, a NULL state,
+  multi-run output, frozen slope selection, and weak collision-run rejection;
+- proved linear boundaries, NULL gaps, reference jumps, same-diagonal
+  re-entries, tempo-slope selection, short repeated-pattern rejection, and
+  no-match abstention on deterministic point clouds;
+- proved synthetic audio through actual landmark hashing and matching recovers
+  two separated, reference-jumped appearances.
+
+This earns Phase 3 multi-channel corroboration. It does **not** yet establish a
+real-set improvement or authorize tracklist attribution/default integration.
 
 Canonical benchmark values remain exclusively in
 [`docs/alignment_status.md`](../../alignment_status.md). This plan defines gates

@@ -30,6 +30,18 @@ class Diagonal:
     votes: int
 
 
+@dataclass(frozen=True)
+class DiagonalRun:
+    """One explicit non-NULL run from the segment-cover path."""
+
+    mix_start_s: float
+    mix_end_s: float
+    song_start_s: float
+    song_end_s: float
+    diagonal: Diagonal
+    evidence: float
+
+
 def hough_diagonals(
     points: np.ndarray, slope: float, cfg: SegmentConfig = SEG_V1
 ) -> list[Diagonal]:
@@ -114,7 +126,7 @@ def _noise_floor(
     return np.median(np.stack(probes, axis=0), axis=0)
 
 
-def cover_dp(
+def cover_dp_runs(
     points: np.ndarray,
     slope: float,
     span_dur_s: float,
@@ -123,8 +135,8 @@ def cover_dp(
     weights: np.ndarray | None = None,
     diagonals: list[Diagonal] | None = None,
     bonus: np.ndarray | None = None,
-) -> tuple[list[tuple[float, float, float]], float]:
-    """(segment list [(mix_start_s, song_start_s, song_end_s)], evidence).
+) -> tuple[list[DiagonalRun], float]:
+    """Decode explicit non-NULL runs, including their mix-time end boundaries.
 
     weights: optional per-point multiplier (loop-collapse evidence weight).
     States = candidate diagonals + NULL; emission = per-time support (NULL
@@ -179,8 +191,11 @@ def cover_dp(
     for t in range(t_steps - 1, 0, -1):
         path[t - 1] = back[path[t], t]
     evidence = float(raw[path, np.arange(t_steps)].sum())
-    # runs of one diagonal -> segments
-    segs: list[tuple[float, float, float]] = []
+    # Runs of one diagonal become bounded segments. The legacy cover_dp return
+    # shape omitted mix_end and inferred it from the next segment, which cannot
+    # represent a genuine NULL gap. Keep the boundary here while the decoded
+    # state path still makes it explicit.
+    runs: list[DiagonalRun] = []
     null_state = n_states - 1
     i = 0
     while i < t_steps:
@@ -189,17 +204,64 @@ def cover_dp(
         while j < t_steps and path[j] == s:
             j += 1
         if s != null_state and (j - i) * cfg.grid_step_s >= cfg.min_segment_s:
-            m0, m1 = grid[i], grid[min(j, t_steps - 1)]
+            m0 = float(grid[i])
+            m1 = min(float(span_dur_s), float(grid[j - 1] + cfg.grid_step_s))
             b0 = diags[s].intercept_s
-            segs.append(
-                (
-                    round(float(m0), 3),
-                    round(float(slope * m0 + b0), 3),
-                    round(float(slope * m1 + b0), 3),
+            run_ev = float(raw[s, i:j].sum())
+            runs.append(
+                DiagonalRun(
+                    mix_start_s=round(m0, 3),
+                    mix_end_s=round(m1, 3),
+                    song_start_s=round(float(slope * m0 + b0), 3),
+                    song_end_s=round(float(slope * m1 + b0), 3),
+                    diagonal=diags[s],
+                    evidence=run_ev,
                 )
             )
         i = j
-    return segs, evidence
+    return runs, evidence
+
+
+def cover_dp(
+    points: np.ndarray,
+    slope: float,
+    span_dur_s: float,
+    cfg: SegmentConfig = SEG_V1,
+    *,
+    weights: np.ndarray | None = None,
+    diagonals: list[Diagonal] | None = None,
+    bonus: np.ndarray | None = None,
+) -> tuple[list[tuple[float, float, float]], float]:
+    """Legacy segment shape over :func:`cover_dp_runs`.
+
+    Existing looptrace consumers intentionally retain
+    ``(mix_start, song_start, song_end)``. New whole-mix consumers use the
+    bounded runs so NULL gaps and re-entry boundaries survive materialization.
+    """
+    runs, evidence = cover_dp_runs(
+        points,
+        slope,
+        span_dur_s,
+        cfg,
+        weights=weights,
+        diagonals=diagonals,
+        bonus=bonus,
+    )
+    last_grid_s = float(
+        np.arange(0.0, max(span_dur_s, cfg.grid_step_s), cfg.grid_step_s)[-1]
+    )
+    legacy = []
+    for run in runs:
+        # Preserve cover_dp's historical final-cell convention exactly. The
+        # bounded API deliberately extends the final cell to its right edge;
+        # existing looptrace callers historically ended it at the grid centre.
+        song_end = run.song_end_s
+        if run.mix_end_s >= span_dur_s:
+            song_end = round(
+                float(slope * last_grid_s + run.diagonal.intercept_s), 3
+            )
+        legacy.append((run.mix_start_s, run.song_start_s, song_end))
+    return legacy, evidence
 
 
 def mel_emission(
