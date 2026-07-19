@@ -57,3 +57,5 @@ tests/labeling/fixtures/als/audio/**/*.asd
 
 # WS2 ear-check snippets (audio, do not track)
 workspaces/streaming_mir/ws2_snippets/
+
+soundcloud/data/

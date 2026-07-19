@@ -67,16 +67,14 @@ def _feature_for(stem: str) -> str:
 def _ref_audio_for(span: dict, track: dict, set_dir: Path | None = None) -> str | None:
     """Stem-routed reference audio (vocals/instrumental stem or full track).
 
-    Disk is truth: the manifest ``stems`` field is written once at pull time
-    and drifts stale (measured 2026-07-09: 44 BB11 + 13 BB12 acappella spans
-    silently lost their looptrace decode to this — stems on disk since June,
-    absent from the manifest). ``resolve_stem`` globs the on-disk slot dirs
-    when the manifest hint misses."""
+    The manifest ``stems`` field is written once at pull time and drifts stale
+    (measured 2026-07-09: 44 BB11 + 13 BB12 acappella spans silently lost their
+    looptrace decode to this). ``resolve_stem`` accepts one unambiguous on-disk
+    fallback and abstains when multiple slot-matched copies exist."""
     sk = _STEM_FILE.get(span.get("claimed_stem") or "regular")
     if sk:
         sp = resolve_stem(set_dir, span.get("slot_label"), track, sk)
-        if sp is not None:
-            return str(sp)
+        return str(sp) if sp is not None else None
     lp = track.get("local_path")
     return lp if lp and Path(lp).is_file() else None
 

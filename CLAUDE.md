@@ -153,6 +153,9 @@ subtree — keep stage-specific detail there, not here. Index:
   in [lab/corpus_empirics/findings.md](lab/corpus_empirics/findings.md).
 - **[core/CLAUDE.md](core/CLAUDE.md)** — shared substrate; `core/identity.py`
   (three axes); the rule that `core` imports nothing upward.
+- **[soundcloud/CLAUDE.md](soundcloud/CLAUDE.md)** — SoundCloud data-lake
+  substrate (anon `client_id` fetch + `sc_lake.db` on pi-storage). General
+  ingestion primitive consumed by `personalization`/`lab`; off the alignment DAG.
 
 ## Database
 

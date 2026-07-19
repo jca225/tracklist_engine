@@ -195,9 +195,14 @@ def push_mert_rows(track_audio_id: int, mert_version: str) -> None:
     versions["mert"] = mert_version
     versions_lit = json.dumps(versions).replace("'", "''")
 
+    # busy_timeout + BEGIN IMMEDIATE (mirrors vast_loop.push_track_rows): the
+    # canonical DB is shared with pi services and other pushers; without a lock
+    # wait a concurrent writer trips "database is locked (5)" immediately and
+    # the MERT embed is wasted + the track misleadingly counts as failed.
     sql_lines = [
         ".bail on",
-        "BEGIN;",
+        "PRAGMA busy_timeout=120000;",
+        "BEGIN IMMEDIATE;",
         f"DELETE FROM track_mert_measures WHERE track_audio_id={track_audio_id};",
         dumped.strip(),
         (

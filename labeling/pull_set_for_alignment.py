@@ -886,6 +886,11 @@ def main() -> int:
         )
     if not args.dry_run:
         (dest_root / "manifest.json").write_text(json.dumps(manifest, indent=2))
+        from labeling.audio_index import build_audio_index, write_audio_index
+
+        write_audio_index(
+            dest_root, build_audio_index(dest_root, manifest["tracks"])
+        )
 
     if args.fetch_candidates and not args.dry_run and succeeded:
         _run_fetch_candidates(dest_root, satisfaction_by_label)

@@ -188,9 +188,14 @@ def push_set_mert_rows(set_audio_id: int, mert_version: str) -> None:
         errors="surrogateescape",
         timeout=SSH_QUERY_TIMEOUT,
     )
+    # busy_timeout + BEGIN IMMEDIATE (mirrors vast_loop.push_track_rows): the
+    # canonical DB is shared with pi services and other pushers; without a lock
+    # wait a concurrent writer trips "database is locked (5)" immediately and
+    # the MERT embed is wasted + the set misleadingly counts as failed.
     sql_lines = [
         ".bail on",
-        "BEGIN;",
+        "PRAGMA busy_timeout=120000;",
+        "BEGIN IMMEDIATE;",
         f"DELETE FROM set_mert_measures WHERE set_audio_id={set_audio_id};",
         dumped.strip(),
         "COMMIT;",
