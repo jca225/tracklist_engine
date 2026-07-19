@@ -331,3 +331,34 @@ lyrics-alone auto does not skip HuBERT; (3) HuBERT prior falls back to
 lyrics/timeline when mert/cue absent; (4) `resolve_track_id` accepts rid stored
 as manifest `track_id` when `recording_id` is null. Whisper long-mix checkpoint
 kept the lyrics cache warm. Disco Lines remains a dead pool for E1.
+
+## BB12 inventory coherence (2026-07-19) — neutral
+
+**Question:** after BB12 inventory-audio repair (aligning ref files + spectrogram
+`src=yes`), does a fresh score of the frozen `_lt` / agentic timelines move
+identity, traj, stem_mismatch, or decode-residual on the real board?
+
+**Verdict:** neutral — inventory coherence fixed evaluation surfaces but not the
+end-to-end scoreboard on unchanged timelines. Park further inventory polish;
+return to algo (routing materialize, decode, placement).
+
+**Evidence (BB12 `1fsnxchk`, vs `docs/alignment_status.md` §1 regenerated
+2026-07-19):**
+
+- **Spectrogram / preflight:** Task 7 `src=yes` **139/139** (was broken); scorer
+  preflight still flags **2** acquisition gaps (`tlp2853054`, `tlp2853062`) —
+  `--strict-inventory` aborts; scored without strict.
+- **Live `_lt` classical** (frozen timeline, `--decompose`): identity **127/152
+  (84%)** unchanged; set_start median **5.1s / <15s 71%** unchanged; multiseg+loop
+  traj **30% strict → 50% fiber** unchanged; span-table **stem_mismatch 62/139**
+  unchanged (materialized `claimed_stem` routing not re-run).
+- **Agentic timeline** (same inventory, no re-infer): placement **2.9s / 78% <15s**
+  (better than classical); traj headline **35% strict → 55% fiber** — algo delta,
+  not inventory.
+- **Oracle `_gtstem_lt` (Task 7):** stem_mismatch **0/139** confirms routing was
+  confounding diagnosis; modest traj lift (+6 spans ≥0.95) shows inventory alone
+  is insufficient for board movement.
+
+**Do not** re-litigate inventory-audio paths on BB12 before fixing live stem
+materialize / re-infer. **Do** run BB11 inventory pass next only if routing +
+algo blockers are addressed in parallel.
