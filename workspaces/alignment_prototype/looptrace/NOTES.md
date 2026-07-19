@@ -626,3 +626,22 @@ Expected effect bound: placement ≈ 31% of GT-seconds lost; lattice prior
 attacks the coarse-error tail (wrong bar / wrong phrase), not the "which
 chorus" decode-residual wall (45%). Validate before/after on `make
 scorecard` (BB11 41% headline guard, both sets).
+
+## Oracle→e2e gap decomposition (2026-07-18): the queued analytic step, DONE
+
+Closes the "decompose the oracle↔e2e gap with the scorer's own matching" open
+item recorded above (Lyrics-wiring passes). Built `evals/oracle_ladder.py`: a
+layered oracle-substitution ladder (R0 e2e → +routing → +identity → +placement),
+looptrace fixed, scored over a fixed GT-acappella-row denominator. Both sets:
+
+- **Instance selection is the binding constraint at the oracle ceiling** — with
+  placement+identity+routing all oracle (R3), acappella strict caps at 0.37
+  (BB12) / 0.30 (BB11) while fiber is 0.59 / 0.54. The strict→fiber headroom
+  (~+22–24 pp) survives placement being fixed → build the selector (still gated
+  on a 3rd GT set; this is the case for labeling BB10).
+- **Co-equal with placement**, which is set-dependent (BB12 +10.8 vs BB11
+  +20.1 pp of the fiber gap) — matches cotrain's placement-non-transfer.
+- **Routing is a free hand-off** to the data-engine session (BB12 +12.6 pp; the
+  w-layer stale-stem mis-route).
+
+Full write-up + tables: `evals/ORACLE_LADDER_FINDINGS.md`.
