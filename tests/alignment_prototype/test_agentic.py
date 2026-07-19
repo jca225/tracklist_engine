@@ -307,8 +307,11 @@ def test_dominance_plans_prune_dominated_probes():
     # supplies the w-row band center)
     assert vocal[-1] == "surprise" and host[-1] == "surprise"
     assert vocal.index("mert_decode") < vocal.index("surprise")
-    # before the tail, plans are information-ordered, most expensive probe last
-    assert vocal[-2] == "stem_hubert" and host[-2] == "chroma_refine"
+    # before the tail, plans are information-ordered; regulars now include
+    # stem_hubert (after fp) so E1 can form fp+hubert G2 on the non-acap tail
+    assert vocal[-2] == "stem_hubert"
+    assert host.index("fp") < host.index("stem_hubert") < host.index("chroma_refine")
+    assert host[-2] == "chroma_refine"
 
 
 def test_bind_rejects_unknown_actions():
@@ -434,20 +437,26 @@ def test_ref_fp_for_span_falls_back_to_regular(monkeypatch):
     assert calls == [FpKey("abc", "instrumental"), FpKey("abc", "regular")]
 
 
-def test_ref_fp_for_span_abstains_outside_instrumental_lane(monkeypatch):
+def test_ref_fp_for_span_abstains_acappella_allows_regular(monkeypatch):
     from workspaces.alignment_prototype.agentic import live_runners as lr
+    from workspaces.alignment_prototype.fp_index import FpKey
 
-    def unexpected_load(*_args, **_kwargs):
-        raise AssertionError("non-instrumental spans must not load landmark fp")
+    calls: list[FpKey] = []
+
+    def fake_load(key, **_kw):
+        calls.append(key)
+        return object() if key.stem == "instrumental" else None
 
     import workspaces.alignment_prototype.fp_index as fp_index
 
-    monkeypatch.setattr(fp_index, "load", unexpected_load)
+    monkeypatch.setattr(fp_index, "load", fake_load)
     assert (
-        lr.ref_fp_for_span({"recording_id": "abc", "claimed_stem": "acappella"})
-        is None
+        lr.ref_fp_for_span({"recording_id": "abc", "claimed_stem": "acappella"}) is None
     )
-    assert lr.ref_fp_for_span({"recording_id": "abc", "claimed_stem": "regular"}) is None
+    assert calls == []  # acappella must not touch the index
+    hit = lr.ref_fp_for_span({"recording_id": "abc", "claimed_stem": "regular"})
+    assert hit is not None
+    assert calls[0] == FpKey("abc", "instrumental")
 
 
 def test_live_hubert_can_be_skipped(monkeypatch):

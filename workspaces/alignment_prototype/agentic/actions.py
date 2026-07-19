@@ -68,7 +68,12 @@ REGISTRY: dict[str, ActionSpec] = {
             "lyrics", cost=1.0, precision=0.76, stems=("acappella",)
         ),  # EXPERIMENT
         # banded HuBERT joint placement: vocal fallback when lyrics abstains
-        ActionSpec("stem_hubert", cost=3.0, precision=0.75, stems=("acappella",)),
+        # Vocal HuBERT: acappella primary; regular beds with a vocal stem use
+        # the same mix_vocals lane so E1 can form fp+hubert G2 on the non-acap
+        # tail (fp alone is 0.53 and cannot auto-commit).
+        ActionSpec(
+            "stem_hubert", cost=3.0, precision=0.75, stems=("acappella", "regular")
+        ),
         # chroma matched-filter refine (instrumental/regular ref offsets)
         ActionSpec(
             "chroma_refine", cost=0.5, precision=0.70, stems=("regular", "instrumental")
@@ -152,7 +157,14 @@ REGISTRY: dict[str, ActionSpec] = {
 # the review queue. Live-mode ordering also needs mert's proposal to exist
 # first (the w-row band center; scraped cue is fake 0.0 there).
 DOMINANCE: dict[str, tuple[str, ...]] = {
-    "regular": ("cue_prior", "mert_decode", "fp", "chroma_refine", "surprise"),
+    "regular": (
+        "cue_prior",
+        "mert_decode",
+        "fp",
+        "stem_hubert",
+        "chroma_refine",
+        "surprise",
+    ),
     "instrumental": ("cue_prior", "mert_decode", "fp", "chroma_refine", "surprise"),
     "acappella": (
         "cue_prior",

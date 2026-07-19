@@ -297,16 +297,16 @@ BB11?
 fp-only / no exportable 330M MERT; `accepted=0` at G0. Infra (Tasks 1–4) was fine.
 **Verdict (BB10 smoke, 2026-07-19): viable → mass up** — `pool=w1mgcjt` →
 `eval=2nvzlh2k`, `--smoke-only`. Progression: `accepted=3` (infra unblock) →
-`16` (lyrics tracklist-slot fix: Ableton `slot_label` over timeline rid) →
-`24` (HuBERT↔lyrics corroboration: snap set_start to lyrics when |Δ|≤30s so
-G2 CLUSTER_TOL_S=8 can pair; tighter band_s=45 when prior=lyrics). Smoke TRM
-at n=24 still underfits held-out vs control (expected); mass lever only.
+`16` (lyrics tracklist-slot fix) → `24` (HuBERT↔lyrics corroboration) →
+`33` (BB10 regular fp landmarks + fp+HuBERT G2: allow regular in
+`ref_fp_for_span` / stem plan, E1 sets `AGENTIC_LIVE_ENABLE_FP_PLACEMENT`,
+HuBERT↔fp corroboration ≤30s; 6/33 autos are regular). Smoke TRM still
+underfits held-out (expected); mass lever only. FP placement stays
+fail-closed outside E1 (BB11/BB12 NO-GO as decider unchanged).
 **Verdict (BB10 full E1 @ n=3 / n=16 / n=24, 2026-07-19): noise-floor** —
 drop `--smoke-only`, `--reuse-agentic`. At n=24: pseudo-TRM train-fit ~0.86
-but held-out HEADLINE ~0.05 ≪ control ~0.31 (same shape as n=3/16). Do
-**not** regenerate `docs/alignment_status.md`. Mass alone is not enough at
-this n — next lever: BB10 fp landmarks for regulars (pool had 0/25 rid fps
-in earlier audit) without loosening G1/G2/G3.
+but held-out HEADLINE ~0.05 ≪ control ~0.31. Do **not** regenerate
+`docs/alignment_status.md`. Full E1 @ n=33 pending/next.
 **Fixes that unblocked BB10 (do not weaken G1/G2/G3):** (1) prefer `mix.wav`
 over `mix.m4a` for fp load; (2) `resolve(require_independence=True)` in
 pseudo-safe so lyrics-alone auto does not skip HuBERT; (3) HuBERT prior falls

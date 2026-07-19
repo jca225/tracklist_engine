@@ -55,13 +55,12 @@ _FIBER_FPS = 22050 / 512
 
 
 def ref_fp_for_span(span: dict):
-    """Load the landmark fp for a span, keyed by claimed_stem.
+    """Load the landmark fp for a span against the instrumental mix lane.
 
-    This live lane is intentionally instrumental-only, matching the belief
-    gate: prefer the stem-specific entry and fall back to a regular landmark
-    for the same recording. Regular and acappella spans abstain so a newly
-    dense fp index cannot perturb their already-strong baseline placements.
-    Returns None when no valid entry exists.
+    Acappella spans abstain (vocal landmark lane is a recorded NO-GO). Instrumental
+    and regular spans use the separated-instrumental landmark when present, with
+    a regular-landmark fallback. Placement into belief still requires
+    ``AGENTIC_LIVE_ENABLE_FP_PLACEMENT`` (fail-closed by default).
     """
     from workspaces.alignment_prototype.fp_index import FpKey
     from workspaces.alignment_prototype.fp_index import load as fp_load
@@ -70,10 +69,12 @@ def ref_fp_for_span(span: dict):
     if not rid:
         return None
     stem = span.get("claimed_stem") or "regular"
-    if stem != "instrumental":
+    if stem == "acappella":
         return None
-    hit = fp_load(FpKey(rid, stem))
-    if hit is None and stem != "regular":
+    # Symmetric instrumental lane: prefer instrumental hashes even for regular
+    # claimed_stem (full-mix refs reintroduce vocals/FX).
+    hit = fp_load(FpKey(rid, "instrumental"))
+    if hit is None:
         hit = fp_load(FpKey(rid, "regular"))
     return hit
 
@@ -421,17 +422,21 @@ class LiveContext:
             )
             from workspaces.alignment_prototype.stem_placement import hubert_of
 
-            ac = [
-                s for s in spans if (s.get("claimed_stem") or "regular") == "acappella"
+            # Acappella + regular (beds with a vocal stem). Instrumental-only
+            # spans stay out — no vocal ref to match against mix_vocals.
+            vocal_spans = [
+                s
+                for s in spans
+                if (s.get("claimed_stem") or "regular") in ("acappella", "regular")
             ]
             mixv = set_dir / "mix_vocals.flac"
-            if not ac:
+            if not vocal_spans:
                 return
             if not mixv.is_file():
                 log.warning("live hubert: mix_vocals.flac missing — abstain")
                 return
             by_tid = _manifest_by_tid(set_dir, ctx.set_id)
-            for s in ac:
+            for s in vocal_spans:
                 t = by_tid.get(s.get("recording_id"))
                 vpath = _vocal_ref_path(t)
                 if vpath and Path(vpath).is_file() and s.get("recording_id"):
@@ -477,6 +482,8 @@ def _prior_ss(data: dict) -> float | None:
 # thresholds — only aligns the reported placement when acoustic evidence is near.
 LYRICS_HUBERT_BAND_S = 45.0
 LYRICS_HUBERT_CORROBORATE_S = 30.0
+FP_HUBERT_BAND_S = 45.0
+FP_HUBERT_CORROBORATE_S = 30.0
 
 
 def corroborate_hubert_with_lyrics(
@@ -501,6 +508,30 @@ def corroborate_hubert_with_lyrics(
         float(lyrics_ss),
         float(hubert_rs),
         f" corroborate_lyricsΔ={delta:+.1f}s",
+    )
+
+
+def corroborate_hubert_with_fp(
+    hubert_ss: float,
+    hubert_rs: float,
+    *,
+    fp_ss: float | None,
+    tol_s: float = FP_HUBERT_CORROBORATE_S,
+) -> tuple[float, float, str]:
+    """Snap HuBERT set_start to a nearby fp diagonal for G2 clustering.
+
+    Same clustering-only contract as lyrics corroboration: does not loosen
+    G1/G2/G3; fp alone still cannot clear the auto bar (precision 0.53).
+    """
+    if fp_ss is None:
+        return hubert_ss, hubert_rs, ""
+    delta = float(hubert_ss) - float(fp_ss)
+    if abs(delta) > tol_s:
+        return hubert_ss, hubert_rs, ""
+    return (
+        float(fp_ss),
+        float(hubert_rs),
+        f" corroborate_fpΔ={delta:+.1f}s",
     )
 
 
@@ -612,8 +643,8 @@ def stem_hubert_runner(ctx: LiveContext) -> Runner:
         from workspaces.alignment_prototype.stem_placement import place_joint
 
         stem = data.get("claimed_stem") or "regular"
-        if stem != "acappella":
-            return _abstain("stem_hubert", "not an acappella span")
+        if stem not in ("acappella", "regular"):
+            return _abstain("stem_hubert", "not a vocal span")
         if ctx.mix_hub is None:
             return _abstain("stem_hubert", "no mix_vocals HuBERT")
         rid = str(data.get("recording_id") or "")
@@ -621,23 +652,32 @@ def stem_hubert_runner(ctx: LiveContext) -> Runner:
         if ref_hub is None:
             return _abstain("stem_hubert", "no ref vocal HuBERT for this recording")
         # Prefer mert/cue anchors; on unlabeled pools (BB10) those are absent, so
-        # fall back to the joint lyrics decode already loaded into LiveContext,
-        # then the coarse timeline set_start. Without this, stem_hubert always
-        # abstains with "no prior" and G2 can never pair lyrics+hubert.
+        # fall back to lyrics (acappella), then live fp (regulars), then the
+        # coarse timeline set_start — so G2 can pair lyrics+hubert / fp+hubert.
         prior = _prior_ss(data)
         prior_src = "mert_or_cue"
+        slot = str(data.get("slot_label") or "")
         if prior is None:
-            slot = str(data.get("slot_label") or "")
             lyr = ctx.lyrics_by_slot.get(slot)
             if lyr is not None:
                 prior = float(lyr[0])
                 prior_src = "lyrics"
+        if prior is None:
+            fp_hit = ctx.fp_by_slot.get(slot)
+            if fp_hit is not None:
+                prior = float(fp_hit[0])
+                prior_src = "fp"
         if prior is None and data.get("set_start_s") is not None:
             prior = float(data["set_start_s"])
             prior_src = "timeline"
         if prior is None:
             return _abstain("stem_hubert", "no prior set_start to band around")
-        band_s = LYRICS_HUBERT_BAND_S if prior_src == "lyrics" else 90.0
+        if prior_src == "lyrics":
+            band_s = LYRICS_HUBERT_BAND_S
+        elif prior_src == "fp":
+            band_s = FP_HUBERT_BAND_S
+        else:
+            band_s = 90.0
         try:
             se = data.get("set_end_s")
             span_dur = (
@@ -657,6 +697,12 @@ def stem_hubert_runner(ctx: LiveContext) -> Runner:
             prior_src=prior_src,
             lyrics_ss=lyrics_ss,
         )
+        fp_ss = None
+        fp_hit = ctx.fp_by_slot.get(slot)
+        if fp_hit is not None:
+            fp_ss = float(fp_hit[0])
+        ss, rs, corr_fp = corroborate_hubert_with_fp(float(ss), float(rs), fp_ss=fp_ss)
+        corr = f"{corr}{corr_fp}"
         obs = Observation(
             probe="stem_hubert",
             set_start_s=float(ss),

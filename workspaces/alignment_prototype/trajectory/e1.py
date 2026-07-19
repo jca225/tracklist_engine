@@ -74,7 +74,9 @@ def build_train_commands(cfg: E1Config, pseudo_yaml: Path) -> list[list[str]]:
     # excludes it from the loader. Use a non-eval GT fixture as the placeholder.
     others = [sid for sid in sorted(GT_FIXTURES) if sid != cfg.eval_set]
     if not others:
-        raise ValueError("no non-eval GT fixture available for synthetic-only placeholder")
+        raise ValueError(
+            "no non-eval GT fixture available for synthetic-only placeholder"
+        )
     placeholder = others[0]
     synth = [
         py,
@@ -144,6 +146,8 @@ def _run_logged(cmd: list[str], log_path: Path) -> int:
 
 
 def _produce_agentic_timeline(cfg: E1Config, aligning: Path) -> Path:
+    import os
+
     from workspaces.alignment_prototype.agentic.live_runners import (
         LiveContext,
         build_live_runners,
@@ -154,6 +158,11 @@ def _produce_agentic_timeline(cfg: E1Config, aligning: Path) -> Path:
     if cfg.reuse_agentic and out_path.is_file():
         load_timeline(out_path)
         return out_path
+
+    # Unlabeled-pool mass lever: admit landmark fp into belief (still fail-closed
+    # for ordinary agentic/race on BB11/BB12). fp precision 0.53 cannot solo
+    # auto-commit; E1 needs it as an independent content vote with HuBERT.
+    os.environ.setdefault("AGENTIC_LIVE_ENABLE_FP_PLACEMENT", "1")
 
     base = load_timeline_dict(cfg.base_timeline)
     if str(base.get("set_id")) != cfg.pool_set:
@@ -174,9 +183,7 @@ def _produce_agentic_timeline(cfg: E1Config, aligning: Path) -> Path:
             )
         )
 
-    lctx = LiveContext.from_set(
-        cfg.pool_set, base["spans"], apply_fiber_gate=True
-    )
+    lctx = LiveContext.from_set(cfg.pool_set, base["spans"], apply_fiber_gate=True)
     if lctx is None:
         raise RuntimeError(
             f"agentic live: no LiveContext for {cfg.pool_set} (missing mix MERT). "
