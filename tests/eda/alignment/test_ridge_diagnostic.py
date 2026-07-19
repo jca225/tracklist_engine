@@ -43,8 +43,21 @@ def test_align_bin_grid_crops_and_pads() -> None:
 def test_gt_diagonal_mask_multiseg_two_offsets() -> None:
     mask = gt_diagonal_mask((40, 40), offsets_s=(0.0, 10.0), bin_s=1.0, band_bins=0)
     assert mask[5, 5]
-    assert mask[5, 15]
+    assert mask[15, 5]
     assert not mask[5, 25]
+
+
+def test_gt_diagonal_mask_crop_origins() -> None:
+    mask = gt_diagonal_mask(
+        (40, 40),
+        offsets_s=(80.0,),
+        bin_s=1.0,
+        band_bins=0,
+        mix_origin_s=100.0,
+        ref_origin_s=20.0,
+    )
+    assert mask[5, 5]
+    assert not mask[5, 6]
 
 
 def test_ridge_contrast_high_on_planted_diagonal() -> None:
