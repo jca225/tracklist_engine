@@ -318,3 +318,12 @@ decode prefers manifest Ableton `slot_label`; (6) HuBERT corroborates lyrics
 placement for clustering only (`live_runners.corroborate_hubert_with_lyrics`).
 Whisper long-mix checkpoint kept the lyrics cache warm. Disco Lines remains a
 dead pool for E1.
+
+## E1 pool expansion — Murph smoke (2026-07-19)
+**Question:** can Club Space Murph (`pwgrrb1`, all-regular, already pulled) add
+usable AUTO_COMMIT mass for the flywheel?
+**Verdict: thin** — scaffolded 37-span cue timeline + 35 instrumental landmarks;
+`--smoke-only` → `accepted=4/37` (all other drops `g0_mode`). Smoke TRM
+memorized train (fit 1.0) and lost to BB11 control on HEADLINE. Prefer BB13+
+Bootie pools (acappella density + richer overlap with BB11/12) over more Murph
+epochs.
