@@ -12,5 +12,21 @@ if [[ ! -x "$PYTHON" ]]; then
 fi
 
 "$PYTHON" scripts/guardrails.py
+
+# GT release gate: changed fixture YAMLs must have matching committed stamps.
+# (Portable — macOS /bin/bash is 3.2, no mapfile.)
+_gt_fixtures=$(git diff --cached --name-only --diff-filter=ACM -- \
+  'labeling/fixtures/*_ground_truth.yaml' || true)
+if [ -n "$_gt_fixtures" ]; then
+  echo "gt-gate: checking committed stamps for changed fixtures"
+  # shellcheck disable=SC2086
+  "$PYTHON" -m labeling.gt_release_gate --check-fixtures $_gt_fixtures
+fi
+# Status doc regen must not land against unstamped BB fixtures.
+if git diff --cached --name-only --diff-filter=ACM | grep -qx 'docs/alignment_status.md'; then
+  echo "gt-gate: alignment_status.md staged — fixture stamp preflight"
+  "$PYTHON" -m labeling.gt_release_gate --check-status-regen
+fi
+
 bash scripts/typecheck.sh
 "$PYTHON" -m pytest tests/ -q

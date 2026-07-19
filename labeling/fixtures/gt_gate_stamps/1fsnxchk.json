@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "set_id": "1fsnxchk",
+  "yaml_path": "/Users/johnnycabrahams/Desktop/tracklist_engine/.claude/worktrees/gt-release-gate/labeling/fixtures/bb12_ground_truth.yaml",
+  "yaml_sha256": "d08945b03e07657e0bfe12d6cca07fb7115a9cf746a8e8b7b11d0edac35f66b2",
+  "als_path": "/Users/johnnycabrahams/aligning/_backups/20260616_150150/big bootie 12 labeling Project/big bootie 12 labeling_fast.als",
+  "als_sha256": "3dc4112415d6cc67bc65dc4c88fff0d0315621059d78c0c0f3af82544cdf127b",
+  "created_unix": 1784483154.6763031,
+  "ack_audio_mismatches": true,
+  "acked_failures": [
+    {
+      "status": "POSITION_MISMATCH",
+      "slot": "024w1",
+      "mix_start_s": 2011.155367213119
+    },
+    {
+      "status": "POSITION_MISMATCH",
+      "slot": "012",
+      "mix_start_s": 343.24696750465193
+    }
+  ],
+  "audit_summary": {
+    "status": {
+      "OK": 281,
+      "MUTED": 7,
+      "POSITION_MISMATCH": 2
+    },
+    "identity": {
+      "orig-path": 288,
+      "unresolved": 1,
+      "size-match": 1
+    },
+    "dropped": 11,
+    "unwarped": 5,
+    "variable_warp": 93
+  }
+}

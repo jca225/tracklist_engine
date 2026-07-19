@@ -34,10 +34,12 @@ is the *how we work* layer; the *what the code is* layer lives in
 ## 3b. No GT / status without the release gate
 - Do **not** commit a new/changed `labeling/fixtures/*_ground_truth.yaml`, write back
   to `set_ground_truth`, or regenerate `docs/alignment_status.md` from that GT unless
-  `make gt-gate SET=… ALS=… YAML=…` is green (stamp under `labeling/.cache/gt_gate/`).
-- Re-export matching an old YAML proves reproducibility, not correctness against the
-  mix — the gate includes `als_audit`. Escape hatch: `--force-ungated` / `--ack-audio-mismatches`
-  only with an explicit debt note.
+  `make gt-gate SET=… ALS=… YAML=…` is green.
+- Gate writes a **committed** stamp under `labeling/fixtures/gt_gate_stamps/` (stage it
+  with the YAML — pre-commit checks the sha) and a local cache stamp for write-back.
+- Known leftover audit debt: `labeling/fixtures/gt_audit_acks.yaml`. Status regen:
+  `make status-preflight` first. Escape: `--force-ungated` / blanket
+  `--ack-audio-mismatches` only with an explicit debt note.
 
 ## 4. Record dead ends
 - A closed experiment goes in the **EXPERIMENTS ledger**

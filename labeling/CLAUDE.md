@@ -168,10 +168,13 @@ expect a separate downloaded acappella master unless you explicitly acquired one
 - **Release gate (required before write-back / status regen):**
   `make gt-gate SET=<id> ALS=<hand.als> YAML=<fixture.yaml> [ANCHORS=…]`.
   Runs validate → `anchor_check --strict-ref` → `als_audit`, then stamps
-  `labeling/.cache/gt_gate/<set_id>.ok.json` bound to the YAML sha256.
+  `labeling/.cache/gt_gate/<set_id>.ok.json` (write-back) **and**
+  `labeling/fixtures/gt_gate_stamps/<set_id>.json` (commit with the YAML;
+  pre-commit enforces sha match). Known leftover failures:
+  `fixtures/gt_audit_acks.yaml`. Status: `make status-preflight`.
   `write_back_ground_truth` refuses DB writes without a fresh stamp
-  (`--force-ungated` escape; `--ack-audio-mismatches` for known leftover
-  MISMATCH debt). Re-export matching old YAML is not enough.
+  (`--force-ungated` / blanket `--ack-audio-mismatches` escapes).
+  Re-export matching old YAML is not enough.
 - CLI: `venvs/audio/bin/python -m labeling.write_back_ground_truth --db ... --yaml ...`
   transactionally replaces [set_ground_truth](../web_crawler/database/schema.sql)
   for that set. Dry-run with `--dry-run`. Uses `slot_label` as DB `label` when

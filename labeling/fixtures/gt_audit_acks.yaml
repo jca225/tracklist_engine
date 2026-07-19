@@ -1,0 +1,55 @@
+# Known leftover als_audit failures that may still stamp via the release gate.
+# Prefer fixing the .als / YAML; only add entries after ear-checking the debt.
+# Matching key: set_id + status + slot + mix_start_s (±0.5 s).
+version: 1
+sets:
+  1fsnxchk:
+    note: "BB12 post-regen leftover (audit 2026-07-19 regenerated.v3)"
+    entries:
+      - status: POSITION_MISMATCH
+        slot: "012"
+        mix_start_s: 343.2
+        reason: "placement drift vs mix; deferred after GT regen"
+      - status: POSITION_MISMATCH
+        slot: "024w1"
+        mix_start_s: 2011.2
+        reason: "acappella placement drift; deferred after GT regen"
+  2nvzlh2k:
+    note: "BB11 post-regen leftover (audit 2026-07-19 regenerated.v3)"
+    entries:
+      - status: NO_AUDIO
+        slot: "011"
+        mix_start_s: 1092.4
+        reason: "instrumental ref missing locally; baby-rule / stem path debt"
+      - status: NO_AUDIO
+        slot: "039"
+        mix_start_s: 3579.3
+        reason: "instrumental ref missing locally; baby-rule / stem path debt"
+      - status: POSITION_MISMATCH
+        slot: "001w3"
+        mix_start_s: 86.5
+        reason: "acappella placement drift; deferred after GT regen"
+      - status: POSITION_MISMATCH
+        slot: "003w1"
+        mix_start_s: 299.5
+        reason: "acappella placement drift; deferred after GT regen"
+      - status: POSITION_MISMATCH
+        slot: "009w2"
+        mix_start_s: 913.5
+        reason: "acappella placement drift; deferred after GT regen"
+      - status: POSITION_MISMATCH
+        slot: "017w1"
+        mix_start_s: 1624.9
+        reason: "acappella placement drift; deferred after GT regen"
+      - status: POSITION_MISMATCH
+        slot: "018w1"
+        mix_start_s: 1712.4
+        reason: "Sad Machine fragment placement; deferred after GT regen"
+      - status: POSITION_MISMATCH
+        slot: "018w1"
+        mix_start_s: 1729.8
+        reason: "Sad Machine fragment placement; deferred after GT regen"
+      - status: POSITION_MISMATCH
+        slot: "030w2"
+        mix_start_s: 2760.3
+        reason: "placement drift; deferred after GT regen"

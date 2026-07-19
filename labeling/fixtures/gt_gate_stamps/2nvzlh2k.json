@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "set_id": "2nvzlh2k",
+  "yaml_path": "/Users/johnnycabrahams/Desktop/tracklist_engine/.claude/worktrees/gt-release-gate/labeling/fixtures/bb11_ground_truth.yaml",
+  "yaml_sha256": "062795051d1a422448d0ef50c017c55aeb1f13dfefba99334757088df7ee1c83",
+  "als_path": "/Users/johnnycabrahams/aligning/2nvzlh2k__Two Friends - Big Bootie Mix Episode 11/BB11 align Project/BB11 align.als",
+  "als_sha256": "923298d8a066bfe80dc45bf8681b9be51cf541f37830579fad857d1a0b83a8de",
+  "created_unix": 1784483154.680635,
+  "ack_audio_mismatches": true,
+  "acked_failures": [
+    {
+      "status": "POSITION_MISMATCH",
+      "slot": "001w3",
+      "mix_start_s": 86.54761904761905
+    },
+    {
+      "status": "POSITION_MISMATCH",
+      "slot": "003w1",
+      "mix_start_s": 299.49404761904765
+    },
+    {
+      "status": "POSITION_MISMATCH",
+      "slot": "009w2",
+      "mix_start_s": 913.4779852407775
+    },
+    {
+      "status": "NO_AUDIO",
+      "slot": "011",
+      "mix_start_s": 1092.3787768870723
+    },
+    {
+      "status": "POSITION_MISMATCH",
+      "slot": "017w1",
+      "mix_start_s": 1624.8631361413316
+    },
+    {
+      "status": "POSITION_MISMATCH",
+      "slot": "018w1",
+      "mix_start_s": 1712.3543599105285
+    },
+    {
+      "status": "POSITION_MISMATCH",
+      "slot": "018w1",
+      "mix_start_s": 1729.8152974105285
+    },
+    {
+      "status": "POSITION_MISMATCH",
+      "slot": "030w2",
+      "mix_start_s": 2760.2773223676195
+    },
+    {
+      "status": "NO_AUDIO",
+      "slot": "039",
+      "mix_start_s": 3579.3320076900354
+    }
+  ],
+  "audit_summary": {
+    "status": {
+      "OK": 263,
+      "POSITION_MISMATCH": 7,
+      "NO_AUDIO": 2,
+      "MUTED": 1
+    },
+    "identity": {
+      "orig-path": 273
+    },
+    "dropped": 3,
+    "unwarped": 1,
+    "variable_warp": 114
+  }
+}

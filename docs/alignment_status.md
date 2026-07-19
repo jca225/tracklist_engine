@@ -157,6 +157,7 @@ target. Recorded here so it stops being re-litigated.
 
 ```bash
 # repo root, venvs/audio/bin/python. BB11=2nvzlh2k, BB12=1fsnxchk.
+make status-preflight                # BB fixtures must have committed gt-gate stamps
 make scorecard                       # attribution + per-axis + identity + set_start (_lt)
 for sid in 1fsnxchk 2nvzlh2k; do
   tl=workspaces/alignment_prototype/out/${sid}_predicted_timeline_lt.json

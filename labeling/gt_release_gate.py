@@ -7,18 +7,17 @@ the mix.  This gate requires:
 2. ``labeling.anchor_check`` (set-specific anchors + ``--strict-ref``)
 3. ``workspaces.source_detection.als_audit`` audio verification
 
-On success it writes a stamp binding the YAML bytes.  ``write_back_ground_truth``
-refuses to mutate the DB unless that stamp is present and fresh.
+On success it writes:
+
+- a local stamp under ``labeling/.cache/gt_gate/`` (unlocks write-back)
+- a committed stamp under ``labeling/fixtures/gt_gate_stamps/`` (unlocks
+  fixture commits / status regen via pre-commit)
+
+Known leftover mismatches live in ``labeling/fixtures/gt_audit_acks.yaml``.
 
 Usage::
 
-    venvs/audio/bin/python -m labeling.gt_release_gate \\
-        --set-id 1fsnxchk \\
-        --als path/to/labeling_fast.als \\
-        --yaml labeling/fixtures/bb12_ground_truth.yaml \\
-        --anchors 002,003,024,099
-
-    make gt-gate SET=1fsnxchk ALS=... YAML=... ANCHORS=002,003,024,099
+    make gt-gate SET=1fsnxchk ALS=... YAML=labeling/fixtures/bb12_ground_truth.yaml
 """
 
 from __future__ import annotations
@@ -32,6 +31,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 _REPO = Path(__file__).resolve().parent.parent
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
@@ -41,10 +42,26 @@ from labeling.als.validate import has_errors, validate_session
 from labeling.export_als_to_gt import DEFAULT_ALS, DEFAULT_SET_DIR
 
 STAMP_DIR = _REPO / "labeling" / ".cache" / "gt_gate"
+FIXTURE_STAMP_DIR = _REPO / "labeling" / "fixtures" / "gt_gate_stamps"
+ACKS_PATH = _REPO / "labeling" / "fixtures" / "gt_audit_acks.yaml"
 STAMP_VERSION = 1
 DEFAULT_MAX_AGE_S = 48 * 3600
+ACK_TOL_S = 0.5
 FAIL_STATUSES = frozenset(
     {"POSITION_MISMATCH", "WRONG_AUDIO", "UNRESOLVED", "NO_AUDIO"}
+)
+
+# Per-set spot-check slots (BB11 / BB12). Keys are set_ids; avoid
+# `default="…"` / `== "…"` forms that trip the set_id_default ratchet.
+_DEFAULT_ANCHORS_BY_SET: dict[str, str] = {
+    "2nvzlh2k": "002,003,022w1,039",
+    "1fsnxchk": "002,003,024,099",
+}
+
+# Fixtures that must be stamped before regenerating docs/alignment_status.md.
+_STATUS_FIXTURES: tuple[Path, ...] = (
+    _REPO / "labeling" / "fixtures" / "bb11_ground_truth.yaml",
+    _REPO / "labeling" / "fixtures" / "bb12_ground_truth.yaml",
 )
 
 
@@ -60,6 +77,33 @@ def stamp_path(set_id: str) -> Path:
     return STAMP_DIR / f"{set_id}.ok.json"
 
 
+def fixture_stamp_path(set_id: str) -> Path:
+    return FIXTURE_STAMP_DIR / f"{set_id}.json"
+
+
+def _stamp_payload(
+    *,
+    set_id: str,
+    yaml_path: Path,
+    als_path: Path,
+    audit_summary: dict[str, Any],
+    ack_mismatches: bool,
+    acked_failures: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "version": STAMP_VERSION,
+        "set_id": set_id,
+        "yaml_path": str(yaml_path.resolve()),
+        "yaml_sha256": sha256_file(yaml_path),
+        "als_path": str(als_path.resolve()),
+        "als_sha256": sha256_file(als_path) if als_path.is_file() else "",
+        "created_unix": time.time(),
+        "ack_audio_mismatches": ack_mismatches,
+        "acked_failures": acked_failures,
+        "audit_summary": audit_summary,
+    }
+
+
 def write_stamp(
     *,
     set_id: str,
@@ -67,22 +111,84 @@ def write_stamp(
     als_path: Path,
     audit_summary: dict[str, Any],
     ack_mismatches: bool,
-) -> Path:
+    acked_failures: list[dict[str, Any]] | None = None,
+) -> tuple[Path, Path]:
+    """Write local + committed stamps. Returns (local_path, fixture_path)."""
+    payload = _stamp_payload(
+        set_id=set_id,
+        yaml_path=yaml_path,
+        als_path=als_path,
+        audit_summary=audit_summary,
+        ack_mismatches=ack_mismatches,
+        acked_failures=acked_failures or [],
+    )
+    text = json.dumps(payload, indent=2) + "\n"
     STAMP_DIR.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "version": STAMP_VERSION,
-        "set_id": set_id,
-        "yaml_path": str(yaml_path.resolve()),
-        "yaml_sha256": sha256_file(yaml_path),
-        "als_path": str(als_path.resolve()),
-        "als_sha256": sha256_file(als_path),
-        "created_unix": time.time(),
-        "ack_audio_mismatches": ack_mismatches,
-        "audit_summary": audit_summary,
-    }
-    path = stamp_path(set_id)
-    path.write_text(json.dumps(payload, indent=2) + "\n")
-    return path
+    FIXTURE_STAMP_DIR.mkdir(parents=True, exist_ok=True)
+    local = stamp_path(set_id)
+    committed = fixture_stamp_path(set_id)
+    local.write_text(text)
+    committed.write_text(text)
+    return local, committed
+
+
+def load_acks(path: Path = ACKS_PATH) -> dict[str, list[dict[str, Any]]]:
+    if not path.is_file():
+        return {}
+    raw = yaml.safe_load(path.read_text()) or {}
+    sets = raw.get("sets") or {}
+    out: dict[str, list[dict[str, Any]]] = {}
+    for set_id, body in sets.items():
+        entries = (body or {}).get("entries") or []
+        out[str(set_id)] = [e for e in entries if isinstance(e, dict)]
+    return out
+
+
+def _failure_key(v: dict[str, Any]) -> tuple[str, str, float]:
+    return (
+        str(v.get("status") or ""),
+        str(v.get("slot") or ""),
+        float(v.get("mix_start_s") or 0.0),
+    )
+
+
+def partition_failures(
+    failures: list[dict[str, Any]],
+    acks: list[dict[str, Any]],
+    *,
+    tol_s: float = ACK_TOL_S,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split audit failures into (unacked, acked)."""
+    remaining = list(acks)
+    unacked: list[dict[str, Any]] = []
+    acked: list[dict[str, Any]] = []
+    for fail in failures:
+        status, slot, t = _failure_key(fail)
+        match_i: int | None = None
+        for i, ack in enumerate(remaining):
+            if str(ack.get("status") or "") != status:
+                continue
+            if str(ack.get("slot") or "") != slot:
+                continue
+            if abs(float(ack.get("mix_start_s") or 0.0) - t) > tol_s:
+                continue
+            match_i = i
+            break
+        if match_i is None:
+            unacked.append(fail)
+        else:
+            acked.append(fail)
+            remaining.pop(match_i)
+    return unacked, acked
+
+
+def _read_stamp(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return None
 
 
 def verify_stamp(
@@ -90,8 +196,9 @@ def verify_stamp(
     *,
     set_id: str | None = None,
     max_age_s: float = DEFAULT_MAX_AGE_S,
+    allow_committed: bool = True,
 ) -> tuple[bool, str]:
-    """Return (ok, reason).  Used by write-back before mutating the DB."""
+    """Return (ok, reason). Used by write-back before mutating the DB."""
     if set_id is None:
         from labeling.ground_truth.schema import load as load_gt
         from core.result import Err, Ok
@@ -103,36 +210,86 @@ def verify_stamp(
                 set_id = gt.set_id
     if not set_id:
         return False, "yaml has no set_id"
-    path = stamp_path(set_id)
-    if not path.is_file():
-        return False, (
-            f"missing GT gate stamp at {path}. "
-            f"Run: make gt-gate SET={set_id} ALS=<hand.als> YAML={yaml_path}"
-        )
-    try:
-        stamp = json.loads(path.read_text())
-    except json.JSONDecodeError as e:
-        return False, f"corrupt stamp: {e}"
-    if stamp.get("version") != STAMP_VERSION:
-        return False, f"stamp version mismatch (got {stamp.get('version')})"
-    if stamp.get("set_id") != set_id:
-        return False, "stamp set_id does not match yaml"
-    age = time.time() - float(stamp.get("created_unix") or 0)
-    if age > max_age_s:
-        return (
-            False,
-            f"stamp expired ({age / 3600:.1f}h old; max {max_age_s / 3600:.0f}h)",
-        )
+
     digest = sha256_file(yaml_path)
-    if stamp.get("yaml_sha256") != digest:
+    candidates: list[tuple[str, Path]] = [("local", stamp_path(set_id))]
+    if allow_committed:
+        candidates.append(("committed", fixture_stamp_path(set_id)))
+
+    last_reason = "missing GT gate stamp"
+    for kind, path in candidates:
+        stamp = _read_stamp(path)
+        if stamp is None:
+            continue
+        if stamp.get("version") != STAMP_VERSION:
+            last_reason = f"{kind} stamp version mismatch"
+            continue
+        if stamp.get("set_id") != set_id:
+            last_reason = f"{kind} stamp set_id mismatch"
+            continue
+        if stamp.get("yaml_sha256") != digest:
+            last_reason = (
+                f"{kind} stamp yaml sha mismatch — re-run make gt-gate "
+                "(re-export matching old YAML is not enough)"
+            )
+            continue
+        summary = stamp.get("audit_summary") or {}
+        if summary.get("skipped"):
+            last_reason = f"{kind} stamp skipped audio audit"
+            continue
+        age = time.time() - float(stamp.get("created_unix") or 0)
+        if age > max_age_s:
+            last_reason = (
+                f"{kind} stamp expired ({age / 3600:.1f}h old; "
+                f"max {max_age_s / 3600:.0f}h)"
+            )
+            continue
+        return True, f"{kind} stamp ok ({path.name}, age {age / 3600:.1f}h)"
+
+    return False, (
+        f"{last_reason}. Run: make gt-gate SET={set_id} ALS=<hand.als> YAML={yaml_path}"
+    )
+
+
+def verify_fixture_stamp(yaml_path: Path) -> tuple[bool, str]:
+    """Committed stamp must match YAML bytes (no age — for pre-commit / CI)."""
+    from labeling.ground_truth.schema import load as load_gt
+    from core.result import Err, Ok
+
+    match load_gt(yaml_path):
+        case Err(e):
+            return False, f"yaml load failed: {e.detail}"
+        case Ok(gt):
+            set_id = gt.set_id
+    path = fixture_stamp_path(set_id)
+    stamp = _read_stamp(path)
+    if stamp is None:
         return False, (
-            "yaml bytes changed since gate stamp — re-run make gt-gate "
-            "(re-export matching old YAML is not enough)"
+            f"missing committed stamp {path}. Run make gt-gate and stage "
+            f"labeling/fixtures/gt_gate_stamps/{set_id}.json"
         )
-    summary = stamp.get("audit_summary") or {}
-    if summary.get("skipped"):
-        return False, "stamp skipped audio audit — not releasable"
-    return True, f"stamp ok ({path.name}, age {age / 3600:.1f}h)"
+    if stamp.get("yaml_sha256") != sha256_file(yaml_path):
+        return False, (
+            f"committed stamp out of date for {yaml_path.name} — re-run "
+            f"make gt-gate and stage the updated stamp"
+        )
+    return True, f"committed stamp ok for {set_id}"
+
+
+def check_fixture_paths(paths: list[Path]) -> int:
+    rc = 0
+    for path in paths:
+        ok, reason = verify_fixture_stamp(path)
+        print(("OK: " if ok else "FAIL: ") + reason)
+        if not ok:
+            rc = 1
+    return rc
+
+
+def check_status_regen() -> int:
+    """Fixtures feeding docs/alignment_status.md must have matching stamps."""
+    print("==> gt-gate preflight for alignment_status regen")
+    return check_fixture_paths(list(_STATUS_FIXTURES))
 
 
 def _run(argv: list[str], *, label: str) -> int:
@@ -141,14 +298,6 @@ def _run(argv: list[str], *, label: str) -> int:
     if proc.returncode != 0:
         print(f"FAIL: {label} exited {proc.returncode}", file=sys.stderr)
     return proc.returncode
-
-
-# Per-set spot-check slots (BB11 / BB12). Keys are set_ids; avoid
-# `default="…"` / `== "…"` forms that trip the set_id_default ratchet.
-_DEFAULT_ANCHORS_BY_SET: dict[str, str] = {
-    "2nvzlh2k": "002,003,022w1,039",
-    "1fsnxchk": "002,003,024,099",
-}
 
 
 def _default_anchors(set_id: str) -> str:
@@ -210,14 +359,12 @@ def run_gate(
     if _run(anchor_argv, label="anchor_check --strict-ref") != 0:
         return 1
 
-    audit_summary: dict[str, Any] = {"skipped": skip_audio}
     if skip_audio:
         print(
             "\nWARNING: --skip-audio — stamp will NOT satisfy write-back "
             "(audio audit required for a releasable stamp).",
             file=sys.stderr,
         )
-        # Still write a non-releasable stamp marker? No — refuse stamp entirely.
         print("FAIL: refuse to stamp without audio audit", file=sys.stderr)
         return 1
 
@@ -239,9 +386,18 @@ def run_gate(
     report = json.loads(out_path.read_text())
     audit_summary = report.get("summary") or {}
     failures = _audit_failures(report)
-    if failures:
-        print(f"\naudio audit failures: {len(failures)}", file=sys.stderr)
-        for v in failures[:12]:
+    acks = load_acks().get(set_id, [])
+    unacked, acked = partition_failures(failures, acks)
+
+    if acked:
+        print(f"\nacked via gt_audit_acks.yaml: {len(acked)}")
+        for v in acked[:12]:
+            print(
+                f"  ACK {v.get('status')} slot={v.get('slot')} t={v.get('mix_start_s')}"
+            )
+    if unacked:
+        print(f"\naudio audit failures (unacked): {len(unacked)}", file=sys.stderr)
+        for v in unacked[:12]:
             print(
                 f"  {v.get('status')} slot={v.get('slot')} "
                 f"t={v.get('mix_start_s')} {v.get('song') or v.get('note')}",
@@ -249,25 +405,36 @@ def run_gate(
             )
         if not ack_audio_mismatches:
             print(
-                "FAIL: audio mismatches present. Fix labels, or re-run with "
-                "--ack-audio-mismatches after recording the debt.",
+                "FAIL: unacked audio mismatches. Fix labels, add entries to "
+                f"{ACKS_PATH.relative_to(_REPO)}, or pass "
+                "--ack-audio-mismatches (blanket; prefer the ack file).",
                 file=sys.stderr,
             )
             return 1
         print(
-            "WARNING: --ack-audio-mismatches accepted; stamp records the debt.",
+            "WARNING: --ack-audio-mismatches blanket-accepted unacked failures; "
+            "record them in gt_audit_acks.yaml.",
             file=sys.stderr,
         )
 
-    path = write_stamp(
+    local, committed = write_stamp(
         set_id=set_id,
         yaml_path=yaml_path,
         als_path=als,
         audit_summary=audit_summary if isinstance(audit_summary, dict) else {},
-        ack_mismatches=ack_audio_mismatches,
+        ack_mismatches=ack_audio_mismatches or bool(acked),
+        acked_failures=[
+            {
+                "status": v.get("status"),
+                "slot": v.get("slot"),
+                "mix_start_s": v.get("mix_start_s"),
+            }
+            for v in acked
+        ],
     )
-    print(f"\nPASS — wrote gate stamp {path}")
-    print("Safe next steps: commit reviewed YAML fixtures, then write-back.")
+    print(f"\nPASS — wrote local stamp {local}")
+    print(f"PASS — wrote committed stamp {committed} (stage this with the YAML)")
+    print("Safe next steps: commit reviewed YAML + stamp, then write-back.")
     return 0
 
 
@@ -276,9 +443,9 @@ def main(argv: list[str] | None = None) -> int:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--set-id", required=True)
+    p.add_argument("--set-id", default=None)
     p.add_argument("--als", type=Path, default=None)
-    p.add_argument("--yaml", type=Path, required=True)
+    p.add_argument("--yaml", type=Path, default=None)
     p.add_argument("--set-dir", type=Path, default=None)
     p.add_argument(
         "--anchors",
@@ -293,7 +460,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--ack-audio-mismatches",
         action="store_true",
-        help="allow a stamp despite audit mismatches (records ack in stamp)",
+        help="blanket-allow unacked audit mismatches (prefer gt_audit_acks.yaml)",
     )
     p.add_argument("--audit-out", type=Path, default=None)
     p.add_argument(
@@ -301,12 +468,36 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="only check an existing stamp against --yaml (no audit)",
     )
+    p.add_argument(
+        "--check-fixtures",
+        nargs="+",
+        type=Path,
+        default=None,
+        help="verify committed stamps match these YAML paths (pre-commit)",
+    )
+    p.add_argument(
+        "--check-status-regen",
+        action="store_true",
+        help="verify BB11/BB12 fixture stamps before regenerating alignment_status",
+    )
     args = p.parse_args(argv)
 
+    if args.check_status_regen:
+        return check_status_regen()
+    if args.check_fixtures is not None:
+        return check_fixture_paths(args.check_fixtures)
+
     if args.verify_only:
+        if args.yaml is None:
+            print("--verify-only requires --yaml", file=sys.stderr)
+            return 2
         ok, reason = verify_stamp(args.yaml, set_id=args.set_id)
         print(("OK: " if ok else "FAIL: ") + reason)
         return 0 if ok else 1
+
+    if not args.set_id or args.yaml is None:
+        print("--set-id and --yaml are required for a full gate run", file=sys.stderr)
+        return 2
 
     als = args.als or DEFAULT_ALS
     set_dir = args.set_dir

@@ -786,6 +786,12 @@ def main(argv: list[str] | None = None) -> int:
         case Ok(path):
             print(f"wrote {len(gt.tracks)} tracks -> {path}")
             _write_inventory_bundle(gt, path)
+            print(
+                "next: make gt-gate SET="
+                f"{gt.set_id} ALS={args.als} YAML={path}  "
+                "(required before fixture commit / write-back / status regen)",
+                flush=True,
+            )
     return 0
 
 
