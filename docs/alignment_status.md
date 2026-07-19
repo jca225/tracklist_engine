@@ -1,8 +1,9 @@
 # Alignment — canonical status (single source of truth)
 
-> **Numbers regenerated 2026-07-11 at commit `eb21a5e`** (§1–§3 re-run and verified
-> unchanged from the initial `bd44417` regeneration) via the command block in
-> §Regeneration below. **This doc owns every current alignment headline number.**
+> **Numbers regenerated 2026-07-19 at commit `ce3b285`** (§1–§2 re-run after
+> canonical BB11/BB12 Ableton GT regeneration) via the command block in
+> §Regeneration below. §3–§4 are explicitly carried, not silently presented as
+> rerun. **This doc owns every current alignment headline number.**
 > Other docs cite it; they do not re-state numbers. If a number here is stale,
 > re-run §Regeneration — do not hand-edit. Drift found while building this doc is
 > logged in [alignment_status_corrections_20260711.md](alignment_status_corrections_20260711.md).
@@ -27,64 +28,64 @@ strict **and** fiber-aware; never a single scalar.
 
 ---
 
-## 1. Headline (regenerated on `_lt`, 2026-07-11)
+## 1. Headline (regenerated on `_lt`, 2026-07-19)
 
 | | BB11 (`2nvzlh2k`) | BB12 (`1fsnxchk`) |
 |---|---|---|
-| **Identity** (span recording correct) | 124/150 (83%) | 128/152 (84%) |
-| **set_start** placement, median / <15 s | 7.9 s / 63% | 6.3 s / 68% |
-| ref-offset MAE, straight clips (median / p90) | 8.7 s / 143.6 s | 22.9 s / 123.4 s |
-| **Trajectory — multiseg+loop headline** (strict → fiber-aware) | **16% → 37%** | **19% → 38%** |
-| &nbsp;&nbsp;stem: acappella | 12% → 30% | 10% → 33% |
-| &nbsp;&nbsp;stem: regular | 23% → 51% | 31% → 57% |
-| &nbsp;&nbsp;stem: instrumental | 20% → 48% | 16% → 36% |
-| GT-seconds lost (corpus, both sets combined) | **85%** (13176 / 15433 s) | ← both sets |
+| **Identity** (span recording correct) | 123/150 (82%) | 127/152 (84%) |
+| **set_start** placement, median / <15 s | 7.1 s / 65% | 5.1 s / 71% |
+| ref-offset MAE, straight clips (median / p90) | 12.1 s / 142.0 s | 22.9 s / 123.4 s |
+| **Trajectory — multiseg+loop headline** (strict → fiber-aware) | **28% → 44%** | **30% → 50%** |
+| &nbsp;&nbsp;stem: acappella | 15% → 32% | 14% → 37% |
+| &nbsp;&nbsp;stem: regular | 30% → 53% | 43% → 65% |
+| &nbsp;&nbsp;stem: instrumental | 32% → 55% | 24% → 48% |
+| GT-seconds lost (corpus, both sets combined) | **74%** (8909 / 11959 s) | ← both sets |
 
 **Loss attribution** (binding cause, seconds-weighted, both sets, `_lt`):
 
 | cause | % of loss | note |
 |---|---|---|
-| decode-residual | **38%** | "which chorus" repeat-instance wall |
-| placement | **37%** | co-equal binding wall (was mis-typed as ~31%, see corrections C2) |
-| mis-route | 9% | stale `set_track_slots` stem axis (score from GT stem, not timeline) |
-| identity | 6% | |
-| tempo/octave | 4% | |
+| decode-residual | **39%** | "which chorus" repeat-instance wall |
+| placement | **30%** | co-equal binding wall |
+| mis-route | 11% | stale `set_track_slots` stem axis (score from GT stem, not timeline) |
+| identity | 8% | |
+| tempo/octave | 5% | |
 | instance-ambiguity | 4% | |
-| loop-instance | 2% | |
+| loop-instance | 3% | |
 
-Acappella is **51%** of corpus mix-seconds and the worst axis; acappella-multiseg
-alone is **34%** of all loss.
+Acappella is **42%** of corpus mix-seconds and the worst axis; acappella-multiseg
+is **18%** of all loss.
 
 ---
 
 ## 2. The strict → fiber-aware gap (named contribution, not a caveat)
 
-Fiber-aware − strict ≈ **+19 to +22 pp** on the multiseg+loop headline, holding
-across **both sets, all three drivers, and both timelines**. This gap *is* the
+Fiber-aware − strict is **+16 pp (BB11) / +20 pp (BB12)** on the regenerated
+multiseg+loop headline. This gap *is* the
 "which-instance" residual: the decoder lands on the correct repeated content
 (right chorus) but not always the exact occurrence. It is externally
 precision-validated (SALAMI **P .88**; low recall R .06 is precision-first-by-
 design on a jam-band pessimistic floor, **not** a limitation verdict). Fibers v4
 (2026-07-09) fixed the acappella recall hole (vocal coverage 0.06–0.28 → 0.33–0.73,
-ear-validated by John); the phase-cancel clone certificate is wired. **This +20pp
-is a finding, not a footnote** — under-crediting fibers as a "scoring util" was
+ear-validated by John); the phase-cancel clone certificate is wired. **This fiber
+lift is a finding, not a footnote** — under-crediting fibers as a "scoring util" was
 the original trigger for this overhaul (corrections C5).
 
-**Timeline caveat (corrections C4):** the fiber headline is **45 (BB12) / 40
-(BB11) on the base classical timeline** (race board) but **38 / 37 on `_lt`**.
-Looptrace `_lt` does *not* uniformly beat base classical on fiber-aware
-trajectory (it regresses BB12 45→38). Trust the **lift** (+20pp), not any single
-absolute. Which composition is "current best" for fiber trajectory is unresolved
-— flagged, not fixed, in this docs pass.
+**Timeline caveat:** the carried base-classical race board reports **45 (BB12) /
+40 (BB11)**, while regenerated `_lt` reports **50 / 44**. Because the race board
+was not rerun on the corrected GT, treat this cross-timeline comparison as
+provisional; trust the within-run fiber lift above.
 
 ---
 
 ## 3. Oracle placement ceiling (isolates placement from decode)
 
+⚠ **Carried from the 2026-07-11 run; not regenerated on the 2026-07-19 GT.**
 `path_decode --eval` on acappella (HuBERT decode, GT placement given), n=21:
-**strict 37% / fiber-aware 61%.** Real end-to-end acappella (`_lt`) is 10–12%
-strict / 30–33% fiber-aware → a **~+28 pp** placement gap. Placement is a real
-binding wall, consistent with the 37%-of-loss attribution. The `fiber_gate`
+**strict 37% / fiber-aware 61%.** Regenerated real end-to-end acappella (`_lt`)
+is 14–15% strict / 32–37% fiber-aware, leaving a **~24–29 pp** fiber-aware
+placement gap. Placement is a real
+binding wall, consistent with the regenerated loss attribution. The `fiber_gate`
 validated in the same run (unflagged − flagged instance-acc = +17 pp, GATE VALID).
 
 ---
@@ -131,8 +132,8 @@ default target = agentic placement + gated-ml decode.
 
 ## 6. Binding walls & current lever
 
-Two co-equal walls: **placement (37% of loss)** and **which-instance
-decode-residual (38%)**. LOSO proof (n=2): identity transfers 100% cross-set both
+Two co-equal walls: **placement (30% of loss)** and **which-instance
+decode-residual (39%)**. LOSO proof (n=2): identity transfers 100% cross-set both
 directions; **placement does not** (the MERT head memorizes placement per-set).
 The lever for transferable placement is therefore **not** the MERT head — it is
 the **learned trajectory decoder + the agentic pseudo-label flywheel** (+ a third
