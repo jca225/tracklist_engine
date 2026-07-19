@@ -37,3 +37,21 @@ direction/magnitude rule, so this experiment is closed rather than
 cherry-picked.
 
 Generated timelines and scorer output remain local under ignored `out/` paths.
+
+## Observation-model correction — evaluated, no-go
+
+The first live FP integration was only stem-aware on the reference side: it
+matched full `mix.m4a` hashes against instrumental reference landmarks. The
+corrected race used the symmetric observation intended by the architecture:
+`mix_instrumental.flac` against reference instrumental landmarks. Results from
+the asymmetric full-mix experiment must not be used to judge that lane.
+
+The corrected lane did not clear the placement gate on either held-out set.
+Native top-K oracle headroom improved slightly on one set, but the joint
+tracklist decode and FP-only delta both regressed placement cleanliness. The
+instrumental trajectory headline was unchanged, so there is no deployable SOTA
+gain to trade against that regression. Keep symmetric hashes as candidate
+evidence, but do not let FP override placement until an independent verifier
+can reject repeated/aliased instrumental diagonals. Live placement is therefore
+default-off; `AGENTIC_LIVE_ENABLE_FP_PLACEMENT=1` exists only for isolated
+experiments.

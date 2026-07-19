@@ -60,7 +60,9 @@ def build_synthetic_fp_bank(
         if (row.get("claimed_stem") or "regular") == "instrumental"
         and row.get("track_id")
     ]
-    mix_path = window / "mix.flac"
+    # Match the production instrumental lane exactly: separated instrumental
+    # mix against instrumental references, never full mix against a stem.
+    mix_path = window / "mix_instrumental.flac"
     mix_y = load_mix_mono(mix_path)
     mix_hashes = hashes(*constellation(mix_y))
     rng = np.random.default_rng(seed)

@@ -66,6 +66,29 @@ superposition-invariant audio-pair verifier with a genuinely independent
 validation set. Reusable contracts remain in `candidate_arbiter/`; no critic is
 wired into a driver.
 
+## Symmetric instrumental landmark FP (2026-07-19) — NO-GO AS DECIDER
+
+**Question:** does correcting the live observation model from full-mix hashes
+against reference-instrumental hashes to separated-instrumental hashes on both
+sides make landmark FP safe as an instrumental placement decider?
+
+**Verdict:** no. The symmetric lane is the correct architecture and remains
+useful as a candidate generator, but its joint decoded placements regress
+placement cleanliness on both complete-GT sets. An FP-only overlay also
+regresses both sets while leaving the instrumental and overall trajectory
+headlines unchanged. Native top-K oracle headroom improves slightly in one
+direction, confirming that some useful alternatives exist, but vote count,
+density, runner-up ratio, and displacement do not separate the catastrophic
+repeat/alias diagonals from the wins across sets. The production runner now
+reads `mix_instrumental.flac` and a stem-specific cache name, but downstream
+acceptance must remain fail-closed/shadow-only.
+`AGENTIC_LIVE_ENABLE_FP_PLACEMENT=1` is an experiment-only escape hatch.
+
+**Do not re-test** thresholds on BB11/BB12. Revisit only with an independent
+validation set and a verifier trained to distinguish the same musical material
+from repeated instrumental texture, or with local monotonic path evidence that
+corroborates an FP diagonal before it may move a placement.
+
 ## PWS categorical label model over offset bins (2026-07-14) — REFUTED
 **Question:** can a Dawid–Skene label model (learned per-probe accuracy, no GT)
 beat hand-tuned `source_priority` fusion, aggregating genuine per-probe votes

@@ -218,9 +218,17 @@ class LiveContext:
                 fp_candidates_for_span,
             )
 
-            mix_file = set_dir / "mix.m4a"
+            # This live FP lane is instrumental-only (ref_fp_for_span). Keep the
+            # observation symmetric: separated mix instrumental against the
+            # reference instrumental stem. Full-mix hashes reintroduce vocals,
+            # FX and other active layers and were the source of precise false
+            # diagonals in the first integration attempt.
+            mix_file = set_dir / "mix_instrumental.flac"
             if not mix_file.is_file():
-                log.warning("live fp: mix.m4a missing in %s — abstain", set_dir)
+                log.warning(
+                    "live fp: mix_instrumental.flac missing in %s — abstain",
+                    set_dir,
+                )
                 return
             # ref fps in tracklist (span) order — DO NOT sort; None where absent
             fps = [ref_fp_for_span(s) for s in spans]
@@ -231,14 +239,18 @@ class LiveContext:
                 )
                 return
             # Optional precomputed mix hashes (e.g. ridge_diagnostic mix_hash_cache)
-            # via FP_MIX_HASH_CACHE=/path/to/dir containing {set_id}_mix_hashes.pkl.
+            # via FP_MIX_HASH_CACHE=/path/to/dir containing
+            # {set_id}_instrumental_mix_hashes.pkl.
             import os
             import pickle
 
             hm = None
             cache_dir = os.environ.get("FP_MIX_HASH_CACHE", "").strip()
             if cache_dir:
-                cp = Path(cache_dir) / f"{ctx.set_id}_mix_hashes.pkl"
+                cp = (
+                    Path(cache_dir)
+                    / f"{ctx.set_id}_instrumental_mix_hashes.pkl"
+                )
                 if cp.is_file():
                     hm = pickle.loads(cp.read_bytes())
                     log.info("live fp: mix hashes from cache %s", cp)
@@ -262,6 +274,19 @@ class LiveContext:
                         native_candidates[local_index],
                     )
                 )
+            # The symmetric lane improves candidate recall but failed the
+            # two-set placement gate as a decider. Preserve its evidence for
+            # shadow evaluation; require an explicit experiment opt-in before
+            # it can enter the live belief state.
+            if os.environ.get(
+                "AGENTIC_LIVE_ENABLE_FP_PLACEMENT", ""
+            ).strip().lower() not in ("1", "true", "yes"):
+                log.info(
+                    "live fp: %d shadow candidates; placement disabled "
+                    "(AGENTIC_LIVE_ENABLE_FP_PLACEMENT not set)",
+                    len(native_candidates),
+                )
+                return
             for r, i in enumerate(keep):
                 pl = placements[r]
                 if pl is None:
