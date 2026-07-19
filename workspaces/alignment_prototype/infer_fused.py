@@ -56,12 +56,18 @@ def _resolve_ref(track: dict, set_dir: Path) -> Path | None:
 
     ``tag_aligning_folder.py`` appends ``[NNNbpm KK]`` tags to the track
     filenames *after* the manifest is written, so ``local_path`` goes stale.
-    Fall back to a slot-prefix glob only when it identifies exactly one file;
-    ambiguous copies abstain rather than silently selecting the first one.
+    Prefer ``audio_index.json`` by ``track_audio_id``, then a slot-prefix glob
+    only when it identifies exactly one file; ambiguous copies abstain rather
+    than silently selecting the first one.
     """
+    from labeling.audio_index import load_audio_index, lookup_ref
+
     p = track.get("local_path")
     if p and Path(p).is_file():
         return Path(p)
+    indexed = lookup_ref(load_audio_index(set_dir), track.get("track_audio_id"))
+    if indexed is not None:
+        return indexed
     slot = _slot_of(track)
     candidates = [
         hit
