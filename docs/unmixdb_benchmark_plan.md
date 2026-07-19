@@ -4,7 +4,7 @@
 v1.1** on the field-standard MAE metrics, reproduce **André/Schwarz/Fourer 2024
 multi-pass NMF** as the target line, and produce one table: *our methods vs the
 SOTA, same data, same units*. Executes item #1 of
-[alignment_research_plan.md](alignment_research_plan.md) §9.
+[alignment_research_plan.md](archive/alignment_research_plan.md) §9.
 
 **Success criterion:** a committed `eval_bench` table with rows {Kim-DTW,
 grid+matched-filter (ours), quad-fingerprint, NMF-baseline} × columns {placement

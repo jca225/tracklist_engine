@@ -32,7 +32,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-_REPO = Path(__file__).resolve().parents[3]
+_REPO = Path(__file__).resolve().parent.parent.parent.parent
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
@@ -63,7 +63,7 @@ from workspaces.alignment_prototype.trajectory.trm import (  # noqa: E402
     trm_offset_targets,
 )
 
-CKPT_DIR = Path(__file__).resolve().parents[1] / ".cache" / "trajectory"
+CKPT_DIR = Path(__file__).resolve().parent.parent / ".cache" / "trajectory"
 
 
 class SpanSubset:

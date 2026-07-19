@@ -17,8 +17,8 @@ from pathlib import Path
 from . import runner
 from .stages import AblationSpec, Grain
 
-_REPO = Path(__file__).resolve().parents[3]
-_DEFAULT_LEDGER = Path(__file__).resolve().parents[1] / "out" / "ablation_runs.jsonl"
+_REPO = Path(__file__).resolve().parent.parent.parent.parent
+_DEFAULT_LEDGER = Path(__file__).resolve().parent.parent / "out" / "ablation_runs.jsonl"
 
 
 def load_spec(cfg: dict) -> AblationSpec:

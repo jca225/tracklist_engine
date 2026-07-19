@@ -36,7 +36,7 @@ Scripts still run in place (`python -m workspaces.alignment_prototype.attic.<nam
 | `stem_correct` | fix scraped `claimed_stem` before alignment, validated vs hand GT | Superseded by the row-text materialize fix (888caca) + `candidate_vocal_gate`. |
 | `stem_match_probe` | stem→stem matching robustness (the open-lane litmus) | **POSITIVE** — stem-routed + HuBERT lifts acappella identity 0–14%→84%; wired into live stem-routed matching. |
 | `transition_probe` | do regular/instrumental placement errors concentrate in transition zones? | Probe; findings folded into the failure-analysis placement bucket. |
-| `sic_phase0_probe` | can informed successive cancellation (spectral SIC) make missed medley layers identifiable? | CLOSED 2026-07-10 — cancellation works (−4 dB, physics gate passed) but adds nothing to identification: fp-visible layers were never masked (Honest 1.4k/2.8k votes in raw mix, mis-placed by decision logic = bug lead), fp-invisible layers are invisible from keylock warp geometry, not masking (lever = warp-tolerant hashing, not separation). See docs/medley_sic_plan.md. |
+| `sic_phase0_probe` | can informed successive cancellation (spectral SIC) make missed medley layers identifiable? | CLOSED 2026-07-10 — cancellation works (−4 dB, physics gate passed) but adds nothing to identification: fp-visible layers were never masked (Honest 1.4k/2.8k votes in raw mix, mis-placed by decision logic = bug lead), fp-invisible layers are invisible from keylock warp geometry, not masking (lever = warp-tolerant hashing, not separation). See docs/archive/medley_sic_plan.md. |
 
 ## PWS categorical label model over offset bins (2026-07-14) — REFUTED
 **Question:** can a Dawid–Skene label model (learned per-probe accuracy, no GT)

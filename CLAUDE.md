@@ -25,9 +25,10 @@ with `eda/` a cross-cutting consumer that reads from multiple stages.
   `workspaces/`.
 
 **BEFORE ANY ALIGNMENT WORK, read [docs/alignment_state_of_record.md](docs/alignment_state_of_record.md)** —
-the single *living* record of the aligner's current best solution, settled
-decisions, and open fronts. A new session reads it first; a finishing session
-updates it last via `/align-checkpoint` instead of writing a dated handoff.
+the single *living* record of the aligner's current best solution + settled
+decisions (what to build ON, what not to re-litigate) + open fronts. A new
+session reads it first; a finishing session updates it last via `/align-checkpoint`
+instead of writing a new dated handoff.
 
 **Alignment north star (target Aug 1):** the aligner consumes `{tokenized tracklist,
 track audios, set audio}` → an Ableton-round-trippable structure, trained on manual
@@ -71,10 +72,14 @@ possible — the gate. *North-north (deferred, in `lab/`):* the
 research lab above. Alignment is the necessary-but-not-sufficient foundation.
 Current state: [docs/alignment_state_of_record.md](docs/alignment_state_of_record.md)
 (prior stock-take [docs/alignment_bearings_20260712.md](docs/alignment_bearings_20260712.md)
-is a superseded snapshot).
+is a superseded 2026-07-12 snapshot).
 
 New features land inside one of the chain modules. New top-level folders
 require explicit justification.
+
+Standing design/plan/research docs (not dated snapshots) are indexed in
+[docs/design_docs_index.md](docs/design_docs_index.md); dated handoffs age out to
+`docs/archive/` via `scripts/docs_gc.py` (`make docs-gc`).
 
 ## Track identity (three axes)
 
@@ -160,6 +165,9 @@ subtree — keep stage-specific detail there, not here. Index:
   in [lab/corpus_empirics/findings.md](lab/corpus_empirics/findings.md).
 - **[core/CLAUDE.md](core/CLAUDE.md)** — shared substrate; `core/identity.py`
   (three axes); the rule that `core` imports nothing upward.
+- **[soundcloud/CLAUDE.md](soundcloud/CLAUDE.md)** — SoundCloud data-lake
+  substrate (anon `client_id` fetch + `sc_lake.db` on pi-storage). General
+  ingestion primitive consumed by `personalization`/`lab`; off the alignment DAG.
 
 ## Database
 

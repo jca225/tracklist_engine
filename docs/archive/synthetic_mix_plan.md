@@ -120,6 +120,6 @@ Pulled artifacts:
 
 ## Related docs
 
-- `docs/agent_handoff_stem_bootstrap_20260625.md` — probe numbers + context
+- `docs/archive/agent_handoff_stem_bootstrap_20260625.md` — probe numbers + context
 - `docs/alignment_objective.md` — A/B/C standing
 - `docs/alignment_program_plan.md` — tiered label schema

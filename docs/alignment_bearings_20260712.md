@@ -1,3 +1,9 @@
+> ⚠️ **SUPERSEDED SNAPSHOT (2026-07-12).** This was a one-time desk-review
+> stock-take, not a living doc. For current best solution + settled decisions,
+> read **[alignment_state_of_record.md](alignment_state_of_record.md)**. Kept for
+> history; do not treat anything below as current (e.g. it says "20,000 sets" —
+> the operative target is now ~40,000).
+
 # Bearings — weekend of 2026-07-10…12, grounded against the north star
 
 > **What this is.** A stock-take produced after a weekend of heavy creation, to

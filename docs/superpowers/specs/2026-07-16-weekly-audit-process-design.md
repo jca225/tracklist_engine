@@ -200,7 +200,6 @@ Order:
 - AST/complexity analysis beyond grep counts (add only if a metric proves it needs it).
 - Auto-fixing findings (the routine reports; humans/sessions fix).
 - Human process ceremony beyond the one-page `AGENTS.md` (see 4b rationale).
-```
 
 ## Implementation notes & amendments (2026-07-17)
 

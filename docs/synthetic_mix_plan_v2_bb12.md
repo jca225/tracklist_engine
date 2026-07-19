@@ -228,7 +228,7 @@ Start with `bb12-lite`; only scale after ear-check passes.
 
 ## Related
 
-- `docs/synthetic_mix_plan.md` — Phase 1 plan + kill criteria
+- `docs/archive/synthetic_mix_plan.md` — Phase 1 plan + kill criteria
 - `labeling/fixtures/bb12_ground_truth.yaml` — topology oracle
 - `workspaces/alignment_prototype/synthetic_mix/` — Phase 1 implementation
 - `.cursor/skills/vast-jobs/SKILL.md` — Vast orchestration

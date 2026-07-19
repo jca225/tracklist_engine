@@ -18,7 +18,7 @@ import math
 from pathlib import Path
 from typing import Callable
 
-from ..landmark_fp import fp_offset
+from ..landmark_fp import LandmarkFingerprint, fp_offset
 from .contract import AlignmentResult, CandidatePool, MixContext, Probe, RefContext
 
 # Provisional constants (pre-calibration). votes for a real hit run into the
@@ -85,18 +85,29 @@ class FingerprintProbe(Probe):
         *,
         stretches: tuple[float, ...] = (0.98, 1.0, 1.02),
         loader: Callable[[Path], object] | None = None,
+        mix_fp: Callable[[MixContext], LandmarkFingerprint] | None = None,
     ) -> None:
         self._stretches = stretches
         self._load = loader or _default_loader
+        # Optional precomputed full-mix fingerprint provider — symmetric with
+        # ChromaProbe's injectable mix_chroma. When set, the mix is neither
+        # loaded nor re-fingerprinted here (the harness caches it per span);
+        # default None preserves the exact original load-and-fingerprint path.
+        self._mix_fp = mix_fp
 
     def run(
         self, mix: MixContext, ref: RefContext, candidates: CandidatePool
     ) -> AlignmentResult:
-        mix_y = self._load(mix.audio_path)
         ref_y = self._load(ref.audio_path)
-        ref_start_s, votes, stretch, sharpness = fp_offset(
-            mix_y, ref_y, stretches=self._stretches
-        )
+        if self._mix_fp is not None:
+            ref_start_s, votes, stretch, sharpness = fp_offset(
+                None, ref_y, mix_fp=self._mix_fp(mix), stretches=self._stretches
+            )
+        else:
+            mix_y = self._load(mix.audio_path)
+            ref_start_s, votes, stretch, sharpness = fp_offset(
+                mix_y, ref_y, stretches=self._stretches
+            )
         return fp_result_to_alignment(
             ref_start_s,
             votes,

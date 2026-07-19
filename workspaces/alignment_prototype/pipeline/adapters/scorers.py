@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 from typing import Mapping
 
-_REPO = Path(__file__).resolve().parents[4]
+_REPO = Path(__file__).resolve().parent.parent.parent.parent.parent
 
 # Mirrors drivers/race.py `_METRICS` (kept local to avoid importing the heavy
 # drivers package just for regexes). If race.py's format changes, update both.

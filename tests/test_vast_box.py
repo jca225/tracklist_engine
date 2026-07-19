@@ -33,6 +33,7 @@ from scripts.vast_box import (
     parse_instances,
     parse_offers,
     provision_plan,
+    race_step,
     rewrite_ssh_config,
     ssh_config_block,
 )
@@ -239,6 +240,65 @@ class TestAdvance:
         s = WaitState(started=0.0, running_since=None)
         _, v = advance(s, status="loading", port_listening=True, now=10.0)
         assert v == "wait"
+
+
+# ---------------------------------------------------------------------------
+# Race pool (parallel dud-avoidance)
+# ---------------------------------------------------------------------------
+
+
+class TestRaceStep:
+    def test_first_ready_is_a_winner_the_rest_wait(self) -> None:
+        states = {1: WaitState(0.0, 300.0), 2: WaitState(0.0, None)}
+        obs = {1: ("running", True), 2: ("loading", False)}
+        _, verdicts = race_step(states, obs, now=310.0)
+        assert verdicts[1] == "ready"
+        assert verdicts[2] == "wait"
+
+    def test_dud_detected_per_box(self) -> None:
+        states = {1: WaitState(0.0, 300.0)}
+        obs = {1: ("running", False)}  # running but port never opens
+        _, verdicts = race_step(states, obs, now=901.0, dud_after=600.0)
+        assert verdicts[1] == "dud"
+
+    def test_boot_timeout_per_box(self) -> None:
+        states = {7: WaitState(0.0, None)}
+        obs = {7: ("loading", False)}
+        _, verdicts = race_step(states, obs, now=1801.0, boot_timeout=1800.0)
+        assert verdicts[7] == "boot_timeout"
+
+    def test_boxes_advance_independently(self) -> None:
+        states = {1: WaitState(0.0, None), 2: WaitState(0.0, None)}
+        obs = {1: ("running", False), 2: ("loading", False)}
+        new_states, _ = race_step(states, obs, now=100.0)
+        assert new_states[1].running_since == 100.0  # box 1 started its dud clock
+        assert new_states[2].running_since is None  # box 2 still booting
+
+
+class TestQuarantine:
+    def test_roundtrip_and_merge(self, tmp_path, monkeypatch) -> None:
+        import scripts.vast_box as vb
+
+        monkeypatch.setattr(vb, "QUARANTINE_PATH", tmp_path / "q")
+        assert vb.load_quarantine() == frozenset()
+        vb.add_quarantine({111, 222})
+        assert vb.load_quarantine() == frozenset({111, 222})
+        vb.add_quarantine({222, 333})  # union, no dupes
+        assert vb.load_quarantine() == frozenset({111, 222, 333})
+
+    def test_ignores_nondigit_lines(self, tmp_path, monkeypatch) -> None:
+        import scripts.vast_box as vb
+
+        (tmp_path / "q").write_text("111\n# a comment\n\n222\n")
+        monkeypatch.setattr(vb, "QUARANTINE_PATH", tmp_path / "q")
+        assert vb.load_quarantine() == frozenset({111, 222})
+
+    def test_empty_set_is_noop(self, tmp_path, monkeypatch) -> None:
+        import scripts.vast_box as vb
+
+        monkeypatch.setattr(vb, "QUARANTINE_PATH", tmp_path / "q")
+        vb.add_quarantine(set())
+        assert not (tmp_path / "q").exists()
 
 
 # ---------------------------------------------------------------------------
