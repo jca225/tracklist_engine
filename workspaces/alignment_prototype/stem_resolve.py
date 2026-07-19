@@ -1,4 +1,4 @@
-"""Robust stem-path resolution: manifest first, unambiguous disk fallback.
+"""Robust stem-path resolution: manifest, audio_index, then unique disk fallback.
 
 `labeling/pull_set_for_alignment.py` writes each track's ``stems`` field ONCE at
 pull time; stems separated AFTER the pull (re-stem, phase-cancel, the annotator's
@@ -10,9 +10,10 @@ slot (plain + annotator-tagged). ~50 aligner modules read the manifest field and
 silently drop the spans it misses (this bit the agentic loop, the instrumental
 probe, and joint_ref_decode).
 
-This is the shared resolver: check the manifest field first, then accept an
-on-disk slot fallback only when it identifies exactly one stem file. Ambiguous
-fallbacks abstain rather than silently selecting a content-divergent copy.
+This is the shared resolver: check the manifest field first, then
+``audio_index.json`` by ``track_audio_id``, then accept an on-disk slot fallback
+only when it identifies exactly one stem file. Ambiguous fallbacks abstain
+rather than silently selecting a content-divergent copy.
 """
 
 from __future__ import annotations
@@ -20,6 +21,8 @@ from __future__ import annotations
 import re
 import warnings
 from pathlib import Path
+
+from labeling.audio_index import load_audio_index, lookup_stem
 
 # identity stem axis -> Demucs/Roformer stem file basename. 'regular' = the full
 # track (no stem file), so it is intentionally absent.
@@ -50,15 +53,21 @@ def resolve_stem(
     """Real path to a track's ``stem_name`` ('vocals'|'instrumental') stem.
 
     1. ``track['stems'][stem_name]`` if it exists on disk (the manifest hint);
-    2. else collect ``set_dir/stems/<slot>__*/<stem_name>.flac`` across both
+    2. ``audio_index.json`` by ``track_audio_id`` when present;
+    3. else collect ``set_dir/stems/<slot>__*/<stem_name>.flac`` across both
        slot forms;
-    3. return the fallback only when exactly one distinct file exists;
-    4. warn and abstain when multiple files exist.
+    4. return the fallback only when exactly one distinct file exists;
+    5. warn and abstain when multiple files exist.
     """
     if track:
         p = (track.get("stems") or {}).get(stem_name)
         if p and Path(p).is_file():
             return Path(p)
+        indexed = lookup_stem(
+            load_audio_index(set_dir), track.get("track_audio_id"), stem_name
+        )
+        if indexed is not None:
+            return indexed
     if not set_dir or not slot_label or slot_label == "?":
         return None
     stems_root = Path(set_dir) / "stems"
