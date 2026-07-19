@@ -2,6 +2,11 @@
 
 Shadow-only: writes a new timeline JSON. Does not touch the default driver or
 canonical state. Spans without accepted segments are preserved byte-for-byte.
+
+Optional ``gate_s`` reuses the same consistency idea as instrumental stem /
+fp-placement: only apply segments whose mix starts lie within ``gate_s`` of the
+baseline ``set_start_s``. Far collision runs keep the baseline. Default gate
+``90.0`` matches ``--instr-stem-gate-s`` / fp-placement (not mined on BB11/BB12).
 """
 
 from __future__ import annotations
@@ -16,12 +21,31 @@ from workspaces.alignment_prototype.drivers.base import finalize
 
 from .stem_overrides import norm_slot
 
+# Same frozen consistency window as instr-stem / fp-placement gates.
+DEFAULT_GATE_S = 90.0
+
 
 def _bank_by_slot(bank: dict[str, Any]) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
     for row in bank.get("spans") or []:
         out[norm_slot(row["slot_label"])] = row
     return out
+
+
+def filter_segments_for_gate(
+    segments: list[dict[str, Any]],
+    *,
+    baseline_set_start_s: float,
+    gate_s: float,
+) -> list[dict[str, Any]]:
+    """Keep only segments whose mix_start is within ``gate_s`` of the prior."""
+    if gate_s < 0.0:
+        raise ValueError("gate_s must be non-negative")
+    return [
+        seg
+        for seg in segments
+        if abs(float(seg["mix_start_s"]) - baseline_set_start_s) <= gate_s
+    ]
 
 
 def apply_segments_to_span(
@@ -53,21 +77,40 @@ def materialize_timeline(
     baseline: dict[str, Any],
     bank: dict[str, Any],
     output_path: Path,
+    *,
+    gate_s: float | None = None,
 ) -> Path:
-    """Write a validated shadow timeline merging decoded bank rows into baseline."""
+    """Write a validated shadow timeline merging decoded bank rows into baseline.
+
+    When ``gate_s`` is set, segments farther than ``gate_s`` from the baseline
+    ``set_start_s`` are dropped; if none remain, the baseline span is kept.
+    """
     if str(baseline.get("set_id")) != str(bank.get("set_id")):
         raise ValueError("baseline and bank set_id must match")
+    if gate_s is not None and gate_s < 0.0:
+        raise ValueError("gate_s must be non-negative")
     by_slot = _bank_by_slot(bank)
     spans_out: list[dict[str, Any]] = []
     n_applied = 0
+    n_gated_reject = 0
     for span in baseline["spans"]:
         row = by_slot.get(norm_slot(span["slot_label"]))
         segments = list((row or {}).get("segments") or [])
-        if row is not None and row.get("status") == "decoded" and segments:
-            spans_out.append(apply_segments_to_span(span, segments))
-            n_applied += 1
-        else:
+        if row is None or row.get("status") != "decoded" or not segments:
             spans_out.append(copy.deepcopy(span))
+            continue
+        if gate_s is not None:
+            segments = filter_segments_for_gate(
+                segments,
+                baseline_set_start_s=float(span["set_start_s"]),
+                gate_s=gate_s,
+            )
+            if not segments:
+                spans_out.append(copy.deepcopy(span))
+                n_gated_reject += 1
+                continue
+        spans_out.append(apply_segments_to_span(span, segments))
+        n_applied += 1
     payload = copy.deepcopy(baseline)
     payload["spans"] = spans_out
     payload["fp_segment_materialize"] = {
@@ -76,6 +119,8 @@ def materialize_timeline(
         "observation": bank.get("observation"),
         "lane": bank.get("lane"),
         "spans_applied": n_applied,
+        "spans_gated_reject": n_gated_reject,
+        "gate_s": gate_s,
     }
     return finalize(payload, output_path)
 
@@ -85,10 +130,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--baseline", type=Path, required=True)
     parser.add_argument("--bank", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--gate-s",
+        type=float,
+        default=None,
+        help=f"baseline consistency gate in seconds (use {DEFAULT_GATE_S} to "
+        "match instr-stem/fp-placement; omit for ungated)",
+    )
+    parser.add_argument(
+        "--gated",
+        action="store_true",
+        help=f"shorthand for --gate-s {DEFAULT_GATE_S}",
+    )
     args = parser.parse_args(argv)
+    gate_s = DEFAULT_GATE_S if args.gated else args.gate_s
     baseline = json.loads(args.baseline.read_text())
     bank = json.loads(args.bank.read_text())
-    path = materialize_timeline(baseline, bank, args.output)
+    path = materialize_timeline(baseline, bank, args.output, gate_s=gate_s)
     print(path)
     return 0
 

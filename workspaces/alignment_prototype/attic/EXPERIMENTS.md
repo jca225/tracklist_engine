@@ -175,6 +175,26 @@ acceptance gate that preserves baseline when segment evidence is weak, plus an
 independent validation set. Materializer kept at
 `fp_segments/materialize.py` for gated experiments.
 
+## Instrumental FP-segment gated materialize (2026-07-19) — STILL NO-GO FOR BOARD
+
+**Question:** does a baseline-consistency gate (`gate_s=90`, same frozen window
+as instr-stem/fp-placement; keep only segments with
+`|mix_start - baseline_set_start| ≤ gate_s`) fix the ungated regression?
+
+**Verdict:** damage control, not promotion. vs agentic baseline:
+
+- BB12: applied 14 / rejected 4. Placement still worse (median 2.9→3.9s,
+  <15s 78%→73%) though better than ungated (5.5s / 70%). Instr traj 32%→46%.
+  Identity held 83%. Headline traj ~flat (33%→34%).
+- BB11: applied 21 / rejected 0 (all proposals already within 90s of prior).
+  Placement still worse (1.2→2.5s, <15s 76%→73%). Instr traj 40%→49%.
+  Headline 26%→29%.
+
+Near-baseline wrong overwrites still hurt overall set_start; the 90s gate
+only stops teleports. **Do not** tighten `gate_s` on BB11/BB12. Needs a
+stronger GT-free accept rule (evidence vs baseline, or leave set_start and
+only patch `ref_segments`) and an independent set.
+
 ## Instrumental secondary-run evidence floor 0.25 (2026-07-19) — REGRESSED
 
 **Question:** does raising `min_run_evidence_fraction` from 0.05 to 0.25 cut

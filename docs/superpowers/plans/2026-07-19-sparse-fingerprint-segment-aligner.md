@@ -102,6 +102,12 @@ baseline: instrumental traj can improve, but **overall placement regresses on
 both sets** (ungated overwrite of good baselines). Ledgered NO-GO for ungated
 promotion; needs an acceptance gate before any driver wiring.
 
+**Gated materialize (`--gated` / `--gate-s 90`):** baseline-consistency filter
+on segment `mix_start` (frozen 90s window). Reduces BB12 teleport damage vs
+ungated but **still regresses overall set_start on both sets** (near-wrong
+overwrites). Instr traj up; board promotion not earned. Do not retune gate_s
+on BB11/BB12.
+
 ## Runnable shadow command
 
 ```bash

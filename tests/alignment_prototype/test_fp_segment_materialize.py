@@ -94,3 +94,97 @@ def test_materialize_applies_decoded_segments_and_preserves_abstains(tmp_path: P
     assert s1["set_start_s"] == 50.0
     assert s1["start_source"] == "baseline"
     assert s1["ref_segments"] == []
+
+
+def test_gate_rejects_far_proposal_and_keeps_near(tmp_path: Path):
+    baseline = {
+        "set_id": "demo",
+        "spans": [
+            {
+                "slot_label": "1",
+                "recording_id": "r1",
+                "claimed_stem": "instrumental",
+                "set_start_s": 100.0,
+                "set_end_s": 140.0,
+                "ref_start_s": 0.0,
+                "ref_end_s": 40.0,
+                "start_source": "baseline",
+                "ref_segments": [],
+            },
+            {
+                "slot_label": "2",
+                "recording_id": "r2",
+                "claimed_stem": "instrumental",
+                "set_start_s": 200.0,
+                "set_end_s": 240.0,
+                "ref_start_s": 0.0,
+                "ref_end_s": 40.0,
+                "start_source": "baseline",
+                "ref_segments": [],
+            },
+        ],
+    }
+    bank = {
+        "set_id": "demo",
+        "spans": [
+            {
+                "slot_label": "1",
+                "recording_id": "r1",
+                "stem": "instrumental",
+                "status": "decoded",
+                "segments": [
+                    {
+                        "mix_start_s": 2000.0,
+                        "mix_end_s": 2040.0,
+                        "ref_start_s": 0.0,
+                        "ref_end_s": 40.0,
+                        "slope": 1.0,
+                        "evidence": 99.0,
+                        "confidence": 0.9,
+                    }
+                ],
+            },
+            {
+                "slot_label": "2",
+                "recording_id": "r2",
+                "stem": "instrumental",
+                "status": "decoded",
+                "segments": [
+                    {
+                        "mix_start_s": 205.0,
+                        "mix_end_s": 235.0,
+                        "ref_start_s": 2.0,
+                        "ref_end_s": 32.0,
+                        "slope": 1.0,
+                        "evidence": 20.0,
+                        "confidence": 0.5,
+                    },
+                    {
+                        # Far false extra — must not be applied under the gate.
+                        "mix_start_s": 900.0,
+                        "mix_end_s": 930.0,
+                        "ref_start_s": 0.0,
+                        "ref_end_s": 30.0,
+                        "slope": 1.0,
+                        "evidence": 50.0,
+                        "confidence": 0.8,
+                    },
+                ],
+            },
+        ],
+    }
+    out = tmp_path / "gated.json"
+    materialize_timeline(baseline, bank, out, gate_s=90.0)
+    doc = json.loads(out.read_text())
+    meta = doc["fp_segment_materialize"]
+    assert meta["gate_s"] == 90.0
+    assert meta["spans_applied"] == 1
+    assert meta["spans_gated_reject"] == 1
+    # Far proposal rejected.
+    assert doc["spans"][0]["set_start_s"] == 100.0
+    assert doc["spans"][0]["start_source"] == "baseline"
+    # Near proposal applied; far extra dropped.
+    assert doc["spans"][1]["set_start_s"] == 205.0
+    assert doc["spans"][1]["set_end_s"] == 235.0
+    assert len(doc["spans"][1]["ref_segments"]) == 1
+    assert doc["spans"][1]["start_source"] == "fp_segment_dp"
