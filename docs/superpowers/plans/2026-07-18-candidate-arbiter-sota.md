@@ -5,6 +5,25 @@
 already-correct spans by learning when to accept a candidate and otherwise
 falling back to the frozen baseline.
 
+## Execution checkpoint
+
+Completed on branch `fp-hit-decoder-clean`:
+
+- Phase 0 immutable candidate schema, provenance-stamped JSONL persistence and
+  baseline extraction;
+- shadow extraction of all probe proposals already serialized in canonical
+  timelines;
+- evaluation-only candidate oracle and strict two-set oracle race;
+- baseline-relative label contract, missingness-aware vectorizer and a
+  precision-weighted logistic critic baseline.
+
+The candidate oracle clears the placement gate on both held-out boards, so
+existing proposer recall is sufficient for this milestone and a learned
+arbiter is earned. The real-only single-set-to-single-set logistic critic does
+not transfer, so it must not be integrated into a driver. Current active work
+is Phase 1 evidence enrichment plus Phase 2 synthetic hard-negative generation.
+The mashup-invariant encoder remains deferred.
+
 This plan does not introduce another probe first. The ridge diagnostic and the
 instrumental-FP delta proof showed that existing proposers often contain useful
 answers, but their confidence is not calibrated for candidate selection. The
