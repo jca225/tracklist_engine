@@ -38,7 +38,7 @@ _GT_FIXTURE = {
     "1fsnxchk": "bb12_ground_truth.yaml",
 }
 
-_REPO = Path(__file__).resolve().parents[3]
+_REPO = Path(__file__).resolve().parent.parent.parent.parent
 
 
 # ── pure engine (unit-tested) ─────────────────────────────────────────────────

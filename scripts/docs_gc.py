@@ -34,7 +34,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parent.parent
 DOCS_DIR = REPO_ROOT / "docs"
 ARCHIVE_DIR = DOCS_DIR / "archive"
 # Memory is also an orientation root: a design doc that memory points at is LIVE,

@@ -207,7 +207,7 @@ def _load_gt(set_id: str) -> GroundTruthSet:
     fixture = _GT_FIXTURE.get(set_id)
     if fixture is None:
         raise SystemExit(f"no GT fixture registered for set_id={set_id}")
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = Path(__file__).resolve().parent.parent.parent
     path = repo_root / "labeling" / "fixtures" / fixture
     res = load(path)
     if not res.is_ok():
