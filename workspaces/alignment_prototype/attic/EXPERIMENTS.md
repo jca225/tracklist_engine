@@ -303,10 +303,12 @@ fp-only / no exportable 330M MERT; `accepted=0` at G0. Infra (Tasks 1–4) was f
 HuBERT↔fp corroboration ≤30s; 6/33 autos are regular). Smoke TRM still
 underfits held-out (expected); mass lever only. FP placement stays
 fail-closed outside E1 (BB11/BB12 NO-GO as decider unchanged).
-**Verdict (BB10 full E1 @ n=3 / n=16 / n=24, 2026-07-19): noise-floor** —
-drop `--smoke-only`, `--reuse-agentic`. At n=24: pseudo-TRM train-fit ~0.86
-but held-out HEADLINE ~0.05 ≪ control ~0.31. Do **not** regenerate
-`docs/alignment_status.md`. Full E1 @ n=33 pending/next.
+**Verdict (BB10 full E1 @ n=3 / n=16 / n=24 / n=33, 2026-07-19): noise-floor** —
+drop `--smoke-only`, `--reuse-agentic`. At n=33: pseudo-TRM train-fit ~0.70
+but held-out HEADLINE ~0.08 ≪ control ~0.31 (slightly above n=24's ~0.05,
+still a clear loss). Do **not** regenerate `docs/alignment_status.md`.
+Mass is growing; held-out still needs a larger/cleaner pool (more Booties
+with warm probe caches), not more epochs on BB10 alone.
 **Fixes that unblocked BB10 (do not weaken G1/G2/G3):** (1) prefer `mix.wav`
 over `mix.m4a` for fp load; (2) `resolve(require_independence=True)` in
 pseudo-safe so lyrics-alone auto does not skip HuBERT; (3) HuBERT prior falls
