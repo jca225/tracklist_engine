@@ -38,6 +38,209 @@ Scripts still run in place (`python -m workspaces.alignment_prototype.attic.<nam
 | `transition_probe` | do regular/instrumental placement errors concentrate in transition zones? | Probe; findings folded into the failure-analysis placement bucket. |
 | `sic_phase0_probe` | can informed successive cancellation (spectral SIC) make missed medley layers identifiable? | CLOSED 2026-07-10 — cancellation works (−4 dB, physics gate passed) but adds nothing to identification: fp-visible layers were never masked (Honest 1.4k/2.8k votes in raw mix, mis-placed by decision logic = bug lead), fp-invisible layers are invisible from keylock warp geometry, not masking (lever = warp-tolerant hashing, not separation). See docs/medley_sic_plan.md. |
 
+## Candidate critic v0 (2026-07-19) — ORACLE POSITIVE, CRITIC NO-GO
+
+**Question:** can a baseline-aware logistic critic select the best existing
+placement candidate using serialized proposal agreement, baseline provenance,
+native top-K FP strength, and synthetic instrumental-FP hard negatives?
+
+**Verdict:** the candidate oracle clears the two-set placement gate, confirming
+that proposer recall is sufficient. The learned critic does not transfer
+bidirectionally under set-level holdout. Adding baseline-source provenance
+improves ranking in one direction, but calibrated acceptance remains
+low-precision and accepted regressions dominate in the reverse direction.
+Threshold tuning is closed because only two real GT sets exist and further
+held-out adjustment would be leakage.
+
+**Audio-pair follow-up:** a pinned stem-routed verifier was then trained on
+local diagonal similarity, nearby-shift margin, continuity and synthetic exact
+instrumental pairs. It improves ranking in one holdout direction but reverses
+in the other; MERT-only verified candidates also fail transfer. Therefore
+simple chroma-summary verification is not sufficient.
+
+**Do not re-test** these tabular/pinned-summary critics on BB11/BB12 with more
+thresholds. Revisit candidate arbitration only after one of: (a) a third
+independent real GT set, (b) proposer-native evidence for MERT/lyrics/HuBERT
+rather than mostly serialized argmax positions, or (c) a learned
+superposition-invariant audio-pair verifier with a genuinely independent
+validation set. Reusable contracts remain in `candidate_arbiter/`; no critic is
+wired into a driver.
+
+## Symmetric instrumental landmark FP (2026-07-19) — NO-GO AS DECIDER
+
+**Question:** does correcting the live observation model from full-mix hashes
+against reference-instrumental hashes to separated-instrumental hashes on both
+sides make landmark FP safe as an instrumental placement decider?
+
+**Verdict:** no. The symmetric lane is the correct architecture and remains
+useful as a candidate generator, but its joint decoded placements regress
+placement cleanliness on both complete-GT sets. An FP-only overlay also
+regresses both sets while leaving the instrumental and overall trajectory
+headlines unchanged. Native top-K oracle headroom improves slightly in one
+direction, confirming that some useful alternatives exist, but vote count,
+density, runner-up ratio, and displacement do not separate the catastrophic
+repeat/alias diagonals from the wins across sets. The production runner now
+reads `mix_instrumental.flac` and a stem-specific cache name, but downstream
+acceptance must remain fail-closed/shadow-only.
+`AGENTIC_LIVE_ENABLE_FP_PLACEMENT=1` is an experiment-only escape hatch.
+
+**Do not re-test** thresholds on BB11/BB12. Revisit only with an independent
+validation set and a verifier trained to distinguish the same musical material
+from repeated instrumental texture, or with local monotonic path evidence that
+corroborates an FP diagonal before it may move a placement.
+
+## Multi-channel FP path corroboration (2026-07-19) — NO-GO AS GATE
+
+**Question:** after whole-mix NULL-aware segment decoding, can independently
+decoded full-mix/full-reference fingerprint paths verify the primary
+instrumental-mix/instrumental-reference paths without changing their geometry?
+
+**Verdict:** the typed fusion behavior is correct and synthetic tests pass, but
+the real-set signal does not transfer. Full-channel agreement accompanies many
+correct BB11 paths but also many false ones; on BB12 it misses the small correct
+set while corroborating false paths. Missing channels remain distinct from
+negative evidence, as intended, but no cross-set acceptance threshold is
+earned. Keep the fusion contract for future independent representations; do
+not use exact full-channel FP agreement as a placement gate.
+
+**Scope correction:** this was also not the requested production architecture.
+The aligner uses independent instrumental-to-instrumental and vocal-to-vocal
+lanes; it does not require full audio to corroborate either.
+
+**Do not re-test** thresholds on these two sets. The next verifier must add
+genuinely different evidence (sustained chroma/HuBERT or learned
+superposition-invariant similarity) and an independent validation set, not
+another view of the same landmark collisions.
+
+## Vocal-to-vocal landmark segment lane (2026-07-19) — REPRESENTATION NO-GO
+
+**Question:** with routing mechanically restricted to `mix_vocals.flac`
+against each constituent's `vocals.flac`, can sparse constellation landmark
+correspondences drive the same NULL-aware segment decoder?
+
+**Verdict:** the strict independent lane is operational and never falls back to
+regular/instrumental audio, but landmark coverage is too weak and false paths
+dominate across the real sets. This is consistent with the existing axis
+contract, which omitted fingerprinting for vocals. The routing architecture is
+correct; the vocal observation must use HuBERT/phonetic or lyric anchors
+instead of Shazam-style constellation hashes.
+
+**Do not re-test** vocal landmark thresholds on BB11/BB12. Reuse the lane,
+segment schema, and NULL-aware decoder with vocal-specific correspondences.
+
+## Instrumental segment-bank BB11/BB12 autopsy (2026-07-19) — DIAGNOSTIC
+
+**Question:** is BB12’s weak instrumental landmark segment bank the same
+failure as BB11’s residual errors (collision / decoder), or a different wall?
+
+**Verdict (corrected):** the first pass under-counted BB12 because Ableton GT
+slot labels were zero-strip-matched onto unrelated tracklist slots. After
+recording-id stem overrides (`fp_segments.stem_overrides`), BB12 coverage is
+20/≈21 GT instrumentals (1 true inventory gap) with segment recall@15 ≈ 0.60
+vs BB11 ≈ 0.77. Remaining asymmetry: BB12 misses are mostly ridge-absent in
+the landmark cloud; BB11 misses usually keep strong GT-band support and fail
+at boundary/false-extra selection. Match counts are huge on both sets.
+
+**Do not** use slot-norm GT overrides on BB12. Next levers: chroma (or other)
+second observation for ridge-absent misses; false-run rejection for
+BB11-style near-misses — still no threshold mining on these two sets alone.
+
+## Instrumental chroma peak segment lane (2026-07-19) — MIXED / NO DEFAULT
+
+**Question:** can peak-sparsified instrumental chroma (same vocal HuBERT
+adapter pattern) beat landmark FP on the honest recording-id instrumental
+slice?
+
+**Verdict:** mixed. BB12 recall@15 improved (0.60 → 0.65) with fewer
+false-only decodes; BB11 regressed (0.77 → 0.64). Keep `--observation chroma`
+as a shadow tool; do not make it the instrumental default. Landmark remains
+the default instrumental observation.
+
+**Do not** retune chroma peak_frac on BB11/BB12 to chase the asymmetry.
+
+## Instrumental FP-segment → timeline materialize (2026-07-19) — NO-GO AS UNGATED PATCH
+
+**Question:** if landmark instrumental segment banks are written onto the agentic
+baseline timeline (`set_start`/`ref_segments`/`start_source=fp_segment_dp`) and
+scored with `score_timeline_vs_gt`, does the real board improve?
+
+**Verdict:** no as an ungated patch. Instrumental trajectory slices can rise
+(BB11 instr traj-acc 40%→50%, BB12 32%→40%) while **overall set_start placement
+regresses** on both sets (BB11 median 1.2→2.5s, <15s 76%→73%; BB12 median
+2.9→5.5s, <15s 78%→70%). BB12 identity also slipped (83%→81%). False/weak
+decoded runs overwrite good baseline placements.
+
+**Do not** promote ungated `fp_segment_dp` materialize. Revisit only with an
+acceptance gate that preserves baseline when segment evidence is weak, plus an
+independent validation set. Materializer kept at
+`fp_segments/materialize.py` for gated experiments.
+
+## Instrumental FP-segment gated materialize (2026-07-19) — STILL NO-GO FOR BOARD
+
+**Question:** does a baseline-consistency gate (`gate_s=90`, same frozen window
+as instr-stem/fp-placement; keep only segments with
+`|mix_start - baseline_set_start| ≤ gate_s`) fix the ungated regression?
+
+**Verdict:** damage control, not promotion. vs agentic baseline:
+
+- BB12: applied 14 / rejected 4. Placement still worse (median 2.9→3.9s,
+  <15s 78%→73%) though better than ungated (5.5s / 70%). Instr traj 32%→46%.
+  Identity held 83%. Headline traj ~flat (33%→34%).
+- BB11: applied 21 / rejected 0 (all proposals already within 90s of prior).
+  Placement still worse (1.2→2.5s, <15s 76%→73%). Instr traj 40%→49%.
+  Headline 26%→29%.
+
+Near-baseline wrong overwrites still hurt overall set_start; the 90s gate
+only stops teleports. **Do not** tighten `gate_s` on BB11/BB12. Needs a
+stronger GT-free accept rule (evidence vs baseline, or leave set_start and
+only patch `ref_segments`) and an independent set.
+
+## Instrumental FP-segment ref-only materialize (2026-07-19) — PARTIAL
+
+**Question:** with `--gated --ref-segments-only`, can segment banks improve
+ref/traj without touching baseline `set_start`?
+
+**Verdict:** first mode that does not regress the board. vs agentic baseline:
+
+- Placement + identity unchanged on both sets (by construction).
+- BB11: instr traj 40%→45%, headline 26%→29%, instr straight-clip ref median
+  25.0→3.2s; overall ref median 37.5→26.8s.
+- BB12: instr traj 32%→46%, headline 33%→34%; instr straight-clip ref median
+  worsened 32.9→46.3s (n=6) while overall placement held.
+
+**Do not** promote to default driver yet — gains are stem-local / modest, BB12
+scalar ref mixed, still n=2. Keep as the preferred shadow materialize mode
+(`fp_segment_dp_ref`). Next: independent set or evidence-vs-baseline accept
+before wiring a driver.
+
+## Instrumental secondary-run evidence floor 0.25 (2026-07-19) — REGRESSED
+
+**Question:** does raising `min_run_evidence_fraction` from 0.05 to 0.25 cut
+false extras without losing true paths?
+
+**Verdict:** no on these two sets. Landmark recall@15 fell on both (BB12
+0.60→0.45, BB11 0.77→0.64). Default remains 0.05; the stricter fraction stays
+available for synthetic/explicit calls only.
+
+## Vocal-to-vocal HuBERT peak segment lane (2026-07-19) — REPRESENTATION NO-GO
+
+**Question:** with the same vocal-to-vocal route and NULL-aware decoder, can a
+whole-mix HuBERT-L9 cosine matrix sparsified to local peaks
+(`fp_segments.hubert_retrieve`) recover useful constituent segments?
+
+**Verdict:** the observation adapter is operational (`--lane vocal
+--observation hubert`, default for vocal), reuses `.feat_cache`, and never
+crosses stems. Real shadow banks are denser than landmark vocal (more
+`decoded` rows; median matches hit the frozen `max_peaks=256` cap), but
+placement recall stays near floor and false-path duration dominates on both
+complete-GT sets. Peak-sparsified HuBERT is therefore the wrong
+correspondence producer for this decoder — not a routing failure.
+
+**Do not re-test** HuBERT peak-frac / neighborhood / max-peaks on BB11/BB12.
+Keep the lane + decoder. Next vocal observation candidates are sustained
+phonetic/lyric anchors or a different decode of the dense \(M\) (not another
+peak-threshold sweep on these two sets).
+
 ## PWS categorical label model over offset bins (2026-07-14) — REFUTED
 **Question:** can a Dawid–Skene label model (learned per-probe accuracy, no GT)
 beat hand-tuned `source_priority` fusion, aggregating genuine per-probe votes

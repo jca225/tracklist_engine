@@ -54,6 +54,30 @@ log = logging.getLogger(__name__)
 _FIBER_FPS = 22050 / 512
 
 
+def ref_fp_for_span(span: dict):
+    """Load the landmark fp for a span, keyed by claimed_stem.
+
+    This live lane is intentionally instrumental-only, matching the belief
+    gate: prefer the stem-specific entry and fall back to a regular landmark
+    for the same recording. Regular and acappella spans abstain so a newly
+    dense fp index cannot perturb their already-strong baseline placements.
+    Returns None when no valid entry exists.
+    """
+    from workspaces.alignment_prototype.fp_index import FpKey
+    from workspaces.alignment_prototype.fp_index import load as fp_load
+
+    rid = span.get("recording_id")
+    if not rid:
+        return None
+    stem = span.get("claimed_stem") or "regular"
+    if stem != "instrumental":
+        return None
+    hit = fp_load(FpKey(rid, stem))
+    if hit is None and stem != "regular":
+        hit = fp_load(FpKey(rid, "regular"))
+    return hit
+
+
 # ---------------------------------------------------------------------------
 # per-set context: precompute the JOINT decodes + hold the on-demand caches
 # ---------------------------------------------------------------------------
@@ -76,6 +100,9 @@ class LiveContext:
     rid_vocal_path: dict[str, str] = field(default_factory=dict)
     _ref_hub_cache: dict[str, np.ndarray | None] = field(default_factory=dict)
     _ref_fiber_cache: dict[str, tuple | None] = field(default_factory=dict)
+    # Shadow-only candidates for the learned arbiter; never read by the current
+    # agentic decision path.
+    shadow_candidates: list[object] = field(default_factory=list)
     # down-weight instance-ambiguous ref placements (B3 fiber abstain). OPT-IN:
     # on BB11 it demotes ~4 vocal spans auto->suggest at unchanged set_start
     # cleanliness (the ambiguity is in ref_start/which-instance, which the rung
@@ -188,45 +215,61 @@ class LiveContext:
     ) -> None:
         """JOINT landmark-fp decode over tracklist order (mirrors infer's fp block)."""
         try:
-            from workspaces.alignment_prototype.fp_index import FpKey
-            from workspaces.alignment_prototype.fp_index import load as fp_load
             from workspaces.alignment_prototype.landmark_fp import constellation, hashes
             from workspaces.alignment_prototype.mix_fp_hits import (
                 decode_placements,
                 load_mix_mono,
             )
+            from workspaces.alignment_prototype.candidate_arbiter.adapters import (
+                fp_candidates_for_span,
+            )
 
-            # Prefer PCM (wav/flac) over m4a: librosa's audioread path on
-            # hour-long AAC spikes RAM and has OOM-killed the BB10 E1 smoke.
+            # Instrumental-only live FP lane (ref_fp_for_span): separated mix
+            # instrumental vs ref instrumental. Full-mix hashes reintroduce
+            # vocals/FX and produced precise false diagonals. Prefer PCM
+            # (wav/flac) over m4a — AAC on long files can OOM (BB10 E1).
             mix_file = next(
                 (
                     p
                     for p in (
-                        set_dir / "mix.wav",
-                        set_dir / "mix.flac",
-                        set_dir / "mix.m4a",
+                        set_dir / "mix_instrumental.wav",
+                        set_dir / "mix_instrumental.flac",
+                        set_dir / "mix_instrumental.m4a",
                     )
                     if p.is_file()
                 ),
                 None,
             )
             if mix_file is None:
-                log.warning("live fp: no mix.{wav,flac,m4a} in %s — abstain", set_dir)
+                log.warning(
+                    "live fp: mix_instrumental.{wav,flac,m4a} missing in %s — abstain",
+                    set_dir,
+                )
                 return
             # ref fps in tracklist (span) order — DO NOT sort; None where absent
-            fps = [
-                fp_load(FpKey(s["recording_id"], "regular"))
-                if s.get("recording_id")
-                else None
-                for s in spans
-            ]
+            fps = [ref_fp_for_span(s) for s in spans]
             keep = [i for i, fp in enumerate(fps) if fp is not None]
             if not keep:
                 log.warning(
                     "live fp: no ref fingerprints cached for %s — abstain", ctx.set_id
                 )
                 return
-            hm = hashes(*constellation(load_mix_mono(mix_file)))
+            # Optional precomputed mix hashes (e.g. ridge_diagnostic mix_hash_cache)
+            # via FP_MIX_HASH_CACHE=/path/to/dir containing
+            # {set_id}_instrumental_mix_hashes.pkl.
+            import os
+            import pickle
+
+            hm = None
+            cache_dir = os.environ.get("FP_MIX_HASH_CACHE", "").strip()
+            if cache_dir:
+                cp = Path(cache_dir) / f"{ctx.set_id}_instrumental_mix_hashes.pkl"
+                if cp.is_file():
+                    hm = pickle.loads(cp.read_bytes())
+                    log.info("live fp: mix hashes from cache %s", cp)
+            if hm is None:
+                hm = hashes(*constellation(load_mix_mono(mix_file)))
+            native_candidates = []
             placements = decode_placements(
                 hm,
                 [fps[i] for i in keep],
@@ -234,7 +277,29 @@ class LiveContext:
                 topk=6,
                 gap_s=6.0,
                 with_offset=True,
+                candidate_evidence_out=native_candidates,
             )
+            for local_index, span_index in enumerate(keep):
+                ctx.shadow_candidates.extend(
+                    fp_candidates_for_span(
+                        ctx.set_id,
+                        spans[span_index],
+                        native_candidates[local_index],
+                    )
+                )
+            # The symmetric lane improves candidate recall but failed the
+            # two-set placement gate as a decider. Preserve its evidence for
+            # shadow evaluation; require an explicit experiment opt-in before
+            # it can enter the live belief state.
+            if os.environ.get(
+                "AGENTIC_LIVE_ENABLE_FP_PLACEMENT", ""
+            ).strip().lower() not in ("1", "true", "yes"):
+                log.info(
+                    "live fp: %d shadow candidates; placement disabled "
+                    "(AGENTIC_LIVE_ENABLE_FP_PLACEMENT not set)",
+                    len(native_candidates),
+                )
+                return
             for r, i in enumerate(keep):
                 pl = placements[r]
                 if pl is None:
@@ -255,6 +320,17 @@ class LiveContext:
     ) -> None:
         """JOINT lyrics decode over acappella spans (mirrors infer's lyrics block)."""
         try:
+            import os
+
+            # Prove/dev fast-path when Whisper cache is cold (no ASR).
+            if os.environ.get("AGENTIC_LIVE_SKIP_LYRICS", "").strip() in (
+                "1",
+                "true",
+                "yes",
+            ):
+                log.info("live lyrics: skipped (AGENTIC_LIVE_SKIP_LYRICS)")
+                return
+
             from workspaces.alignment_prototype.infer import (
                 _manifest_by_tid,
                 _vocal_ref_path,
@@ -327,6 +403,18 @@ class LiveContext:
     def _load_hubert(ctx: LiveContext, set_dir: Path, spans: list[dict]) -> None:
         """mix_vocals HuBERT (once) + rid->ref-vocal-path map (mirrors infer's stem block)."""
         try:
+            import os
+
+            # Prove/dev fast-path when HuBERT features are cold or deliberately
+            # outside the experiment under test.
+            if os.environ.get("AGENTIC_LIVE_SKIP_HUBERT", "").strip().lower() in (
+                "1",
+                "true",
+                "yes",
+            ):
+                log.info("live hubert: skipped (AGENTIC_LIVE_SKIP_HUBERT)")
+                return
+
             from workspaces.alignment_prototype.infer import (
                 _manifest_by_tid,
                 _vocal_ref_path,

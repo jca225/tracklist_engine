@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from workspaces.alignment_prototype.agentic.actions import REGISTRY, bind, plan_for
 from workspaces.alignment_prototype.agentic.belief import Observation, SpanBelief
 from workspaces.alignment_prototype.agentic.events import EventLog, replay_beliefs
@@ -20,8 +22,8 @@ def _obs(probe, start, conf=1.0, prec=0.9, cost=0.1):
     )
 
 
-def _belief(*obs):
-    b = SpanBelief("001", "rec1", "acappella")
+def _belief(*obs, stem: str = "acappella"):
+    b = SpanBelief("001", "rec1", stem)
     for o in obs:
         b = b.observe(o)
     return b
@@ -185,6 +187,67 @@ def test_belief_conflict_lowers_quality():
     assert conflict.quality() < agree.quality()
 
 
+def test_regular_stem_keeps_heaviest_cluster_over_fp():
+    """bb12_42w5: regular stem — do NOT prefer fp over mert+surprise.
+
+    fp@3519 is near audible onset but regresses official GT set_start (~3477);
+    place-median SOTA requires heaviest-cluster (surprise/mert ~3466).
+    """
+    b = _belief(
+        _obs("fp", 3519.5, conf=0.8, prec=0.53),
+        _obs("mert_decode", 3470.4, conf=0.7, prec=0.55),
+        _obs("surprise", 3466.08, conf=1.0, prec=0.45),
+        stem="regular",
+    )
+    top = b.best()
+    assert top is not None
+    assert "fp" not in top.probes
+    assert abs(top.set_start_s - 3466.08) < 5.0
+
+
+def test_weak_fp_cluster_does_not_steal_strong_mert_pileup():
+    """A low-weight stray fp diagonal must not beat a much heavier mert cluster."""
+    b = _belief(
+        _obs("fp", 100.0, conf=0.2, prec=0.53),  # weight ≈ 0.106
+        _obs("mert_decode", 400.0, conf=1.0, prec=0.55),  # 0.55
+        _obs("surprise", 402.0, conf=1.0, prec=0.45),  # 0.45 → pileup ≈ 1.0
+        stem="instrumental",
+    )
+    top = b.best()
+    assert top is not None
+    assert "fp" not in top.probes
+    assert 400.0 <= top.set_start_s <= 402.0
+
+
+def test_fp_preferred_over_cue_prior_surprise_overwrite():
+    """bb12_39 instrumental: classical fp @ GT; cue+surprise piled up ~46s off."""
+    b = _belief(
+        _obs("fp", 3210.7, conf=0.8, prec=0.53),
+        _obs("mert_decode", 3256.14, conf=0.7, prec=0.55),
+        _obs("cue_prior", 3256.8, conf=0.6, prec=0.50),
+        _obs("surprise", 3256.8, conf=1.0, prec=0.45),
+        stem="instrumental",
+    )
+    top = b.best()
+    assert top is not None
+    assert "fp" in top.probes
+    assert abs(top.set_start_s - 3210.7) < 1.0
+
+
+def test_instr_fp_preferred_over_mert_surprise_pileup():
+    """Instrumental decoder_wall: competitive fp beats mert+surprise pile-up."""
+    b = _belief(
+        _obs("fp", 3399.8, conf=0.8, prec=0.53),
+        _obs("mert_decode", 3480.0, conf=0.7, prec=0.55),
+        _obs("surprise", 3481.0, conf=1.0, prec=0.45),
+        stem="instrumental",
+    )
+    top = b.best()
+    assert top is not None
+    assert "fp" in top.probes
+    assert abs(top.set_start_s - 3399.8) < 1.0
+
+
 def test_belief_all_abstain_is_zero():
     b = _belief(Observation("lyrics", None, 0.0, 0.9))
     assert b.quality() == 0.0
@@ -323,3 +386,75 @@ def test_loop_budget_stops_expensive_actions():
         if (res.escalated or res.review or res.suggested)
         else True
     )
+
+
+def test_ref_fp_for_span_prefers_claimed_stem_then_regular(monkeypatch):
+    """Instrumental landmarks are often the only cached entry (bb11_34)."""
+    from workspaces.alignment_prototype.agentic import live_runners as lr
+    from workspaces.alignment_prototype.fp_index import FpKey
+
+    calls: list[FpKey] = []
+
+    def fake_load(key, **_kw):
+        calls.append(key)
+        if key.stem == "instrumental":
+            return object()  # truthy stand-in
+        return None
+
+    monkeypatch.setattr("workspaces.alignment_prototype.fp_index.load", fake_load)
+    # Also patch the late import path used inside ref_fp_for_span
+    import workspaces.alignment_prototype.fp_index as fp_index
+
+    monkeypatch.setattr(fp_index, "load", fake_load)
+
+    hit = lr.ref_fp_for_span(
+        {"recording_id": "g99m0t5", "claimed_stem": "instrumental"}
+    )
+    assert hit is not None
+    assert calls[0] == FpKey("g99m0t5", "instrumental")
+    assert all(c.stem != "regular" for c in calls)  # no fallback needed
+
+
+def test_ref_fp_for_span_falls_back_to_regular(monkeypatch):
+    from workspaces.alignment_prototype.agentic import live_runners as lr
+    from workspaces.alignment_prototype.fp_index import FpKey
+
+    calls: list[FpKey] = []
+
+    def fake_load(key, **_kw):
+        calls.append(key)
+        return object() if key.stem == "regular" else None
+
+    import workspaces.alignment_prototype.fp_index as fp_index
+
+    monkeypatch.setattr(fp_index, "load", fake_load)
+
+    hit = lr.ref_fp_for_span({"recording_id": "abc", "claimed_stem": "instrumental"})
+    assert hit is not None
+    assert calls == [FpKey("abc", "instrumental"), FpKey("abc", "regular")]
+
+
+def test_ref_fp_for_span_abstains_outside_instrumental_lane(monkeypatch):
+    from workspaces.alignment_prototype.agentic import live_runners as lr
+
+    def unexpected_load(*_args, **_kwargs):
+        raise AssertionError("non-instrumental spans must not load landmark fp")
+
+    import workspaces.alignment_prototype.fp_index as fp_index
+
+    monkeypatch.setattr(fp_index, "load", unexpected_load)
+    assert (
+        lr.ref_fp_for_span({"recording_id": "abc", "claimed_stem": "acappella"})
+        is None
+    )
+    assert lr.ref_fp_for_span({"recording_id": "abc", "claimed_stem": "regular"}) is None
+
+
+def test_live_hubert_can_be_skipped(monkeypatch):
+    from workspaces.alignment_prototype.agentic.live_runners import LiveContext
+
+    monkeypatch.setenv("AGENTIC_LIVE_SKIP_HUBERT", "1")
+    ctx = LiveContext(set_id="set")
+    LiveContext._load_hubert(ctx, Path("/unused"), [])
+    assert "stem_hubert" not in ctx.loaded
+    assert ctx.mix_hub is None

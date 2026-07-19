@@ -12,7 +12,7 @@ from workspaces.alignment_prototype.score_timeline_vs_gt import (
     score_spans,
 )
 
-_REPO = Path(__file__).resolve().parent.parent.parent.parent
+_REPO = Path(__file__).resolve().parents[3]
 _ALN_OUT = _REPO / "workspaces" / "alignment_prototype" / "out"
 
 SET_META = {

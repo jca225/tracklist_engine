@@ -13,6 +13,15 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 CLUSTER_TOL_S = 8.0  # proposals within this agree (matches stem-placement guard)
+# When fp forms its own cluster and a mert/surprise/cue pile-up wins on raw
+# weight, prefer the fp cluster if it is within this fraction of the heaviest
+# cluster's weight — but ONLY for instrumental spans. Earned by the 2026-07-18
+# decoder_wall dig: bb11_39 / bb12_39 (instrumental) need this to keep GT-correct
+# fp; applying it to regular (bb12_42w5) regresses official GT set_start place
+# median (fp snaps near audible onset, not GT start). 0.35 clears instr cases
+# (0.42/1.14) while a weak stray fp (weight ~0.11 vs pile-up ~1.0) still loses.
+FP_CLUSTER_MARGIN = 0.35
+FP_PREFER_STEMS = frozenset({"instrumental"})
 
 
 @dataclass(frozen=True)
@@ -137,8 +146,28 @@ class SpanBelief:
         return tuple(sorted(out, key=lambda c: -c.weight))
 
     def best(self) -> Cluster | None:
+        """Heaviest cluster, with a content-fp tie-break on instrumental spans.
+
+        Default: heaviest precision-weighted cluster. Exception (instrumental
+        only): if a cluster contains ``fp`` and its weight is ≥
+        ``FP_CLUSTER_MARGIN`` × the heaviest cluster's weight, return that fp
+        cluster instead. Stops mert-family probes from outvoting a competitive
+        landmark diagonal on instr decoder_wall cases. Regular/acappella keep
+        heaviest-cluster (bb12_42w5 place-median regression otherwise).
+        """
         cs = self.clusters()
-        return cs[0] if cs else None
+        if not cs:
+            return None
+        top = cs[0]
+        if self.claimed_stem not in FP_PREFER_STEMS:
+            return top
+        fp_cs = [c for c in cs if "fp" in c.probes]
+        if not fp_cs:
+            return top
+        best_fp = max(fp_cs, key=lambda c: c.weight)
+        if best_fp.weight >= FP_CLUSTER_MARGIN * top.weight:
+            return best_fp
+        return top
 
     def quality(self, *, combine: bool = False) -> float:
         """Belief quality in [0, 1] — drives the permission ladder.
