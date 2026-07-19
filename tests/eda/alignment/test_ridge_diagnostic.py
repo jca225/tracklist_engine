@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
+
+pytest.importorskip("librosa")  # features → trajectory → recon_probe pulls librosa
 
 from eda.alignment.ridge_diagnostic.cases import CaseRecord, _rank_candidates
 from eda.alignment.ridge_diagnostic.features import (
