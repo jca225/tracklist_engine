@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -85,14 +87,14 @@ def test_refine_main_supplies_set_dir_to_audio_resolver(
         '{"spans":[{"recording_id":"recording-1"}]}'
     )
 
-    import librosa
-
     monkeypatch.setattr(refine_ref_offsets, "OUT_DIR", out_dir)
     monkeypatch.setattr(
         refine_ref_offsets, "find_aligning_dir", lambda _set_id: set_dir
     )
-    monkeypatch.setattr(
-        librosa, "load", lambda *_args, **_kwargs: (np.zeros(1024), 16000)
+    monkeypatch.setitem(
+        sys.modules,
+        "librosa",
+        SimpleNamespace(load=lambda *_args, **_kwargs: (np.zeros(1024), 16000)),
     )
     monkeypatch.setattr(refine_ref_offsets, "chroma", lambda _audio: np.zeros((12, 32)))
 
