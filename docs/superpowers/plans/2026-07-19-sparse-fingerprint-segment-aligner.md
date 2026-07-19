@@ -95,6 +95,13 @@ stronger; not earned as the default observation. Raising
 both sets (BB12 0.45 / BB11 0.64); default stays 0.05 with an opt-in fraction
 tested synthetically. Canonical SOTA unchanged.
 
+**Shadow timeline materialize (same day):**
+`fp_segments.materialize` writes decoded instrumental banks onto the agentic
+baseline (`start_source=fp_segment_dp`). Real `score_timeline_vs_gt` vs that
+baseline: instrumental traj can improve, but **overall placement regresses on
+both sets** (ungated overwrite of good baselines). Ledgered NO-GO for ungated
+promotion; needs an acceptance gate before any driver wiring.
+
 ## Runnable shadow command
 
 ```bash

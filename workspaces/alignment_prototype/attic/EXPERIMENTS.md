@@ -158,6 +158,23 @@ the default instrumental observation.
 
 **Do not** retune chroma peak_frac on BB11/BB12 to chase the asymmetry.
 
+## Instrumental FP-segment → timeline materialize (2026-07-19) — NO-GO AS UNGATED PATCH
+
+**Question:** if landmark instrumental segment banks are written onto the agentic
+baseline timeline (`set_start`/`ref_segments`/`start_source=fp_segment_dp`) and
+scored with `score_timeline_vs_gt`, does the real board improve?
+
+**Verdict:** no as an ungated patch. Instrumental trajectory slices can rise
+(BB11 instr traj-acc 40%→50%, BB12 32%→40%) while **overall set_start placement
+regresses** on both sets (BB11 median 1.2→2.5s, <15s 76%→73%; BB12 median
+2.9→5.5s, <15s 78%→70%). BB12 identity also slipped (83%→81%). False/weak
+decoded runs overwrite good baseline placements.
+
+**Do not** promote ungated `fp_segment_dp` materialize. Revisit only with an
+acceptance gate that preserves baseline when segment evidence is weak, plus an
+independent validation set. Materializer kept at
+`fp_segments/materialize.py` for gated experiments.
+
 ## Instrumental secondary-run evidence floor 0.25 (2026-07-19) — REGRESSED
 
 **Question:** does raising `min_run_evidence_fraction` from 0.05 to 0.25 cut
