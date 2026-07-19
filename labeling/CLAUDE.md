@@ -161,20 +161,20 @@ expect a separate downloaded acappella master unless you explicitly acquired one
   vs fresh `.als` re-export (offline; no pi-storage).
 - **Audio audit (run before trusting a GT export):** `make audit-gt SET=<set_id>`
   audio-verifies every clip of the labeling `.als` against the actual mix
-  (identity / placement / ref-offset / pitch via chroma matched filter). The
-  XML round-trip tests in `tests/labeling/` prove the codec; only this catches
-  a session whose *assertions* silently drift from the mix audio. Wraps
+  (identity / placement / ref-offset / pitch via chroma matched filter). Wraps
   `workspaces/source_detection/als_audit.py`.
+- **Denotational audio round-trip (release ruler):** 
+  `python -m labeling.audio_roundtrip --als … --set-dir … [--yaml …]`.
+  Offline-renders pre-merge arrangement clips vs GT and asserts equivalence.
+  XML `als/roundtrip.py` is a unit test only — it does **not** unlock release
+  (missed distant-clip merges). Live Export Audio goldens: [live_export_roundtrip.md](live_export_roundtrip.md).
 - **Release gate (required before write-back / status regen):**
-  `make gt-gate SET=<id> ALS=<hand.als> YAML=<fixture.yaml> [ANCHORS=…]`.
-  Runs validate → `anchor_check --strict-ref` → `als_audit`, then stamps
-  `labeling/.cache/gt_gate/<set_id>.ok.json` (write-back) **and**
-  `labeling/fixtures/gt_gate_stamps/<set_id>.json` (commit with the YAML;
-  pre-commit enforces sha match). Known leftover failures:
-  `fixtures/gt_audit_acks.yaml`. Status: `make status-preflight`.
-  `write_back_ground_truth` refuses DB writes without a fresh stamp
-  (`--force-ungated` / blanket `--ack-audio-mismatches` escapes).
-  Re-export matching old YAML is not enough.
+  `make gt-gate SET=<id> ALS=<hand.als> YAML=<fixture.yaml> SET_DIR=<aligning>`.
+  Runs validate → `anchor_check --strict-ref` → `als_audit` → **audio_roundtrip**,
+  then stamps `labeling/.cache/gt_gate/` + `fixtures/gt_gate_stamps/` (commit with
+  YAML). Known leftover mix-audit failures: `fixtures/gt_audit_acks.yaml`.
+  Status: `make status-preflight`. Write-back requires `audio_roundtrip.ok` on
+  the stamp (`--force-ungated` escape).
 - CLI: `venvs/audio/bin/python -m labeling.write_back_ground_truth --db ... --yaml ...`
   transactionally replaces [set_ground_truth](../web_crawler/database/schema.sql)
   for that set. Dry-run with `--dry-run`. Uses `slot_label` as DB `label` when

@@ -3,8 +3,10 @@
 The `.als` is treated as a bidirectional grammar (source ↔ AST): `read` parses
 a session into frozen records, `identity` resolves clip paths to slot / stem /
 manifest identity, `write` mutates a session tree (seeding primitives), and the
-round-trip law ``parse ∘ print = id`` is the verification pillar (BB12 152/152
-clips; see docs/als_codec_subpackage_plan.md).
+round-trip law ``parse ∘ print = id`` is the **codec** pillar (BB12 152/152
+clips; see docs/als_codec_subpackage_plan.md). GT release trust uses the
+**denotational** audio law in ``labeling.audio_roundtrip``, not codec
+round-trip alone.
 
 Uses `lxml` (Py3.14 venv lacks working stdlib expat). Always re-read the
 `.als` from disk — never cache a parse across runs.

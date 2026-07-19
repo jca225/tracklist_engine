@@ -85,16 +85,17 @@ audit-gt:
 	@test -n "$(SET)" || (echo "Usage: make audit-gt SET=<set_id> [ALS=<path>]" && exit 1)
 	venvs/audio/bin/python -m workspaces.source_detection.als_audit --set-id $(SET) $(if $(ALS),--als $(ALS),)
 
-# GT release gate: validate .als → anchor_check --strict-ref → als_audit → stamp.
+# GT release gate: validate → anchor_check → als_audit → audio_roundtrip → stamp.
 # write_back_ground_truth refuses DB writes without a fresh stamp for the YAML bytes.
 # Known leftover mismatches: edit labeling/fixtures/gt_audit_acks.yaml (prefer) or
 # ACK=--ack-audio-mismatches. Stage labeling/fixtures/gt_gate_stamps/<set>.json with the YAML.
 gt-gate:
-	@test -n "$(SET)" || (echo "Usage: make gt-gate SET=<id> ALS=<hand.als> YAML=<fixture.yaml> [ANCHORS=…] [ACK=--ack-audio-mismatches]" && exit 1)
-	@test -n "$(ALS)" || (echo "Usage: make gt-gate SET=<id> ALS=<hand.als> YAML=<fixture.yaml>" && exit 1)
-	@test -n "$(YAML)" || (echo "Usage: make gt-gate SET=<id> ALS=<hand.als> YAML=<fixture.yaml>" && exit 1)
+	@test -n "$(SET)" || (echo "Usage: make gt-gate SET=<id> ALS=<hand.als> YAML=<fixture.yaml> SET_DIR=<aligning> [ANCHORS=…] [ACK=--ack-audio-mismatches]" && exit 1)
+	@test -n "$(ALS)" || (echo "Usage: make gt-gate SET=<id> ALS=<hand.als> YAML=<fixture.yaml> SET_DIR=<aligning>" && exit 1)
+	@test -n "$(YAML)" || (echo "Usage: make gt-gate SET=<id> ALS=<hand.als> YAML=<fixture.yaml> SET_DIR=<aligning>" && exit 1)
 	venvs/audio/bin/python -m labeling.gt_release_gate \
 		--set-id $(SET) --als $(ALS) --yaml $(YAML) \
+		$(if $(SET_DIR),--set-dir $(SET_DIR),) \
 		$(if $(ANCHORS),--anchors $(ANCHORS),) $(ACK)
 
 # Before regenerating docs/alignment_status.md — BB fixtures must have committed stamps.

@@ -56,6 +56,7 @@ def test_verify_stamp_accepts_matching_yaml(tmp_path: Path, monkeypatch):
         als_path=als,
         audit_summary={"n_ok": 1, "skipped": False},
         ack_mismatches=False,
+        audio_roundtrip={"ok": True, "corr": 1.0, "rms_diff": 0.0},
     )
     assert path.is_file() and committed.is_file()
     ok, reason = verify_stamp(_BB11, set_id="2nvzlh2k")
@@ -83,6 +84,7 @@ def test_verify_stamp_rejects_yaml_byte_change(tmp_path: Path, monkeypatch):
         als_path=als,
         audit_summary={"n_ok": 1},
         ack_mismatches=False,
+        audio_roundtrip={"ok": True},
     )
     yaml_copy.write_bytes(yaml_copy.read_bytes() + b"\n# touched\n")
     ok, reason = verify_stamp(yaml_copy, set_id="2nvzlh2k")
@@ -107,6 +109,7 @@ def test_verify_stamp_rejects_expired(tmp_path: Path, monkeypatch):
         als_path=als,
         audit_summary={"n_ok": 1},
         ack_mismatches=False,
+        audio_roundtrip={"ok": True},
     )
     stamp = stamp_path("2nvzlh2k")
     payload = json.loads(stamp.read_text())

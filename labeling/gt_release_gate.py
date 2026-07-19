@@ -1,11 +1,13 @@
 """GT release gate — no fixture commit / DB write-back without a green stamp.
 
 Re-export matching an old YAML proves reproducibility, not correctness against
-the mix.  This gate requires:
+the mix.  XML codec round-trip is **not** enough (it missed distant-clip merges).
+This gate requires:
 
 1. ``labeling.als.validate`` clean on the source ``.als``
 2. ``labeling.anchor_check`` (set-specific anchors + ``--strict-ref``)
-3. ``workspaces.source_detection.als_audit`` audio verification
+3. ``workspaces.source_detection.als_audit`` (labels vs DJ mix)
+4. ``labeling.audio_roundtrip`` denotational law (arrangement ↔ GT audio)
 
 On success it writes:
 
@@ -89,6 +91,7 @@ def _stamp_payload(
     audit_summary: dict[str, Any],
     ack_mismatches: bool,
     acked_failures: list[dict[str, Any]],
+    audio_roundtrip: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "version": STAMP_VERSION,
@@ -101,6 +104,7 @@ def _stamp_payload(
         "ack_audio_mismatches": ack_mismatches,
         "acked_failures": acked_failures,
         "audit_summary": audit_summary,
+        "audio_roundtrip": audio_roundtrip or {},
     }
 
 
@@ -112,6 +116,7 @@ def write_stamp(
     audit_summary: dict[str, Any],
     ack_mismatches: bool,
     acked_failures: list[dict[str, Any]] | None = None,
+    audio_roundtrip: dict[str, Any] | None = None,
 ) -> tuple[Path, Path]:
     """Write local + committed stamps. Returns (local_path, fixture_path)."""
     payload = _stamp_payload(
@@ -121,6 +126,7 @@ def write_stamp(
         audit_summary=audit_summary,
         ack_mismatches=ack_mismatches,
         acked_failures=acked_failures or [],
+        audio_roundtrip=audio_roundtrip,
     )
     text = json.dumps(payload, indent=2) + "\n"
     STAMP_DIR.mkdir(parents=True, exist_ok=True)
@@ -236,6 +242,13 @@ def verify_stamp(
         summary = stamp.get("audit_summary") or {}
         if summary.get("skipped"):
             last_reason = f"{kind} stamp skipped audio audit"
+            continue
+        rt = stamp.get("audio_roundtrip") or {}
+        if not rt.get("ok"):
+            last_reason = (
+                f"{kind} stamp missing denotational audio_roundtrip — "
+                "re-run make gt-gate (XML round-trip is not enough)"
+            )
             continue
         age = time.time() - float(stamp.get("created_unix") or 0)
         if age > max_age_s:
@@ -417,6 +430,25 @@ def run_gate(
             file=sys.stderr,
         )
 
+    if set_dir is None or not set_dir.is_dir():
+        print(
+            "FAIL: --set-dir required for denotational audio round-trip",
+            file=sys.stderr,
+        )
+        return 1
+    print("\n==> audio round-trip (ALS arrangement ↔ GT denotation)", flush=True)
+    from labeling.audio_roundtrip import run_roundtrip
+
+    rt = run_roundtrip(als, set_dir, yaml_path=yaml_path)
+    print(("OK: " if rt.ok else "FAIL: ") + rt.detail)
+    if not rt.ok:
+        print(
+            "FAIL: denotational audio round-trip — GT does not recreate the "
+            "arrangement audio (XML/codec round-trip is not enough).",
+            file=sys.stderr,
+        )
+        return 1
+
     local, committed = write_stamp(
         set_id=set_id,
         yaml_path=yaml_path,
@@ -431,6 +463,7 @@ def run_gate(
             }
             for v in acked
         ],
+        audio_roundtrip=rt.as_dict(),
     )
     print(f"\nPASS — wrote local stamp {local}")
     print(f"PASS — wrote committed stamp {committed} (stage this with the YAML)")

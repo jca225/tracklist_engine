@@ -491,8 +491,14 @@ def collect_kept_clip_rows(
     set_dir: Path,
     *,
     include_all: bool = False,
+    arrangement_denotation: bool = False,
 ) -> tuple[str, list[ClipRow], list[ReviewRow]]:
-    """Run the ALS export pipeline and return hygiene-passed clip rows."""
+    """Run the ALS export pipeline and return hygiene-passed clip rows.
+
+    ``arrangement_denotation=True`` stops before sliver-merge and loop
+    detection — used by the audio round-trip so a bad merge in the GT export
+    is audible against the Live arrangement (see labeling/audio_roundtrip.py).
+    """
     manifest_path = set_dir / "manifest.json"
     if not manifest_path.is_file():
         raise FileNotFoundError(f"missing manifest: {manifest_path}")
@@ -577,17 +583,24 @@ def collect_kept_clip_rows(
 
     rows, rev = _drop_parking(raw_rows, mix_duration_s)
     review.extend(rev)
-    rows, rev = _merge_slivers(rows)
-    review.extend(rev)
-    rows, rev = _drop_micro_slivers(rows)
-    review.extend(rev)
-    rows = _detect_loops(rows)
+    if arrangement_denotation:
+        # Drop only zero-width garbage; keep short non-adjacent reprises intact.
+        rows, rev = _drop_micro_slivers(rows)
+        review.extend(rev)
+        reason = "arrangement denotation (pre-merge)"
+    else:
+        rows, rev = _merge_slivers(rows)
+        review.extend(rev)
+        rows, rev = _drop_micro_slivers(rows)
+        review.extend(rev)
+        rows = _detect_loops(rows)
+        reason = "hygiene pass"
 
     for row in rows:
         review.append(
             ReviewRow(
                 action="kept",
-                reason="hygiene pass",
+                reason=reason,
                 group=row.clip.group_name,
                 slot=row.slot_label,
                 track=row.display,

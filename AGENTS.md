@@ -34,7 +34,10 @@ is the *how we work* layer; the *what the code is* layer lives in
 ## 3b. No GT / status without the release gate
 - Do **not** commit a new/changed `labeling/fixtures/*_ground_truth.yaml`, write back
   to `set_ground_truth`, or regenerate `docs/alignment_status.md` from that GT unless
-  `make gt-gate SET=… ALS=… YAML=…` is green.
+  `make gt-gate SET=… ALS=… YAML=… SET_DIR=…` is green.
+- Gate includes **denotational audio round-trip** (arrangement ↔ GT). XML
+  `parse∘print` is a unit test only — it does **not** unlock release (it missed
+  distant-clip merges).
 - Gate writes a **committed** stamp under `labeling/fixtures/gt_gate_stamps/` (stage it
   with the YAML — pre-commit checks the sha) and a local cache stamp for write-back.
 - Known leftover audit debt: `labeling/fixtures/gt_audit_acks.yaml`. Status regen:
