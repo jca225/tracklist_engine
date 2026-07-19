@@ -6,7 +6,9 @@ import argparse
 import subprocess
 from pathlib import Path
 
-from .io import write_baseline_bank
+from .adapters import candidates_from_timeline
+from .io import sha256_file, write_baseline_bank, write_candidate_bank
+from .schema import CandidateBankMetadata
 
 _PACKAGE = Path(__file__).resolve().parent
 _ALIGNMENT = _PACKAGE.parent
@@ -27,6 +29,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--timeline", type=Path, required=True)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--producer-sha", default=None)
+    parser.add_argument(
+        "--include-proposals",
+        action="store_true",
+        help="include serialized probe proposals in shadow mode",
+    )
     args = parser.parse_args(argv)
 
     output = args.output
@@ -35,11 +42,25 @@ def main(argv: list[str] | None = None) -> int:
 
         set_id = json.loads(args.timeline.read_text())["set_id"]
         output = _OUT / f"{set_id}.jsonl"
-    write_baseline_bank(
-        args.timeline,
-        output,
-        producer_sha=args.producer_sha or _producer_sha(),
-    )
+    producer_sha = args.producer_sha or _producer_sha()
+    if args.include_proposals:
+        import json
+
+        timeline = json.loads(args.timeline.read_text())
+        write_candidate_bank(
+            output,
+            CandidateBankMetadata(
+                producer_sha=producer_sha,
+                source_timeline_sha256=sha256_file(args.timeline),
+            ),
+            candidates_from_timeline(timeline),
+        )
+    else:
+        write_baseline_bank(
+            args.timeline,
+            output,
+            producer_sha=producer_sha,
+        )
     print(output)
     return 0
 
