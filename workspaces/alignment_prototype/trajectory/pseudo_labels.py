@@ -23,6 +23,7 @@ live upstream in `agentic/` and decide which spans reach `driver_mode ==
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import numpy as np
@@ -36,15 +37,20 @@ AUTO_COMMIT_MODE = "auto_commit"
 
 def _segments_ok(segs: list[dict], s0: float, s1: float) -> bool:
     """G4 structural sanity on a predicted span's ref_segments. Reject decode
-    pathologies: a segment must play the ref FORWARD (ref_end >= ref_start) and
-    have a real mix extent. An empty list is allowed (linear-span fallback via
-    ref_start_s, validated by the caller)."""
+    pathologies: a segment must play the ref FORWARD (ref_end >= ref_start),
+    carry a finite mix_start inside the span window, and have a real mix
+    extent. An empty list is allowed (linear-span fallback via ref_start_s,
+    validated by the caller)."""
     for s in segs:
         try:
-            rs, re = float(s["ref_start_s"]), float(s["ref_end_s"])
+            mix_start = float(s["mix_start_s"])
+            rs = float(s["ref_start_s"])
+            re = float(s["ref_end_s"])
         except (KeyError, TypeError, ValueError):
             return False
-        if re < rs:  # backwards segment — not a forward play
+        if not all(math.isfinite(v) for v in (mix_start, rs, re)):
+            return False
+        if not s0 <= mix_start < s1 or re < rs:
             return False
     return True
 
@@ -70,8 +76,8 @@ def pseudo_gt_row(span: dict) -> dict | None:
         s1 = float(span["set_end_s"])
     except (KeyError, TypeError, ValueError):
         return None
-    # G4 — degenerate mix window.
-    if s1 <= s0:
+    # G4 — degenerate / non-finite mix window.
+    if not (math.isfinite(s0) and math.isfinite(s1)) or s1 <= s0:
         return None
 
     segs = list(span.get("ref_segments") or ())
@@ -84,7 +90,28 @@ def pseudo_gt_row(span: dict) -> dict | None:
     slope = span.get("tempo_ratio")
     if slope is None:
         slope = span.get("ref_stretch")
-    tempo_ratio = float(slope) if slope not in (None, "") else 1.0
+    try:
+        tempo_ratio = float(slope) if slope not in (None, "") else 1.0
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(tempo_ratio):
+        return None
+
+    def _opt_float(key: str) -> float | None:
+        if span.get(key) is None:
+            return None
+        try:
+            v = float(span[key])
+        except (TypeError, ValueError):
+            return None
+        return v if math.isfinite(v) else None
+
+    ref_start_s = _opt_float("ref_start_s")
+    ref_end_s = _opt_float("ref_end_s")
+    if span.get("ref_start_s") is not None and ref_start_s is None:
+        return None
+    if span.get("ref_end_s") is not None and ref_end_s is None:
+        return None
 
     row: dict[str, Any] = {
         "slot_label": span.get("slot_label"),
@@ -93,12 +120,8 @@ def pseudo_gt_row(span: dict) -> dict | None:
         "claimed_stem": span.get("claimed_stem") or "regular",
         "set_start_s": s0,
         "set_end_s": s1,
-        "ref_start_s": (
-            float(span["ref_start_s"]) if span.get("ref_start_s") is not None else None
-        ),
-        "ref_end_s": (
-            float(span["ref_end_s"]) if span.get("ref_end_s") is not None else None
-        ),
+        "ref_start_s": ref_start_s,
+        "ref_end_s": ref_end_s,
         "tempo_ratio": tempo_ratio,
         "ref_segments": [
             {

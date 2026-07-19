@@ -108,6 +108,18 @@ ablate:
 	venvs/audio/bin/python -m workspaces.alignment_prototype.pipeline.cli \
 		--config $(CONFIG) $(EXTRA)
 
+# E1 real pseudo-label flywheel (docs/trm_flywheel_design.md §7).
+# POOL=unlabeled set, EVAL=hand-GT set, TIMELINE=base predicted timeline,
+# SYNTH=generate_v2 root for the synthetic-only control.
+POOL ?= w1mgcjt
+EVAL ?= 2nvzlh2k
+TIMELINE ?= workspaces/alignment_prototype/out/$(POOL)_predicted_timeline.json
+SYNTH ?= data/synthetic_mixes_v2
+trm-e1:
+	venvs/audio/bin/python -m workspaces.alignment_prototype.trajectory.e1 \
+		--pool-set $(POOL) --eval-set $(EVAL) \
+		--base-timeline $(TIMELINE) --synthetic-root $(SYNTH) $(EXTRA)
+
 align-ablate:
 	venvs/audio/bin/python -m workspaces.alignment_prototype.experiments.cli $(EXTRA)
 

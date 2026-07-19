@@ -22,7 +22,87 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from workspaces.alignment_prototype.agentic.belief import (
+    INDEPENDENCE_GROUP,
+    SpanBelief,
+)
+from workspaces.alignment_prototype.agentic.events import EventLog
+from workspaces.alignment_prototype.agentic.loop import Resolution, SpanCtx, resolve
+from workspaces.alignment_prototype.agentic.policy import Ladder
+
 from .base import SetContext, finalize, gt_stem_by_slot, load_timeline_dict, norm_slot
+
+
+def pseudo_acceptance(belief: SpanBelief) -> tuple[bool, str | None]:
+    top = belief.best()
+    if top is None:
+        return False, "g0_mode"
+    members = tuple(
+        obs
+        for obs in belief.observations
+        if not obs.abstained and obs.probe in top.probes
+    )
+    if any("[fiber" in obs.detail for obs in members):
+        return False, "g3_fiber"
+    groups = {INDEPENDENCE_GROUP.get(obs.probe, obs.probe) for obs in members}
+    if len(groups) >= 2 or max((obs.precision for obs in members), default=0.0) >= 0.9:
+        return True, None
+    return False, "g2_independence"
+
+
+def refine_agentic_spans(
+    timeline: dict,
+    spans_ctx: list[SpanCtx],
+    runners: dict,
+    log: EventLog,
+    *,
+    ladder: Ladder,
+    pseudo_safe: bool = False,
+) -> tuple[list[dict], Resolution]:
+    res = resolve(spans_ctx, runners, log, ladder=ladder)
+
+    mode_of: dict[str, str] = {}
+    belief_of: dict[str, SpanBelief] = {}
+    for mode, group in (
+        ("auto_commit", res.committed),
+        ("review", res.review),
+        ("suggest", res.suggested),
+        ("escalate", res.escalated),
+    ):
+        for slot, belief in group.items():
+            mode_of[slot] = mode
+            belief_of[slot] = belief
+
+    out_spans: list[dict] = []
+    for span in timeline["spans"]:
+        slot = str(span["slot_label"])
+        mode = mode_of.get(slot, "escalate")
+        belief = belief_of.get(slot)
+        top = belief.best() if belief is not None else None
+        if mode == "escalate" or top is None:
+            out_spans.append({**span, "driver_mode": "escalate->classical"})
+            continue
+
+        rejection = None
+        if pseudo_safe and mode == "auto_commit":
+            accepted, rejection = pseudo_acceptance(belief)
+            if not accepted:
+                mode = "review"
+
+        delta = float(top.set_start_s) - float(span["set_start_s"])
+        new = {
+            **span,
+            "set_start_s": round(float(top.set_start_s), 3),
+            "set_end_s": round(float(span["set_end_s"]) + delta, 3),
+            "driver_mode": mode,
+            "agentic_quality": round(belief.quality(), 4),
+            "start_source": f"agentic:{'+'.join(sorted(top.probes))}",
+        }
+        if rejection is not None:
+            new["pseudo_gate_rejection"] = rejection
+        out_spans.append(new)
+
+    return out_spans, res
 
 
 class AgenticDriver:
@@ -33,16 +113,9 @@ class AgenticDriver:
         self.live = live
 
     def align_set(self, ctx: SetContext) -> Path:
-        from workspaces.alignment_prototype.agentic.events import EventLog
-        from workspaces.alignment_prototype.agentic.loop import (
-            Resolution,
-            SpanCtx,
-            resolve,
-        )
         from workspaces.alignment_prototype.agentic.novelty import (
             surprise_runner_for_set,
         )
-        from workspaces.alignment_prototype.agentic.policy import Ladder
 
         timeline = load_timeline_dict(self.base)
         gt_stems = gt_stem_by_slot(ctx.gt_yaml)
@@ -72,53 +145,18 @@ class AgenticDriver:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         if log_path.exists():
             log_path.unlink()
-        res: Resolution = resolve(
-            spans_ctx, runners, EventLog(log_path), ladder=Ladder()
+        out_spans, res = refine_agentic_spans(
+            timeline,
+            spans_ctx,
+            runners,
+            EventLog(log_path),
+            ladder=Ladder(),
         )
         print(f"  agentic: {res.summary()}")
-
-        # slot_label -> (mode, belief) across every rung
-        mode_of: dict[str, str] = {}
-        belief_of = {}
-        for mode, group in (
-            ("auto_commit", res.committed),
-            ("review", res.review),
-            ("suggest", res.suggested),
-            ("escalate", res.escalated),
-        ):
-            for slot, b in group.items():
-                mode_of[slot] = mode
-                belief_of[slot] = b
-
-        out_spans, n_override, n_fallback = [], 0, 0
-        for s in timeline["spans"]:
-            slot = str(s["slot_label"])
-            mode = mode_of.get(slot, "escalate")
-            belief = belief_of.get(slot)
-            top = belief.best() if belief is not None else None
-            # escalate OR no usable cluster -> classical fallback (locked policy)
-            if mode == "escalate" or top is None:
-                out_spans.append({**s, "driver_mode": "escalate->classical"})
-                n_fallback += 1
-                continue
-            delta = float(top.set_start_s) - float(s["set_start_s"])
-            # This driver owns PLACEMENT only — slide the span to the belief's
-            # placement and INHERIT classical's ref decode verbatim. We do NOT
-            # translate ref_segments: the scorer re-anchors them at the GT
-            # set_start, so shifting their absolute mix positions double-counts
-            # the placement move against GT (measured: tanks headline traj 20->8).
-            # The decoded ref-content mapping belongs to the ref-decode stage;
-            # agentic changes where the span sits, not what it maps to.
-            new = {
-                **s,
-                "set_start_s": round(float(top.set_start_s), 3),
-                "set_end_s": round(float(s["set_end_s"]) + delta, 3),
-                "driver_mode": mode,
-                "agentic_quality": round(belief.quality(), 4),
-                "start_source": f"agentic:{'+'.join(sorted(top.probes))}",
-            }
-            out_spans.append(new)
-            n_override += 1
+        n_fallback = sum(
+            span["driver_mode"] == "escalate->classical" for span in out_spans
+        )
+        n_override = len(out_spans) - n_fallback
 
         print(
             f"  agentic: {n_override} placements overridden, "

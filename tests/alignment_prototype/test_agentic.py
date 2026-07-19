@@ -5,8 +5,13 @@ from __future__ import annotations
 from workspaces.alignment_prototype.agentic.actions import REGISTRY, bind, plan_for
 from workspaces.alignment_prototype.agentic.belief import Observation, SpanBelief
 from workspaces.alignment_prototype.agentic.events import EventLog, replay_beliefs
+from workspaces.alignment_prototype.agentic.live_runners import LiveContext
 from workspaces.alignment_prototype.agentic.loop import SpanCtx, resolve
 from workspaces.alignment_prototype.agentic.policy import Ladder, Mode
+from workspaces.alignment_prototype.drivers.agentic import (
+    pseudo_acceptance,
+    refine_agentic_spans,
+)
 
 
 def _obs(probe, start, conf=1.0, prec=0.9, cost=0.1):
@@ -20,6 +25,107 @@ def _belief(*obs):
     for o in obs:
         b = b.observe(o)
     return b
+
+
+def _timeline_span(slot: str, recording_id: str, *, stem: str = "regular") -> dict:
+    return {
+        "slot_label": slot,
+        "recording_id": recording_id,
+        "claimed_stem": stem,
+        "set_start_s": 10.0,
+        "set_end_s": 40.0,
+        "ref_segments": [{"set_start_s": 10.0, "ref_start_s": 20.0}],
+    }
+
+
+def test_pseudo_acceptance_requires_independence_or_high_precision():
+    independent = _belief(
+        _obs("mert_decode", 100.0, prec=0.70),
+        _obs("lyrics", 101.0, prec=0.70),
+    )
+    correlated = _belief(
+        _obs("fp", 100.0, prec=0.80),
+        _obs("chroma_refine", 101.0, prec=0.80),
+    )
+    single_high = _belief(_obs("lyrics", 100.0, prec=0.90))
+    fiber_ambiguous = _belief(
+        Observation(
+            "lyrics",
+            100.0,
+            confidence=1.0,
+            precision=0.90,
+            ref_start_s=20.0,
+            detail="[fiber×2 amb]",
+        )
+    )
+
+    assert pseudo_acceptance(independent) == (True, None)
+    assert pseudo_acceptance(correlated) == (False, "g2_independence")
+    assert pseudo_acceptance(single_high) == (True, None)
+    assert pseudo_acceptance(fiber_ambiguous) == (False, "g3_fiber")
+
+
+def test_refine_agentic_spans_demotes_unsafe_pseudo_commit(tmp_path):
+    timeline = {
+        "set_id": "pool",
+        "spans": [
+            _timeline_span("1", "r1"),
+            _timeline_span("2", "r2", stem="acappella"),
+        ],
+    }
+    spans = [
+        SpanCtx("1", "r1", "regular", timeline["spans"][0]),
+        SpanCtx("2", "r2", "acappella", timeline["spans"][1]),
+    ]
+    runners = {
+        "fp": lambda _: _obs("fp", 25.0, prec=0.80),
+        "lyrics": lambda _: _obs("lyrics", 30.0, prec=0.90),
+    }
+    ladder = Ladder(auto=0.75, combine=True)
+
+    general, _ = refine_agentic_spans(
+        timeline,
+        spans,
+        runners,
+        EventLog(tmp_path / "general.jsonl"),
+        ladder=ladder,
+    )
+    pseudo, _ = refine_agentic_spans(
+        timeline,
+        spans,
+        runners,
+        EventLog(tmp_path / "pseudo.jsonl"),
+        ladder=ladder,
+        pseudo_safe=True,
+    )
+
+    assert [span["driver_mode"] for span in general] == [
+        "auto_commit",
+        "auto_commit",
+    ]
+    assert pseudo[0]["driver_mode"] == "review"
+    assert pseudo[0]["pseudo_gate_rejection"] == "g2_independence"
+    assert pseudo[1]["driver_mode"] == "auto_commit"
+    assert "pseudo_gate_rejection" not in pseudo[1]
+    assert pseudo[0]["ref_segments"] == timeline["spans"][0]["ref_segments"]
+
+
+def test_live_context_from_set_accepts_explicit_fiber_gate(monkeypatch):
+    from core.result import Ok
+    from workspaces.alignment_prototype import fp_placement_refine, mert_store
+
+    mix = type("Mix", (), {"end_s": [60.0]})()
+    monkeypatch.setattr(
+        mert_store,
+        "load_bb12_mert",
+        lambda set_id: Ok((set_id, mix, {})),
+    )
+    monkeypatch.setattr(fp_placement_refine, "find_aligning_dir", lambda _: None)
+
+    ctx = LiveContext.from_set("pool", [], apply_fiber_gate=True)
+
+    assert ctx is not None
+    assert ctx.apply_fiber_gate is True
 
 
 def test_belief_clusters_agreeing_probes():
