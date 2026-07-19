@@ -324,6 +324,11 @@ dead pool for E1.
 usable AUTO_COMMIT mass for the flywheel?
 **Verdict: thin** — scaffolded 37-span cue timeline + 35 instrumental landmarks;
 `--smoke-only` → `accepted=4/37` (all other drops `g0_mode`). Smoke TRM
-memorized train (fit 1.0) and lost to BB11 control on HEADLINE. Prefer BB13+
-Bootie pools (acappella density + richer overlap with BB11/12) over more Murph
-epochs.
+memorized train (fit 1.0) and lost to BB11 control on HEADLINE.
+**Qualitative note (binding):** Murph/Disco/Alesso/Tiësto club sets are a
+different distribution than Two Friends Big Bootie (mashup density, acappella
+% — BB10/11/12/13 ≈43–66% acap vs Murph 0% / Disco 3%). Crowdsourced
+1001tracklists already supply the pool spine (`set_track_slots`: cues,
+`claimed_stem`, order). Use that tracklist signal to **cohort** pools with the
+eval family (Bootie↔Bootie first), not “any pulled set.” Cross-style pools are
+a later generalization test, not the mass lever for BB11 headlines.
