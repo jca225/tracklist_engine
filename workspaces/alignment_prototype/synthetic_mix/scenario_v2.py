@@ -23,6 +23,19 @@ from .timeline import (
 )
 
 
+def ref_start_sample(
+    rng: np.random.Generator, lo: float, hi: float, drop_from_top_prob: float
+) -> float:
+    """Sample a ref_start, injecting the 'drop from the top' mode (ref_start=0)
+    at `drop_from_top_prob`. Real BB spans start a track from its beginning ~24%
+    of the time; synthetic v2 never did (uniform(lo,hi), lo>=20), teaching the
+    decoder a false 'ref_start is never 0' prior that pushed real eval below the
+    raw control. With prob 0 this is byte-identical to the old uniform(lo,hi)."""
+    if drop_from_top_prob > 0.0 and rng.random() < drop_from_top_prob:
+        return 0.0
+    return float(rng.uniform(lo, hi))
+
+
 def _beds_compatible(a: BedEntry, b: BedEntry, cfg: CurriculumV2) -> bool:
     if a.key_pc is None or b.key_pc is None or a.bpm <= 0 or b.bpm <= 0:
         return False
@@ -252,7 +265,7 @@ def _loop_acap(
     mix_end = min(window_s, mix_start + total + 4.0)
     if mix_end - mix_start < phrase * 2:
         return None
-    ref_lo = float(rng.uniform(20.0, 70.0))
+    ref_lo = ref_start_sample(rng, 20.0, 70.0, cfg.drop_from_top_prob)
     tr = tempo_r
     slices: list[MixSlice] = []
     t = mix_start
@@ -308,7 +321,7 @@ def _regular_span(
     mix_end = min(window_s, mix_start + dur)
     if mix_end - mix_start < 12.0:
         return None
-    ref_start = float(rng.uniform(5.0, 60.0))
+    ref_start = ref_start_sample(rng, 5.0, 60.0, cfg.drop_from_top_prob)
     tr = tempo_r
     ref_dur = (mix_end - mix_start) * tr
     pitch = 0

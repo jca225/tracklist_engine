@@ -154,6 +154,22 @@ def apply_sweep(collectable: list[Path]) -> None:
     if not collectable:
         print("nothing to collect.")
         return
+    untracked = [
+        p
+        for p in collectable
+        if subprocess.run(
+            ["git", "ls-files", "--error-unmatch", str(p)],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            check=False,
+        ).returncode
+        != 0
+    ]
+    if untracked:
+        names = ", ".join(p.name for p in untracked)
+        raise RuntimeError(
+            f"refusing partial sweep; commit collectable docs first: {names}"
+        )
     ARCHIVE_DIR.mkdir(exist_ok=True)
     for p in collectable:
         dest = ARCHIVE_DIR / p.name

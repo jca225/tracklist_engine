@@ -52,8 +52,19 @@ _NET_TOKENS = ("ssh", "rsync", "sqlite3")
 _SUBPROCESS_FUNCS = frozenset({"run", "check_call", "check_output", "Popen", "call"})
 # net-subprocess fences apply only where we actually shell out to pi-storage.
 _NET_SCOPE_ROOTS = ("scripts", "ingest", "analysis")
+# Keep in lockstep with guardrails.py SKIP_DIR_NAMES: msst_webui (vendored MSST
+# separation trainer) and data/ are not our code — their bug-classes aren't ours.
 _SKIP_PARTS = frozenset(
-    {"venvs", "cue-detr", "__pycache__", ".git", "node_modules", ".claude"}
+    {
+        "venvs",
+        "cue-detr",
+        "msst_webui",
+        "data",
+        "__pycache__",
+        ".git",
+        "node_modules",
+        ".claude",
+    }
 )
 
 

@@ -34,7 +34,7 @@ from workspaces.alignment_prototype.recon_probe import find_aligning_dir, find_m
 from .features import BIN_S, FEAT_KIND, FeatureBank, SpanAudio, resolve_span_audio
 from .targets import KIND_IGNORE, KIND_NULL, KIND_POSITION, raster_targets
 
-_REPO = Path(__file__).resolve().parents[3]
+_REPO = Path(__file__).resolve().parent.parent.parent.parent
 
 
 @dataclass(frozen=True)

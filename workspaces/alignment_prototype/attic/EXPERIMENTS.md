@@ -58,3 +58,30 @@ DS aggregation on genuinely CATEGORICAL LFs (operation-type detectors from the
 DJ/DAW tool ontology). Infra kept in `workspaces/pws_aligner/` (capture,
 calibration report, typed abstention). Spec: docs/superpowers/specs/
 2026-07-14-pws-aligner-design.md. Verdict memory: project_pws_gate_verdict.
+
+## TRM decoder graft — sim2real gap MEASURED (2026-07-18)
+**Question:** does the Tiny-Recursive-Model decoder (bake-off
+`docs/trm_decoder_bakeoff.md`), trained on synthetic mashups, transfer to real
+BB? Architecture + wiring first, then the honest cross-set number.
+**Verdict: architecture WORKS; the wall is DATA (sim2real), not the model.**
+Measured on the `_lt`-independent `trajectory_acc` referee (strict, no fibers),
+control = raw match-sim argmax:
+- **v0 overfit** (6 real spans, eval==train): traj-acc **0.95** — offset-coord
+  encoding + recursion + decode + train loop all correct. It can learn.
+- **real-only cross-set** (train BB12 → eval BB11, ~150 real spans): pure
+  memorization — train 0.61↑ / eval **0.075**↓, below the **0.239** control.
+  Confirms the bake-off "2 real sets = memorization" call.
+- **synthetic-only → real** (40 `generate_v2` windows, 311 spans, synthetic-only
+  loader, real BB eval-only): train-fit climbs 0.095→**0.87** over 200 epochs
+  (learns synthetic fine) while real-BB eval stays **flat ~0.09**, far below the
+  **0.306** control. Train-high / eval-flat = **sim2real gap**, NOT underfitting.
+**Do not throw GPU/scale at this** — more epochs only memorized synthetic better
+(eval never moved). The lever is synthetic REALISM (bb12-lite curriculum is too
+clean: no EQ/effects/crowd/transition modeling) or a pivot to the real
+pseudo-label flywheel (status doc), with TRM as the decoder trained on real
+pseudo-labels. Stability fix on record: answer-latent LayerNorm + grad-clip 1.0
+(first run exploded, CE ~8e7). Infra kept + wired: `trajectory/trm.py`,
+`trajectory/offset_coords.py`, `train.py --model trm --synthetic-only
+--max-train/--max-eval`, ablation framework `pipeline/`. Branch
+`trm-ablation-framework`. Numbers here are DIAGNOSTICS, not SSOT — see
+`docs/alignment_status.md` for headline metrics (unchanged by this).

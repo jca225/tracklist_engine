@@ -23,6 +23,7 @@ DB           := /mnt/storage/data/db/music_database.db
 help:
 	@echo "Common targets:"
 	@echo "  make check            — guardrails script + full pytest suite"
+	@echo "  make docs-gc          — classify stale docs (dry run; docs-gc-apply archives)"
 	@echo "  make check-inventory SET=<set_id> — slot satisfaction gate (pi-storage)"
 	@echo "  make audit-gt SET=<set_id> — audio-verify a labeling .als vs the mix"
 	@echo "  make scorecard        — aligner per-span scorecard + failure attribution"
@@ -97,6 +98,15 @@ DRIVERS ?= classical,agentic,ml
 race:
 	venvs/audio/bin/python -m workspaces.alignment_prototype.drivers.race \
 		--sets $(SETS) --drivers $(DRIVERS) $(EXTRA)
+
+# Staged pipeline + ablation framework (docs/pipeline_ablation_framework.md).
+# Compose grain reproduces `make race` with auto baseline-injection + a
+# reproducible JSONL ledger; CONFIG selects the matrix. Isolate-grain (decoder
+# bake-off) ships with the TRM build (docs/trm_decoder_bakeoff.md).
+CONFIG ?= workspaces/alignment_prototype/pipeline/configs/race_default.yaml
+ablate:
+	venvs/audio/bin/python -m workspaces.alignment_prototype.pipeline.cli \
+		--config $(CONFIG) $(EXTRA)
 
 align-ablate:
 	venvs/audio/bin/python -m workspaces.alignment_prototype.experiments.cli $(EXTRA)
