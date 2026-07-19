@@ -178,6 +178,7 @@ def test_rejects_mixed_recording_cloud():
 
 def test_audio_landmarks_recover_jump_and_gap_end_to_end():
     """Synthetic audio -> hashes -> raw matches -> bounded segment decode."""
+    pytest.importorskip("librosa")
     from workspaces.alignment_prototype.looptrace import fixtures, landmarks
 
     song = fixtures.make_song(32.0, seed=21)
