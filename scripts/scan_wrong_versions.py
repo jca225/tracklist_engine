@@ -154,6 +154,12 @@ def main() -> int:
     )
     ap.add_argument("--out", type=Path, default=Path("wrong_version_scan.csv"))
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument(
+        "--open-cases",
+        action="store_true",
+        help="open acquisition cases for each suspect (per placement)",
+    )
+    ap.add_argument("--cases-root", type=Path, default=Path("data/acquisition_cases"))
     args = ap.parse_args()
 
     suspects = scan(args.db, limit=args.limit)
@@ -182,6 +188,20 @@ def main() -> int:
                 ]
             )
     print(f"Wrote {len(suspects)} suspects -> {args.out}")
+
+    if args.open_cases:
+        from ingest.scan_source import open_cases_for_suspect, placements_for_track
+
+        n = 0
+        for s in suspects:
+            placements = placements_for_track(args.db, s.track_id)
+            n += len(
+                open_cases_for_suspect(
+                    s.track_id, s.klass, s.detail, placements, root=args.cases_root
+                )
+            )
+        print(f"Opened/updated {n} cases from {len(suspects)} suspects")
+
     return 0
 
 
