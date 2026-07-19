@@ -25,13 +25,13 @@ def gt_diagonal_mask(
     """
     tm, tr = shape
     mask = np.zeros((tm, tr), dtype=bool)
-    origin_shift_bins = (ref_origin_s - mix_origin_s) / bin_s
+    origin_shift_bins = (mix_origin_s - ref_origin_s) / bin_s
 
     mix_bins = np.arange(tm, dtype=np.float64)
     ref_bins = np.arange(tr, dtype=np.float64)
 
     for offset_s in offsets_s:
-        expected_ref = mix_bins + origin_shift_bins + offset_s / bin_s
+        expected_ref = mix_bins + origin_shift_bins - offset_s / bin_s
         dist = np.abs(ref_bins[np.newaxis, :] - expected_ref[:, np.newaxis])
         mask |= dist <= float(band_bins)
 
