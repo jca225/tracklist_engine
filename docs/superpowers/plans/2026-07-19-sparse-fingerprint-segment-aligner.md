@@ -23,6 +23,57 @@ Phase 2 synthetic proof completed on `fp-hit-decoder-clean`:
 This earns Phase 3 multi-channel corroboration. It does **not** yet establish a
 real-set improvement or authorize tracklist attribution/default integration.
 
+The collision-aware retrieval path and instrumental shadow CLI are also
+implemented. Real-set shadow runs preserve the asymmetric diagnostic seen
+before cleanup: BB11 contains strong recoverable paths and fewer false runs
+after weighting, while BB12 remains weak and collision-prone. The segment bank
+is therefore runnable but remains non-production.
+
+## Runnable shadow command
+
+```bash
+venvs/audio/bin/python \
+  -m workspaces.alignment_prototype.fp_segments.run \
+  --set-id 2nvzlh2k \
+  --timeline workspaces/alignment_prototype/out/2nvzlh2k_agentic_baseline_gtstem.json \
+  --mix-hash-cache eda/alignment/ridge_diagnostic/out/stem_mix_hash_cache \
+  --stem-overrides labeling/fixtures/bb11_ground_truth.yaml \
+  --output workspaces/alignment_prototype/out/fp_segments/2nvzlh2k.json
+```
+
+`--stem-overrides` is evaluation-only and compensates for historical timelines
+whose `claimed_stem` field predates the materialization repair. Omit it for a
+current correctly routed timeline. Output is a shadow segment bank and cannot
+mutate a timeline or canonical state.
+
+The operative pseudocode is:
+
+```python
+mix_hashes = fingerprint_whole_mix("mix_instrumental.flac")
+
+for slot in instrumental_slots:
+    ref_hashes = fp_index.load(slot.recording_id, stem="instrumental")
+
+    matches = []
+    for key shared by mix_hashes and ref_hashes:
+        pair_count = len(mix_hashes[key]) * len(ref_hashes[key])
+        if pair_count > PAIR_CAP:
+            continue
+        weight = 1 / log2(2 + pair_count)
+        for mix_frame in mix_hashes[key]:
+            for ref_frame in ref_hashes[key]:
+                matches.append((mix_frame, ref_frame, weight))
+
+    for slope in ALLOWED_SLOPES:
+        diagonals = hough(matches, intercept=ref_time - slope * mix_time)
+        support = local_weighted_support(diagonals, matches)
+        support -= random_diagonal_background_floor(matches)
+        path = viterbi(states=[*diagonals, NULL], emissions=support)
+        runs = explicit_non_null_runs(path)
+
+    emit(best_slope_runs_or_abstain)
+```
+
 Canonical benchmark values remain exclusively in
 [`docs/alignment_status.md`](../../alignment_status.md). This plan defines gates
 and artifacts, not new headline numbers.
