@@ -71,11 +71,18 @@ def run_shadow(
     stem_override_path: Path | None = None,
     pair_cap: int = 64,
     slopes: tuple[float, ...] = (0.94, 0.97, 1.0, 1.03, 1.06),
+    mix_channel: str = "instrumental",
+    ref_fingerprint_stem: str = "instrumental",
 ) -> Path:
     timeline = json.loads(timeline_path.read_text())
     if str(timeline.get("set_id")) != set_id:
         raise ValueError("timeline set_id does not match --set-id")
-    cache_path = mix_hash_cache / f"{set_id}_instrumental_mix_hashes.pkl"
+    cache_name = (
+        f"{set_id}_instrumental_mix_hashes.pkl"
+        if mix_channel == "instrumental"
+        else f"{set_id}_mix_hashes.pkl"
+    )
+    cache_path = mix_hash_cache / cache_name
     if not cache_path.is_file():
         raise FileNotFoundError(f"missing instrumental mix hash cache: {cache_path}")
     mix_hashes = pickle.loads(cache_path.read_bytes())
@@ -89,7 +96,7 @@ def run_shadow(
         if stem != "instrumental":
             continue
         recording_id = str(span["recording_id"])
-        ref_fp = _reference_fp(recording_id, stem)
+        ref_fp = _reference_fp(recording_id, ref_fingerprint_stem)
         if ref_fp is None:
             rows.append(
                 {
@@ -106,8 +113,8 @@ def run_shadow(
             mix_hashes,
             ref_fp,
             recording_id=recording_id,
-            ref_stem=stem,
-            mix_channel="instrumental",
+            ref_stem=ref_fingerprint_stem,
+            mix_channel=mix_channel,
             pair_cap=pair_cap,
         )
         segments = decode_constituent(
@@ -145,7 +152,7 @@ def run_shadow(
         "mix_hash_cache": str(cache_path),
         "pair_cap": pair_cap,
         "slopes": list(slopes),
-        "channel_route": "mix_instrumental->reference_instrumental",
+        "channel_route": f"mix_{mix_channel}->reference_{ref_fingerprint_stem}",
         "shadow_only": True,
         "spans": rows,
     }
@@ -167,6 +174,12 @@ def main(argv: list[str] | None = None) -> int:
         help="evaluation-only GT YAML used solely to correct stale claimed_stem",
     )
     parser.add_argument("--pair-cap", type=int, default=64)
+    parser.add_argument(
+        "--mix-channel", choices=("instrumental", "full"), default="instrumental"
+    )
+    parser.add_argument(
+        "--ref-fingerprint-stem", default="instrumental"
+    )
     args = parser.parse_args(argv)
     path = run_shadow(
         set_id=args.set_id,
@@ -175,6 +188,8 @@ def main(argv: list[str] | None = None) -> int:
         output_path=args.output,
         stem_override_path=args.stem_overrides,
         pair_cap=args.pair_cap,
+        mix_channel=args.mix_channel,
+        ref_fingerprint_stem=args.ref_fingerprint_stem,
     )
     print(path)
     return 0

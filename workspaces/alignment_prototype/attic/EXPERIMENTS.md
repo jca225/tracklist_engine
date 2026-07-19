@@ -89,6 +89,25 @@ validation set and a verifier trained to distinguish the same musical material
 from repeated instrumental texture, or with local monotonic path evidence that
 corroborates an FP diagonal before it may move a placement.
 
+## Multi-channel FP path corroboration (2026-07-19) — NO-GO AS GATE
+
+**Question:** after whole-mix NULL-aware segment decoding, can independently
+decoded full-mix/full-reference fingerprint paths verify the primary
+instrumental-mix/instrumental-reference paths without changing their geometry?
+
+**Verdict:** the typed fusion behavior is correct and synthetic tests pass, but
+the real-set signal does not transfer. Full-channel agreement accompanies many
+correct BB11 paths but also many false ones; on BB12 it misses the small correct
+set while corroborating false paths. Missing channels remain distinct from
+negative evidence, as intended, but no cross-set acceptance threshold is
+earned. Keep the fusion contract for future independent representations; do
+not use exact full-channel FP agreement as a placement gate.
+
+**Do not re-test** thresholds on these two sets. The next verifier must add
+genuinely different evidence (sustained chroma/HuBERT or learned
+superposition-invariant similarity) and an independent validation set, not
+another view of the same landmark collisions.
+
 ## PWS categorical label model over offset bins (2026-07-14) — REFUTED
 **Question:** can a Dawid–Skene label model (learned per-probe accuracy, no GT)
 beat hand-tuned `source_priority` fusion, aggregating genuine per-probe votes

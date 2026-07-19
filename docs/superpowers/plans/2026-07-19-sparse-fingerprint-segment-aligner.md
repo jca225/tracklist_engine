@@ -29,6 +29,16 @@ before cleanup: BB11 contains strong recoverable paths and fewer false runs
 after weighting, while BB12 remains weak and collision-prone. The segment bank
 is therefore runnable but remains non-production.
 
+Phase 3's channel-safe fusion contract is implemented: instrumental paths stay
+geometrically fixed while an independently decoded full-mix/full-reference
+path marks them corroborated, contradicted, or missing. Synthetic agreement,
+corruption, and missing-channel tests pass. The real-set shadow gate fails,
+however: full-channel agreement is useful on BB11 but does not distinguish its
+false paths sharply, and on BB12 it corroborates false paths while missing the
+few correct instrumental paths. Vocal evidence is correctly treated as
+missing for this instrumental-only lane. No confidence acceptance rule is
+therefore earned, and tracklist attribution remains blocked.
+
 ## Runnable shadow command
 
 ```bash
