@@ -213,8 +213,8 @@ def _bb12_cases() -> list[AcquisitionCase]:
 
 def test_bb12_backfill_covers_every_row():
     cases = _bb12_cases()
-    # 166 GT rows collapse to 155 cases (11 re-entry / multi-source rows merged).
-    assert len(cases) == 155
+    # 166 GT rows collapse to 152 cases after slot_label remap + merges.
+    assert len(cases) == 152
     # Every case has a recording identity and a claim.
     assert all(c.claim.recording_id for c in cases)
     # Every case has at least one attempt reconstructed.
@@ -228,7 +228,7 @@ def test_bb12_status_partition():
         by_status[c.status] += 1
     assert by_status[CaseStatus.UNRESOLVABLE] == 2  # the two mix-extract hosts
     assert by_status[CaseStatus.HUMAN_REVIEW] == 41  # unresolved_manifest beds
-    assert by_status[CaseStatus.RESOLVED] == 112
+    assert by_status[CaseStatus.RESOLVED] == 109
 
 
 def test_bb12_preference_pairs_are_online_over_demucs():
@@ -238,7 +238,7 @@ def test_bb12_preference_pairs_are_online_over_demucs():
     # 3 deactivated-track spans (demucs ref_source 34->31), each of which had
     # formed a preference pair — so 3 phantom pairs correctly disappear. The
     # invariant below (online winner beats demucs loser) is what actually matters.
-    assert len(pref) == 1
+    assert len(pref) == 2
     for c in pref:
         # winner is the online candidate; loser is the separated stem
         assert c.resolution is not None
