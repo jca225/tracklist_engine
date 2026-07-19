@@ -306,6 +306,26 @@ train spans and does **not** beat the raw control (or conv) on held-out BB11.
 Do **not** regenerate `docs/alignment_status.md` from this run. Next lever is
 more real pseudo mass (better lyrics∩HuBERT agreement / fp landmarks / a third
 labeled set), not more epochs on n=3.
+## Ableton ReAct harness — daw_env (2026-07-19)
+**Question:** does place→listen→sense→iterate in an ALS-first session beat
+probe-only agentic on hard placement (ridge decoder_wall), without Live OSC?
+**Infra:** `workspaces/alignment_prototype/daw_env/` — Mode A/B CLI, unit tests
+green (`tests/alignment_prototype/test_daw_env.py`). Spec:
+`docs/superpowers/specs/2026-07-19-ableton-react-harness-design.md`.
+**Live sensors (2026-07-19 follow-up):** listen→sense now runs LiveContext
+`fp` + `stem_hubert` (lyrics off by default; `--with-lyrics` opt-in). Nudges are
+**content-only** within 24s of geom — onset fallback caused 36s cue-seed drifts
+on regulars. BB11 smoke (`--stems acappella`, budget 12): HuBERT drove
+content_target nudges (e.g. 31w2 −3.6s, 24w1 −5.7s, 7w3 +1.7s); wild peaks
+beyond 24s stay put. Instrumental `fp` fires when
+`AGENTIC_LIVE_ENABLE_FP_PLACEMENT=1` (daw_env sets this) but BB11 slots 11/39
+landed 80–90s off cue so the 24s gate correctly refused to chase (matches
+agentic’s shadow-only FP decider).
+**Verdict: SHADOW / pending operator scorecard.** Full BB11/BB12 scorecard vs
+agentic `_lt` not yet flipped. Default `make align` / race board **unchanged**.
+Flip to GO only if placement median + fiber traj do not regress and
+decoder_wall bucket improves; else NO-GO and keep as labeling Mode B assist.
+
 **Fixes that unblocked BB10 (do not weaken G1/G2):** (1) prefer `mix.wav` over
 `mix.m4a` for fp load; (2) `resolve(require_independence=True)` in pseudo-safe so
 lyrics-alone auto does not skip HuBERT; (3) HuBERT prior falls back to
