@@ -37,6 +37,7 @@ docs/*.pdf
 workspaces/msst_webui/
 workspaces/separation_qa/smoke_out/
 workspaces/separation_qa/smoke_run.log
+labeling/.cache/
 workspaces/alignment_prototype/.cache/
 workspaces/alignment_prototype/.feat_cache/
 workspaces/alignment_prototype/out/

@@ -31,6 +31,14 @@ is the *how we work* layer; the *what the code is* layer lives in
   Never hand-type an alignment metric into another doc, a commit message, or memory —
   cite the canonical doc.
 
+## 3b. No GT / status without the release gate
+- Do **not** commit a new/changed `labeling/fixtures/*_ground_truth.yaml`, write back
+  to `set_ground_truth`, or regenerate `docs/alignment_status.md` from that GT unless
+  `make gt-gate SET=… ALS=… YAML=…` is green (stamp under `labeling/.cache/gt_gate/`).
+- Re-export matching an old YAML proves reproducibility, not correctness against the
+  mix — the gate includes `als_audit`. Escape hatch: `--force-ungated` / `--ack-audio-mismatches`
+  only with an explicit debt note.
+
 ## 4. Record dead ends
 - A closed experiment goes in the **EXPERIMENTS ledger**
   (`workspaces/alignment_prototype/attic/EXPERIMENTS.md`) with its verdict — so no

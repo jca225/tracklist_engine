@@ -6,6 +6,10 @@ Phase 5 of the identity plan — the seam between Ableton labeling and downstrea
 alignment training. Replacing the set prevents labels removed or split by a
 fresh Ableton export from surviving as stale database rows.
 
+**Release gate:** non-dry-run writes require a fresh stamp from
+``make gt-gate`` / ``python -m labeling.gt_release_gate``. Escape hatch:
+``--force-ungated`` (prints a loud warning).
+
 Usage (on pi-storage or against a local DB copy):
 
     venvs/audio/bin/python -m labeling.write_back_ground_truth \\
@@ -16,6 +20,7 @@ Dry-run (print rows, no write):
 
     venvs/audio/bin/python -m labeling.write_back_ground_truth --yaml ... --dry-run
 """
+
 from __future__ import annotations
 
 import argparse
@@ -27,7 +32,8 @@ _REPO = Path(__file__).resolve().parent.parent
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from labeling.ground_truth.schema import load as load_gt
+from labeling.ground_truth.schema import GroundTruthTrack, load as load_gt
+from labeling.gt_release_gate import verify_stamp
 from core.db import connect
 from core.result import Err, Ok
 
@@ -46,7 +52,26 @@ def _db_label(track: GroundTruthTrack, seen: set[str]) -> str:
     return disambig
 
 
-def write_back(db_path: Path, yaml_path: Path, *, dry_run: bool = False) -> int:
+def write_back(
+    db_path: Path,
+    yaml_path: Path,
+    *,
+    dry_run: bool = False,
+    force_ungated: bool = False,
+) -> int:
+    if not dry_run and not force_ungated:
+        ok, reason = verify_stamp(yaml_path)
+        if not ok:
+            print(f"GT release gate: {reason}", file=sys.stderr)
+            return 3
+        print(f"GT release gate: {reason}")
+    elif force_ungated and not dry_run:
+        print(
+            "WARNING: --force-ungated — writing set_ground_truth without a "
+            "green gt-gate stamp. Prefer: make gt-gate SET=… ALS=… YAML=…",
+            file=sys.stderr,
+        )
+
     match load_gt(yaml_path):
         case Err(e):
             print(f"YAML error: {e.detail}", file=sys.stderr)
@@ -57,29 +82,41 @@ def write_back(db_path: Path, yaml_path: Path, *, dry_run: bool = False) -> int:
     seen_labels: set[str] = set()
     for t in gt.tracks:
         stem = t.claimed_stem
-        seg_json = json.dumps([
-            {"ref_start_s": s.ref_start_s, "ref_end_s": s.ref_end_s, "mix_start_s": s.mix_start_s}
-            for s in t.ref_segments
-        ]) if t.ref_segments else None
+        seg_json = (
+            json.dumps(
+                [
+                    {
+                        "ref_start_s": s.ref_start_s,
+                        "ref_end_s": s.ref_end_s,
+                        "mix_start_s": s.mix_start_s,
+                    }
+                    for s in t.ref_segments
+                ]
+            )
+            if t.ref_segments
+            else None
+        )
         ml_json = json.dumps(t.media_links.as_dict()) if t.media_links.any() else None
         db_label = _db_label(t, seen_labels)
-        rows.append((
-            gt.set_id,
-            db_label,
-            t.track_id,
-            stem,
-            t.set_start_s,
-            t.set_end_s,
-            t.ref_start_s,
-            t.ref_end_s,
-            t.tempo_ratio,
-            t.pitch_shift_semi,
-            t.ref_source,
-            int(t.is_loop),
-            seg_json,
-            ml_json,
-            gt.source,
-        ))
+        rows.append(
+            (
+                gt.set_id,
+                db_label,
+                t.track_id,
+                stem,
+                t.set_start_s,
+                t.set_end_s,
+                t.ref_start_s,
+                t.ref_end_s,
+                t.tempo_ratio,
+                t.pitch_shift_semi,
+                t.ref_source,
+                int(t.is_loop),
+                seg_json,
+                ml_json,
+                gt.source,
+            )
+        )
     if dry_run:
         print(
             f"would replace set_ground_truth for set_id={gt.set_id} "
@@ -111,16 +148,27 @@ def write_back(db_path: Path, yaml_path: Path, *, dry_run: bool = False) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--db", type=Path, required=True)
     p.add_argument("--yaml", type=Path, required=True)
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument(
+        "--force-ungated",
+        action="store_true",
+        help="bypass gt-gate stamp (emergency only; prefer make gt-gate)",
+    )
     args = p.parse_args(argv)
     if not args.yaml.is_file():
         print(f"not found: {args.yaml}", file=sys.stderr)
         return 2
-    return write_back(args.db, args.yaml, dry_run=args.dry_run)
+    return write_back(
+        args.db,
+        args.yaml,
+        dry_run=args.dry_run,
+        force_ungated=args.force_ungated,
+    )
 
 
 if __name__ == "__main__":

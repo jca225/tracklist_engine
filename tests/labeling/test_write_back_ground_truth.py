@@ -51,20 +51,29 @@ def test_write_back_replaces_stale_rows_for_only_the_yaml_set(tmp_path: Path):
             ("other-set", "keep-me"),
         )
 
-    assert write_back(db, _BB11) == 0
+    assert write_back(db, _BB11, force_ungated=True) == 0
 
     with sqlite3.connect(db) as conn:
-        assert conn.execute(
-            "SELECT COUNT(*) FROM set_ground_truth "
-            "WHERE set_id='2nvzlh2k' AND label='stale-label'"
-        ).fetchone()[0] == 0
-        assert conn.execute(
-            "SELECT COUNT(*) FROM set_ground_truth WHERE set_id='2nvzlh2k'"
-        ).fetchone()[0] > 100
-        assert conn.execute(
-            "SELECT COUNT(*) FROM set_ground_truth "
-            "WHERE set_id='other-set' AND label='keep-me'"
-        ).fetchone()[0] == 1
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM set_ground_truth "
+                "WHERE set_id='2nvzlh2k' AND label='stale-label'"
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM set_ground_truth WHERE set_id='2nvzlh2k'"
+            ).fetchone()[0]
+            > 100
+        )
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM set_ground_truth "
+                "WHERE set_id='other-set' AND label='keep-me'"
+            ).fetchone()[0]
+            == 1
+        )
 
 
 def test_write_back_rolls_back_delete_when_insert_fails(tmp_path: Path):
@@ -86,7 +95,7 @@ def test_write_back_rolls_back_delete_when_insert_fails(tmp_path: Path):
         )
 
     with pytest.raises(sqlite3.IntegrityError, match="injected failure"):
-        write_back(db, _BB11)
+        write_back(db, _BB11, force_ungated=True)
 
     with sqlite3.connect(db) as conn:
         assert conn.execute(

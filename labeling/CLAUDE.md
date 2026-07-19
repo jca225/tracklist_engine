@@ -165,10 +165,17 @@ expect a separate downloaded acappella master unless you explicitly acquired one
   XML round-trip tests in `tests/labeling/` prove the codec; only this catches
   a session whose *assertions* silently drift from the mix audio. Wraps
   `workspaces/source_detection/als_audit.py`.
+- **Release gate (required before write-back / status regen):**
+  `make gt-gate SET=<id> ALS=<hand.als> YAML=<fixture.yaml> [ANCHORS=…]`.
+  Runs validate → `anchor_check --strict-ref` → `als_audit`, then stamps
+  `labeling/.cache/gt_gate/<set_id>.ok.json` bound to the YAML sha256.
+  `write_back_ground_truth` refuses DB writes without a fresh stamp
+  (`--force-ungated` escape; `--ack-audio-mismatches` for known leftover
+  MISMATCH debt). Re-export matching old YAML is not enough.
 - CLI: `venvs/audio/bin/python -m labeling.write_back_ground_truth --db ... --yaml ...`
-  upserts [set_ground_truth](../web_crawler/database/schema.sql). Dry-run with
-  `--dry-run`. Uses `slot_label` as DB `label` when present. Algorithmic aligner
-  still in `workspaces/`.
+  transactionally replaces [set_ground_truth](../web_crawler/database/schema.sql)
+  for that set. Dry-run with `--dry-run`. Uses `slot_label` as DB `label` when
+  present. Algorithmic aligner still in `workspaces/`.
 
 ## Folder lifecycle
 
