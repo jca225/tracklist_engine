@@ -11,6 +11,11 @@ from .landmark_fp import FHOP, LandmarkFingerprint, SR, fp_offset
 
 HIT_MIN_VOTES = 25
 HIT_MIN_SHARPNESS = 1.2
+# Among offset candidates whose votes are ≥ this fraction of the max, prefer
+# highest vote-density (votes / cluster duration). Earned on BB11 slot 034
+# (decoder_wall bb11_34): vote-argmax was a long false diagonal (+33s) while
+# the GT audible-onset cluster was shorter and denser (18/s vs 10/s).
+COMPETITIVE_VOTE_FRAC = 0.3
 
 
 @dataclass(frozen=True)
@@ -162,6 +167,29 @@ def load_mix_mono(path: Path, *, sr: int = SR) -> np.ndarray:
     return y
 
 
+def candidate_density(cand: tuple[float, float, int, float]) -> float:
+    """Votes per second of the vote-extent cluster (set_end - set_start)."""
+    ss, se, votes, _off = cand
+    return float(votes) / max(float(se - ss), 0.1)
+
+
+def pick_dense_competitive(
+    cands: list[tuple[float, float, int, float]],
+    *,
+    frac: float = COMPETITIVE_VOTE_FRAC,
+) -> tuple[float, float, int, float] | None:
+    """Prefer the densest cluster among candidates with competitive vote mass.
+
+    Vote-argmax alone prefers long false diagonals on multiseg instrumentals
+    (bb11_34). Restrict to votes ≥ ``frac`` × max, then maximize density.
+    """
+    if not cands:
+        return None
+    mx = max(c[2] for c in cands)
+    pool = [c for c in cands if c[2] >= frac * mx]
+    return max(pool, key=candidate_density)
+
+
 def span_from_offset_votes(
     mix_hashes: dict,
     ref_fp: LandmarkFingerprint,
@@ -172,23 +200,13 @@ def span_from_offset_votes(
     """(set_start_s, set_end_s, votes, offset_s) from the fingerprint's own
     vote-extent — the placement primitive behind the 2026-06-28 reframe.
 
-    The landmark vote bins are off = ref_frame - mix_frame; the dominant bin is
-    the alignment diagonal d. The mix-times voting for d are exactly where the
-    ref plays in the mix, so the densest contiguous cluster of them (gap-split at
-    ``gap_s``) is the played span [set_start, set_end] — directly, with no
-    ref_start, cue, or GT. This is why the ~30s set_start "wall" was illusory:
-    the fingerprint localizes the diagonal to ~0.2s and its vote-extent gives
-    set_start to ~5.7s median (BB12 regular). Outliers (repeat / weak-fp /
-    heavy-crossfade) want a boundary-snap (D2) + fiber handling on top.
-
-    Pass ``mix_hashes`` = landmark_fp.hashes(*constellation(mix)) computed ONCE
-    per set and reused across refs.
+    The landmark vote bins are off = ref_frame - mix_frame; competitive
+    diagonals are clustered on mix-time, then the densest competitive cluster
+    wins (see ``pick_dense_competitive``). Pass ``mix_hashes`` =
+    landmark_fp.hashes(*constellation(mix)) computed ONCE per set.
     """
-    votes, pairs = _vote_pairs(mix_hashes, ref_fp)
-    if not votes:
-        return None
-    d = max(votes.items(), key=lambda kv: kv[1])[0]  # dominant diagonal
-    return _cluster_at(pairs, d, tol=tol, gap_s=gap_s)
+    cands = offset_candidates(mix_hashes, ref_fp, topk=6, gap_s=gap_s, tol=tol)
+    return pick_dense_competitive(cands)
 
 
 def offset_candidates(
@@ -200,8 +218,12 @@ def offset_candidates(
     tol: int = 1,
 ) -> list[tuple[float, float, int, float]]:
     """Top-K alignment-diagonal candidates, each (set_start_s, set_end_s, votes,
-    offset_s) from that offset's densest contiguous vote-cluster, ordered by
-    total votes.
+    offset_s) from that offset's densest contiguous vote-cluster.
+
+    Offset bins are still gathered by raw vote count (recall); the returned
+    list is ordered densest-competitive first so argmax-style consumers and
+    ``decode_placements`` prefer short dense onset clusters over long false
+    diagonals (bb11_34).
 
     Feeds the monotonic placement decode: pass all spans' candidates (in
     tracklist order) to sequence_decode.monotonic_decode so a high-vote but
@@ -224,7 +246,15 @@ def offset_candidates(
         r = _cluster_at(pairs, c, tol=tol, gap_s=gap_s)
         if r:
             out.append(r)
-    return out
+    if not out:
+        return []
+    # Densest among competitive first; remaining keep relative vote order.
+    mx = max(c[2] for c in out)
+    competitive = [c for c in out if c[2] >= COMPETITIVE_VOTE_FRAC * mx]
+    rest = [c for c in out if c not in competitive]
+    competitive.sort(key=candidate_density, reverse=True)
+    rest.sort(key=lambda c: c[2], reverse=True)
+    return competitive + rest
 
 
 def _vote_pairs(mix_hashes: dict, ref_fp: LandmarkFingerprint):
@@ -304,10 +334,11 @@ def decode_placements(
     curves = np.full((len(keep), T), NEG, dtype=np.float64)
     for r, i in enumerate(keep):
         cands = cand_lists[i]
-        mx = max(c[2] for c in cands) or 1.0
-        for ss, _se, votes, _off in cands:
+        dens = [candidate_density(c) for c in cands]
+        mx = max(dens) or 1.0
+        for (ss, _se, _votes, _off), d in zip(cands, dens):
             b = min(T - 1, int(ss / dt))
-            curves[r, b] = max(curves[r, b], votes / mx)
+            curves[r, b] = max(curves[r, b], d / mx)
     starts = monotonic_decode(curves, min_step=min_step)
     for r, i in enumerate(keep):
         ss_pred = float(starts[r]) * dt

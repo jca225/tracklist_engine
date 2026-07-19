@@ -55,12 +55,19 @@ Root cause on bb12_42w5: `SpanBelief.best()` took the heaviest cluster; mert+sur
 
 So the belief fix targets **3/5** decoder_wall cases (2× `gt_is_argmax` + bb12_39). Only bb11_34 needs a decode-side candidate re-rank; bb12_3w2 remains a soft holdout.
 
+### Dig: bb11_34 (fixed — density among competitive)
+
+Multiseg instrumental: vote-argmax was a **41s false diagonal** (+33s) while GT
+audible onset was a **9s cluster at 2× density**. Fix: `pick_dense_competitive`
+in `mix_fp_hits` (see [BB11_34_DIG.md](BB11_34_DIG.md)). Belief fusion alone
+could not help — classical/`instr_fp` already picked the wrong mode.
+
 **Still open:**
 
-1. **bb11_34 wrong-diagonal** — high-vote false mode beats GT (2.5× votes); mert prior does not disambiguate toward GT. Needs a new signal (sharpness / extent / neighbor monotonicity), not belief fusion.
-2. **bb11_39 race path** — ensure agentic actually *runs* fp for that slot (cue_prior-only belief can't be rescued by the tie-break).
-3. **Holdout** — bb12_3w2 soft miss (~10s).
-4. **Re-race** — agentic on BB11/BB12 when parallel agents are clear; expect movement on bb12_42w5, bb12_39, maybe bb11_39 if fp fires.
+1. **bb11_39 race path** — ensure agentic actually *runs* fp for that slot.
+2. **Holdout** — bb12_3w2 soft miss (~10s).
+3. **Re-race** — classical + agentic on BB11/BB12 when parallel agents are clear;
+   expect movement on bb11_34 (density), bb12_42w5 / bb12_39 (belief), maybe bb11_39.
 
 ## Non-claims
 
