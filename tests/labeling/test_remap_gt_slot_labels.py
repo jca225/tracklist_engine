@@ -2,7 +2,71 @@
 
 from __future__ import annotations
 
-from labeling.remap_gt_slot_labels import RemapEvent, remap_slots
+from labeling.remap_gt_slot_labels import RemapEvent, fetch_remap_slot_rows, remap_slots
+
+
+def test_fetch_remap_slot_rows_selects_cue_columns():
+    captured: list[str] = []
+
+    def fake_ssh(sql: str) -> list[dict]:
+        captured.append(sql)
+        return [
+            {
+                "slot_label": "001",
+                "recording_id": "abc",
+                "row_index": 0,
+                "cue_time_seconds": 120,
+                "cue_seconds": None,
+            },
+            {
+                "slot_label": "002",
+                "recording_id": "def",
+                "row_index": 1,
+                "cue_time_seconds": None,
+                "cue_seconds": 240,
+            },
+        ]
+
+    rows = fetch_remap_slot_rows("1fsnxchk", fake_ssh)
+    assert "cue_time_seconds" in captured[0]
+    assert "cue_seconds" in captured[0]
+    assert len(rows) == 2
+    assert rows[0]["cue_time_seconds"] == 120
+    assert rows[1]["cue_seconds"] == 240
+
+
+def test_disambiguate_by_cue_time_when_stem_matches():
+    gt = {
+        "tracks": [
+            {
+                "track": "Same stem dup",
+                "slot_label": "010",
+                "track_id": "abc123",
+                "claimed_stem": "regular",
+                "set_start_s": 200.0,
+            },
+        ]
+    }
+    pi = [
+        {
+            "slot_label": "003",
+            "recording_id": "abc123",
+            "claimed_stem": "regular",
+            "row_index": 3,
+            "cue_time_seconds": 195,
+        },
+        {
+            "slot_label": "002",
+            "recording_id": "abc123",
+            "claimed_stem": "regular",
+            "row_index": 2,
+            "cue_time_seconds": 50,
+        },
+    ]
+    out, events = remap_slots(gt, pi)
+    assert out["tracks"][0]["slot_label"] == "003"
+    assert len(events) == 1
+    assert events[0].status == "remapped"
 
 
 def test_remap_heiress_and_saints():

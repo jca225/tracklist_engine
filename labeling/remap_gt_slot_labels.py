@@ -28,8 +28,31 @@ if str(_REPO) not in sys.path:
 from core.identity import normalize_stem  # noqa: E402
 from core.result import Err, Ok  # noqa: E402
 from labeling.ground_truth.schema import load, replace, save  # noqa: E402
-from labeling.inventory_check import fetch_slot_rows  # noqa: E402
 from labeling.pull_set_for_alignment import ssh_sqlite  # noqa: E402
+
+
+def fetch_remap_slot_rows(set_id: str, ssh_sqlite) -> list[dict[str, Any]]:
+    """Load pi slots for remap, including scrape cue times for disambiguation."""
+    try:
+        rows = ssh_sqlite(f"""
+            SELECT set_id, row_index, slot_label,
+                   COALESCE(recording_id, track_id) AS recording_id,
+                   track_id, claimed_stem,
+                   cue_time_seconds, cue_seconds
+            FROM set_track_slots
+            WHERE set_id = '{set_id}'
+            ORDER BY row_index;
+        """)
+    except Exception:
+        rows = ssh_sqlite(f"""
+            SELECT set_id, row_index, slot_label,
+                   COALESCE(recording_id, track_id) AS recording_id,
+                   track_id, claimed_stem, cue_seconds
+            FROM set_track_slots
+            WHERE set_id = '{set_id}'
+            ORDER BY row_index;
+        """)
+    return [r for r in rows if r.get("slot_label") and r.get("recording_id")]
 
 
 @dataclass(frozen=True)
@@ -250,13 +273,21 @@ def main() -> int:
     import yaml
 
     gt_doc = yaml.safe_load(args.yaml.read_text()) or {}
-    pi_slots = fetch_slot_rows(args.set_id, ssh_sqlite)
+    pi_slots = fetch_remap_slot_rows(args.set_id, ssh_sqlite)
     out_doc, events = remap_slots(gt_doc, pi_slots)
 
     remapped = [e for e in events if e.status == "remapped"]
     needs_human = [e for e in events if e.status == "needs_human"]
+    with_cue = sum(1 for r in pi_slots if _cue_time_s(r) is not None)
 
     print(f"pi_slots: {len(pi_slots)}")
+    print(f"pi_slots_with_cue: {with_cue}")
+    if pi_slots and with_cue == 0:
+        print(
+            "WARN: fetched pi slots have no cue_time_seconds/cue_seconds — "
+            "time tie-break inactive",
+            file=sys.stderr,
+        )
     print(f"remapped: {len(remapped)}")
     print(f"needs_human: {len(needs_human)}")
 
