@@ -251,15 +251,33 @@ def select_arrangement_mapper(
 ) -> ArrangementMapper | TempoArrangementMapper:
     """Pick the arrangement→mix-seconds map for a session.
 
-    Default to the clip-warp ``ArrangementMapper`` (warped-mix convention, e.g.
-    BB12). Fall back to the master-tempo mapper only when the clip-warp domain
-    fails to cover the labeled clips — i.e. the unwarped-mix / varying-BPM
-    convention where the mix clip is a stub. This keeps existing warped sessions
-    bit-identical while supporting the new convention."""
+    Rich mix warp markers are an explicit arrangement→file-time map even when
+    Live stores ``IsWarped=false`` (the hand-authored BB sessions use this
+    dialect).  Conversely, an explicitly-unwarped mix clip with only Live's
+    sparse sentinel markers and a varying master-tempo envelope must use the
+    tempo integral even when that clip covers the full arrangement.  The old
+    coverage-only choice interpreted that valid full-length dialect through
+    meaningless sentinel markers.
+    """
     clip_mapper = ArrangementMapper.from_mix_track(
         mix_track, mix_duration_s=mix_duration_s
     )
+    mix_clips = mix_track.xpath(".//AudioClip")
+    explicitly_unwarped = bool(mix_clips) and all(
+        (iw := clip.find("IsWarped")) is not None and iw.get("Value") == "false"
+        for clip in mix_clips
+    )
+    sparse_warp = bool(mix_clips) and all(
+        len({b for b, _s in WarpMarkers.from_clip(clip).points}) <= 2
+        for clip in mix_clips
+    )
     if clip_mapper.spans and clip_mapper.arr_max + 1.0 >= label_arr_max:
+        if explicitly_unwarped and sparse_warp:
+            tempo_mapper = TempoArrangementMapper.from_root(
+                root, mix_track, mix_duration_s=mix_duration_s
+            )
+            if tempo_mapper is not None and len(tempo_mapper.tempo_pts) > 1:
+                return tempo_mapper
         return clip_mapper
     tempo_mapper = TempoArrangementMapper.from_root(
         root, mix_track, mix_duration_s=mix_duration_s

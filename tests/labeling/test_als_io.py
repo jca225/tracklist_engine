@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+
+from lxml import etree
+
 from labeling.als import (
     ArrangementMapper,
     ManifestIndex,
@@ -199,6 +202,27 @@ def test_arrangement_mapper_gap_bridge():
     mapper = ArrangementMapper(spans=spans, mix_duration_s=200.0)  # type: ignore[arg-type]
     assert mapper.arr_to_set_sec(50.0) == 50.0
     assert mapper.arr_to_set_sec(105.0) == 110.0
+
+
+def test_full_length_unwarped_sparse_mix_uses_master_tempo():
+    """Coverage alone must not make sentinel warp markers beat a real tempo map."""
+    from labeling.als.semantics import (
+        TempoArrangementMapper,
+        select_arrangement_mapper,
+    )
+    from tests.labeling.synth_session import session_root
+
+    root = session_root(
+        tempo_events=((0.0, 120.0), (64.0, 120.0), (64.0, 90.0)),
+        mix_warp_points=((0.0, 0.0), (0.03125, 0.015625)),
+    )
+    mix_track = root.xpath(".//LiveSet/Tracks/AudioTrack")[0]
+    mix_track.xpath(".//AudioClip")[0].append(etree.Element("IsWarped", Value="false"))
+    mapper = select_arrangement_mapper(
+        root, mix_track, mix_duration_s=300.0, label_arr_max=256.0
+    )
+    assert isinstance(mapper, TempoArrangementMapper)
+    assert abs(mapper.arr_to_set_sec(64.0) - 32.0) < 1e-9
 
 
 def test_envelope_value_interpolates():

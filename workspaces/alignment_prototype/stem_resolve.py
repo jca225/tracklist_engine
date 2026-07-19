@@ -22,7 +22,7 @@ import re
 import warnings
 from pathlib import Path
 
-from labeling.audio_index import load_audio_index, lookup_stem
+from labeling.audio_index import has_audio_index, load_audio_index, lookup_stem
 
 # identity stem axis -> Demucs/Roformer stem file basename. 'regular' = the full
 # track (no stem file), so it is intentionally absent.
@@ -52,22 +52,21 @@ def resolve_stem(
 ) -> Path | None:
     """Real path to a track's ``stem_name`` ('vocals'|'instrumental') stem.
 
-    1. ``track['stems'][stem_name]`` if it exists on disk (the manifest hint);
-    2. ``audio_index.json`` by ``track_audio_id`` when present;
+    1. ``audio_index.json`` by ``track_audio_id`` when present;
+    2. ``track['stems'][stem_name]`` only when no index has been built;
     3. else collect ``set_dir/stems/<slot>__*/<stem_name>.flac`` across both
        slot forms;
     4. return the fallback only when exactly one distinct file exists;
     5. warn and abstain when multiple files exist.
     """
     if track:
+        if has_audio_index(set_dir):
+            return lookup_stem(
+                load_audio_index(set_dir), track.get("track_audio_id"), stem_name
+            )
         p = (track.get("stems") or {}).get(stem_name)
         if p and Path(p).is_file():
             return Path(p)
-        indexed = lookup_stem(
-            load_audio_index(set_dir), track.get("track_audio_id"), stem_name
-        )
-        if indexed is not None:
-            return indexed
     if not set_dir or not slot_label or slot_label == "?":
         return None
     stems_root = Path(set_dir) / "stems"

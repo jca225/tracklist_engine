@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -13,7 +14,7 @@ import msgspec
 from core.contracts import MANIFEST_FILENAME, load_manifest
 
 INDEX_NAME = "audio_index.json"
-INDEX_VERSION = 1
+INDEX_VERSION = 2
 
 _SLOT_RE = re.compile(r"^(\d{3}(?:w\d+)?)")
 
@@ -37,6 +38,14 @@ def _slot_variants(slot_label: str) -> list[str]:
             if cand not in out:
                 out.append(cand)
     return out
+
+
+def _sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def _unique_track_file(set_dir: Path, slot_label: str) -> Path | None:
@@ -82,7 +91,16 @@ def build_audio_index(set_dir: Path, tracks: list[dict]) -> dict:
         taid = track.get("track_audio_id")
         if taid is None:
             continue
-        entry: dict = {"local_path": None, "stems": {}}
+        entry: dict = {
+            "recording_id": track.get("recording_id") or track.get("track_id"),
+            "stem": track.get("stem") or "regular",
+            "variant": track.get("variant") or "regular",
+            "canonical_path": track.get("pi_path"),
+            "local_path": None,
+            "local_sha256": None,
+            "stems": {},
+            "stem_sha256": {},
+        }
         local = track.get("local_path")
         if local and Path(local).is_file():
             entry["local_path"] = str(Path(local))
@@ -92,12 +110,15 @@ def build_audio_index(set_dir: Path, tracks: list[dict]) -> dict:
                 hit = _unique_track_file(set_dir, slot)
                 if hit is not None:
                     entry["local_path"] = str(hit)
+        if entry["local_path"]:
+            entry["local_sha256"] = _sha256(Path(entry["local_path"]))
 
         stems = track.get("stems") or {}
         for stem_name in ("vocals", "instrumental"):
             p = stems.get(stem_name)
             if p and Path(p).is_file():
                 entry["stems"][stem_name] = str(Path(p))
+                entry["stem_sha256"][stem_name] = _sha256(Path(p))
                 continue
             slot = _slot_of(track)
             if not slot:
@@ -105,6 +126,7 @@ def build_audio_index(set_dir: Path, tracks: list[dict]) -> dict:
             hit = _unique_stem_file(set_dir, slot, stem_name)
             if hit is not None:
                 entry["stems"][stem_name] = str(hit)
+                entry["stem_sha256"][stem_name] = _sha256(hit)
 
         if entry["local_path"] or entry["stems"]:
             by_id[str(taid)] = entry
@@ -133,6 +155,10 @@ def load_audio_index(set_dir: Path | None) -> dict:
     if not isinstance(by_id, dict):
         by_id = {}
     return {"version": int(data.get("version") or INDEX_VERSION), "by_track_audio_id": by_id}
+
+
+def has_audio_index(set_dir: Path | None) -> bool:
+    return bool(set_dir) and (Path(set_dir) / INDEX_NAME).is_file()
 
 
 def lookup_ref(index: dict, track_audio_id: object) -> Path | None:

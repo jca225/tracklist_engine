@@ -30,6 +30,7 @@ import torch
 from torch.utils.data import Dataset
 
 from workspaces.alignment_prototype.recon_probe import find_aligning_dir, find_mix_stems
+from workspaces.alignment_prototype.identity_bridge import canonicalize_gt_rows
 
 from .features import BIN_S, FEAT_KIND, FeatureBank, SpanAudio, resolve_span_audio
 from .targets import KIND_IGNORE, KIND_NULL, KIND_POSITION, raster_targets
@@ -57,7 +58,8 @@ def _load_gt_rows(yaml_path: Path) -> tuple[str, list[dict]]:
     import yaml
 
     d = yaml.safe_load(open(yaml_path))
-    return str(d["set_id"]), list(d["tracks"])
+    set_id = str(d["set_id"])
+    return set_id, canonicalize_gt_rows(set_id, d["tracks"])
 
 
 class TrajectorySpanDataset(Dataset):
