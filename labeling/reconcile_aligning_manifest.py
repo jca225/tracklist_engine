@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -63,6 +64,7 @@ class ReconcileReport:
     wired: list[str]
     unresolved: list[str]
     backed_up: Path | None
+    warnings: tuple[str, ...] = ()
 
 
 def _slot_variants(slot_label: str) -> list[str]:
@@ -112,6 +114,25 @@ def _name_score_ok(slot_name: str, filename: str) -> bool:
         stem = stem[m.end() :]
     hay = set(re.split(r"[\W_]+", stem.lower()))
     return bool(want & hay)
+
+
+def _local_path_is_valid(
+    set_dir: Path,
+    set_id: str,
+    slot_label: str,
+    slot_name: str,
+    local_path: Path,
+) -> bool:
+    """True when an existing manifest path is allowed for this slot."""
+    if not local_path.is_file():
+        return False
+    proxy_rel = PROXY_SLOT_AUDIO.get((set_id, slot_label))
+    if (
+        proxy_rel is not None
+        and local_path.resolve() == (set_dir / proxy_rel).resolve()
+    ):
+        return True
+    return _name_score_ok(slot_name, local_path.name)
 
 
 def _track_file_candidates(set_dir: Path, slot_label: str) -> list[Path]:
@@ -234,6 +255,18 @@ def _base_row(slot: dict[str, Any], pi_track: Any | None = None) -> dict[str, An
     return row
 
 
+def _load_satisfaction_by_label(
+    set_id: str,
+) -> tuple[dict[str, Any], list[str]]:
+    """Pi inventory enrichment; SSH/parse failures become visible warnings."""
+    try:
+        return {
+            s.claim.slot_label: s for s in evaluate_set_inventory(set_id, ssh_sqlite)
+        }, []
+    except (subprocess.CalledProcessError, json.JSONDecodeError, OSError) as exc:
+        return {}, [f"inventory enrichment skipped: {exc}"]
+
+
 def reconcile_manifest(set_dir: Path, *, dry_run: bool = True) -> ReconcileReport:
     set_dir = Path(set_dir)
     manifest_path = set_dir / MANIFEST_FILENAME
@@ -244,12 +277,7 @@ def reconcile_manifest(set_dir: Path, *, dry_run: bool = True) -> ReconcileRepor
     slot_rows = fetch_slot_rows(set_id, ssh_sqlite)
     pi_tracks = fetch_tracks(set_id)
     pi_by_label = {t.label: t for t in pi_tracks}
-    try:
-        satisfaction_by_label = {
-            s.claim.slot_label: s for s in evaluate_set_inventory(set_id, ssh_sqlite)
-        }
-    except Exception:
-        satisfaction_by_label = {}
+    satisfaction_by_label, report_warnings = _load_satisfaction_by_label(set_id)
 
     existing = list(manifest.get("tracks") or [])
     by_label = {
@@ -288,6 +316,12 @@ def reconcile_manifest(set_dir: Path, *, dry_run: bool = True) -> ReconcileRepor
         claimed_variant = slot.get("claimed_variant") or "regular"
         row["variant"] = claimed_variant
 
+        existing_local = row.get("local_path")
+        if existing_local:
+            path_obj = Path(str(existing_local))
+            if not _local_path_is_valid(set_dir, set_id, label, slot_name, path_obj):
+                row["local_path"] = None
+
         track_path = _pick_track_file(set_dir, set_id, label, slot_name)
         stem_dirs = _stem_dirs(set_dir, label, slot_name)
         stems = _wire_stem_paths(stem_dirs)
@@ -295,7 +329,9 @@ def reconcile_manifest(set_dir: Path, *, dry_run: bool = True) -> ReconcileRepor
         if track_path is not None:
             row["local_path"] = str(track_path)
             wired.append(label)
-        elif not row.get("local_path") or not Path(str(row["local_path"])).is_file():
+        elif row.get("local_path") and Path(str(row["local_path"])).is_file():
+            wired.append(label)
+        else:
             row["local_path"] = None
             unresolved.append(label)
 
@@ -341,6 +377,7 @@ def reconcile_manifest(set_dir: Path, *, dry_run: bool = True) -> ReconcileRepor
         wired=wired,
         unresolved=unresolved,
         backed_up=backed_up,
+        warnings=tuple(report_warnings),
     )
 
 
@@ -359,6 +396,10 @@ def _print_report(report: ReconcileReport) -> None:
     print(f"added:       {', '.join(report.added) or '(none)'}")
     print(f"wired:       {', '.join(report.wired) or '(none)'}")
     print(f"unresolved:  {', '.join(report.unresolved) or '(none)'}")
+    if report.warnings:
+        print("warnings:")
+        for msg in report.warnings:
+            print(f"  {msg}")
     if report.stem_rewrites:
         print("stem_rewrites:")
         for label, old, new in report.stem_rewrites:
