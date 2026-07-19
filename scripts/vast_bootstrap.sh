@@ -91,6 +91,7 @@ echo "==> [4/7] Install audio pipeline deps INTO /venv/main"
 /venv/main/bin/pip install --quiet \
     "yt-dlp>=2026.5.0" "yt-dlp-ejs" "spotdl>=3.9.6" "spotipy>=2.26.0" \
     "librosa>=0.11" "pyloudnorm>=0.2" "soundfile>=0.13" \
+    "msgspec>=0.21" \
     "beat-this>=1.1" "transformers>=4.57" "timm>=1.0" \
     "matplotlib"   # cue-detr/cue_points.py imports this at module level
 echo "    /venv/main now has audio pipeline deps"
