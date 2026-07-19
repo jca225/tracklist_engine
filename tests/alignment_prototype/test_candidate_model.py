@@ -31,6 +31,8 @@ def _example(source: str, delta: float, improves: bool) -> CandidateExample:
             baseline_delta_s=delta,
             ridge_prominence=4.0 if improves else None,
             independent_groups=2 if improves else 1,
+            verify_match_mean=0.9 if improves else 0.1,
+            verify_margin=0.7 if improves else -0.1,
         ),
     )
     return CandidateExample(

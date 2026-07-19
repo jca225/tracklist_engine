@@ -52,12 +52,19 @@ low-precision and accepted regressions dominate in the reverse direction.
 Threshold tuning is closed because only two real GT sets exist and further
 held-out adjustment would be leakage.
 
-**Do not re-test** this same small tabular critic on BB11/BB12 with more
+**Audio-pair follow-up:** a pinned stem-routed verifier was then trained on
+local diagonal similarity, nearby-shift margin, continuity and synthetic exact
+instrumental pairs. It improves ranking in one holdout direction but reverses
+in the other; MERT-only verified candidates also fail transfer. Therefore
+simple chroma-summary verification is not sufficient.
+
+**Do not re-test** these tabular/pinned-summary critics on BB11/BB12 with more
 thresholds. Revisit candidate arbitration only after one of: (a) a third
 independent real GT set, (b) proposer-native evidence for MERT/lyrics/HuBERT
-rather than mostly serialized argmax positions, or (c) a critic trained on
-audio-pair verification features. Reusable contracts remain in
-`candidate_arbiter/`; no critic is wired into a driver.
+rather than mostly serialized argmax positions, or (c) a learned
+superposition-invariant audio-pair verifier with a genuinely independent
+validation set. Reusable contracts remain in `candidate_arbiter/`; no critic is
+wired into a driver.
 
 ## PWS categorical label model over offset bins (2026-07-14) — REFUTED
 **Question:** can a Dawid–Skene label model (learned per-probe accuracy, no GT)

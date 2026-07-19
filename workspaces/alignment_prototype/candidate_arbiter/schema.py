@@ -39,10 +39,22 @@ class CandidateEvidence:
     neighbor_gap_right_s: float | None = None
     active_layer_count: int | None = None
     repeat_ambiguity: float | None = None
+    verify_match_mean: float | None = None
+    verify_match_p10: float | None = None
+    verify_margin: float | None = None
+    verify_continuity: float | None = None
+    verify_support_bins: int | None = None
+    verify_background_count: int | None = None
 
     def __post_init__(self) -> None:
         _validate_optional_floats(self, owner=type(self).__name__)
-        for name in ("vote_count", "independent_groups", "active_layer_count"):
+        for name in (
+            "vote_count",
+            "independent_groups",
+            "active_layer_count",
+            "verify_support_bins",
+            "verify_background_count",
+        ):
             value = getattr(self, name)
             if value is not None and value < 0:
                 raise ValueError(f"{name} must be non-negative")

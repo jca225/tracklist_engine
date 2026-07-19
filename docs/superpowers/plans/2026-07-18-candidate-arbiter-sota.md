@@ -25,8 +25,10 @@ and baseline-source provenance were subsequently added; the critic still
 failed bidirectional held-out acceptance and remains disconnected from every
 driver. The v0 tabular critic is closed in the attic ledger. Candidate
 arbitration should resume only with a third real GT set or audio-pair
-verification features. The mashup-invariant encoder remains deferred pending a
-new representation-wall gate.
+verification features. A pinned stem-routed chroma verifier was subsequently
+implemented and evaluated; it also failed bidirectional transfer, including a
+MERT-only candidate race. Candidate arbitration now requires a third real GT
+set or a learned superposition-invariant verifier with independent validation.
 
 This plan does not introduce another probe first. The ridge diagnostic and the
 instrumental-FP delta proof showed that existing proposers often contain useful

@@ -49,6 +49,12 @@ OPTIONAL_NUMERIC = (
     "neighbor_gap_right_s",
     "active_layer_count",
     "repeat_ambiguity",
+    "verify_match_mean",
+    "verify_match_p10",
+    "verify_margin",
+    "verify_continuity",
+    "verify_support_bins",
+    "verify_background_count",
 )
 REQUIRED_NUMERIC = (
     "baseline_delta_s",
