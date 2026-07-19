@@ -39,6 +39,38 @@ def test_belief_conflict_lowers_quality():
     assert conflict.quality() < agree.quality()
 
 
+def test_fp_cluster_preferred_over_mert_surprise_pileup():
+    """bb12_42w5 failure mode: surprise+mert co-cluster outvotes correct fp.
+
+    Registry-like weights: fp 0.53×0.8=0.424; surprise 0.45×1.0=0.45;
+    mert 0.55×0.7=0.385. mert+surprise share a cluster (~3468) heavier than
+    lone fp (~3519), but fp is within FP_CLUSTER_MARGIN of that weight and
+    must win — otherwise agentic:surprise overwrites a GT-correct diagonal.
+    """
+    b = _belief(
+        _obs("fp", 3519.5, conf=0.8, prec=0.53),
+        _obs("mert_decode", 3470.4, conf=0.7, prec=0.55),
+        _obs("surprise", 3466.08, conf=1.0, prec=0.45),
+    )
+    top = b.best()
+    assert top is not None
+    assert "fp" in top.probes
+    assert abs(top.set_start_s - 3519.5) < 1.0
+
+
+def test_weak_fp_cluster_does_not_steal_strong_mert_pileup():
+    """A low-weight stray fp diagonal must not beat a much heavier mert cluster."""
+    b = _belief(
+        _obs("fp", 100.0, conf=0.2, prec=0.53),  # weight ≈ 0.106
+        _obs("mert_decode", 400.0, conf=1.0, prec=0.55),  # 0.55
+        _obs("surprise", 402.0, conf=1.0, prec=0.45),  # 0.45 → pileup ≈ 1.0
+    )
+    top = b.best()
+    assert top is not None
+    assert "fp" not in top.probes
+    assert 400.0 <= top.set_start_s <= 402.0
+
+
 def test_belief_all_abstain_is_zero():
     b = _belief(Observation("lyrics", None, 0.0, 0.9))
     assert b.quality() == 0.0
