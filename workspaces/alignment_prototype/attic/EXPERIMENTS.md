@@ -95,11 +95,17 @@ fp-only / no exportable 330M MERT; `accepted=0` at G0. Infra (Tasks 1–4) was f
 **Verdict (BB10 smoke, 2026-07-19): viable** — `pool=w1mgcjt` → `eval=2nvzlh2k`,
 `--smoke-only`. Artifacts: `out/e1/e1_result.json` status `"completed"`,
 `accepted=3` (lyrics∩HuBERT G2 survivors after fixes below). Smoke TRM train ran
-(`out/e1/logs/smoke_trm.log`). Not a held-out win claim — mass is thin; run full
-E1 (drop `--smoke-only`, keep gates) before regenerating `docs/alignment_status.md`.
+(`out/e1/logs/smoke_trm.log`).
+**Verdict (BB10 full E1, 2026-07-19): noise-floor** — same pool/eval, drop
+`--smoke-only`, `--reuse-agentic`. Pipeline completed (`smoke_only: false`); logs
+under `out/e1/logs/{conv,synth_trm,pseudo_trm}.log`. Pseudo-TRM overfits the 3
+train spans and does **not** beat the raw control (or conv) on held-out BB11.
+Do **not** regenerate `docs/alignment_status.md` from this run. Next lever is
+more real pseudo mass (better lyrics∩HuBERT agreement / fp landmarks / a third
+labeled set), not more epochs on n=3.
 **Fixes that unblocked BB10 (do not weaken G1/G2):** (1) prefer `mix.wav` over
 `mix.m4a` for fp load; (2) `resolve(require_independence=True)` in pseudo-safe so
 lyrics-alone auto does not skip HuBERT; (3) HuBERT prior falls back to
 lyrics/timeline when mert/cue absent; (4) `resolve_track_id` accepts rid stored
 as manifest `track_id` when `recording_id` is null. Whisper long-mix checkpoint
-(`a2e59e7`) kept the lyrics cache warm. Disco Lines remains a dead pool for E1.
+kept the lyrics cache warm. Disco Lines remains a dead pool for E1.
