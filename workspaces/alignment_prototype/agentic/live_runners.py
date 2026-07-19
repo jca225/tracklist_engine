@@ -54,6 +54,30 @@ log = logging.getLogger(__name__)
 _FIBER_FPS = 22050 / 512
 
 
+def ref_fp_for_span(span: dict):
+    """Load the landmark fp for a span, keyed by claimed_stem.
+
+    This live lane is intentionally instrumental-only, matching the belief
+    gate: prefer the stem-specific entry and fall back to a regular landmark
+    for the same recording. Regular and acappella spans abstain so a newly
+    dense fp index cannot perturb their already-strong baseline placements.
+    Returns None when no valid entry exists.
+    """
+    from workspaces.alignment_prototype.fp_index import FpKey
+    from workspaces.alignment_prototype.fp_index import load as fp_load
+
+    rid = span.get("recording_id")
+    if not rid:
+        return None
+    stem = span.get("claimed_stem") or "regular"
+    if stem != "instrumental":
+        return None
+    hit = fp_load(FpKey(rid, stem))
+    if hit is None and stem != "regular":
+        hit = fp_load(FpKey(rid, "regular"))
+    return hit
+
+
 # ---------------------------------------------------------------------------
 # per-set context: precompute the JOINT decodes + hold the on-demand caches
 # ---------------------------------------------------------------------------
@@ -182,8 +206,6 @@ class LiveContext:
     ) -> None:
         """JOINT landmark-fp decode over tracklist order (mirrors infer's fp block)."""
         try:
-            from workspaces.alignment_prototype.fp_index import FpKey
-            from workspaces.alignment_prototype.fp_index import load as fp_load
             from workspaces.alignment_prototype.landmark_fp import constellation, hashes
             from workspaces.alignment_prototype.mix_fp_hits import (
                 decode_placements,
@@ -195,19 +217,27 @@ class LiveContext:
                 log.warning("live fp: mix.m4a missing in %s — abstain", set_dir)
                 return
             # ref fps in tracklist (span) order — DO NOT sort; None where absent
-            fps = [
-                fp_load(FpKey(s["recording_id"], "regular"))
-                if s.get("recording_id")
-                else None
-                for s in spans
-            ]
+            fps = [ref_fp_for_span(s) for s in spans]
             keep = [i for i, fp in enumerate(fps) if fp is not None]
             if not keep:
                 log.warning(
                     "live fp: no ref fingerprints cached for %s — abstain", ctx.set_id
                 )
                 return
-            hm = hashes(*constellation(load_mix_mono(mix_file)))
+            # Optional precomputed mix hashes (e.g. ridge_diagnostic mix_hash_cache)
+            # via FP_MIX_HASH_CACHE=/path/to/dir containing {set_id}_mix_hashes.pkl.
+            import os
+            import pickle
+
+            hm = None
+            cache_dir = os.environ.get("FP_MIX_HASH_CACHE", "").strip()
+            if cache_dir:
+                cp = Path(cache_dir) / f"{ctx.set_id}_mix_hashes.pkl"
+                if cp.is_file():
+                    hm = pickle.loads(cp.read_bytes())
+                    log.info("live fp: mix hashes from cache %s", cp)
+            if hm is None:
+                hm = hashes(*constellation(load_mix_mono(mix_file)))
             placements = decode_placements(
                 hm,
                 [fps[i] for i in keep],
@@ -236,6 +266,17 @@ class LiveContext:
     ) -> None:
         """JOINT lyrics decode over acappella spans (mirrors infer's lyrics block)."""
         try:
+            import os
+
+            # Prove/dev fast-path when Whisper cache is cold (no ASR).
+            if os.environ.get("AGENTIC_LIVE_SKIP_LYRICS", "").strip() in (
+                "1",
+                "true",
+                "yes",
+            ):
+                log.info("live lyrics: skipped (AGENTIC_LIVE_SKIP_LYRICS)")
+                return
+
             from workspaces.alignment_prototype.infer import (
                 _manifest_by_tid,
                 _vocal_ref_path,
@@ -305,6 +346,18 @@ class LiveContext:
     def _load_hubert(ctx: LiveContext, set_dir: Path, spans: list[dict]) -> None:
         """mix_vocals HuBERT (once) + rid->ref-vocal-path map (mirrors infer's stem block)."""
         try:
+            import os
+
+            # Prove/dev fast-path when HuBERT features are cold or deliberately
+            # outside the experiment under test.
+            if os.environ.get("AGENTIC_LIVE_SKIP_HUBERT", "").strip().lower() in (
+                "1",
+                "true",
+                "yes",
+            ):
+                log.info("live hubert: skipped (AGENTIC_LIVE_SKIP_HUBERT)")
+                return
+
             from workspaces.alignment_prototype.infer import (
                 _manifest_by_tid,
                 _vocal_ref_path,
