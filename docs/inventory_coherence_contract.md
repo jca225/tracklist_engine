@@ -33,6 +33,7 @@ Status: 2026-06-23. Consumed by alignment training export and ingest QA.
 | Command | Purpose |
 |---------|---------|
 | `make check-inventory SET=…` | Pre-pull gate |
+| `python -m labeling.reconcile_aligning_manifest <set_id> [--apply]` | Mac manifest repair from pi slots + disk |
 | `scripts/reconcile_gt_inventory.py --yaml …` | GT → action CSV |
 | `scripts/apply_stem_matches.py` | Discord → canonical |
 | `scripts/ingest_candidate_winners.py` | candidates/ → canonical |
