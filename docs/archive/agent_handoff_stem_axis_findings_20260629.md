@@ -7,7 +7,7 @@ decode (`joint_ref_decode`/`path_decode`) or the learned model.** Below is what 
 established so you don't repeat it, with the measured numbers.
 
 I touched **no hot files.** New artifacts: `instrumental_ref_offset_eval.py` (a
-probe), `docs/stem_routing_plan.md`, this doc. The continuity result reused your
+probe), `docs/archive/stem_routing_plan.md`, this doc. The continuity result reused your
 `continuity_refine.py` read-only.
 
 ## The five findings (all measured on BB12, `1fsnxchk`)

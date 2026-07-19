@@ -14,7 +14,7 @@ REPO         := ~/tracklist_engine
 PIP          := $(REPO)/venvs/web_crawler/bin/pip
 DB           := /mnt/storage/data/db/music_database.db
 
-.PHONY: help check check-corpus check-inventory audit-gt scorecard race align-ablate deploy deploy-storage deploy-worker \
+.PHONY: help check check-corpus check-inventory docs-gc docs-gc-apply audit-gt scorecard race align-ablate deploy deploy-storage deploy-worker \
         restart-jobqueue start-scraper stop-scraper restart-retry \
         install-taste-scrape restart-taste-scrape logs-taste-scrape \
         install-corpus-integrity logs-corpus-integrity \
@@ -23,6 +23,7 @@ DB           := /mnt/storage/data/db/music_database.db
 help:
 	@echo "Common targets:"
 	@echo "  make check            — guardrails script + full pytest suite"
+	@echo "  make docs-gc          — classify stale docs (dry run; docs-gc-apply archives)"
 	@echo "  make check-inventory SET=<set_id> — slot satisfaction gate (pi-storage)"
 	@echo "  make audit-gt SET=<set_id> — audio-verify a labeling .als vs the mix"
 	@echo "  make scorecard        — aligner per-span scorecard + failure attribution"
@@ -55,6 +56,14 @@ check:
 
 typecheck:
 	bash scripts/typecheck.sh
+
+# Docs garbage collection — classify docs/ by reachability; archive dead dated
+# snapshots. Dry-run by default; `make docs-gc-apply` sweeps COLLECTABLE.
+docs-gc:
+	venvs/audio/bin/python scripts/docs_gc.py
+
+docs-gc-apply:
+	venvs/audio/bin/python scripts/docs_gc.py --apply
 
 # Corpus data-integrity: identity/reference invariants over the CANONICAL DB
 # (the data analogue of `make check`, which polices the source tree). ERROR
@@ -89,6 +98,27 @@ DRIVERS ?= classical,agentic,ml
 race:
 	venvs/audio/bin/python -m workspaces.alignment_prototype.drivers.race \
 		--sets $(SETS) --drivers $(DRIVERS) $(EXTRA)
+
+# Staged pipeline + ablation framework (docs/pipeline_ablation_framework.md).
+# Compose grain reproduces `make race` with auto baseline-injection + a
+# reproducible JSONL ledger; CONFIG selects the matrix. Isolate-grain (decoder
+# bake-off) ships with the TRM build (docs/trm_decoder_bakeoff.md).
+CONFIG ?= workspaces/alignment_prototype/pipeline/configs/race_default.yaml
+ablate:
+	venvs/audio/bin/python -m workspaces.alignment_prototype.pipeline.cli \
+		--config $(CONFIG) $(EXTRA)
+
+# E1 real pseudo-label flywheel (docs/trm_flywheel_design.md §7).
+# POOL=unlabeled set, EVAL=hand-GT set, TIMELINE=base predicted timeline,
+# SYNTH=generate_v2 root for the synthetic-only control.
+POOL ?= w1mgcjt
+EVAL ?= 2nvzlh2k
+TIMELINE ?= workspaces/alignment_prototype/out/$(POOL)_predicted_timeline.json
+SYNTH ?= data/synthetic_mixes_v2
+trm-e1:
+	venvs/audio/bin/python -m workspaces.alignment_prototype.trajectory.e1 \
+		--pool-set $(POOL) --eval-set $(EVAL) \
+		--base-timeline $(TIMELINE) --synthetic-root $(SYNTH) $(EXTRA)
 
 align-ablate:
 	venvs/audio/bin/python -m workspaces.alignment_prototype.experiments.cli $(EXTRA)

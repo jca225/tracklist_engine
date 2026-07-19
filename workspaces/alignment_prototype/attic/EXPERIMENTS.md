@@ -261,3 +261,54 @@ DS aggregation on genuinely CATEGORICAL LFs (operation-type detectors from the
 DJ/DAW tool ontology). Infra kept in `workspaces/pws_aligner/` (capture,
 calibration report, typed abstention). Spec: docs/superpowers/specs/
 2026-07-14-pws-aligner-design.md. Verdict memory: project_pws_gate_verdict.
+
+## TRM decoder graft — sim2real gap MEASURED (2026-07-18)
+**Question:** does the Tiny-Recursive-Model decoder (bake-off
+`docs/trm_decoder_bakeoff.md`), trained on synthetic mashups, transfer to real
+BB? Architecture + wiring first, then the honest cross-set number.
+**Verdict: architecture WORKS; the wall is DATA (sim2real), not the model.**
+Measured on the `_lt`-independent `trajectory_acc` referee (strict, no fibers),
+control = raw match-sim argmax:
+- **v0 overfit** (6 real spans, eval==train): traj-acc **0.95** — offset-coord
+  encoding + recursion + decode + train loop all correct. It can learn.
+- **real-only cross-set** (train BB12 → eval BB11, ~150 real spans): pure
+  memorization — train 0.61↑ / eval **0.075**↓, below the **0.239** control.
+  Confirms the bake-off "2 real sets = memorization" call.
+- **synthetic-only → real** (40 `generate_v2` windows, 311 spans, synthetic-only
+  loader, real BB eval-only): train-fit climbs 0.095→**0.87** over 200 epochs
+  (learns synthetic fine) while real-BB eval stays **flat ~0.09**, far below the
+  **0.306** control. Train-high / eval-flat = **sim2real gap**, NOT underfitting.
+**Do not throw GPU/scale at this** — more epochs only memorized synthetic better
+(eval never moved). The lever is synthetic REALISM (bb12-lite curriculum is too
+clean: no EQ/effects/crowd/transition modeling) or a pivot to the real
+pseudo-label flywheel (status doc), with TRM as the decoder trained on real
+pseudo-labels. Stability fix on record: answer-latent LayerNorm + grad-clip 1.0
+(first run exploded, CE ~8e7). Infra kept + wired: `trajectory/trm.py`,
+`trajectory/offset_coords.py`, `train.py --model trm --synthetic-only
+--max-train/--max-eval`, ablation framework `pipeline/`. Branch
+`trm-ablation-framework`. Numbers here are DIAGNOSTICS, not SSOT — see
+`docs/alignment_status.md` for headline metrics (unchanged by this).
+
+## E1 pseudo-label flywheel — STARVED then VIABLE smoke (2026-07-18/19)
+**Question:** can pseudo-safe agentic AUTO_COMMIT on an unlabeled pool produce
+enough audited labels to train a TRM that beats synthetic-only / conv on held-out
+BB11?
+**Verdict (Disco Lines pool): starved** — `pool=1rfb0yl9` → `eval=2nvzlh2k`,
+fp-only / no exportable 330M MERT; `accepted=0` at G0. Infra (Tasks 1–4) was fine.
+**Verdict (BB10 smoke, 2026-07-19): viable** — `pool=w1mgcjt` → `eval=2nvzlh2k`,
+`--smoke-only`. Artifacts: `out/e1/e1_result.json` status `"completed"`,
+`accepted=3` (lyrics∩HuBERT G2 survivors after fixes below). Smoke TRM train ran
+(`out/e1/logs/smoke_trm.log`).
+**Verdict (BB10 full E1, 2026-07-19): noise-floor** — same pool/eval, drop
+`--smoke-only`, `--reuse-agentic`. Pipeline completed (`smoke_only: false`); logs
+under `out/e1/logs/{conv,synth_trm,pseudo_trm}.log`. Pseudo-TRM overfits the 3
+train spans and does **not** beat the raw control (or conv) on held-out BB11.
+Do **not** regenerate `docs/alignment_status.md` from this run. Next lever is
+more real pseudo mass (better lyrics∩HuBERT agreement / fp landmarks / a third
+labeled set), not more epochs on n=3.
+**Fixes that unblocked BB10 (do not weaken G1/G2):** (1) prefer `mix.wav` over
+`mix.m4a` for fp load; (2) `resolve(require_independence=True)` in pseudo-safe so
+lyrics-alone auto does not skip HuBERT; (3) HuBERT prior falls back to
+lyrics/timeline when mert/cue absent; (4) `resolve_track_id` accepts rid stored
+as manifest `track_id` when `recording_id` is null. Whisper long-mix checkpoint
+kept the lyrics cache warm. Disco Lines remains a dead pool for E1.

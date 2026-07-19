@@ -65,6 +65,8 @@ DEFAULT_SET_DIR = (
 
 PARKING_TOL_S = 5.0
 SLIVER_MAX_S = 3.0
+SLIVER_ADJACENCY_S = 0.1
+SLIVER_REF_CONTINUITY_S = 1.5
 MICRO_SLIVER_DROP_S = 0.01  # clip-boundary specks (e.g. slot 107)
 LOOP_OVERLAP_MIN = 0.35
 BLINK_182_SLOTS = frozenset({"024", "024w1", "029"})
@@ -249,7 +251,28 @@ def _merge_slivers(rows: list[ClipRow]) -> tuple[list[ClipRow], list[ReviewRow]]
     while i < len(rows):
         row = rows[i]
         span = row.set_end_s - row.set_start_s
-        if 0 < span <= SLIVER_MAX_S and kept and kept[-1].clip.path == row.clip.path:
+        prev = kept[-1] if kept else None
+        gap_s = row.set_start_s - prev.set_end_s if prev is not None else float("inf")
+        ref_gap_s = (
+            row.ref_start_s - prev.ref_end_s if prev is not None else float("inf")
+        )
+        same_identity = (
+            prev is not None
+            and prev.clip.path == row.clip.path
+            and prev.recording_id == row.recording_id
+            and prev.claimed_stem == row.claimed_stem
+            and prev.clip.is_warped == row.clip.is_warped
+        )
+        # A sliver is a split-off tail of the preceding clip, not merely a
+        # short later occurrence of the same file.  The old path-only test
+        # swallowed reprises separated by 12–51 seconds (and even parking
+        # clips thousands of seconds later), corrupting the GT trajectory.
+        contiguous = (
+            -SLIVER_ADJACENCY_S <= gap_s <= SLIVER_ADJACENCY_S
+            and abs(ref_gap_s) <= SLIVER_REF_CONTINUITY_S
+        )
+        if 0 < span <= SLIVER_MAX_S and same_identity and contiguous:
+            assert prev is not None
             prev = kept[-1]
             m_end = max(prev.set_end_s, row.set_end_s)
             m_curve = _merge_curves(prev.gain_curve, row.gain_curve)
@@ -272,7 +295,10 @@ def _merge_slivers(rows: list[ClipRow]) -> tuple[list[ClipRow], list[ReviewRow]]
             review.append(
                 ReviewRow(
                     action="merged",
-                    reason=f"sliver ({span:.2f}s) into neighbor",
+                    reason=(
+                        f"sliver ({span:.2f}s, gap={gap_s:.3f}s, "
+                        f"ref_gap={ref_gap_s:.3f}s) into adjacent neighbor"
+                    ),
                     group=row.clip.group_name,
                     slot=row.slot_label,
                     track=row.display,

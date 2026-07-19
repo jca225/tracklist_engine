@@ -1,6 +1,6 @@
 # Acappella segment-decode — Phase 0 findings + result (2026-06-29)
 
-Follows the stem-axis handoff (`docs/agent_handoff_stem_axis_findings_20260629.md`,
+Follows the stem-axis handoff (`docs/archive/agent_handoff_stem_axis_findings_20260629.md`,
 commit e82aa07), which diagnosed the acappella traj-acc deficit (BB12) as **warp**
 and recommended a "warp-aware / wide-stretch path decode." I probed that claim and
 then tested the cheap fix. **Net: there is no cheap decode fix for acappella —

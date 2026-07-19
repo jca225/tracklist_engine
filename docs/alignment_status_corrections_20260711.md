@@ -80,7 +80,7 @@ the §3 command block in the handoff.
      (rows 17–18): the parenthetical set_ids were inverted relative to the
      bb-labels *and* the doc's own preamble (line 5, which is correct). Row read
      `bb11 (1fsnxchk) … 150 spans … 18.6 s`.
-  2. `docs/agent_handoff_flywheel_select_20260711.md` line 54:
+  2. `docs/archive/agent_handoff_flywheel_select_20260711.md` line 54:
      `bb11 = 1fsnxchk, bb12 = 2nvzlh2k` (both swapped); line 84's DoD example
      called `1fsnxchk` "bb11's" spans (internally inconsistent).
 - **Correct:** **`bb11 = 2nvzlh2k`** (Episode 11), **`bb12 = 1fsnxchk`** (Volume 12).

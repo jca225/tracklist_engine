@@ -56,7 +56,7 @@ tracks:
     set_end_s:   136.687
     ref_start_s: 39.6076
     ref_end_s:   157.133
-    tempo_ratio: 0.944961
+    tempo_ratio: 1.008
     pitch_shift_semi: 1
     is_loop:     true
     ref_segments:
@@ -69,6 +69,9 @@ tracks:
       - mix_start_s: 86.6481
         ref_start_s: 153.248
         ref_end_s:   157.088
+      - mix_start_s: 90.4874
+        ref_start_s: 153.248
+        ref_end_s:   155.708
       - mix_start_s: 111.071
         ref_start_s: 39.6076
         ref_end_s:   65.4282
@@ -374,7 +377,14 @@ tracks:
     set_end_s:   419.72
     ref_start_s: 52.7907
     ref_end_s:   76.2791
-    tempo_ratio: 1.46642
+    tempo_ratio: 1
+    ref_segments:
+      - mix_start_s: 403.703
+        ref_start_s: 52.7907
+        ref_end_s:   66.657
+      - mix_start_s: 417.569
+        ref_start_s: 74.1279
+        ref_end_s:   76.2791
     gain_curve:
       - [403.703, 1]
       - [417.569, 1]
@@ -442,7 +452,14 @@ tracks:
     set_end_s:   507.611
     ref_start_s: 159.965
     ref_end_s:   185.03
-    tempo_ratio: 1.5178
+    tempo_ratio: 1.04233
+    ref_segments:
+      - mix_start_s: 491.097
+        ref_start_s: 159.965
+        ref_end_s:   176.14
+      - mix_start_s: 506.614
+        ref_start_s: 183.992
+        ref_end_s:   185.03
     gain_curve:
       - [491.097, 1]
       - [506.614, 1]
@@ -572,24 +589,60 @@ tracks:
     claimed_stem: acappella
     ref_source:  online_candidate
     set_start_s: 627.806
-    set_end_s:   651.363
+    set_end_s:   643.144
     ref_start_s: 54.1553
     ref_end_s:   71.1169
-    tempo_ratio: 0.720014
+    tempo_ratio: 1.10586
     pitch_shift_semi: 1
     gain_curve:
       - [627.806, 1]
       - [641.367, 1]
       - [641.378, 1]
       - [643.144, 1]
-      - [644.19, 1]
-      - [645.956, 1]
-      - [646.97, 1]
-      - [648.365, 1]
-      - [648.376, 1]
-      - [649.772, 1]
-      - [649.777, 1]
-      - [651.363, 1]
+  - track:       "Blink-182 - What's My Age Again (Vocals Only)"
+    slot_label:  "024"
+    track_id:    2fj43sgf
+    claimed_stem: acappella
+    ref_source:  online_candidate
+    set_start_s: 644.19
+    set_end_s:   645.956
+    ref_start_s: 69.1788
+    ref_end_s:   71.1169
+    tempo_ratio: 1.09746
+    pitch_shift_semi: 1
+  - track:       "Blink-182 - What's My Age Again (Vocals Only)"
+    slot_label:  "024"
+    track_id:    2fj43sgf
+    claimed_stem: acappella
+    ref_source:  online_candidate
+    set_start_s: 646.97
+    set_end_s:   648.365
+    ref_start_s: 69.1788
+    ref_end_s:   70.7134
+    tempo_ratio: 1.09982
+    pitch_shift_semi: 1
+  - track:       "Blink-182 - What's My Age Again (Vocals Only)"
+    slot_label:  "024"
+    track_id:    2fj43sgf
+    claimed_stem: acappella
+    ref_source:  online_candidate
+    set_start_s: 648.376
+    set_end_s:   649.772
+    ref_start_s: 69.1788
+    ref_end_s:   70.7134
+    tempo_ratio: 1.09982
+    pitch_shift_semi: 1
+  - track:       "Blink-182 - What's My Age Again (Vocals Only)"
+    slot_label:  "024"
+    track_id:    2fj43sgf
+    claimed_stem: acappella
+    ref_source:  online_candidate
+    set_start_s: 649.777
+    set_end_s:   651.363
+    ref_start_s: 69.1788
+    ref_end_s:   70.9211
+    tempo_ratio: 1.09847
+    pitch_shift_semi: 1
   - track:       "Aryay - The Lawnmower"
     slot_label:  "025"
     track_id:    1mdpuq6f
@@ -1406,7 +1459,7 @@ tracks:
     set_end_s:   1733.89
     ref_start_s: 14.4587
     ref_end_s:   109.807
-    tempo_ratio: 1.08064
+    tempo_ratio: 1.146
     ref_segments:
       - mix_start_s: 1703.9
         ref_start_s: 14.4587
@@ -1414,6 +1467,12 @@ tracks:
       - mix_start_s: 1706.05
         ref_start_s: 79.8685
         ref_end_s:   109.807
+      - mix_start_s: 1732.14
+        ref_start_s: 15.45
+        ref_end_s:   16.7948
+      - mix_start_s: 1733.31
+        ref_start_s: 48.2702
+        ref_end_s:   48.8849
     gain_curve:
       - [1703.9, 1]
       - [1706.04, 1]
@@ -1628,13 +1687,16 @@ tracks:
     set_end_s:   1997.25
     ref_start_s: 91.6223
     ref_end_s:   270.038
-    tempo_ratio: 1.42105
+    tempo_ratio: 0.994339
     ref_segments:
       - mix_start_s: 1945.58
         ref_start_s: 91.6223
         ref_end_s:   135.092
       - mix_start_s: 1989.34
         ref_start_s: 240.09
+        ref_end_s:   246.645
+      - mix_start_s: 1995.9
+        ref_start_s: 268.691
         ref_end_s:   270.038
     audible_frac: 0.91
     audible_start_s: 1950
@@ -1933,7 +1995,14 @@ tracks:
     set_end_s:   2364.01
     ref_start_s: 52.5438
     ref_end_s:   105.364
-    tempo_ratio: 1.38872
+    tempo_ratio: 0.994329
+    ref_segments:
+      - mix_start_s: 2325.97
+        ref_start_s: 52.5438
+        ref_end_s:   87.6558
+      - mix_start_s: 2361.14
+        ref_start_s: 102.656
+        ref_end_s:   105.364
     gain_curve:
       - [2325.97, 0.2818]
       - [2331.6, 1]
@@ -1949,13 +2018,16 @@ tracks:
     set_end_s:   2364.15
     ref_start_s: 15.3109
     ref_end_s:   105.589
-    tempo_ratio: 2.84814
+    tempo_ratio: 0.996903
     ref_segments:
       - mix_start_s: 2331.79
         ref_start_s: 103.451
         ref_end_s:   105.355
       - mix_start_s: 2333.69
         ref_start_s: 15.3109
+        ref_end_s:   31.0433
+      - mix_start_s: 2361.83
+        ref_start_s: 103.451
         ref_end_s:   105.589
     gain_curve:
       - [2331.79, 1]
@@ -2015,8 +2087,15 @@ tracks:
     set_end_s:   2447.15
     ref_start_s: 26.5858
     ref_end_s:   64.076
-    tempo_ratio: 1.63001
+    tempo_ratio: 0.977036
     pitch_shift_semi: -1
+    ref_segments:
+      - mix_start_s: 2424.15
+        ref_start_s: 26.5858
+        ref_end_s:   46.8243
+      - mix_start_s: 2444.88
+        ref_start_s: 61.8427
+        ref_end_s:   64.076
     audible_frac: 0.995
     audible_end_s: 2447.04
     gain_curve:

@@ -1,8 +1,10 @@
 """Write manual ground-truth YAML back to pi-storage canonical DB.
 
 Loads a ``*_ground_truth.yaml`` (see labeling/ground_truth/schema.py) and
-upserts rows into ``set_ground_truth``. This is Phase 5 of the identity plan —
-the seam between Ableton labeling and downstream alignment training.
+transactionally replaces that set's rows in ``set_ground_truth``. This is
+Phase 5 of the identity plan — the seam between Ableton labeling and downstream
+alignment training. Replacing the set prevents labels removed or split by a
+fresh Ableton export from surviving as stale database rows.
 
 Usage (on pi-storage or against a local DB copy):
 
@@ -79,7 +81,10 @@ def write_back(db_path: Path, yaml_path: Path, *, dry_run: bool = False) -> int:
             gt.source,
         ))
     if dry_run:
-        print(f"would upsert {len(rows)} rows into set_ground_truth for set_id={gt.set_id}")
+        print(
+            f"would replace set_ground_truth for set_id={gt.set_id} "
+            f"with {len(rows)} rows"
+        )
         for r in rows[:5]:
             print(f"  {r[1]} recording={r[2]} stem={r[3]} [{r[4]:.1f}-{r[5]:.1f}s]")
         if len(rows) > 5:
@@ -87,6 +92,8 @@ def write_back(db_path: Path, yaml_path: Path, *, dry_run: bool = False) -> int:
         return 0
 
     with connect(db_path) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute("DELETE FROM set_ground_truth WHERE set_id = ?", (gt.set_id,))
         conn.executemany(
             """
             INSERT OR REPLACE INTO set_ground_truth (
@@ -99,7 +106,7 @@ def write_back(db_path: Path, yaml_path: Path, *, dry_run: bool = False) -> int:
             rows,
         )
         conn.commit()
-    print(f"wrote {len(rows)} ground-truth rows for set_id={gt.set_id}")
+    print(f"replaced ground truth for set_id={gt.set_id} with {len(rows)} rows")
     return 0
 
 

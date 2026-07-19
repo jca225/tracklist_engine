@@ -155,7 +155,13 @@ class LiveContext:
         return fiber_gate(obs, labels, label_hz)
 
     @classmethod
-    def from_set(cls, set_id: str, spans: list[dict]) -> LiveContext | None:
+    def from_set(
+        cls,
+        set_id: str,
+        spans: list[dict],
+        *,
+        apply_fiber_gate: bool = False,
+    ) -> LiveContext | None:
         """Build the live context from cached MERT + the pulled aligning folder.
 
         Returns None only if MERT (the mix timebase everything else keys off)
@@ -164,7 +170,7 @@ class LiveContext:
         """
         from workspaces.alignment_prototype.mert_store import load_bb12_mert
 
-        ctx = cls(set_id=set_id)
+        ctx = cls(set_id=set_id, apply_fiber_gate=apply_fiber_gate)
 
         # --- mix timebase (MERT): the one hard dependency -------------------
         from core.result import Err, Ok
@@ -218,15 +224,25 @@ class LiveContext:
                 fp_candidates_for_span,
             )
 
-            # This live FP lane is instrumental-only (ref_fp_for_span). Keep the
-            # observation symmetric: separated mix instrumental against the
-            # reference instrumental stem. Full-mix hashes reintroduce vocals,
-            # FX and other active layers and were the source of precise false
-            # diagonals in the first integration attempt.
-            mix_file = set_dir / "mix_instrumental.flac"
-            if not mix_file.is_file():
+            # Instrumental-only live FP lane (ref_fp_for_span): separated mix
+            # instrumental vs ref instrumental. Full-mix hashes reintroduce
+            # vocals/FX and produced precise false diagonals. Prefer PCM
+            # (wav/flac) over m4a — AAC on long files can OOM (BB10 E1).
+            mix_file = next(
+                (
+                    p
+                    for p in (
+                        set_dir / "mix_instrumental.wav",
+                        set_dir / "mix_instrumental.flac",
+                        set_dir / "mix_instrumental.m4a",
+                    )
+                    if p.is_file()
+                ),
+                None,
+            )
+            if mix_file is None:
                 log.warning(
-                    "live fp: mix_instrumental.flac missing in %s — abstain",
+                    "live fp: mix_instrumental.{wav,flac,m4a} missing in %s — abstain",
                     set_dir,
                 )
                 return
@@ -247,10 +263,7 @@ class LiveContext:
             hm = None
             cache_dir = os.environ.get("FP_MIX_HASH_CACHE", "").strip()
             if cache_dir:
-                cp = (
-                    Path(cache_dir)
-                    / f"{ctx.set_id}_instrumental_mix_hashes.pkl"
-                )
+                cp = Path(cache_dir) / f"{ctx.set_id}_instrumental_mix_hashes.pkl"
                 if cp.is_file():
                     hm = pickle.loads(cp.read_bytes())
                     log.info("live fp: mix hashes from cache %s", cp)
@@ -328,6 +341,8 @@ class LiveContext:
                 _slot_order,
                 candidate_diagonals,
                 monotonic_decode,
+                resolve_tracklist_slot,
+                tracklist_max_slot,
                 transcribe_words,
             )
 
@@ -343,21 +358,17 @@ class LiveContext:
             manifest = json.loads((set_dir / "manifest.json").read_text())
             by_tid = _manifest_by_tid(set_dir, ctx.set_id)
             mix_dur = float(manifest.get("mix_duration_s") or 0) or mix_end
-            max_slot = (
-                max(
-                    (
-                        _slot_order(s["slot_label"])[0]
-                        for s in spans
-                        if s.get("slot_label")
-                    ),
-                    default=1,
-                )
-                or 1
-            )
+            man_slots = [
+                str(r["slot_label"])
+                for r in (manifest.get("tracks") or [])
+                if isinstance(r, dict) and r.get("slot_label")
+            ]
+            max_slot = tracklist_max_slot(man_slots) if man_slots else 1
             mix_bt = _bigram_times(_norm(transcribe_words(mixv)))
-            decode_spans, keys = [], []
+            items: list[tuple[tuple[int, int], str, list, float]] = []
             for s in ac:
                 t = by_tid.get(s.get("recording_id"))
+                row = t if isinstance(t, dict) else None
                 vpath = _vocal_ref_path(t)
                 if not vpath or not Path(vpath).is_file():
                     continue
@@ -367,14 +378,19 @@ class LiveContext:
                 cands = candidate_diagonals(_norm(cw), mix_bt)
                 if not cands:
                     continue
-                epos = _slot_order(s["slot_label"])[0] / max_slot * mix_dur
-                decode_spans.append((cands, epos))
-                keys.append(str(s["slot_label"]))
-            if not decode_spans:
+                man_slot = resolve_tracklist_slot(s.get("slot_label"), row)
+                order = _slot_order(man_slot)
+                epos = order[0] / max_slot * mix_dur
+                # Key by timeline slot_label so lyrics_runner still matches.
+                items.append((order, str(s["slot_label"]), cands, epos))
+            if not items:
                 log.warning(
                     "live lyrics: no acappella span produced diagonals — abstain"
                 )
                 return
+            items.sort(key=lambda it: it[0])
+            decode_spans = [(cands, epos) for _order, _key, cands, epos in items]
+            keys = [key for _order, key, _cands, _epos in items]
             for key, (ss, rs) in zip(keys, monotonic_decode(decode_spans)):
                 if ss is not None:
                     ctx.lyrics_by_slot[key] = (float(ss), float(rs))
@@ -571,7 +587,21 @@ def stem_hubert_runner(ctx: LiveContext) -> Runner:
         ref_hub = ctx.ref_hub(rid)
         if ref_hub is None:
             return _abstain("stem_hubert", "no ref vocal HuBERT for this recording")
+        # Prefer mert/cue anchors; on unlabeled pools (BB10) those are absent, so
+        # fall back to the joint lyrics decode already loaded into LiveContext,
+        # then the coarse timeline set_start. Without this, stem_hubert always
+        # abstains with "no prior" and G2 can never pair lyrics+hubert.
         prior = _prior_ss(data)
+        prior_src = "mert_or_cue"
+        if prior is None:
+            slot = str(data.get("slot_label") or "")
+            lyr = ctx.lyrics_by_slot.get(slot)
+            if lyr is not None:
+                prior = float(lyr[0])
+                prior_src = "lyrics"
+        if prior is None and data.get("set_start_s") is not None:
+            prior = float(data["set_start_s"])
+            prior_src = "timeline"
         if prior is None:
             return _abstain("stem_hubert", "no prior set_start to band around")
         try:
@@ -593,7 +623,10 @@ def stem_hubert_runner(ctx: LiveContext) -> Runner:
             confidence=float(min(1.0, max(0.3, peak))),
             precision=spec.precision,
             cost=spec.cost,
-            detail=f"HuBERT place_joint set_start={ss:.1f}s peak={peak:.2f}",
+            detail=(
+                f"HuBERT place_joint set_start={ss:.1f}s peak={peak:.2f} "
+                f"prior={prior_src}"
+            ),
         )
         return ctx.gate_instance(obs, rid)
 

@@ -261,3 +261,107 @@ def test_bb12_backfill_serializes_cleanly():
     # Every BB12 case must survive a dict round-trip (schema completeness).
     for c in _bb12_cases():
         assert case_from_dict(case_to_dict(c)) == c
+
+
+def test_impact_score_round_trips():
+    case = AcquisitionCase(
+        set_id="1fsnxchk",
+        slot_label="097",
+        layer_role="solo",
+        claim=CaseClaim(recording_id="1jz334x5"),
+        impact_score=3,
+    )
+    back = case_from_dict(case_to_dict(case))
+    assert back.impact_score == 3
+
+
+def test_impact_score_defaults_zero_when_absent():
+    # legacy dict with no impact_score key
+    back = case_from_dict(
+        {"set_id": "x", "slot_label": "1", "claim": {"recording_id": "r"}}
+    )
+    assert back.impact_score == 0
+
+
+# ── open_case: detection-time find-or-create ──────────────────────────────────
+
+
+def test_open_case_creates_open_case(tmp_path):
+    from core.acquisition_case import default_path, open_case
+
+    c = open_case(
+        set_id="1fsnxchk",
+        slot_label="097",
+        recording_id="1jz334x5",
+        problem_classes=(ProblemClass.MISSING_ASSET,),
+        impact_score=1,
+        notes="never matched",
+        root=tmp_path,
+    )
+    assert c.status is CaseStatus.OPEN
+    assert ProblemClass.MISSING_ASSET in c.problem_classes
+    assert c.impact_score == 1
+    on_disk = load_cases(default_path("1fsnxchk", root=tmp_path))
+    assert len(on_disk) == 1
+
+
+def test_open_case_is_idempotent_and_merges(tmp_path):
+    from core.acquisition_case import default_path, open_case
+
+    open_case(
+        set_id="s",
+        slot_label="1",
+        recording_id="r",
+        problem_classes=(ProblemClass.MISSING_ASSET,),
+        impact_score=1,
+        root=tmp_path,
+    )
+    open_case(
+        set_id="s",
+        slot_label="1",
+        recording_id="r",
+        problem_classes=(ProblemClass.WRONG_VERSION,),
+        impact_score=3,
+        root=tmp_path,
+    )
+    cases = load_cases(default_path("s", root=tmp_path))
+    assert len(cases) == 1  # dedup guarantee
+    assert ProblemClass.MISSING_ASSET in cases[0].problem_classes
+    assert ProblemClass.WRONG_VERSION in cases[0].problem_classes
+    assert cases[0].impact_score == 3  # takes the max
+
+
+# ── global queries: load_all_cases + open_worklist ────────────────────────────
+
+
+def test_open_worklist_spans_sets_and_ranks_by_impact(tmp_path):
+    from core.acquisition_case import open_case, open_worklist, ProblemClass
+
+    open_case(
+        set_id="A", slot_label="1", recording_id="r1", impact_score=1, root=tmp_path
+    )
+    open_case(
+        set_id="B", slot_label="2", recording_id="r2", impact_score=5, root=tmp_path
+    )
+    wl = open_worklist(root=tmp_path)
+    assert [c.set_id for c in wl] == ["B", "A"]  # higher impact first
+
+
+def test_open_worklist_excludes_non_open(tmp_path):
+    from core.acquisition_case import (
+        open_case,
+        open_worklist,
+        load_cases,
+        save_cases,
+        default_path,
+        CaseStatus,
+    )
+    from dataclasses import replace
+
+    open_case(set_id="A", slot_label="1", recording_id="r1", root=tmp_path)
+    cases = load_cases(default_path("A", root=tmp_path))
+    save_cases(
+        default_path("A", root=tmp_path),
+        [replace(cases[0], status=CaseStatus.RESOLVED)],
+    )
+    assert open_worklist(root=tmp_path) == []

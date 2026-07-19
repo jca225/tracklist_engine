@@ -67,6 +67,26 @@ INDEPENDENCE_GROUP: dict[str, str] = {
 }
 
 
+def independence_satisfied(belief: SpanBelief) -> bool:
+    """True when the winning cluster meets the E1 G2 independence bar.
+
+    ≥2 independent evidence groups, or one member with calibrated precision ≥0.9.
+    Fiber ambiguity is handled separately (``pseudo_acceptance`` / G3).
+    """
+    top = belief.best()
+    if top is None:
+        return False
+    members = tuple(
+        obs
+        for obs in belief.observations
+        if not obs.abstained and obs.probe in top.probes
+    )
+    if not members:
+        return False
+    groups = {INDEPENDENCE_GROUP.get(obs.probe, obs.probe) for obs in members}
+    return len(groups) >= 2 or max(obs.precision for obs in members) >= 0.9
+
+
 def _combine_trust(members: tuple[Observation, ...]) -> float:
     """Noisy-OR of per-group max precision: independent agreeing probes
     corroborate, correlated ones don't double-count. One probe → its own

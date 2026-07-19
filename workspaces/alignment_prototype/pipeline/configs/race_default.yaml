@@ -1,0 +1,8 @@
+# End-to-end (compose) grain — reproduces `make race`, with the classical
+# baseline auto-included and every row logged to out/ablation_runs.jsonl.
+# Referee: score_timeline_vs_gt (strict + fiber-aware), the frozen scorer.
+grain: compose
+sets: [1fsnxchk, 2nvzlh2k]   # BB12, BB11
+actors: [viterbi, agentic, trajectory_decoder]   # classical / agentic / ml actors
+base: classical
+seed: 0

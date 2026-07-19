@@ -185,7 +185,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--n", type=int, default=20)
     p.add_argument(
         "--curriculum",
-        choices=["bb12-lite", "bb12-warp", "bb12-med", "bb12-full"],
+        choices=["bb12-lite", "bb12-real", "bb12-warp", "bb12-med", "bb12-full"],
         default="bb12-lite",
     )
     p.add_argument("--out", type=Path, default=DEFAULT_OUT)

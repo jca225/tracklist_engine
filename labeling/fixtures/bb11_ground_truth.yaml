@@ -577,8 +577,15 @@ tracks:
     set_end_s:   886.139
     ref_start_s: -0.02211
     ref_end_s:   116.677
-    tempo_ratio: 2.47998
+    tempo_ratio: 1.23301
     pitch_shift_semi: 1
+    ref_segments:
+      - mix_start_s: 839.083
+        ref_start_s: -0.02211
+        ref_end_s:   56.8252
+      - mix_start_s: 885.172
+        ref_start_s: 115.503
+        ref_end_s:   116.677
     gain_curve:
       - [839.083, 1]
       - [885.172, 1]
@@ -680,7 +687,7 @@ tracks:
     set_end_s:   1130.08
     ref_start_s: -5.63453e-08
     ref_end_s:   30.2357
-    tempo_ratio: 0.627523
+    tempo_ratio: 1
     ref_segments:
       - mix_start_s: 1009.91
         ref_start_s: -5.63453e-08
@@ -907,14 +914,23 @@ tracks:
     set_end_s:   1335.23
     ref_start_s: 29.8548
     ref_end_s:   95.463
-    tempo_ratio: 1.22866
+    tempo_ratio: 0.992653
     ref_segments:
       - mix_start_s: 1282.39
         ref_start_s: 29.8548
+        ref_end_s:   62.2425
+      - mix_start_s: 1314.99
+        ref_start_s: 71.4325
+        ref_end_s:   73.9173
+      - mix_start_s: 1317.47
+        ref_start_s: 78.3502
         ref_end_s:   81.4905
       - mix_start_s: 1320.61
         ref_start_s: 81.4905
         ref_end_s:   89.1156
+      - mix_start_s: 1328.41
+        ref_start_s: 87.1014
+        ref_end_s:   88.2524
       - mix_start_s: 1329.58
         ref_start_s: 89.7934
         ref_end_s:   95.463
@@ -1507,7 +1523,8 @@ tracks:
     set_end_s:   2221.03
     ref_start_s: 0
     ref_end_s:   91.9595
-    tempo_ratio: 0.686049
+    tempo_ratio: 1.3934
+    is_loop:     true
     ref_segments:
       - mix_start_s: 2083.87
         ref_start_s: 0
@@ -1517,7 +1534,19 @@ tracks:
         ref_end_s:   65.5893
       - mix_start_s: 2151.27
         ref_start_s: 77.4997
+        ref_end_s:   91.7841
+      - mix_start_s: 2161.03
+        ref_start_s: 88.9779
+        ref_end_s:   91.7841
+      - mix_start_s: 2162.94
+        ref_start_s: 88.8902
         ref_end_s:   91.9595
+      - mix_start_s: 2165.02
+        ref_start_s: 86.1717
+        ref_end_s:   88.9779
+      - mix_start_s: 2218.11
+        ref_start_s: 86.1717
+        ref_end_s:   88.9779
     gain_curve:
       - [2083.87, 1]
       - [2113.24, 1]
@@ -2185,10 +2214,13 @@ tracks:
     set_end_s:   3231.9
     ref_start_s: -8.82725e-08
     ref_end_s:   67.7647
-    tempo_ratio: 3.15228
+    tempo_ratio: 0.970588
     ref_segments:
       - mix_start_s: 3197.04
         ref_start_s: -8.82725e-08
+        ref_end_s:   9.92647
+      - mix_start_s: 3207.26
+        ref_start_s: 60.75
         ref_end_s:   62.1176
       - mix_start_s: 3220.24
         ref_start_s: 56.4485
@@ -2411,13 +2443,20 @@ tracks:
     set_end_s:   3538.71
     ref_start_s: 53.82
     ref_end_s:   185.6
-    tempo_ratio: 1.07925
+    tempo_ratio: 1.2
+    is_loop:     true
     ref_segments:
       - mix_start_s: 3453.12
         ref_start_s: 53.82
         ref_end_s:   78.07
       - mix_start_s: 3495
         ref_start_s: 179.2
+        ref_end_s:   184
+      - mix_start_s: 3499
+        ref_start_s: 180.8
+        ref_end_s:   184
+      - mix_start_s: 3501.67
+        ref_start_s: 180.8
         ref_end_s:   184
       - mix_start_s: 3504.33
         ref_start_s: 180.8

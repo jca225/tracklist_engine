@@ -3,7 +3,7 @@
 Recover, from a recorded DJ mix + its source tracks, the *editable* parameters a
 DJ applied: **when** each track plays, **how loud** (gain/fade), and **EQ**. This
 is the "reverse-engineering" half of the alignment objective. Built and measured
-this session (2026-06-25); see [alignment_research_plan.md](alignment_research_plan.md).
+this session (2026-06-25); see [alignment_research_plan.md](archive/alignment_research_plan.md).
 
 ## TL;DR — what works, what's validated
 

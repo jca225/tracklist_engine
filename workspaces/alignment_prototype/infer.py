@@ -525,6 +525,8 @@ def main(argv: list[str] | None = None) -> int:
             _slot_order,
             candidate_diagonals,
             monotonic_decode,
+            resolve_tracklist_slot,
+            tracklist_max_slot,
             transcribe_words,
         )
 
@@ -545,22 +547,28 @@ def main(argv: list[str] | None = None) -> int:
             mix_dur = float(manifest.get("mix_duration_s") or 0) or max(
                 p.set_end_s for p in preds
             )
+            man_slots = [
+                str(r["slot_label"])
+                for r in (manifest.get("tracks") or [])
+                if isinstance(r, dict) and r.get("slot_label")
+            ]
             max_slot = (
-                max(
-                    (_slot_order(p.slot_label)[0] for p in preds if p.slot_label),
-                    default=1,
+                tracklist_max_slot(man_slots)
+                if man_slots
+                else tracklist_max_slot(
+                    [str(p.slot_label) for p in preds if p.slot_label]
                 )
-                or 1
             )
             print(
                 f"lyrics placement: transcribing mix_vocals + {len(ac_idx)} acappella "
                 "refs (cached)…"
             )
             mix_bt = _bigram_times(_norm(transcribe_words(mixv)))
-            spans, idxs = [], []
+            items: list[tuple[tuple[int, int], int, list, float]] = []
             for i in ac_idx:
                 p = preds[i]
                 t = by_tid.get(p.recording_id)
+                row = t if isinstance(t, dict) else None
                 vpath = _vocal_ref_path(t)
                 if not vpath or not Path(vpath).is_file():
                     continue
@@ -570,10 +578,14 @@ def main(argv: list[str] | None = None) -> int:
                 cands = candidate_diagonals(_norm(cw), mix_bt)
                 if not cands:
                     continue
-                epos = _slot_order(p.slot_label)[0] / max_slot * mix_dur
-                spans.append((cands, epos))
-                idxs.append(i)
-            if spans:
+                man_slot = resolve_tracklist_slot(p.slot_label, row)
+                order = _slot_order(man_slot)
+                epos = order[0] / max_slot * mix_dur
+                items.append((order, i, cands, epos))
+            if items:
+                items.sort(key=lambda it: it[0])
+                spans = [(cands, epos) for _order, _i, cands, epos in items]
+                idxs = [i for _order, i, _cands, _epos in items]
                 chosen = monotonic_decode(spans)
                 new_preds = list(preds)
                 n_lyr = 0
