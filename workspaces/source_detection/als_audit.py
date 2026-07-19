@@ -53,6 +53,7 @@ from workspaces.source_detection.matcher import _match_curve, _resample_cols  # 
 FRAME_S = config.FRAME_S
 VERIFY_WINDOW_S = 24.0  # max source seconds used as the matched-filter template
 POS_TOL_S = 3.0  # placed vs detected within this == placement confirmed
+PARKING_TOL_S = 5.0
 SCORE_OK = 0.50  # matched-filter score floor to call a peak "real"
 SCORE_WEAK = 0.40  # below this everywhere == source doesn't appear
 
@@ -196,9 +197,15 @@ def parse_als(
     mix_track = None
     for tr in root.xpath(".//LiveSet/Tracks/AudioTrack"):
         nm = als_io.track_display_name(tr)
-        if nm.startswith("1-mix") or nm.startswith("2-mix") or nm.lower() == "mix":
+        if nm == "1-mix":
             mix_track = tr
             break
+    if mix_track is None:
+        for tr in root.xpath(".//LiveSet/Tracks/AudioTrack"):
+            nm = als_io.track_display_name(tr)
+            if nm.startswith("1-mix") or nm.startswith("2-mix") or nm.lower() == "mix":
+                mix_track = tr
+                break
     if mix_track is None:  # fall back: any lane referencing mix.*
         for tr in root.xpath(".//LiveSet/Tracks/AudioTrack"):
             if (
@@ -210,8 +217,18 @@ def parse_als(
             ):
                 mix_track = tr
                 break
-    mapper = als_io.ArrangementMapper.from_mix_track(
-        mix_track, mix_duration_s=_mix_duration_s(set_dir)
+    parsed_layer_clips = als_io.parse_layer_clips(root)
+    label_arr_max = max((clip.arr_end for clip in parsed_layer_clips), default=0.0)
+    parsed_by_key = {
+        (clip.track_name, clip.path, clip.arr_start, clip.arr_end): clip
+        for clip in parsed_layer_clips
+    }
+    mix_duration_s = _mix_duration_s(set_dir)
+    mapper = als_io.select_arrangement_mapper(
+        root,
+        mix_track,
+        mix_duration_s=mix_duration_s,
+        label_arr_max=label_arr_max,
     )
     vol_envs = als_io.build_vol_envelopes(root)
 
@@ -239,6 +256,17 @@ def parse_als(
             warp = als_io.WarpMarkers.from_clip(clip_el)
             arr_s = float(cs.get("Value"))
             arr_e = float(ce.get("Value"))
+            parsed = parsed_by_key.get((nm, path, arr_s, arr_e))
+            if parsed is not None and parsed.silence_reason:
+                dropped.append(
+                    {
+                        "track": nm,
+                        "arr_start": arr_s,
+                        "song": song_label(path),
+                        "reason": parsed.silence_reason,
+                    }
+                )
+                continue
             ms = mapper.arr_to_set_sec(arr_s)
             me = mapper.arr_to_set_sec(arr_e)
             if ms is None or me is None or me <= ms:
@@ -250,6 +278,19 @@ def parse_als(
                         "reason": "arrangement beat is outside every mix-reference "
                         "warp (parked past the mix) — staged/unaligned clip "
                         "with no derivable mix position",
+                    }
+                )
+                continue
+            if ms > mix_duration_s + PARKING_TOL_S:
+                dropped.append(
+                    {
+                        "track": nm,
+                        "arr_start": arr_s,
+                        "song": song_label(path),
+                        "reason": (
+                            f"parking-lot (mix_start_s={ms:.1f} exceeds "
+                            f"mix duration {mix_duration_s:.1f})"
+                        ),
                     }
                 )
                 continue
@@ -312,6 +353,15 @@ def _mix_chroma_for(stem: str, set_dir: Path):
     return features.chroma_of(f) if f.is_file() else None
 
 
+def _placed_window_score(curve: np.ndarray, center: int, radius: int) -> float:
+    """Best match near the asserted placement, honoring ``POS_TOL_S``."""
+    if center < 0 or center >= curve.size:
+        return -2.0
+    lo = max(0, center - radius)
+    hi = min(curve.size, center + radius + 1)
+    return float(curve[lo:hi].max())
+
+
 def verify_clip(fact: ClipFacts, set_dir: Path) -> ClipVerdict:
     v = ClipVerdict(
         idx=fact.idx,
@@ -356,6 +406,7 @@ def verify_clip(fact: ClipFacts, set_dir: Path) -> ClipVerdict:
         tmpl = tmpl[:, : mixc.shape[1] - 1]
 
     placed_frame = int(round(fact.mix_start_s / FRAME_S))
+    placed_radius = int(round(POS_TOL_S / FRAME_S))
     best_score = -2.0
     best_frame = 0
     best_rot = 0
@@ -370,7 +421,7 @@ def verify_clip(fact: ClipFacts, set_dir: Path) -> ClipVerdict:
         if curve[k] > best_score:
             best_score, best_frame, best_rot = float(curve[k]), k, r
         if placed_frame < curve.size:
-            ps = float(curve[placed_frame])
+            ps = _placed_window_score(curve, placed_frame, placed_radius)
             placed_by_rot[r] = ps
             if ps > placed_score:
                 placed_score, placed_rot = ps, r
