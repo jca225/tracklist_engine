@@ -6,7 +6,7 @@
 
 **Architecture:** Use explicit artifacts between stages: base timeline → pseudo-safe agentic timeline → pseudo-GT YAML → trajectory dataset → model runs. Refactor the existing agentic driver around a shared refinement function so supervised behavior stays unchanged while an unlabeled caller supplies timeline/manifest stem claims instead of GT.
 
-**Tech Stack:** Python 3.14, frozen dataclasses, PyYAML, msgspec timeline contracts, NumPy, PyTorch, pytest, existing agentic probes and trajectory training stack.
+**Tech Stack:** Python 3.14, frozen dataclasses, PyYAML, msgspec timeline/manifest contracts, NumPy, PyTorch, pytest, existing agentic probes and trajectory training stack.
 
 ## Global Constraints
 
@@ -254,16 +254,27 @@ if not s0 <= mix_start < s1 or ref_end < ref_start:
 
 - [ ] **Step 4: Implement deterministic manifest resolution**
 
-Index manifest tracks by normalized slot, `recording_id`, and legacy `track_id`. Resolve in this order: existing span `track_id`, recording ID, slot label. Reject ambiguity instead of choosing the first candidate.
+Load the manifest through `core.contracts.load_manifest`; do not add another raw
+`manifest.json` reader. Index typed `ManifestRow` values by normalized slot,
+`recording_id`, and legacy `track_id`. Resolve in this order: existing span
+`track_id`, recording ID, slot label. Reject ambiguity instead of choosing the
+first candidate.
 
 ```python
-def resolve_track_id(span: dict, tracks: list[dict]) -> str | None:
+def resolve_track_id(
+    span: dict,
+    tracks: tuple[ManifestRow, ...],
+) -> str | None:
     ...
 ```
 
 - [ ] **Step 5: Implement materialization and atomic output**
 
-Use `core.contracts.load_timeline` for validation, then load the raw JSON only after validation to retain extension fields. Compute the source SHA-256 from timeline bytes. Write sorted-key YAML to a sibling temporary file, `flush` + `os.fsync`, then `os.replace`.
+Use `core.contracts.load_timeline` for validation, then reuse the existing
+`drivers.base.load_timeline_dict` extension-field reader; do not introduce a
+new raw timeline read that raises the `raw_timeline_read` ratchet. Compute the
+source SHA-256 from timeline bytes. Write sorted-key YAML to a sibling temporary
+file, `flush` + `os.fsync`, then `os.replace`.
 
 ```python
 @dataclass(frozen=True)
