@@ -128,7 +128,13 @@ class LiveContext:
         return fiber_gate(obs, labels, label_hz)
 
     @classmethod
-    def from_set(cls, set_id: str, spans: list[dict]) -> LiveContext | None:
+    def from_set(
+        cls,
+        set_id: str,
+        spans: list[dict],
+        *,
+        apply_fiber_gate: bool = False,
+    ) -> LiveContext | None:
         """Build the live context from cached MERT + the pulled aligning folder.
 
         Returns None only if MERT (the mix timebase everything else keys off)
@@ -137,7 +143,7 @@ class LiveContext:
         """
         from workspaces.alignment_prototype.mert_store import load_bb12_mert
 
-        ctx = cls(set_id=set_id)
+        ctx = cls(set_id=set_id, apply_fiber_gate=apply_fiber_gate)
 
         # --- mix timebase (MERT): the one hard dependency -------------------
         from core.result import Err, Ok
