@@ -306,6 +306,18 @@ train spans and does **not** beat the raw control (or conv) on held-out BB11.
 Do **not** regenerate `docs/alignment_status.md` from this run. Next lever is
 more real pseudo mass (better lyrics∩HuBERT agreement / fp landmarks / a third
 labeled set), not more epochs on n=3.
+## Ableton ReAct harness — daw_env (2026-07-19)
+**Question:** does place→listen→sense→iterate in an ALS-first session beat
+probe-only agentic on hard placement (ridge decoder_wall), without Live OSC?
+**Infra:** `workspaces/alignment_prototype/daw_env/` — Mode A/B CLI, unit tests
+green (`tests/alignment_prototype/test_daw_env.py`). Spec:
+`docs/superpowers/specs/2026-07-19-ableton-react-harness-design.md`.
+**Verdict: SHADOW / pending operator scorecard.** Full BB11/BB12 scorecard vs
+agentic `_lt` requires pulled mix audio + timeline; not run in this landing.
+Default `make align` / race board **unchanged**. Flip to GO only if placement
+median + fiber traj do not regress and decoder_wall bucket improves; else NO-GO
+and keep as labeling Mode B assist only.
+
 **Fixes that unblocked BB10 (do not weaken G1/G2):** (1) prefer `mix.wav` over
 `mix.m4a` for fp load; (2) `resolve(require_independence=True)` in pseudo-safe so
 lyrics-alone auto does not skip HuBERT; (3) HuBERT prior falls back to
