@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
+
+pytest.importorskip("librosa")  # chroma_retrieve → trajectory.features → recon_probe
 
 from workspaces.alignment_prototype.fp_segments.chroma_retrieve import (
     retrieve_chroma_matches,

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import pytest
+
+pytest.importorskip("librosa")  # audio_enrich → recon_probe
+
 from workspaces.alignment_prototype.candidate_arbiter.audio_enrich import (
     with_verification,
 )

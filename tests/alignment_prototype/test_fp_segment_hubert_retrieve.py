@@ -5,6 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+pytest.importorskip("librosa")  # hubert_retrieve → trajectory.features → recon_probe
+
 from workspaces.alignment_prototype.fp_segments.hubert_retrieve import (
     matches_from_similarity,
     retrieve_hubert_matches,
