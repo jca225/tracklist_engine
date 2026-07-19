@@ -362,3 +362,29 @@ return to algo (routing materialize, decode, placement).
 **Do not** re-litigate inventory-audio paths on BB12 before fixing live stem
 materialize / re-infer. **Do** run BB11 inventory pass next only if routing +
 algo blockers are addressed in parallel.
+
+## BB11 inventory coherence (2026-07-19) — manifest wired, pi debt unchanged
+
+**Question:** same inventory-repair tooling as BB12 on `2nvzlh2k` — does manifest
+reconcile + GT slot remap clear blocking inventory and move the board?
+
+**Verdict:** manifest-only progress — aligning tree wired (27 stem rewrites,
+2 added slots); **blocking stays 26/152** (110 satisfied, 16 fallback-warn). No
+Demucs mass-promote (23/23 GT-blocking slots have local vocals but count is too
+high for lean pass). Re-score skipped: frozen `lt_pred_2nvzlh2k_regular_noaudit.json`
+lacks `recording_id` on spans (schema drift).
+
+**Evidence:**
+
+- `reconcile_aligning_manifest 2nvzlh2k --apply`: wired 152 slots; unresolved
+  **017w2, 027, 038w2** (disk/manifest gaps).
+- GT remap: **1** row (`013w1` → `013w3`, Kill FM - Fresh); `needs_human`: `mix`.
+- Worklist: `labeling/out/bb11_inventory_worklist.csv` — **23** GT-blocking
+  (mostly claimed-acappella `wrong_stem` + a few `replace_version` regulars);
+  **23** acquisition cases opened in `data/acquisition_cases/2nvzlh2k.jsonl`.
+- Preflight on scorer attempt: **0** missing ref audio (GT fixture) — spectrogram
+  surface OK; pi `track_audio` stem rows still the blocker.
+
+**Next:** selective Demucs promote or official acappella acquire per worklist
+(not batch-16 like BB12); fix slot **027** missing bed; resolve reconcile
+orphans **017w2/038w2** before strict inventory.

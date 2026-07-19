@@ -1,5 +1,3 @@
-# Hand-annotated ground-truth for 2nvzlh2k__Two Friends - Big Bootie Mix Episode 11
-#
 # Schema: see labeling/ground_truth/ (DSL).
 set_id: 2nvzlh2k
 source: ableton_session
@@ -945,7 +943,7 @@ tracks:
       - [1329.58, 1]
       - [1335.23, 1]
   - track:       "Kill FM - Fresh"
-    slot_label:  "013w1"
+    slot_label:  "013w3"
     track_id:    270uk4cp
     set_start_s: 1329.65
     set_end_s:   1367.17
