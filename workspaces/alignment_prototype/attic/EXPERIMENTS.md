@@ -303,7 +303,6 @@ G2 CLUSTER_TOL_S=8 can pair; tighter band_s=45 when prior=lyrics). Smoke TRM
 at n=24 still underfits held-out vs control (expected); mass lever only.
 **Verdict (BB10 full E1 @ n=3 / n=16 / n=24, 2026-07-19): noise-floor** —
 drop `--smoke-only`, `--reuse-agentic`. At n=24: pseudo-TRM train-fit ~0.86
-but held-out HEADLINE ~0.05 � n=24: pseudo-TRM train-fit ~0.86
 but held-out HEADLINE ~0.05 ≪ control ~0.31 (same shape as n=3/16). Do
 **not** regenerate `docs/alignment_status.md`. Mass alone is not enough at
 this n — next lever: BB10 fp landmarks for regulars (pool had 0/25 rid fps
