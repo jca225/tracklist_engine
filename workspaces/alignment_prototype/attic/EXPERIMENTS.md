@@ -85,3 +85,28 @@ pseudo-labels. Stability fix on record: answer-latent LayerNorm + grad-clip 1.0
 --max-train/--max-eval`, ablation framework `pipeline/`. Branch
 `trm-ablation-framework`. Numbers here are DIAGNOSTICS, not SSOT — see
 `docs/alignment_status.md` for headline metrics (unchanged by this).
+
+## E1 pseudo-label flywheel — STARVED (2026-07-18)
+**Question:** can pseudo-safe agentic AUTO_COMMIT on an unlabeled pool produce
+enough audited labels to train a TRM that beats synthetic-only / conv on held-out
+BB11?
+**Verdict: starved** (infra complete; training mass = 0 under documented gates).
+Commit series on `e1-flywheel` (Tasks 1–4): `pseudo_acceptance` + fiber gate +
+`Ladder(combine=True)`, `pseudo_materialize`, `--train-yaml` LOSO guard,
+`trajectory.e1` / `make trm-e1`. Measured smoke:
+`pool=1rfb0yl9` (Disco Lines) → `eval=2nvzlh2k` (BB11), base =
+`out/1rfb0yl9_fused_timeline.json`, artifacts under `out/e1/` (untracked).
+`e1_result.json` status `"starved"` — all spans demoted at G0 (`review`); no
+train subprocess launched. Root cause is probe poverty, not a code bug: fused
+timeline has no `probe_proposals`/`cue_anchor_s`; live path is fp-only (calibrated
+precision below auto bar; single independence group). Re-infer of Disco Lines
+decoded 1/35 slots (0/30 fused rids have exportable 330M multi-layer track MERT
+on pi — legacy-768 only). Plan-default pool BB10 (`w1mgcjt`) blocked earlier:
+no `set_analysis` measure grid and no `set_mert_measures` on pi (needs
+`mac_analyze_sets` + `set_mert_backfill_loop`, both canonical writes — not run).
+**Unblock (operator):** backfill BB10 set analysis + set MERT on pi, then re-run
+`make trm-e1 POOL=w1mgcjt …` (acappella-heavy → lyrics/HuBERT can satisfy G2);
+or export 330M ref MERT for a regular-stem unlabeled set and re-infer a
+proposal-rich base timeline before agentic. Do not lower G1/G2 to force labels.
+Headline metrics unchanged — cite `docs/alignment_status.md` only after a
+non-starved rerun regenerates scorers.
