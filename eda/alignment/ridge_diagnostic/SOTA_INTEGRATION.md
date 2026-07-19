@@ -23,7 +23,17 @@ What failed:
   instrumental lane. Therefore the fast run is not a valid whole-board SOTA
   replacement even though the targeted instrumental cases improve.
 
-The next proof should run all baseline channels from warm caches, or use an
-explicit delta harness that preserves baseline outputs for channels outside the
-instrumental FP change. Generated timelines and scorer output remain local
-under ignored `out/` paths.
+## Delta proof verdict
+
+An explicit delta harness now preserves the canonical agentic baseline
+byte-for-byte outside instrumental spans whose candidate winner includes FP.
+That isolated proof also failed the two-set SOTA criterion: the known
+decoder-wall repairs were outweighed by other instrumental FP regressions.
+
+The changed-span audit found no prospective discriminator in the available
+signals. Wins and regressions shared the same FP-only source and effectively the
+same belief quality. Selecting only the wins would require a GT-tuned
+direction/magnitude rule, so this experiment is closed rather than
+cherry-picked.
+
+Generated timelines and scorer output remain local under ignored `out/` paths.
