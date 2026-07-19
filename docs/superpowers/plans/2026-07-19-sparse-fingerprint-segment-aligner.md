@@ -108,6 +108,12 @@ ungated but **still regresses overall set_start on both sets** (near-wrong
 overwrites). Instr traj up; board promotion not earned. Do not retune gate_s
 on BB11/BB12.
 
+**Ref-only materialize (`--gated --ref-segments-only`):** preserves baseline
+`set_start`/`set_end`; rewrites ref mapping only (`start_source=fp_segment_dp_ref`).
+Placement/identity unchanged; instrumental traj rises on both sets (BB11
+40%→45%, BB12 32%→46%); BB11 instr ref improves, BB12 instr scalar ref mixed.
+Preferred shadow mode; not default-driver yet.
+
 ## Runnable shadow command
 
 ```bash

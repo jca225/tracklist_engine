@@ -195,6 +195,24 @@ only stops teleports. **Do not** tighten `gate_s` on BB11/BB12. Needs a
 stronger GT-free accept rule (evidence vs baseline, or leave set_start and
 only patch `ref_segments`) and an independent set.
 
+## Instrumental FP-segment ref-only materialize (2026-07-19) — PARTIAL
+
+**Question:** with `--gated --ref-segments-only`, can segment banks improve
+ref/traj without touching baseline `set_start`?
+
+**Verdict:** first mode that does not regress the board. vs agentic baseline:
+
+- Placement + identity unchanged on both sets (by construction).
+- BB11: instr traj 40%→45%, headline 26%→29%, instr straight-clip ref median
+  25.0→3.2s; overall ref median 37.5→26.8s.
+- BB12: instr traj 32%→46%, headline 33%→34%; instr straight-clip ref median
+  worsened 32.9→46.3s (n=6) while overall placement held.
+
+**Do not** promote to default driver yet — gains are stem-local / modest, BB12
+scalar ref mixed, still n=2. Keep as the preferred shadow materialize mode
+(`fp_segment_dp_ref`). Next: independent set or evidence-vs-baseline accept
+before wiring a driver.
+
 ## Instrumental secondary-run evidence floor 0.25 (2026-07-19) — REGRESSED
 
 **Question:** does raising `min_run_evidence_fraction` from 0.05 to 0.25 cut

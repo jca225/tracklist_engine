@@ -188,3 +188,55 @@ def test_gate_rejects_far_proposal_and_keeps_near(tmp_path: Path):
     assert doc["spans"][1]["set_end_s"] == 235.0
     assert len(doc["spans"][1]["ref_segments"]) == 1
     assert doc["spans"][1]["start_source"] == "fp_segment_dp"
+
+
+def test_ref_segments_only_preserves_set_start(tmp_path: Path):
+    baseline = {
+        "set_id": "demo",
+        "spans": [
+            {
+                "slot_label": "1",
+                "recording_id": "r1",
+                "claimed_stem": "instrumental",
+                "set_start_s": 100.0,
+                "set_end_s": 140.0,
+                "ref_start_s": 0.0,
+                "ref_end_s": 40.0,
+                "start_source": "baseline",
+                "ref_segments": [],
+            }
+        ],
+    }
+    bank = {
+        "set_id": "demo",
+        "spans": [
+            {
+                "slot_label": "1",
+                "recording_id": "r1",
+                "stem": "instrumental",
+                "status": "decoded",
+                "segments": [
+                    {
+                        "mix_start_s": 105.0,
+                        "mix_end_s": 130.0,
+                        "ref_start_s": 10.0,
+                        "ref_end_s": 35.0,
+                        "slope": 1.0,
+                        "evidence": 12.0,
+                        "confidence": 0.4,
+                    }
+                ],
+            }
+        ],
+    }
+    out = tmp_path / "ref_only.json"
+    materialize_timeline(baseline, bank, out, gate_s=90.0, ref_segments_only=True)
+    doc = json.loads(out.read_text())
+    span = doc["spans"][0]
+    assert span["set_start_s"] == 100.0
+    assert span["set_end_s"] == 140.0
+    assert span["ref_start_s"] == 10.0
+    assert span["ref_end_s"] == 35.0
+    assert span["start_source"] == "fp_segment_dp_ref"
+    assert len(span["ref_segments"]) == 1
+    assert doc["fp_segment_materialize"]["ref_segments_only"] is True
