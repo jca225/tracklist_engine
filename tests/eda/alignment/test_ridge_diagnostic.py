@@ -11,6 +11,9 @@ from eda.alignment.ridge_diagnostic.features import (
     _clamp_crop_bounds,
     cosine_sim_matrix,
 )
+from eda.alignment.ridge_diagnostic.instrumental_fp_delta import (
+    overlay_instrumental_fp,
+)
 from eda.alignment.ridge_diagnostic.ridge import gt_diagonal_mask, ridge_contrast
 
 
@@ -82,3 +85,85 @@ def test_clamp_crop_bounds_respects_file_duration() -> None:
     lo, hi = _clamp_crop_bounds(115.0, 130.0, duration_s=120.0)
     assert lo == 115.0
     assert hi == 120.0
+
+
+def test_instrumental_fp_delta_preserves_every_other_span() -> None:
+    baseline = {
+        "set_id": "set",
+        "spans": [
+            {
+                "slot_label": "001",
+                "recording_id": "regular",
+                "set_start_s": 10.0,
+                "set_end_s": 20.0,
+                "start_source": "baseline",
+            },
+            {
+                "slot_label": "002",
+                "recording_id": "instr",
+                "set_start_s": 30.0,
+                "set_end_s": 40.0,
+                "start_source": "baseline",
+            },
+        ],
+    }
+    candidate = {
+        "set_id": "set",
+        "spans": [
+            {
+                **baseline["spans"][0],
+                "set_start_s": 999.0,
+                "start_source": "agentic:fp",
+            },
+            {
+                **baseline["spans"][1],
+                "set_start_s": 32.0,
+                "set_end_s": 42.0,
+                "start_source": "agentic:fp",
+            },
+        ],
+    }
+
+    out, changed = overlay_instrumental_fp(
+        baseline,
+        candidate,
+        gt_stems={"1": "regular", "2": "instrumental"},
+    )
+
+    assert changed == ["2"]
+    assert out["spans"][0] == baseline["spans"][0]
+    assert out["spans"][1]["set_start_s"] == 32.0
+    assert out["spans"][1]["delta_base_set_start_s"] == 30.0
+
+
+def test_instrumental_delta_requires_fp_winner() -> None:
+    baseline = {
+        "set_id": "set",
+        "spans": [
+            {
+                "slot_label": "1",
+                "recording_id": "instr",
+                "set_start_s": 10.0,
+                "set_end_s": 20.0,
+            }
+        ],
+    }
+    candidate = {
+        "set_id": "set",
+        "spans": [
+            {
+                **baseline["spans"][0],
+                "set_start_s": 50.0,
+                "start_source": "agentic:cue_prior",
+            }
+        ],
+    }
+
+    out, changed = overlay_instrumental_fp(
+        baseline,
+        candidate,
+        gt_stems={"1": "instrumental"},
+    )
+
+    assert changed == []
+    assert out["spans"][0] == baseline["spans"][0]
