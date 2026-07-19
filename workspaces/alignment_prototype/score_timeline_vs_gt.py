@@ -48,6 +48,7 @@ from workspaces.alignment_prototype.refine_ref_offsets import (
     _STEM_FILE,
     find_aligning_dir,
 )
+from eda.alignment.spectrogram_review.source_audio import run_audio_preflight
 
 OUT_DIR = Path(__file__).resolve().parent / "out"
 
@@ -307,14 +308,18 @@ def score_spans(
 
         # overlay density
         density_times = _sample_played_times(g)
-        density = int(
-            np.median(
-                [
-                    sum(1 for r in gt_rows if _row_active_at(r, float(t)))
-                    for t in density_times
-                ]
+        density = (
+            int(
+                np.median(
+                    [
+                        sum(1 for r in gt_rows if _row_active_at(r, float(t)))
+                        for t in density_times
+                    ]
+                )
             )
-        ) if density_times.size else 0
+            if density_times.size
+            else 0
+        )
 
         # ref_err_s: straight clips only (same exclusion logic as main())
         ref_err_s: float | None = None
@@ -380,6 +385,11 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="write never-matched GT recordings to this JSON path",
     )
+    p.add_argument(
+        "--strict-inventory",
+        action="store_true",
+        help="abort when GT rows lack resolvable ref audio (excluding unalignable)",
+    )
     args = p.parse_args(argv)
 
     if args.gt is None:
@@ -418,6 +428,15 @@ def main(argv: list[str] | None = None) -> int:
         )
         if mapped or id_map:
             print(f"(id map: {mapped} GT ids normalized via {id_map_path.name})")
+
+    gt_doc_pre = yaml.safe_load(args.gt.read_text())
+    gt_rows_preflight = [
+        r for r in gt_doc_pre["tracks"] if str(r.get("slot_label")) != "mix"
+    ]
+    if run_audio_preflight(
+        args.set_id, gt_rows_preflight, strict=args.strict_inventory
+    ):
+        return 1
 
     span_scores = score_spans(
         args.set_id,

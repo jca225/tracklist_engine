@@ -170,6 +170,7 @@ def resolve_source_audio(
         return None
     tracks = tracks if tracks is not None else load_manifest_tracks(set_id)
 
+    by_recording = bool(recording_id and tracks.get(recording_id))
     track = tracks.get(recording_id) if recording_id else None
     if track is None and slot:
         for alias in _slot_aliases(slot):
@@ -180,9 +181,56 @@ def resolve_source_audio(
         resolved = _resolve_from_track(set_dir, track, gt_stem)
         if resolved is not None:
             return resolved
+        if by_recording:
+            return None
 
     if slot:
         return _resolve_from_filesystem(
             set_dir, slot, gt_stem=gt_stem, name_hint=name or ""
         )
     return None
+
+
+def preflight_aligning_audio(set_id: str, gt_tracks: list[dict]) -> list[str]:
+    """recording_ids with no resolvable audio (excluding unalignable/skip_training)."""
+    tracks = load_manifest_tracks(set_id)
+    missing: list[str] = []
+    seen: set[str] = set()
+    for row in gt_tracks:
+        if row.get("unalignable") or row.get("skip_training"):
+            continue
+        if str(row.get("slot_label") or "") == "mix":
+            continue
+        rid = str(row.get("track_id") or "")
+        if not rid or rid in seen:
+            continue
+        seen.add(rid)
+        slot = str(row.get("slot_label") or "")
+        gstem = row.get("claimed_stem") or "regular"
+        name = str(row.get("name") or row.get("label") or "")
+        if (
+            resolve_source_audio(
+                set_id,
+                rid,
+                gt_stem=gstem,
+                tracks=tracks,
+                slot=slot or None,
+                name=name or None,
+            )
+            is None
+        ):
+            missing.append(rid)
+    return missing
+
+
+def run_audio_preflight(
+    set_id: str, gt_tracks: list[dict], *, strict: bool = False
+) -> int:
+    """Print preflight summary; return 1 when *strict* and any ref audio is missing."""
+    missing = preflight_aligning_audio(set_id, gt_tracks)
+    print(f"[preflight] {len(missing)} missing ref audio (excluding unalignable)")
+    for rid in missing[:20]:
+        print(f"  missing: {rid}")
+    if len(missing) > 20:
+        print(f"  ... and {len(missing) - 20} more")
+    return 1 if strict and missing else 0

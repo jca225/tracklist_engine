@@ -394,6 +394,7 @@ def _check_ratchets() -> list[Violation]:
         if allowed is None:
             continue
         if count > allowed:
+            pat = RATCHET_PATTERNS.get(name) or SCOPED_RATCHETS[name][1]
             violations.append(
                 Violation(
                     RATCHET_BASELINE_PATH,
@@ -401,7 +402,7 @@ def _check_ratchets() -> list[Violation]:
                     f"ratchet:{name}",
                     f"{count} occurrences > baseline {allowed} — a new instance of "
                     f"this failure class was introduced (pattern "
-                    f"{RATCHET_PATTERNS[name].pattern!r}); fix it or, if truly "
+                    f"{pat.pattern!r}); fix it or, if truly "
                     "intentional, raise the baseline with justification",
                 )
             )
