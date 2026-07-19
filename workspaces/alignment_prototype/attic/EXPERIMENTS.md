@@ -103,10 +103,30 @@ negative evidence, as intended, but no cross-set acceptance threshold is
 earned. Keep the fusion contract for future independent representations; do
 not use exact full-channel FP agreement as a placement gate.
 
+**Scope correction:** this was also not the requested production architecture.
+The aligner uses independent instrumental-to-instrumental and vocal-to-vocal
+lanes; it does not require full audio to corroborate either.
+
 **Do not re-test** thresholds on these two sets. The next verifier must add
 genuinely different evidence (sustained chroma/HuBERT or learned
 superposition-invariant similarity) and an independent validation set, not
 another view of the same landmark collisions.
+
+## Vocal-to-vocal landmark segment lane (2026-07-19) — REPRESENTATION NO-GO
+
+**Question:** with routing mechanically restricted to `mix_vocals.flac`
+against each constituent's `vocals.flac`, can sparse constellation landmark
+correspondences drive the same NULL-aware segment decoder?
+
+**Verdict:** the strict independent lane is operational and never falls back to
+regular/instrumental audio, but landmark coverage is too weak and false paths
+dominate across the real sets. This is consistent with the existing axis
+contract, which omitted fingerprinting for vocals. The routing architecture is
+correct; the vocal observation must use HuBERT/phonetic or lyric anchors
+instead of Shazam-style constellation hashes.
+
+**Do not re-test** vocal landmark thresholds on BB11/BB12. Reuse the lane,
+segment schema, and NULL-aware decoder with vocal-specific correspondences.
 
 ## PWS categorical label model over offset bins (2026-07-14) — REFUTED
 **Question:** can a Dawid–Skene label model (learned per-probe accuracy, no GT)

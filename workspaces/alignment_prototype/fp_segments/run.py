@@ -23,11 +23,12 @@ from pathlib import Path
 
 import yaml
 
-from workspaces.alignment_prototype.fp_index import FpKey
+from workspaces.alignment_prototype.fp_index import DEFAULT_CACHE_DIR, FpKey
 from workspaces.alignment_prototype.fp_index import load as load_ref_fp
 
 from .local_decode import decode_constituent
 from .retrieve import retrieve_matches
+from .routes import lane
 
 _REPO = Path(__file__).resolve().parent.parent.parent.parent
 
@@ -55,11 +56,10 @@ def _stem_overrides(path: Path | None) -> dict[str, str]:
     }
 
 
-def _reference_fp(recording_id: str, stem: str):
-    fp = load_ref_fp(FpKey(recording_id, stem))
-    if fp is None and stem != "regular":
-        fp = load_ref_fp(FpKey(recording_id, "regular"))
-    return fp
+def _reference_fp(recording_id: str, stem: str, *, cache_dir: Path):
+    # Segment lanes are strictly like-for-like. Missing stem fingerprints
+    # abstain; falling back to regular audio would silently violate the route.
+    return load_ref_fp(FpKey(recording_id, stem), cache_dir=cache_dir)
 
 
 def run_shadow(
@@ -71,17 +71,14 @@ def run_shadow(
     stem_override_path: Path | None = None,
     pair_cap: int = 64,
     slopes: tuple[float, ...] = (0.94, 0.97, 1.0, 1.03, 1.06),
-    mix_channel: str = "instrumental",
-    ref_fingerprint_stem: str = "instrumental",
+    lane_name: str = "instrumental",
+    ref_fp_cache: Path = DEFAULT_CACHE_DIR,
 ) -> Path:
     timeline = json.loads(timeline_path.read_text())
     if str(timeline.get("set_id")) != set_id:
         raise ValueError("timeline set_id does not match --set-id")
-    cache_name = (
-        f"{set_id}_instrumental_mix_hashes.pkl"
-        if mix_channel == "instrumental"
-        else f"{set_id}_mix_hashes.pkl"
-    )
+    route = lane(lane_name)
+    cache_name = f"{set_id}_{route.mix_cache_suffix}"
     cache_path = mix_hash_cache / cache_name
     if not cache_path.is_file():
         raise FileNotFoundError(f"missing instrumental mix hash cache: {cache_path}")
@@ -93,10 +90,12 @@ def run_shadow(
     for span in timeline["spans"]:
         slot = str(span["slot_label"])
         stem = overrides.get(_norm_slot(slot), str(span.get("claimed_stem") or "regular"))
-        if stem != "instrumental":
+        if stem not in route.claimed_stems:
             continue
         recording_id = str(span["recording_id"])
-        ref_fp = _reference_fp(recording_id, ref_fingerprint_stem)
+        ref_fp = _reference_fp(
+            recording_id, route.reference_stem, cache_dir=ref_fp_cache
+        )
         if ref_fp is None:
             rows.append(
                 {
@@ -113,8 +112,8 @@ def run_shadow(
             mix_hashes,
             ref_fp,
             recording_id=recording_id,
-            ref_stem=ref_fingerprint_stem,
-            mix_channel=mix_channel,
+            ref_stem=route.reference_stem,
+            mix_channel=route.mix_channel,
             pair_cap=pair_cap,
         )
         segments = decode_constituent(
@@ -152,7 +151,10 @@ def run_shadow(
         "mix_hash_cache": str(cache_path),
         "pair_cap": pair_cap,
         "slopes": list(slopes),
-        "channel_route": f"mix_{mix_channel}->reference_{ref_fingerprint_stem}",
+        "lane": route.name,
+        "channel_route": (
+            f"mix_{route.mix_channel}->reference_{route.reference_stem}"
+        ),
         "shadow_only": True,
         "spans": rows,
     }
@@ -174,12 +176,8 @@ def main(argv: list[str] | None = None) -> int:
         help="evaluation-only GT YAML used solely to correct stale claimed_stem",
     )
     parser.add_argument("--pair-cap", type=int, default=64)
-    parser.add_argument(
-        "--mix-channel", choices=("instrumental", "full"), default="instrumental"
-    )
-    parser.add_argument(
-        "--ref-fingerprint-stem", default="instrumental"
-    )
+    parser.add_argument("--lane", choices=("instrumental", "vocal"), default="instrumental")
+    parser.add_argument("--ref-fp-cache", type=Path, default=DEFAULT_CACHE_DIR)
     args = parser.parse_args(argv)
     path = run_shadow(
         set_id=args.set_id,
@@ -188,8 +186,8 @@ def main(argv: list[str] | None = None) -> int:
         output_path=args.output,
         stem_override_path=args.stem_overrides,
         pair_cap=args.pair_cap,
-        mix_channel=args.mix_channel,
-        ref_fingerprint_stem=args.ref_fingerprint_stem,
+        lane_name=args.lane,
+        ref_fp_cache=args.ref_fp_cache,
     )
     print(path)
     return 0

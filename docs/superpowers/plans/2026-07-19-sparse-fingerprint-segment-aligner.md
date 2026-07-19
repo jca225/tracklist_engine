@@ -39,6 +39,24 @@ few correct instrumental paths. Vocal evidence is correctly treated as
 missing for this instrumental-only lane. No confidence acceptance rule is
 therefore earned, and tracklist attribution remains blocked.
 
+**Architecture correction:** full-channel corroboration is not part of the
+intended aligner. The only legal primary lanes are independent
+`mix_instrumental -> reference_instrumental` and
+`mix_vocals -> reference_vocals`. They may occur at different times and are
+never required to corroborate one another. `fp_segments.routes` enforces these
+pairings and rejects full or cross-stem routes. The fusion code remains only as
+reusable experiment output; the primary runner cannot select it.
+
+Both strict lanes have now been executed independently on both complete-GT
+sets. Instrumental landmark paths retain the previously recorded asymmetric
+BB11/BB12 behavior. Vocal landmark paths are much weaker: the lane correctly
+uses only `mix_vocals.flac` and reference `vocals.flac`, but sparse
+constellation hashes do not survive vocal separation/processing reliably.
+This rejects landmark FP as the vocal lane's representation, not the
+vocal-to-vocal architecture. The vocal lane should keep the same routing and
+segment contract while replacing landmark correspondences with HuBERT/phonetic
+anchors.
+
 ## Runnable shadow command
 
 ```bash
@@ -55,6 +73,30 @@ venvs/audio/bin/python \
 whose `claimed_stem` field predates the materialization repair. Omit it for a
 current correctly routed timeline. Output is a shadow segment bank and cannot
 mutate a timeline or canonical state.
+
+The independent vocal lane uses the same runner after preparing local-only
+vocal hashes:
+
+```bash
+venvs/audio/bin/python \
+  -m workspaces.alignment_prototype.fp_segments.prepare \
+  --set-id 2nvzlh2k \
+  --timeline workspaces/alignment_prototype/out/2nvzlh2k_agentic_baseline_gtstem.json \
+  --lane vocal \
+  --mix-hash-cache workspaces/alignment_prototype/out/fp_segments/cache/mix \
+  --ref-fp-cache workspaces/alignment_prototype/out/fp_segments/cache/ref \
+  --stem-overrides labeling/fixtures/bb11_ground_truth.yaml
+
+venvs/audio/bin/python \
+  -m workspaces.alignment_prototype.fp_segments.run \
+  --set-id 2nvzlh2k \
+  --timeline workspaces/alignment_prototype/out/2nvzlh2k_agentic_baseline_gtstem.json \
+  --lane vocal \
+  --mix-hash-cache workspaces/alignment_prototype/out/fp_segments/cache/mix \
+  --ref-fp-cache workspaces/alignment_prototype/out/fp_segments/cache/ref \
+  --stem-overrides labeling/fixtures/bb11_ground_truth.yaml \
+  --output workspaces/alignment_prototype/out/fp_segments/2nvzlh2k_vocal.json
+```
 
 The operative pseudocode is:
 
@@ -139,18 +181,19 @@ Do not create a second fingerprint implementation or a second timeline schema.
 
 1. **Fingerprint the whole mix once per channel.** Never repeatedly fingerprint
    candidate windows during retrieval.
-2. **Compare like with like.**
-   - full mix against regular/full references;
+2. **Compare like with like, in exactly two independent lanes.**
    - separated instrumental mix against instrumental references;
-   - separated vocals against acappella/vocal references.
+   - separated vocals against vocal references.
+   Full-audio and cross-stem routes are forbidden in this segment pipeline.
 3. **Preserve raw correspondences.** Offset histograms may propose diagonals,
    but may not discard the underlying `(mix_time, ref_time)` points.
 4. **Decode NULL explicitly.** No evidence must mean “not playing,” not the
    least-bad track or diagonal.
 5. **Allow multiple local paths per recording.** A constituent may stop,
    re-enter, loop, or jump within its reference.
-6. **Allow simultaneous constituents.** Track decodes are not mutually
-   exclusive; vocals and beds may overlap.
+6. **Allow simultaneous constituents and independent stem appearances.** Track
+   decodes are not mutually exclusive; vocals and beds may overlap or appear
+   at completely different times.
 7. **Use tracklist order as a soft global factor.** It corroborates and labels
    audio evidence, but cannot manufacture an appearance with no audio support.
 8. **Fail closed.** The new decoder runs shadow-only until it improves both
