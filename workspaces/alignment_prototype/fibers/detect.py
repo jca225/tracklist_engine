@@ -42,7 +42,7 @@ from workspaces.alignment_prototype.refine_ref_offsets import HOP, SR
 
 # Bump on ANY behavior-changing edit to the detector — artifact caches and GT
 # sidecars key on this so stale fibers fail loudly instead of silently mixing.
-FIBER_VERSION = "v4-per-run-gate-2026-07-09"
+FIBER_VERSION = "v5-fp-adaptive-2026-07-19"
 
 
 @dataclass(frozen=True)
@@ -469,6 +469,63 @@ def compute_fibers_soft(
     )
 
 
+def _fp_lag_vote_floor(
+    votes: np.ndarray,
+    *,
+    adaptive: bool,
+    peak_frac: float,
+    peak_outlier_ratio: float = 5.0,
+    mad_k: float = 2.5,
+) -> float:
+    """Per-track lag-vote gate.
+
+    Fixed mode: ``peak_frac * max(votes)`` (legacy). Adaptive mode:
+    - abstain (infinite floor) when the vote mass is flat (no separable lag);
+    - if the top lag is an outlier vs #2, score fractions against #2 so one
+      spurious dominant lag cannot empty the track;
+    - also require beating a robust background (median + k·MAD).
+    """
+    if votes.size == 0:
+        return float("inf")
+    sv = np.sort(votes.astype(np.float64))[::-1]
+    mx = float(sv[0])
+    med = float(np.median(votes))
+    if not adaptive:
+        return peak_frac * mx
+    if mx / (med + 1e-9) < 2.0:
+        return float("inf")
+    second = float(sv[1]) if sv.size > 1 else mx
+    ref = second if mx > peak_outlier_ratio * max(second, med) else mx
+    mad = float(np.median(np.abs(votes.astype(np.float64) - med))) + 1e-9
+    return max(peak_frac * ref, med + mad_k * mad)
+
+
+def _fp_density_floor(
+    dens: np.ndarray,
+    *,
+    adaptive: bool,
+    dens_frac: float,
+    dens_pct: float = 70.0,
+    min_peak_ratio: float = 2.0,
+) -> float | None:
+    """Per-lag density gate. Returns None to skip a lag with no separable peak."""
+    if dens.max() <= 0:
+        return None
+    if not adaptive:
+        return dens_frac * float(dens.max())
+    pos = dens[dens > 0]
+    if pos.size == 0:
+        return None
+    med = float(np.median(pos))
+    peak_ratio = float(dens.max()) / (med + 1e-9)
+    if peak_ratio < min_peak_ratio:
+        # Flat density at this lag — no localized repeat region.
+        return None
+    # Percentile of positive dens localizes the ridge without requiring the tip
+    # of a single sharp peak (the legacy dens_frac * max failure mode).
+    return max(float(np.percentile(pos, dens_pct)), dens_frac * float(dens.max()) * 0.5)
+
+
 def compute_fibers_fp(
     audio_path: str,
     *,
@@ -479,6 +536,8 @@ def compute_fibers_fp(
     dens_frac: float = 0.30,
     min_repeat_s: float = 6.0,
     close_s: float = 1.0,
+    adaptive: bool = True,
+    max_cover_frac: float = 0.85,
 ) -> tuple[np.ndarray, float]:
     """Constellation match-density localizer (the "proper localizer").
 
@@ -491,12 +550,13 @@ def compute_fibers_fp(
     lags (clustered, vote-thresholded) -> per-lag covered-density -> runs ->
     union [s,e] with [s+L,e+L]. labels: shared id = same fiber, -1 = none.
 
-    STATUS (2026-06-16): recovers melodic repeats HuBERT misses (Love On Me,
-    Emily) but is THRESHOLD-SENSITIVE across tracks (Congratulations/Freeze Time
-    can come out empty at one param set). Full robustness needs per-track
-    ADAPTIVE thresholding (or msaf / learned contrastive embeddings — not
-    installed/built). Offered as a selectable method, not the default, so it
-    doesn't regress HuBERT-validated tracks."""
+    ``adaptive=True`` (default) replaces the fixed ``peak_frac * max`` /
+    ``dens_frac * max`` gates with per-track / per-lag robust floors so weak but
+    real repeats (Congratulations / Freeze Time) are not emptied by one dominant
+    lag, while flat densities abstain. Pass ``adaptive=False`` for the legacy
+    fixed-fraction behavior. ``max_cover_frac`` abstains if fibered mass would
+    cover nearly the whole track (anti-blob).
+    """
     import librosa
     from collections import Counter, defaultdict
 
@@ -534,7 +594,8 @@ def compute_fibers_fp(
             ]
         else:
             clusters.append([lg, v, list(lag_ti[lg])])
-    mx = max(c[1] for c in clusters)
+    votes = np.asarray([c[1] for c in clusters], dtype=np.float64)
+    vote_floor = _fp_lag_vote_floor(votes, adaptive=adaptive, peak_frac=peak_frac)
     parent = list(range(nfr))
 
     def find(a):
@@ -545,7 +606,7 @@ def compute_fibers_fp(
 
     minrep = int(min_repeat_s * label_hz)
     for lag_c, v, tis in clusters:
-        if v < peak_frac * mx:
+        if v < vote_floor:
             continue
         lb = int(round(lag_c / _FPS * label_hz))
         if lb < minrep or lb >= nfr:
@@ -556,10 +617,11 @@ def compute_fibers_fp(
             if 0 <= b < nfr:
                 dens[b] += 1
         dens = uniform_filter1d(dens, int(2 * label_hz))
-        if dens.max() <= 0:
+        dens_thr = _fp_density_floor(dens, adaptive=adaptive, dens_frac=dens_frac)
+        if dens_thr is None:
             continue
         cov = binary_closing(
-            dens > dens_frac * dens.max(), structure=np.ones(int(close_s * label_hz))
+            dens > dens_thr, structure=np.ones(int(close_s * label_hz))
         )
         i = 0
         while i < nfr:
@@ -586,6 +648,9 @@ def compute_fibers_fp(
                 remap[c] = nid
                 nid += 1
             out[i] = remap[c]
+    # Anti-blob: if almost everything fibered, treat as inseparable and abstain.
+    if adaptive and out.size > 0 and float(np.mean(out >= 0)) > max_cover_frac:
+        return -np.ones(nfr, dtype=int), label_hz
     return out, label_hz
 
 
