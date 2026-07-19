@@ -128,6 +128,25 @@ instead of Shazam-style constellation hashes.
 **Do not re-test** vocal landmark thresholds on BB11/BB12. Reuse the lane,
 segment schema, and NULL-aware decoder with vocal-specific correspondences.
 
+## Vocal-to-vocal HuBERT peak segment lane (2026-07-19) — REPRESENTATION NO-GO
+
+**Question:** with the same vocal-to-vocal route and NULL-aware decoder, can a
+whole-mix HuBERT-L9 cosine matrix sparsified to local peaks
+(`fp_segments.hubert_retrieve`) recover useful constituent segments?
+
+**Verdict:** the observation adapter is operational (`--lane vocal
+--observation hubert`, default for vocal), reuses `.feat_cache`, and never
+crosses stems. Real shadow banks are denser than landmark vocal (more
+`decoded` rows; median matches hit the frozen `max_peaks=256` cap), but
+placement recall stays near floor and false-path duration dominates on both
+complete-GT sets. Peak-sparsified HuBERT is therefore the wrong
+correspondence producer for this decoder — not a routing failure.
+
+**Do not re-test** HuBERT peak-frac / neighborhood / max-peaks on BB11/BB12.
+Keep the lane + decoder. Next vocal observation candidates are sustained
+phonetic/lyric anchors or a different decode of the dense \(M\) (not another
+peak-threshold sweep on these two sets).
+
 ## PWS categorical label model over offset bins (2026-07-14) — REFUTED
 **Question:** can a Dawid–Skene label model (learned per-probe accuracy, no GT)
 beat hand-tuned `source_priority` fusion, aggregating genuine per-probe votes

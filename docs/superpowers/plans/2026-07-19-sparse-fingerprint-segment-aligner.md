@@ -57,6 +57,14 @@ vocal-to-vocal architecture. The vocal lane should keep the same routing and
 segment contract while replacing landmark correspondences with HuBERT/phonetic
 anchors.
 
+**HuBERT peak follow-up (same day):**
+`--lane vocal --observation hubert` builds whole-mix HuBERT-L9 cosine matrices,
+sparsifies local peaks, and feeds `decode_constituent`. Synthetic peak gates
+pass. Real BB11/BB12 shadow banks decode more often than landmark vocal but
+still fail placement (false paths dominate). Ledgered as representation
+NO-GO for *peak-sparsified* HuBERT; do not retune peak thresholds on these
+sets. Phonetic/lyric anchors or a non-peak read of dense \(M\) remain open.
+
 ## Runnable shadow command
 
 ```bash

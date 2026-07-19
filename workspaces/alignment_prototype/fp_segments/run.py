@@ -1,12 +1,23 @@
-"""Run collision-aware instrumental fingerprint segment decoding in shadow mode.
+"""Run collision-aware fingerprint / HuBERT segment decoding in shadow mode.
 
-Example:
+Example (instrumental landmark):
 
     venvs/audio/bin/python -m workspaces.alignment_prototype.fp_segments.run \
       --set-id 2nvzlh2k \
       --timeline workspaces/alignment_prototype/out/2nvzlh2k_agentic_baseline_gtstem.json \
+      --lane instrumental \
       --mix-hash-cache eda/alignment/ridge_diagnostic/out/stem_mix_hash_cache \
       --output workspaces/alignment_prototype/out/fp_segments/2nvzlh2k.json
+
+Example (vocal HuBERT):
+
+    venvs/audio/bin/python -m workspaces.alignment_prototype.fp_segments.run \
+      --set-id 2nvzlh2k \
+      --timeline workspaces/alignment_prototype/out/2nvzlh2k_agentic_baseline_gtstem.json \
+      --lane vocal \
+      --observation hubert \
+      --stem-overrides labeling/fixtures/bb11_ground_truth.yaml \
+      --output workspaces/alignment_prototype/out/fp_segments/2nvzlh2k_vocal_hubert.json
 
 The output is a diagnostic segment bank, not a PredictedTimeline. This command
 cannot change the default driver or canonical database.
@@ -20,17 +31,24 @@ import pickle
 import re
 import subprocess
 from pathlib import Path
+from typing import Any
 
+import numpy as np
 import yaml
 
 from workspaces.alignment_prototype.fp_index import DEFAULT_CACHE_DIR, FpKey
 from workspaces.alignment_prototype.fp_index import load as load_ref_fp
+from workspaces.alignment_prototype.fp_placement_refine import find_aligning_dir
+from workspaces.alignment_prototype.infer import _manifest_by_tid, _vocal_ref_path
 
+from .hubert_retrieve import load_hubert_feat, retrieve_hubert_matches
 from .local_decode import decode_constituent
 from .retrieve import retrieve_matches
 from .routes import lane
+from .schema import LandmarkMatch
 
 _REPO = Path(__file__).resolve().parent.parent.parent.parent
+_OBSERVATIONS = frozenset({"landmark", "hubert"})
 
 
 def _producer_sha() -> str:
@@ -62,34 +80,70 @@ def _reference_fp(recording_id: str, stem: str, *, cache_dir: Path):
     return load_ref_fp(FpKey(recording_id, stem), cache_dir=cache_dir)
 
 
-def run_shadow(
-    *,
-    set_id: str,
-    timeline_path: Path,
-    mix_hash_cache: Path,
-    output_path: Path,
-    stem_override_path: Path | None = None,
-    pair_cap: int = 64,
-    slopes: tuple[float, ...] = (0.94, 0.97, 1.0, 1.03, 1.06),
-    lane_name: str = "instrumental",
-    ref_fp_cache: Path = DEFAULT_CACHE_DIR,
-) -> Path:
-    timeline = json.loads(timeline_path.read_text())
-    if str(timeline.get("set_id")) != set_id:
-        raise ValueError("timeline set_id does not match --set-id")
-    route = lane(lane_name)
-    cache_name = f"{set_id}_{route.mix_cache_suffix}"
-    cache_path = mix_hash_cache / cache_name
-    if not cache_path.is_file():
-        raise FileNotFoundError(f"missing instrumental mix hash cache: {cache_path}")
-    mix_hashes = pickle.loads(cache_path.read_bytes())
-    overrides = _stem_overrides(stem_override_path)
-    mix_duration_s = max(float(span["set_end_s"]) for span in timeline["spans"])
+def _default_observation(lane_name: str) -> str:
+    return "hubert" if lane_name == "vocal" else "landmark"
 
-    rows = []
+
+def _resolve_observation(lane_name: str, observation: str | None) -> str:
+    chosen = observation or _default_observation(lane_name)
+    if chosen not in _OBSERVATIONS:
+        raise ValueError(f"unknown observation {chosen!r}")
+    if lane_name == "instrumental" and chosen != "landmark":
+        raise ValueError("instrumental lane only supports --observation landmark")
+    return chosen
+
+
+def _segment_rows(segments) -> list[dict[str, float]]:
+    return [
+        {
+            "mix_start_s": segment.mix_start_s,
+            "mix_end_s": segment.mix_end_s,
+            "ref_start_s": segment.ref_start_s,
+            "ref_end_s": segment.ref_end_s,
+            "slope": segment.slope,
+            "evidence": segment.evidence,
+            "confidence": segment.confidence,
+        }
+        for segment in segments
+    ]
+
+
+def _row(
+    *,
+    slot: str,
+    recording_id: str,
+    stem: str,
+    status: str,
+    matches: tuple[LandmarkMatch, ...] = (),
+    segments=(),
+) -> dict[str, Any]:
+    return {
+        "slot_label": slot,
+        "recording_id": recording_id,
+        "stem": stem,
+        "status": status,
+        "match_count": len(matches),
+        "segments": _segment_rows(segments),
+    }
+
+
+def _decode_landmark_lane(
+    *,
+    route,
+    timeline: dict[str, Any],
+    overrides: dict[str, str],
+    mix_hashes: dict,
+    ref_fp_cache: Path,
+    pair_cap: int,
+    slopes: tuple[float, ...],
+    mix_duration_s: float,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
     for span in timeline["spans"]:
         slot = str(span["slot_label"])
-        stem = overrides.get(_norm_slot(slot), str(span.get("claimed_stem") or "regular"))
+        stem = overrides.get(
+            _norm_slot(slot), str(span.get("claimed_stem") or "regular")
+        )
         if stem not in route.claimed_stems:
             continue
         recording_id = str(span["recording_id"])
@@ -98,14 +152,12 @@ def run_shadow(
         )
         if ref_fp is None:
             rows.append(
-                {
-                    "slot_label": slot,
-                    "recording_id": recording_id,
-                    "stem": stem,
-                    "status": "no_reference_fingerprint",
-                    "match_count": 0,
-                    "segments": [],
-                }
+                _row(
+                    slot=slot,
+                    recording_id=recording_id,
+                    stem=stem,
+                    status="no_reference_fingerprint",
+                )
             )
             continue
         matches = retrieve_matches(
@@ -122,25 +174,131 @@ def run_shadow(
             allowed_slopes=slopes,
         )
         rows.append(
-            {
-                "slot_label": slot,
-                "recording_id": recording_id,
-                "stem": stem,
-                "status": "decoded" if segments else "abstained",
-                "match_count": len(matches),
-                "segments": [
-                    {
-                        "mix_start_s": segment.mix_start_s,
-                        "mix_end_s": segment.mix_end_s,
-                        "ref_start_s": segment.ref_start_s,
-                        "ref_end_s": segment.ref_end_s,
-                        "slope": segment.slope,
-                        "evidence": segment.evidence,
-                        "confidence": segment.confidence,
-                    }
-                    for segment in segments
-                ],
-            }
+            _row(
+                slot=slot,
+                recording_id=recording_id,
+                stem=stem,
+                status="decoded" if segments else "abstained",
+                matches=matches,
+                segments=segments,
+            )
+        )
+    return rows
+
+
+def _decode_hubert_vocal_lane(
+    *,
+    set_id: str,
+    route,
+    timeline: dict[str, Any],
+    overrides: dict[str, str],
+    slopes: tuple[float, ...],
+    mix_duration_s: float,
+) -> list[dict[str, Any]]:
+    set_dir = find_aligning_dir(set_id)
+    if set_dir is None:
+        raise FileNotFoundError(f"no aligning directory for {set_id}")
+    mix_path = set_dir / route.mix_file
+    if not mix_path.is_file():
+        raise FileNotFoundError(f"missing lane mix audio: {mix_path}")
+    mix_feat = load_hubert_feat(mix_path)
+    by_tid = _manifest_by_tid(set_dir, set_id)
+    ref_feat_cache: dict[str, np.ndarray] = {}
+
+    rows: list[dict[str, Any]] = []
+    for span in timeline["spans"]:
+        slot = str(span["slot_label"])
+        stem = overrides.get(
+            _norm_slot(slot), str(span.get("claimed_stem") or "regular")
+        )
+        if stem not in route.claimed_stems:
+            continue
+        recording_id = str(span["recording_id"])
+        audio = _vocal_ref_path(by_tid.get(recording_id))
+        if not audio or not Path(audio).is_file():
+            rows.append(
+                _row(
+                    slot=slot,
+                    recording_id=recording_id,
+                    stem=stem,
+                    status="missing_vocal_audio",
+                )
+            )
+            continue
+        if recording_id not in ref_feat_cache:
+            ref_feat_cache[recording_id] = load_hubert_feat(audio)
+        matches = retrieve_hubert_matches(
+            mix_feat,
+            ref_feat_cache[recording_id],
+            recording_id=recording_id,
+            ref_stem=route.reference_stem,
+            mix_channel=route.mix_channel,
+        )
+        segments = decode_constituent(
+            matches,
+            mix_duration_s=mix_duration_s,
+            allowed_slopes=slopes,
+        )
+        rows.append(
+            _row(
+                slot=slot,
+                recording_id=recording_id,
+                stem=stem,
+                status="decoded" if segments else "abstained",
+                matches=matches,
+                segments=segments,
+            )
+        )
+    return rows
+
+
+def run_shadow(
+    *,
+    set_id: str,
+    timeline_path: Path,
+    output_path: Path,
+    mix_hash_cache: Path | None = None,
+    stem_override_path: Path | None = None,
+    pair_cap: int = 64,
+    slopes: tuple[float, ...] = (0.94, 0.97, 1.0, 1.03, 1.06),
+    lane_name: str = "instrumental",
+    observation: str | None = None,
+    ref_fp_cache: Path = DEFAULT_CACHE_DIR,
+) -> Path:
+    timeline = json.loads(timeline_path.read_text())
+    if str(timeline.get("set_id")) != set_id:
+        raise ValueError("timeline set_id does not match --set-id")
+    route = lane(lane_name)
+    chosen = _resolve_observation(lane_name, observation)
+    overrides = _stem_overrides(stem_override_path)
+    mix_duration_s = max(float(span["set_end_s"]) for span in timeline["spans"])
+
+    cache_path: Path | None = None
+    if chosen == "landmark":
+        if mix_hash_cache is None:
+            raise ValueError("--mix-hash-cache is required for landmark observation")
+        cache_path = mix_hash_cache / f"{set_id}_{route.mix_cache_suffix}"
+        if not cache_path.is_file():
+            raise FileNotFoundError(f"missing mix hash cache: {cache_path}")
+        mix_hashes = pickle.loads(cache_path.read_bytes())
+        rows = _decode_landmark_lane(
+            route=route,
+            timeline=timeline,
+            overrides=overrides,
+            mix_hashes=mix_hashes,
+            ref_fp_cache=ref_fp_cache,
+            pair_cap=pair_cap,
+            slopes=slopes,
+            mix_duration_s=mix_duration_s,
+        )
+    else:
+        rows = _decode_hubert_vocal_lane(
+            set_id=set_id,
+            route=route,
+            timeline=timeline,
+            overrides=overrides,
+            slopes=slopes,
+            mix_duration_s=mix_duration_s,
         )
 
     payload = {
@@ -148,13 +306,12 @@ def run_shadow(
         "producer_sha": _producer_sha(),
         "set_id": set_id,
         "source_timeline": str(timeline_path),
-        "mix_hash_cache": str(cache_path),
+        "mix_hash_cache": str(cache_path) if cache_path is not None else None,
         "pair_cap": pair_cap,
         "slopes": list(slopes),
         "lane": route.name,
-        "channel_route": (
-            f"mix_{route.mix_channel}->reference_{route.reference_stem}"
-        ),
+        "observation": chosen,
+        "channel_route": (f"mix_{route.mix_channel}->reference_{route.reference_stem}"),
         "shadow_only": True,
         "spans": rows,
     }
@@ -167,7 +324,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--set-id", required=True)
     parser.add_argument("--timeline", type=Path, required=True)
-    parser.add_argument("--mix-hash-cache", type=Path, required=True)
+    parser.add_argument(
+        "--mix-hash-cache",
+        type=Path,
+        default=None,
+        help="required for landmark observation; unused for hubert",
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
         "--stem-overrides",
@@ -176,7 +338,15 @@ def main(argv: list[str] | None = None) -> int:
         help="evaluation-only GT YAML used solely to correct stale claimed_stem",
     )
     parser.add_argument("--pair-cap", type=int, default=64)
-    parser.add_argument("--lane", choices=("instrumental", "vocal"), default="instrumental")
+    parser.add_argument(
+        "--lane", choices=("instrumental", "vocal"), default="instrumental"
+    )
+    parser.add_argument(
+        "--observation",
+        choices=("landmark", "hubert"),
+        default=None,
+        help="default: landmark for instrumental, hubert for vocal",
+    )
     parser.add_argument("--ref-fp-cache", type=Path, default=DEFAULT_CACHE_DIR)
     args = parser.parse_args(argv)
     path = run_shadow(
@@ -187,6 +357,7 @@ def main(argv: list[str] | None = None) -> int:
         stem_override_path=args.stem_overrides,
         pair_cap=args.pair_cap,
         lane_name=args.lane,
+        observation=args.observation,
         ref_fp_cache=args.ref_fp_cache,
     )
     print(path)
