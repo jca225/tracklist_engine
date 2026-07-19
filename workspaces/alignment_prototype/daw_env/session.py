@@ -62,6 +62,7 @@ class DawSession:
     als_path: Path | None = None
     out_dir: Path | None = None
     set_dir: Path | None = None
+    live_ctx: Any | None = None  # optional agentic LiveContext for fp/HuBERT/lyrics
     history: list[dict[str, Any]] = field(default_factory=list)
     last_listen_wav: Path | None = None
     last_listen_window: tuple[float, float] | None = None

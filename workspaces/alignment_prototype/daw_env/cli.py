@@ -52,6 +52,21 @@ def main(argv: list[str] | None = None) -> int:
         "--budget-spans", type=int, default=None, help="limit spans (smoke)"
     )
     ap.add_argument("--out-dir", type=Path, default=None)
+    ap.add_argument(
+        "--no-live-sensors",
+        action="store_true",
+        help="skip LiveContext fp/HuBERT/lyrics (onset-only)",
+    )
+    ap.add_argument(
+        "--with-lyrics",
+        action="store_true",
+        help="also run Whisper JOINT lyrics (slow cold-start; off by default)",
+    )
+    ap.add_argument(
+        "--stems",
+        default=None,
+        help="comma-separated claimed_stem filter (e.g. acappella,instrumental)",
+    )
     args = ap.parse_args(argv)
 
     tl_path = args.timeline or _default_timeline(args.set_id)
@@ -93,6 +108,13 @@ def main(argv: list[str] | None = None) -> int:
         log=log,
         max_steps_per_span=args.max_steps,
         budget_spans=args.budget_spans,
+        use_live_sensors=not args.no_live_sensors,
+        with_lyrics=args.with_lyrics,
+        stems=(
+            frozenset(s.strip() for s in args.stems.split(",") if s.strip())
+            if args.stems
+            else None
+        ),
     )
     # Re-bind set_dir into render by monkey-patching via module-level is awkward;
     # if set_dir given, re-render is not needed — loop already ran. Document path.

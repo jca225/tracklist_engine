@@ -116,3 +116,46 @@ def test_resolve_daw_mode_a_commits(tmp_path: Path) -> None:
 def test_daw_react_suffix_never_align() -> None:
     assert "align.als" not in DAW_REACT_SUFFIX
     assert "DAW REACT" in DAW_REACT_SUFFIX
+
+
+def test_content_target_prefers_fp_over_cue() -> None:
+    from workspaces.alignment_prototype.agentic.belief import Observation, SpanBelief
+    from workspaces.alignment_prototype.daw_env.sense import content_target_set_start
+
+    b = SpanBelief("1", "r", "instrumental")
+    b = b.observe(Observation("cue_prior", 10.0, 0.7, 0.50, detail="cue"))
+    b = b.observe(Observation("fp", 40.0, 0.8, 0.53, detail="fp"))
+    assert content_target_set_start(b) == pytest.approx(40.0)
+
+
+def test_propose_nudge_toward_content() -> None:
+    from workspaces.alignment_prototype.agentic.belief import Observation, SpanBelief
+    from workspaces.alignment_prototype.daw_env.loop import _propose_nudge
+
+    b = SpanBelief("1", "r", "instrumental")
+    b = b.observe(Observation("fp", 28.0, 0.8, 0.53))
+    nudge = _propose_nudge(b, geom_start=10.0)
+    assert nudge is not None
+    assert nudge == pytest.approx(12.0)  # capped at +12
+
+
+def test_propose_nudge_ignores_onset_only() -> None:
+    from workspaces.alignment_prototype.agentic.belief import Observation, SpanBelief
+    from workspaces.alignment_prototype.daw_env.loop import _propose_nudge
+
+    b = SpanBelief("1", "r", "regular")
+    b = b.observe(Observation("daw_onset", 40.0, 0.85, 0.55))
+    assert _propose_nudge(b, geom_start=10.0) is None
+
+
+def test_propose_nudge_rejects_wild_content() -> None:
+    from workspaces.alignment_prototype.agentic.belief import Observation, SpanBelief
+    from workspaces.alignment_prototype.daw_env.loop import _propose_nudge
+
+    b = SpanBelief("1", "r", "acappella")
+    b = b.observe(Observation("stem_hubert", 91.0, 0.3, 0.75))
+    assert _propose_nudge(b, geom_start=1316.0) is None
+    # within old 90s band but beyond 24s refine window — still reject
+    b2 = SpanBelief("2", "r", "acappella")
+    b2 = b2.observe(Observation("stem_hubert", 1510.0 + 60.0, 0.8, 0.75))
+    assert _propose_nudge(b2, geom_start=1510.0) is None
