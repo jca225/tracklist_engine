@@ -23,6 +23,8 @@ pytest.importorskip("librosa")
 
 from workspaces.alignment_prototype.fibers.detect import (  # noqa: E402
     _avg_linkage,
+    _fp_density_floor,
+    _fp_lag_vote_floor,
     compute_fibers,
     compute_fibers_soft,
     fiber_at,
@@ -212,3 +214,33 @@ def test_clone_verdict_certifies_copy_paste(tmp_path) -> None:
     assert clone["verdict"] == "CLONE", clone
     distinct = clone_verdict(y, (0.0, 10.0), (10.0, 20.0))
     assert distinct["verdict"] == "distinct", distinct
+
+
+def test_fp_lag_vote_floor_legacy_is_frac_of_max() -> None:
+    votes = np.array([100.0, 20.0, 10.0, 5.0])
+    assert _fp_lag_vote_floor(votes, adaptive=False, peak_frac=0.15) == pytest.approx(
+        15.0
+    )
+
+
+def test_fp_lag_vote_floor_adaptive_survives_dominant_spurious() -> None:
+    """One huge lag must not set a floor that kills a mid-tier real repeat."""
+    # Spurious 1000, real section repeat ~80, noise 1–5.
+    votes = np.array([1000.0, 80.0, 5.0, 4.0, 3.0, 2.0, 1.0])
+    floor = _fp_lag_vote_floor(votes, adaptive=True, peak_frac=0.15)
+    assert floor < 80.0, f"adaptive floor {floor} should keep the 80-vote lag"
+    assert floor > 5.0, f"adaptive floor {floor} should still reject noise"
+
+
+def test_fp_density_floor_skips_flat_lag() -> None:
+    dens = np.ones(64, dtype=np.float64) * 3.0
+    assert _fp_density_floor(dens, adaptive=True, dens_frac=0.30) is None
+
+
+def test_fp_density_floor_keeps_peaked_ridge() -> None:
+    dens = np.ones(64, dtype=np.float64) * 1.0
+    dens[20:28] = 8.0
+    thr = _fp_density_floor(dens, adaptive=True, dens_frac=0.30)
+    assert thr is not None
+    assert thr < 8.0
+    assert (dens > thr).sum() >= 8
