@@ -128,6 +128,23 @@ instead of Shazam-style constellation hashes.
 **Do not re-test** vocal landmark thresholds on BB11/BB12. Reuse the lane,
 segment schema, and NULL-aware decoder with vocal-specific correspondences.
 
+## Instrumental segment-bank BB11/BB12 autopsy (2026-07-19) — DIAGNOSTIC
+
+**Question:** is BB12’s weak instrumental landmark segment bank the same
+failure as BB11’s residual errors (collision / decoder), or a different wall?
+
+**Verdict (corrected):** the first pass under-counted BB12 because Ableton GT
+slot labels were zero-strip-matched onto unrelated tracklist slots. After
+recording-id stem overrides (`fp_segments.stem_overrides`), BB12 coverage is
+20/≈21 GT instrumentals (1 true inventory gap) with segment recall@15 ≈ 0.60
+vs BB11 ≈ 0.77. Remaining asymmetry: BB12 misses are mostly ridge-absent in
+the landmark cloud; BB11 misses usually keep strong GT-band support and fail
+at boundary/false-extra selection. Match counts are huge on both sets.
+
+**Do not** use slot-norm GT overrides on BB12. Next levers: chroma (or other)
+second observation for ridge-absent misses; false-run rejection for
+BB11-style near-misses — still no threshold mining on these two sets alone.
+
 ## Vocal-to-vocal HuBERT peak segment lane (2026-07-19) — REPRESENTATION NO-GO
 
 **Question:** with the same vocal-to-vocal route and NULL-aware decoder, can a

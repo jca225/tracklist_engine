@@ -20,7 +20,8 @@ from workspaces.alignment_prototype.mix_fp_hits import load_mix_mono
 from core.result import Err, Ok
 
 from .routes import lane
-from .run import _norm_slot, _stem_overrides
+from .stem_overrides import norm_slot as _norm_slot
+from .stem_overrides import timeline_stem_overrides
 
 
 def prepare_lane(
@@ -48,7 +49,11 @@ def prepare_lane(
         )
 
     timeline = json.loads(timeline_path.read_text())
-    overrides = _stem_overrides(stem_override_path)
+    overrides = (
+        timeline_stem_overrides(timeline["spans"], stem_override_path)
+        if stem_override_path is not None
+        else {}
+    )
     by_tid = _manifest_by_tid(set_dir, set_id)
     counts = {"ready": 0, "built": 0, "missing_audio": 0, "failed": 0}
     for span in timeline["spans"]:

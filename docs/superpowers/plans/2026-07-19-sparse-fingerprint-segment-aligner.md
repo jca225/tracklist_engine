@@ -65,6 +65,26 @@ still fail placement (false paths dominate). Ledgered as representation
 NO-GO for *peak-sparsified* HuBERT; do not retune peak thresholds on these
 sets. Phonetic/lyric anchors or a non-peak read of dense \(M\) remain open.
 
+**Instrumental BB12 coverage fix + re-autopsy (same day):**
+BB12 GT uses Ableton clip labels; the agentic timeline uses tracklist slots.
+Naive zero-strip stem overrides silently mapped the wrong spans (Ableton
+`007` → timeline `7`). `fp_segments.stem_overrides.timeline_stem_overrides`
+now bridges `GT.track_id → timeline.recording_id` (nearest `set_start_s` on
+ties). After the fix:
+
+1. **Coverage:** BB12 instrumental override slots **20** (was ~5 false
+   collisions); 1 GT instrumental remains a true inventory gap (no timeline
+   recording). BB11 stays 22/22.
+2. **BB12 scored recall@15:** **12/20 (0.60)**. Misses split into low
+   GT-band support (ridge-absent / false decode) vs a few near-misses with
+   support (e.g. ~18s).
+3. **BB11:** unchanged **17/22 (0.77)** — misses still look like
+   decoder/boundary/false-extra with strong GT-band support.
+
+Next instrumental lever (honest slice): second observation (chroma) for
+ridge-absent BB12 misses; false-run rejection for BB11-style near-misses.
+Do not re-introduce slot-norm GT overrides for BB12.
+
 ## Runnable shadow command
 
 ```bash

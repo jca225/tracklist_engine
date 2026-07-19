@@ -28,13 +28,11 @@ from __future__ import annotations
 import argparse
 import json
 import pickle
-import re
 import subprocess
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-import yaml
 
 from workspaces.alignment_prototype.fp_index import DEFAULT_CACHE_DIR, FpKey
 from workspaces.alignment_prototype.fp_index import load as load_ref_fp
@@ -46,6 +44,8 @@ from .local_decode import decode_constituent
 from .retrieve import retrieve_matches
 from .routes import lane
 from .schema import LandmarkMatch
+from .stem_overrides import norm_slot as _norm_slot
+from .stem_overrides import timeline_stem_overrides
 
 _REPO = Path(__file__).resolve().parent.parent.parent.parent
 _OBSERVATIONS = frozenset({"landmark", "hubert"})
@@ -57,21 +57,11 @@ def _producer_sha() -> str:
     ).strip()
 
 
-def _norm_slot(value: object) -> str:
-    match = re.match(r"^0*(\d+)(.*)$", str(value))
-    return match.group(1) + match.group(2) if match else str(value)
-
-
-def _stem_overrides(path: Path | None) -> dict[str, str]:
-    """Evaluation-only stem routing for stale historical timelines."""
+def _stem_overrides(path: Path | None, spans: list[dict[str, Any]]) -> dict[str, str]:
+    """Evaluation-only stem routing via GT track_id → timeline recording_id."""
     if path is None:
         return {}
-    rows = yaml.safe_load(path.read_text())["tracks"]
-    return {
-        _norm_slot(row["slot_label"]): str(row.get("claimed_stem") or "regular")
-        for row in rows
-        if row.get("slot_label") and str(row.get("slot_label")) != "mix"
-    }
+    return timeline_stem_overrides(spans, path)
 
 
 def _reference_fp(recording_id: str, stem: str, *, cache_dir: Path):
@@ -270,7 +260,7 @@ def run_shadow(
         raise ValueError("timeline set_id does not match --set-id")
     route = lane(lane_name)
     chosen = _resolve_observation(lane_name, observation)
-    overrides = _stem_overrides(stem_override_path)
+    overrides = _stem_overrides(stem_override_path, timeline["spans"])
     mix_duration_s = max(float(span["set_end_s"]) for span in timeline["spans"])
 
     cache_path: Path | None = None
@@ -335,7 +325,7 @@ def main(argv: list[str] | None = None) -> int:
         "--stem-overrides",
         type=Path,
         default=None,
-        help="evaluation-only GT YAML used solely to correct stale claimed_stem",
+        help="evaluation-only GT YAML; routes stems via track_id→recording_id",
     )
     parser.add_argument("--pair-cap", type=int, default=64)
     parser.add_argument(
