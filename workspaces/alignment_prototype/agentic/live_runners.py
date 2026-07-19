@@ -265,6 +265,8 @@ class LiveContext:
                 _slot_order,
                 candidate_diagonals,
                 monotonic_decode,
+                resolve_tracklist_slot,
+                tracklist_max_slot,
                 transcribe_words,
             )
 
@@ -280,21 +282,17 @@ class LiveContext:
             manifest = json.loads((set_dir / "manifest.json").read_text())
             by_tid = _manifest_by_tid(set_dir, ctx.set_id)
             mix_dur = float(manifest.get("mix_duration_s") or 0) or mix_end
-            max_slot = (
-                max(
-                    (
-                        _slot_order(s["slot_label"])[0]
-                        for s in spans
-                        if s.get("slot_label")
-                    ),
-                    default=1,
-                )
-                or 1
-            )
+            man_slots = [
+                str(r["slot_label"])
+                for r in (manifest.get("tracks") or [])
+                if isinstance(r, dict) and r.get("slot_label")
+            ]
+            max_slot = tracklist_max_slot(man_slots) if man_slots else 1
             mix_bt = _bigram_times(_norm(transcribe_words(mixv)))
-            decode_spans, keys = [], []
+            items: list[tuple[tuple[int, int], str, list, float]] = []
             for s in ac:
                 t = by_tid.get(s.get("recording_id"))
+                row = t if isinstance(t, dict) else None
                 vpath = _vocal_ref_path(t)
                 if not vpath or not Path(vpath).is_file():
                     continue
@@ -304,14 +302,19 @@ class LiveContext:
                 cands = candidate_diagonals(_norm(cw), mix_bt)
                 if not cands:
                     continue
-                epos = _slot_order(s["slot_label"])[0] / max_slot * mix_dur
-                decode_spans.append((cands, epos))
-                keys.append(str(s["slot_label"]))
-            if not decode_spans:
+                man_slot = resolve_tracklist_slot(s.get("slot_label"), row)
+                order = _slot_order(man_slot)
+                epos = order[0] / max_slot * mix_dur
+                # Key by timeline slot_label so lyrics_runner still matches.
+                items.append((order, str(s["slot_label"]), cands, epos))
+            if not items:
                 log.warning(
                     "live lyrics: no acappella span produced diagonals — abstain"
                 )
                 return
+            items.sort(key=lambda it: it[0])
+            decode_spans = [(cands, epos) for _order, _key, cands, epos in items]
+            keys = [key for _order, key, _cands, _epos in items]
             for key, (ss, rs) in zip(keys, monotonic_decode(decode_spans)):
                 if ss is not None:
                     ctx.lyrics_by_slot[key] = (float(ss), float(rs))

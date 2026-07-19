@@ -314,6 +314,29 @@ def _slot_order(slot: str) -> tuple[int, int]:
     return int(base), int(sub)
 
 
+def resolve_tracklist_slot(
+    timeline_slot: str | None,
+    manifest_row: dict | None,
+) -> str:
+    """Ableton/manifest slot for tracklist order + lyrics position prior.
+
+    Unlabeled-pool timelines (BB10) often key spans by ``recording_id``
+    (``h5u3jtp``). Feeding that into ``_slot_order`` collapses expected mix
+    positions near 0 and starves monotonic decode. Prefer manifest
+    ``slot_label`` (``001w2``) when present; keep ``timeline_slot`` as the
+    lyrics_by_slot key separately.
+    """
+    if manifest_row:
+        ms = manifest_row.get("slot_label")
+        if ms not in (None, ""):
+            return str(ms)
+    return str(timeline_slot or "")
+
+
+def tracklist_max_slot(slot_labels: list[str]) -> int:
+    return max((_slot_order(s)[0] for s in slot_labels if s), default=1) or 1
+
+
 def monotonic_decode(spans):
     """spans = [(cands, expected_pos)] in slot order. Returns chosen (set_start,
     ref_start) per span ((None, None)=abstain). DP maximizing total position-
