@@ -46,15 +46,21 @@ Root cause on bb12_42w5: `SpanBelief.best()` took the heaviest cluster; mert+sur
 `test_fp_cluster_preferred_over_mert_surprise_pileup`. Weak stray fp still loses
 (`test_weak_fp_cluster_does_not_steal_strong_mert_pileup`).
 
+### Dig: `gt_in_topk_missed` (reclassified)
+
+| case | mode_audit | actual stack | implication |
+|---|---|---|---|
+| **bb12_39** | nearest = vote-rank 5 | classical / `_lt` / predicted **already place fp @ GT (0.3s)**; agentic overwrote with `cue_prior+surprise` @ +46s | Same class as bb12_42w5 — covered by fp-cluster preference (`test_fp_preferred_over_cue_prior_surprise_overwrite`) |
+| **bb11_34** | nearest = vote-rank 2 (163 votes) vs argmax 413 @ +33s | classical/`instr_fp`/`_lt` all pick the **wrong** diagonal (~3023); mert prior is also nearer the wrong one | True remaining mode-selection hard case — not an agentic overwrite |
+
+So the belief fix targets **3/5** decoder_wall cases (2× `gt_is_argmax` + bb12_39). Only bb11_34 needs a decode-side candidate re-rank; bb12_3w2 remains a soft holdout.
+
 **Still open:**
 
-1. **Mode selection (`gt_in_topk_missed`)** — bb11_34 (rank 2) and bb12_39 (rank 5)
-   need better disambiguation among top‑K.
-2. **bb11_39 race path** — ensure agentic/classical actually *run* fp for that
-   slot (cue_prior-only belief can't be rescued by the new tie-break).
-3. **Holdout** — bb12_3w2 soft miss (~10s); revisit later.
-4. **Re-race** — re-run agentic on BB11/BB12 and score the two `gt_is_argmax`
-   slots (and full median) when the parallel-agent window is clear.
+1. **bb11_34 wrong-diagonal** — high-vote false mode beats GT (2.5× votes); mert prior does not disambiguate toward GT. Needs a new signal (sharpness / extent / neighbor monotonicity), not belief fusion.
+2. **bb11_39 race path** — ensure agentic actually *runs* fp for that slot (cue_prior-only belief can't be rescued by the tie-break).
+3. **Holdout** — bb12_3w2 soft miss (~10s).
+4. **Re-race** — agentic on BB11/BB12 when parallel agents are clear; expect movement on bb12_42w5, bb12_39, maybe bb11_39 if fp fires.
 
 ## Non-claims
 

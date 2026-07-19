@@ -71,6 +71,20 @@ def test_weak_fp_cluster_does_not_steal_strong_mert_pileup():
     assert 400.0 <= top.set_start_s <= 402.0
 
 
+def test_fp_preferred_over_cue_prior_surprise_overwrite():
+    """bb12_39: classical fp @ GT; agentic cue_prior+surprise piled up ~46s off."""
+    b = _belief(
+        _obs("fp", 3210.7, conf=0.8, prec=0.53),
+        _obs("mert_decode", 3256.14, conf=0.7, prec=0.55),
+        _obs("cue_prior", 3256.8, conf=0.6, prec=0.50),
+        _obs("surprise", 3256.8, conf=1.0, prec=0.45),
+    )
+    top = b.best()
+    assert top is not None
+    assert "fp" in top.probes
+    assert abs(top.set_start_s - 3210.7) < 1.0
+
+
 def test_belief_all_abstain_is_zero():
     b = _belief(Observation("lyrics", None, 0.0, 0.9))
     assert b.quality() == 0.0

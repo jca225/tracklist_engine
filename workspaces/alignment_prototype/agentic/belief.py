@@ -13,13 +13,13 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 CLUSTER_TOL_S = 8.0  # proposals within this agree (matches stem-placement guard)
-# When fp forms its own cluster and a mert/surprise (or cue) pile-up wins on
-# raw weight, prefer the fp cluster if it is within this fraction of the
-# heaviest cluster's weight. Earned by the 2026-07-18 decoder_wall mode audit:
-# bb12_42w5 had fp within 2s of GT while agentic:surprise overwrote it
-# (mert+surprise co-cluster beat lone fp). Margin 0.5 ≈ "fp at least half as
-# heavy as the winner" — weak stray fp diagonals still lose.
-FP_CLUSTER_MARGIN = 0.5
+# When fp forms its own cluster and a mert/surprise/cue pile-up wins on raw
+# weight, prefer the fp cluster if it is within this fraction of the heaviest
+# cluster's weight. Earned by the 2026-07-18 decoder_wall mode audit:
+# bb12_42w5 (mert+surprise) and bb12_39 (mert+cue+surprise) both overwrote
+# GT-correct fp. 0.35 clears both (0.42/0.84 and 0.42/1.14) while a weak stray
+# fp (weight ~0.11 vs pile-up ~1.0) still loses.
+FP_CLUSTER_MARGIN = 0.35
 
 
 @dataclass(frozen=True)
