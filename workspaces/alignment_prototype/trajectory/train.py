@@ -66,6 +66,39 @@ from workspaces.alignment_prototype.trajectory.trm import (  # noqa: E402
 CKPT_DIR = Path(__file__).resolve().parent.parent / ".cache" / "trajectory"
 
 
+def load_pseudo_train_yaml(path: Path, eval_set: str) -> tuple[str, Path]:
+    """Validate a materialized pseudo-GT YAML for set-split training.
+
+    Rejects train/eval set leakage, missing provenance, empty tracks, and any
+    row that is not marked ``pseudo_label: true``. Returns ``(set_id, path)``.
+    """
+    import yaml
+
+    path = Path(path)
+    doc = yaml.safe_load(path.read_text())
+    if not isinstance(doc, dict):
+        raise ValueError(f"pseudo YAML must be a mapping: {path}")
+    set_id = str(doc.get("set_id") or "")
+    if not set_id:
+        raise ValueError(f"pseudo YAML missing set_id: {path}")
+    if set_id == eval_set:
+        raise ValueError(
+            f"pseudo train set_id={set_id!r} is the same set as eval "
+            f"(LOSO leakage — refuse)"
+        )
+    if not doc.get("provenance"):
+        raise ValueError(f"pseudo YAML missing provenance: {path}")
+    tracks = doc.get("tracks") or []
+    if not tracks:
+        raise ValueError(f"pseudo YAML has no tracks: {path}")
+    for i, row in enumerate(tracks):
+        if not bool(row.get("pseudo_label")):
+            raise ValueError(
+                f"pseudo YAML track[{i}] missing pseudo_label=true: {path}"
+            )
+    return set_id, path
+
+
 class SpanSubset:
     """Index view over a TrajectorySpanDataset (keeps .specs/.bin_s contract)."""
 
@@ -233,7 +266,13 @@ def evaluate(
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--split", choices=("set", "slot"), default="set")
-    ap.add_argument("--train-set", required=True)
+    ap.add_argument("--train-set", default=None)
+    ap.add_argument(
+        "--train-yaml",
+        type=Path,
+        default=None,
+        help="materialized pseudo-GT YAML (E1 flywheel); replaces --train-set",
+    )
     ap.add_argument("--eval-set", required=True)
     ap.add_argument("--val-frac", type=float, default=0.2)
     ap.add_argument("--seed", type=int, default=0)
@@ -320,10 +359,19 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = ap.parse_args(argv)
 
+    if args.split == "set" and not args.train_set and not args.train_yaml:
+        ap.error("--split set requires --train-set or --train-yaml")
+    if args.train_yaml and args.synthetic_only:
+        ap.error("--train-yaml cannot be combined with --synthetic-only")
+    if args.train_yaml and args.train_set:
+        ap.error("pass either --train-set or --train-yaml, not both")
+
     device = pick_device(args.device)
     print(f"device: {device}")
 
     if args.split == "slot":
+        if args.train_yaml:
+            ap.error("--train-yaml is only supported with --split set")
         pooled = TrajectorySpanDataset(
             [(sid, GT_FIXTURES[sid]) for sid in sorted(GT_FIXTURES)], bin_s=args.bin_s
         )
@@ -337,18 +385,27 @@ def main(argv: list[str] | None = None) -> int:
         eval_tag = f"heldout-slots seed{args.seed}"
         ckpt_tag = f"slotsplit_seed{args.seed}"
     else:
+        if args.train_yaml:
+            train_set_id, train_yaml = load_pseudo_train_yaml(
+                args.train_yaml, args.eval_set
+            )
+        else:
+            train_set_id = args.train_set
+            train_yaml = GT_FIXTURES[train_set_id]
         train_ds = TrajectorySpanDataset(
-            [(args.train_set, GT_FIXTURES[args.train_set])], bin_s=args.bin_s
+            [(train_set_id, train_yaml)], bin_s=args.bin_s
         )
+        if not train_ds.specs:
+            raise ValueError(f"no trainable spans in {train_yaml}")
         eval_ds = TrajectorySpanDataset(
             [(args.eval_set, GT_FIXTURES[args.eval_set])], bin_s=args.bin_s
         )
-        print(f"train {args.train_set}: {len(train_ds)} spans; skipped:")
+        print(f"train {train_set_id}: {len(train_ds)} spans; skipped:")
         print(train_ds.report_skipped())
         print(f"eval  {args.eval_set}: {len(eval_ds)} spans; skipped:")
         print(eval_ds.report_skipped())
         eval_tag = args.eval_set
-        ckpt_tag = args.train_set
+        ckpt_tag = train_set_id
 
     if args.smoke:
         train_ds = SpanSubset(
