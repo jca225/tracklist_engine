@@ -196,9 +196,22 @@ class LiveContext:
                 load_mix_mono,
             )
 
-            mix_file = set_dir / "mix.m4a"
-            if not mix_file.is_file():
-                log.warning("live fp: mix.m4a missing in %s — abstain", set_dir)
+            # Prefer PCM (wav/flac) over m4a: librosa's audioread path on
+            # hour-long AAC spikes RAM and has OOM-killed the BB10 E1 smoke.
+            mix_file = next(
+                (
+                    p
+                    for p in (
+                        set_dir / "mix.wav",
+                        set_dir / "mix.flac",
+                        set_dir / "mix.m4a",
+                    )
+                    if p.is_file()
+                ),
+                None,
+            )
+            if mix_file is None:
+                log.warning("live fp: no mix.{wav,flac,m4a} in %s — abstain", set_dir)
                 return
             # ref fps in tracklist (span) order — DO NOT sort; None where absent
             fps = [
@@ -483,7 +496,21 @@ def stem_hubert_runner(ctx: LiveContext) -> Runner:
         ref_hub = ctx.ref_hub(rid)
         if ref_hub is None:
             return _abstain("stem_hubert", "no ref vocal HuBERT for this recording")
+        # Prefer mert/cue anchors; on unlabeled pools (BB10) those are absent, so
+        # fall back to the joint lyrics decode already loaded into LiveContext,
+        # then the coarse timeline set_start. Without this, stem_hubert always
+        # abstains with "no prior" and G2 can never pair lyrics+hubert.
         prior = _prior_ss(data)
+        prior_src = "mert_or_cue"
+        if prior is None:
+            slot = str(data.get("slot_label") or "")
+            lyr = ctx.lyrics_by_slot.get(slot)
+            if lyr is not None:
+                prior = float(lyr[0])
+                prior_src = "lyrics"
+        if prior is None and data.get("set_start_s") is not None:
+            prior = float(data["set_start_s"])
+            prior_src = "timeline"
         if prior is None:
             return _abstain("stem_hubert", "no prior set_start to band around")
         try:
@@ -505,7 +532,10 @@ def stem_hubert_runner(ctx: LiveContext) -> Runner:
             confidence=float(min(1.0, max(0.3, peak))),
             precision=spec.precision,
             cost=spec.cost,
-            detail=f"HuBERT place_joint set_start={ss:.1f}s peak={peak:.2f}",
+            detail=(
+                f"HuBERT place_joint set_start={ss:.1f}s peak={peak:.2f} "
+                f"prior={prior_src}"
+            ),
         )
         return ctx.gate_instance(obs, rid)
 

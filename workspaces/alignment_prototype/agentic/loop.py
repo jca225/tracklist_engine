@@ -15,7 +15,10 @@ from dataclasses import dataclass, field
 from dataclasses import replace as _replace
 
 from workspaces.alignment_prototype.agentic.actions import Runner, bind, plan_for
-from workspaces.alignment_prototype.agentic.belief import SpanBelief
+from workspaces.alignment_prototype.agentic.belief import (
+    SpanBelief,
+    independence_satisfied,
+)
 from workspaces.alignment_prototype.agentic.events import EventLog
 from workspaces.alignment_prototype.agentic.policy import Ladder, Mode
 
@@ -62,11 +65,17 @@ def resolve(
     budget: float = float("inf"),
     model=None,  # PrecisionModel | None — learned selection + calibrated precision
     rng=None,  # numpy.random.Generator, required when model is given (reproducible)
+    require_independence: bool = False,
 ) -> Resolution:
     """Heuristic loop; when ``model`` is supplied, action *order* comes from the
     model's Thompson sampling and each observation's precision is overwritten
     with the model's calibrated posterior mean. Without a model, behavior is the
     unchanged static-plan deterministic default.
+
+    ``require_independence`` (E1 pseudo-safe): do not early-stop on AUTO_COMMIT
+    until G2 independence is satisfied or the stem plan is exhausted. Prevents
+    lyrics-alone (prec 0.76 ≥ auto 0.75) from committing before HuBERT/fp can
+    corroborate — which would otherwise starve materialize at g2_independence.
     """
     ladder = ladder or Ladder()
     runners = bind(runners)
@@ -92,15 +101,18 @@ def resolve(
         progressed = False
         for key in list(open_keys):
             b = beliefs[key]
-            if ladder.mode(b) is Mode.AUTO_COMMIT:
-                open_keys.remove(key)
-                continue
             plan = plans[key]
             available = [
                 a.name
                 for a in plan
                 if a.name in runners and a.name not in b.probes_run()
             ]
+            auto = ladder.mode(b) is Mode.AUTO_COMMIT
+            if auto and (
+                not require_independence or independence_satisfied(b) or not available
+            ):
+                open_keys.remove(key)
+                continue
             if not available:  # plan exhausted — final mode decides the queue
                 open_keys.remove(key)
                 continue

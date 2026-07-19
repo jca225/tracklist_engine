@@ -36,7 +36,7 @@ Scripts still run in place (`python -m workspaces.alignment_prototype.attic.<nam
 | `stem_correct` | fix scraped `claimed_stem` before alignment, validated vs hand GT | Superseded by the row-text materialize fix (888caca) + `candidate_vocal_gate`. |
 | `stem_match_probe` | stem→stem matching robustness (the open-lane litmus) | **POSITIVE** — stem-routed + HuBERT lifts acappella identity 0–14%→84%; wired into live stem-routed matching. |
 | `transition_probe` | do regular/instrumental placement errors concentrate in transition zones? | Probe; findings folded into the failure-analysis placement bucket. |
-| `sic_phase0_probe` | can informed successive cancellation (spectral SIC) make missed medley layers identifiable? | CLOSED 2026-07-10 — cancellation works (−4 dB, physics gate passed) but adds nothing to identification: fp-visible layers were never masked (Honest 1.4k/2.8k votes in raw mix, mis-placed by decision logic = bug lead), fp-invisible layers are invisible from keylock warp geometry, not masking (lever = warp-tolerant hashing, not separation). See docs/archive/medley_sic_plan.md. |
+| `sic_phase0_probe` | can informed successive cancellation (spectral SIC) make missed medley layers identifiable? | CLOSED 2026-07-10 — cancellation works (−4 dB, physics gate passed) but adds nothing to identification: fp-visible layers were never masked (Honest 1.4k/2.8k votes in raw mix, mis-placed by decision logic = bug lead), fp-invisible layers are invisible from keylock warp geometry, not masking (lever = warp-tolerant hashing, not separation). See docs/medley_sic_plan.md. |
 
 ## PWS categorical label model over offset bins (2026-07-14) — REFUTED
 **Question:** can a Dawid–Skene label model (learned per-probe accuracy, no GT)
@@ -86,27 +86,20 @@ pseudo-labels. Stability fix on record: answer-latent LayerNorm + grad-clip 1.0
 `trm-ablation-framework`. Numbers here are DIAGNOSTICS, not SSOT — see
 `docs/alignment_status.md` for headline metrics (unchanged by this).
 
-## E1 pseudo-label flywheel — STARVED (2026-07-18)
+## E1 pseudo-label flywheel — STARVED then VIABLE smoke (2026-07-18/19)
 **Question:** can pseudo-safe agentic AUTO_COMMIT on an unlabeled pool produce
 enough audited labels to train a TRM that beats synthetic-only / conv on held-out
 BB11?
-**Verdict: starved** (infra complete; training mass = 0 under documented gates).
-Commit series on `e1-flywheel` (Tasks 1–4): `pseudo_acceptance` + fiber gate +
-`Ladder(combine=True)`, `pseudo_materialize`, `--train-yaml` LOSO guard,
-`trajectory.e1` / `make trm-e1`. Measured smoke:
-`pool=1rfb0yl9` (Disco Lines) → `eval=2nvzlh2k` (BB11), base =
-`out/1rfb0yl9_fused_timeline.json`, artifacts under `out/e1/` (untracked).
-`e1_result.json` status `"starved"` — all spans demoted at G0 (`review`); no
-train subprocess launched. Root cause is probe poverty, not a code bug: fused
-timeline has no `probe_proposals`/`cue_anchor_s`; live path is fp-only (calibrated
-precision below auto bar; single independence group). Re-infer of Disco Lines
-decoded 1/35 slots (0/30 fused rids have exportable 330M multi-layer track MERT
-on pi — legacy-768 only). Plan-default pool BB10 (`w1mgcjt`) blocked earlier:
-no `set_analysis` measure grid and no `set_mert_measures` on pi (needs
-`mac_analyze_sets` + `set_mert_backfill_loop`, both canonical writes — not run).
-**Unblock (operator):** backfill BB10 set analysis + set MERT on pi, then re-run
-`make trm-e1 POOL=w1mgcjt …` (acappella-heavy → lyrics/HuBERT can satisfy G2);
-or export 330M ref MERT for a regular-stem unlabeled set and re-infer a
-proposal-rich base timeline before agentic. Do not lower G1/G2 to force labels.
-Headline metrics unchanged — cite `docs/alignment_status.md` only after a
-non-starved rerun regenerates scorers.
+**Verdict (Disco Lines pool): starved** — `pool=1rfb0yl9` → `eval=2nvzlh2k`,
+fp-only / no exportable 330M MERT; `accepted=0` at G0. Infra (Tasks 1–4) was fine.
+**Verdict (BB10 smoke, 2026-07-19): viable** — `pool=w1mgcjt` → `eval=2nvzlh2k`,
+`--smoke-only`. Artifacts: `out/e1/e1_result.json` status `"completed"`,
+`accepted=3` (lyrics∩HuBERT G2 survivors after fixes below). Smoke TRM train ran
+(`out/e1/logs/smoke_trm.log`). Not a held-out win claim — mass is thin; run full
+E1 (drop `--smoke-only`, keep gates) before regenerating `docs/alignment_status.md`.
+**Fixes that unblocked BB10 (do not weaken G1/G2):** (1) prefer `mix.wav` over
+`mix.m4a` for fp load; (2) `resolve(require_independence=True)` in pseudo-safe so
+lyrics-alone auto does not skip HuBERT; (3) HuBERT prior falls back to
+lyrics/timeline when mert/cue absent; (4) `resolve_track_id` accepts rid stored
+as manifest `track_id` when `recording_id` is null. Whisper long-mix checkpoint
+(`a2e59e7`) kept the lyrics cache warm. Disco Lines remains a dead pool for E1.

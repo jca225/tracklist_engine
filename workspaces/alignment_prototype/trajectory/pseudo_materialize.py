@@ -81,6 +81,13 @@ def resolve_track_id(
             tid = _unique(hits)
             if tid is not None:
                 return tid
+        # Unlabeled-pool manifests (BB10) often leave recording_id null and
+        # store the canonical rid in track_id — accept a unique track_id hit.
+        hits = by_tid.get(str(rid), [])
+        if hits:
+            tid = _unique(hits)
+            if tid is not None:
+                return tid
 
     slot = normalize_slot_label(str(span.get("slot_label") or ""))
     if slot is not None:
