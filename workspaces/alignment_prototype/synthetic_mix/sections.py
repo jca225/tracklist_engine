@@ -20,6 +20,27 @@ CURRICULUM_V2 = {
         "loop_phrase_s": (3.5, 5.5),
         "loop_repeats": (3, 5),
     },
+    "bb12-real": {
+        # Distribution-matched to real BB11 (measured 2026-07-18): inject the
+        # drop-from-top mode (real 24% of spans start ref at 0; lite had 0%) and
+        # raise regular full-track spans (real 21%; lite ~0). These two gaps made
+        # the TRM learn a false ref_start prior -> real eval BELOW control.
+        # Mirrors lite otherwise so the A/B isolates the distribution fix.
+        "window_s": 180.0,
+        "n_instrumentals": 2,
+        "acap_count": (5, 7),
+        "n_loops": 1,
+        "n_regulars": (1, 3),
+        "instr_jump_segments": (2, 3),
+        "instr_jump_prob": 0.85,
+        "max_key_dist": 1,
+        "max_bpm_fold": 0.05,
+        "handoff_crossfade_s": 3.0,
+        "acap_duration_s": (22.0, 42.0),
+        "loop_phrase_s": (3.5, 5.5),
+        "loop_repeats": (3, 5),
+        "drop_from_top_prob": 0.24,
+    },
     "bb12-warp": {
         # Dead-simple saturated at ~40 windows (flat 40->75). This rung applies
         # the empirical warp prior (warp_prior.json, fitted on BB11+BB12): beds
@@ -91,6 +112,7 @@ class CurriculumV2:
     loop_phrase_s: tuple[float, float]
     loop_repeats: tuple[int, int]
     warp_prior: bool = False  # False => legacy slope-1 beds / payload-BPM overlays
+    drop_from_top_prob: float = 0.0  # P(ref_start=0); real BB ~0.24, synth was 0
 
 
 def get_curriculum(name: str) -> CurriculumV2:
@@ -112,4 +134,5 @@ def get_curriculum(name: str) -> CurriculumV2:
         loop_phrase_s=tuple(raw["loop_phrase_s"]),
         loop_repeats=tuple(raw["loop_repeats"]),
         warp_prior=bool(raw.get("warp_prior", False)),
+        drop_from_top_prob=float(raw.get("drop_from_top_prob", 0.0)),
     )
