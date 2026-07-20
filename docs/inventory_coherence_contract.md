@@ -33,10 +33,26 @@ Status: 2026-06-23. Consumed by alignment training export and ingest QA.
 | Command | Purpose |
 |---------|---------|
 | `make check-inventory SET=…` | Pre-pull gate |
+| `python -m labeling.reconcile_aligning_manifest <set_id> [--apply]` | Mac manifest repair from pi slots + disk |
 | `scripts/reconcile_gt_inventory.py --yaml …` | GT → action CSV |
 | `scripts/apply_stem_matches.py` | Discord → canonical |
 | `scripts/ingest_candidate_winners.py` | candidates/ → canonical |
 | `scripts/aligning_refresh.py` | Post-pull ALS tagging chain |
+
+## Proxy / unalignable
+
+Some slots have **no commercial release** (e.g. BB12 slot `032` — Lux Holm - Omega).
+Labeling uses the set's own **`mix_instrumental.flac`** as a host/proxy bed, not a
+fake `track_audio` row on pi-storage.
+
+| Layer | Contract |
+|-------|----------|
+| **Mac manifest** | `reconcile_aligning_manifest` wires `local_path` to `<set_dir>/mix_instrumental.flac`, `stem="instrumental"`, `satisfaction="fallback"`, `gap="proxy:mix_instrumental — original unavailable (…)"` via `PROXY_SLOT_AUDIO`. |
+| **Ableton / GT** | Clip references `mix_instrumental.flac`; `export_als_to_gt._PLACEHOLDER_RE` marks it `unalignable: true` with `source_note` containing `mix_instrumental` (SSOT for placeholder detection). |
+| **Scoring / training** | Honor `unalignable: true` / `skip_training` — do **not** score proxy spans as normal identity+trajectory targets. |
+
+If an ALS clip still points at a missing Lux file, relink once to `mix_instrumental.flac`
+and re-export GT. Do not invent pi `track_audio` for unavailable originals.
 
 ## Training bundle fields (Phase 8)
 

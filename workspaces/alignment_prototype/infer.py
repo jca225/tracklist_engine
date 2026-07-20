@@ -316,7 +316,23 @@ def main(argv: list[str] | None = None) -> int:
         "~50s wall). Needs mix_vocals.flac + ref vocals stems; transcribes on demand "
         "(cached). Lyrics-placed spans are skipped by HuBERT stem-placement.",
     )
+    p.add_argument(
+        "--strict-inventory",
+        action="store_true",
+        help="abort when GT rows lack resolvable ref audio (excluding unalignable)",
+    )
     args = p.parse_args(argv)
+
+    from eda.alignment.spectrogram_review.source_audio import run_audio_preflight
+    from workspaces.alignment_prototype.drivers.base import GT_BY_SET
+
+    if args.set_id in GT_BY_SET:
+        import yaml
+
+        gt_doc = yaml.safe_load(GT_BY_SET[args.set_id].read_text())
+        gt_rows = [r for r in gt_doc["tracks"] if str(r.get("slot_label")) != "mix"]
+        if run_audio_preflight(args.set_id, gt_rows, strict=args.strict_inventory):
+            return 1
 
     from workspaces.alignment_prototype.mert_model import (
         MertLearnedAligner,
