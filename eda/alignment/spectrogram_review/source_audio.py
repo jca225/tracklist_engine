@@ -170,8 +170,8 @@ def resolve_source_audio(
         return None
     tracks = tracks if tracks is not None else load_manifest_tracks(set_id)
 
-    by_recording = bool(recording_id and tracks.get(recording_id))
-    track = tracks.get(recording_id) if recording_id else None
+    track_by_id = tracks.get(recording_id) if recording_id else None
+    track = track_by_id
     if track is None and slot:
         for alias in _slot_aliases(slot):
             track = tracks.get(f"slot:{alias}")
@@ -181,7 +181,11 @@ def resolve_source_audio(
         resolved = _resolve_from_track(set_dir, track, gt_stem)
         if resolved is not None:
             return resolved
-        if by_recording:
+        # Manifest knows this recording_id but has no playable path (unresolved
+        # inventory stub). Do NOT fall back to tracks/stems/{slot}__* — BB12
+        # still has old annotator files under colliding slot numbers (e.g. 032
+        # Lux Holm missing vs 032__AFROJACK… still on disk).
+        if track_by_id is not None:
             return None
 
     if slot:

@@ -18,7 +18,15 @@ def _f(row: Mapping[str, Any], key: str, default: float = 0.0) -> float:
 
 
 def is_success(row: Mapping[str, Any]) -> bool:
-    """True when >= TRAJ_OK of GT seconds decode within 2 s (and identity ok)."""
+    """True when >= TRAJ_OK of GT seconds decode within 2 s (and identity ok).
+
+    Cross-recording stem-compatible matches (the audible truth is a different
+    recording of the same song — e.g. an "acappella" pred over a remix's vocal
+    layer) get trajectory=0 by construction: the pred's ref segments are in the
+    predicted recording's coordinate space, the truth row's are in a different
+    recording's space, so they cannot align. For those, identity + placement
+    within PLACEMENT_MISS_S is the win — trajectory is not comparable across
+    recordings."""
     if row.get("span_class") in (None, ""):
         return False
     identity = row.get("identity_hit", 1)
@@ -26,7 +34,15 @@ def is_success(row: Mapping[str, Any]) -> bool:
         identity = 1
     if int(identity) == 0:
         return False
-    return _f(row, "traj_strict") >= TRAJ_OK
+    if _f(row, "traj_strict") >= TRAJ_OK:
+        return True
+    # cross-recording stem-compatible match: trajectory not comparable; fall back
+    # to identity + placement.
+    gt_rid = row.get("gt_recording_id", "")
+    pred_rid = row.get("recording_id", "")
+    if gt_rid and pred_rid and str(gt_rid) != str(pred_rid):
+        return _f(row, "set_start_err_s") <= PLACEMENT_MISS_S
+    return False
 
 
 def binding_cause(row: Mapping[str, Any]) -> str:
