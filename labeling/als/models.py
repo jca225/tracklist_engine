@@ -109,6 +109,12 @@ class ParsedClip:
     # clips are still returned; the GT exporter drops them (a silent clip is
     # not ground truth, per the fader-silence lesson).
     silence_reason: str = ""
+    # Ableton's own per-clip content identity, read from the ACTIVE FileRef
+    # (never the historical SourceContext copy): the exact bytes labeled against.
+    # This is what identity binds to — path/slot strings are locators, not
+    # identity (Operation Crush §9). None when the .als omits them (rare).
+    file_size: int | None = None
+    crc: int | None = None
 
     @property
     def content_beat_start(self) -> float:

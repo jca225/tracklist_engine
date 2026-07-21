@@ -22,6 +22,35 @@ def clip_original_path(clip: etree._Element) -> str:
     return html.unescape(ps[0].get("Value") or "")
 
 
+def _active_fileref(clip: etree._Element) -> etree._Element | None:
+    """The clip's live sample reference — the FileRef Live actually loads from,
+    NOT the historical `SourceContext/OriginalFileRef` copy. Identity reads must
+    use this one (Operation Crush §9)."""
+    for fr in clip.xpath(".//SampleRef/FileRef"):
+        if not any(a.tag == "SourceContext" for a in fr.iterancestors()):
+            return fr
+    return None
+
+
+def clip_content_identity(clip: etree._Element) -> tuple[int | None, int | None]:
+    """(OriginalFileSize, OriginalCrc) off the active FileRef — Ableton's own
+    record of the exact bytes labeled against. None when the ref omits them."""
+    fr = _active_fileref(clip)
+    if fr is None:
+        return None, None
+
+    def _int(tag: str) -> int | None:
+        el = fr.find(f".//{tag}")
+        if el is None or el.get("Value") is None:
+            return None
+        try:
+            return int(el.get("Value"))
+        except (TypeError, ValueError):
+            return None
+
+    return _int("OriginalFileSize"), _int("OriginalCrc")
+
+
 def track_display_name(track_el: etree._Element) -> str:
     for tag in ("EffectiveName", "Name", "UserName"):
         n = track_el.find(f".//{tag}")
@@ -117,6 +146,7 @@ def parse_layer_clips(root: etree._Element) -> list[ParsedClip]:
             iw_el = clip_el.find("IsWarped")
             vol_id = volume_automation_id(track_el)
             vol_pts = tuple(vol_envs.get(vol_id, ())) if vol_id else ()
+            file_size, crc = clip_content_identity(clip_el)
             try:
                 clip = ParsedClip(
                     group_name=current_group or "",
@@ -140,6 +170,8 @@ def parse_layer_clips(root: etree._Element) -> list[ParsedClip]:
                     # don't occur here; warped is the 295/301 common case)
                     is_warped=iw_el is None or iw_el.get("Value") == "true",
                     silence_reason=_silence_reason(track_el, clip_el, vol_pts),
+                    file_size=file_size,
+                    crc=crc,
                 )
             except (TypeError, ValueError, OverflowError):
                 continue  # malformed clip numerics — validate reports clip-malformed
