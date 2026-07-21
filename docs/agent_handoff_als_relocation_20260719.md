@@ -2,6 +2,13 @@
 
 ## Status: BLOCKED on a human (John) — resume when he's awake.
 
+> **⚠ UPDATE 2026-07-21 (see [operation_crush_master_plan.md](operation_crush_master_plan.md) §4):**
+> **Step A (relocation) is DONE** — BB12 is canonical at
+> `~/aligning/_labeling/1fsnxchk/BB12 align Project/bb12_align.als` (final name
+> `bb12_align.als`, not "BB12 align.als"), relinked **613/613**. Ref counts here
+> ("574 refs") are superseded by **318 external + 295 local**. **Steps B (export
+> search paths) and C (manifest↔`.als` reconcile) remain live inputs to Phase 1.**
+
 John approved the approach but deferred execution to tomorrow. **Do not start
 without confirming the open decisions below with him.**
 

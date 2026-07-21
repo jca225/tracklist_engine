@@ -1,9 +1,14 @@
 # Operation Crush — frontal assault plan (2026-07-20)
 
+> **⚠ SUPERSEDED 2026-07-21 — the operative master is now
+> [operation_crush_master_plan.md](operation_crush_master_plan.md).** This file is
+> kept as the **D1–D15 discrepancy register** only; its phase framing and status
+> claims are stale (see the master plan).
+>
 > Produced by a full assessment of every open/merged PR, every issue, the July
 > handoff docs, the superpowers plans, the EXPERIMENTS ledger, and the north-star
-> docs. This is the operative plan for making the project **rigorous, correct,
-> and SOTA** before the August 1 north star. GitHub tracking: the
+> docs. Original framing: the operative plan for making the project **rigorous,
+> correct, and SOTA** before the August 1 north star. GitHub tracking: the
 > [Operation Crush milestone](https://github.com/jca225/tracklist_engine/milestone/1).
 > Research context: [operation_crush_research_synthesis.md](operation_crush_research_synthesis.md).
 > No alignment metrics are typed here — cite [alignment_status.md](alignment_status.md)

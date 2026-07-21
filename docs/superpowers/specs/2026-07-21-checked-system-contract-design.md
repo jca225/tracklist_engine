@@ -58,7 +58,7 @@ don't enforce.
 | id | invariant | bound check | status |
 |----|-----------|-------------|--------|
 | **C1** | No identity-by-mutable-string: GT/audio resolve only by `track_audio_id` / `recording_id`, never filename/slot_label | extend `entropy_audit` fail-closed resolver fences | mostly exists |
-| **C2** | One metric SSOT: no alignment-metric strings outside `docs/alignment_status.md` | new `guardrails._check_ssot_fence` (= #53) | new |
+| **C2** | One metric SSOT: no alignment-metric strings outside `docs/alignment_status.md` (**detection pattern + path exemptions — `docs/archive/`, `attic/EXPERIMENTS.md`, corrections logs, memory, discrepancy quotes — spec'd in #53 before implementation**) | new `guardrails._check_ssot_fence` (= #53) | new |
 | **C3** | Contract integrity meta-check: every claim → exactly one live check, every registered check → exactly one claim (bidirectional; orphan either way = red) | new `guardrails._check_contract_registry` | new |
 
 **Data plane** — runs where GT + DB exist (`make verify-contract`, gt-gate,
@@ -66,6 +66,7 @@ weekly audit); ratcheted, not a wall of red:
 
 | id | invariant | bound check | status |
 |----|-----------|-------------|--------|
+| **C0** *(top priority)* | `.als` reference integrity: every audio ref resolves **after `html.unescape`**, matches the `.als`'s own `OriginalFileSize`/`OriginalCrc`, and binds to a `track_audio_id`/`recording_id` by content — **the D1/D20 poison-catcher** (see §6b for detail) | new `verify_als_refs` | new |
 | **C4** | GT round-trips: `.als` → export → re-derive within tolerance | audio round-trip law (PR #37) | exists / wire |
 | **C5** | Zero stale ids: every GT `track_id` resolves to the same song the slot claims | `scripts/audit_gt_recording_ids.py` | exists / gate |
 | **C6** | GT freshness/provenance: every committed fixture is sha-proven-derived from the *current* `.als`, never a stale-manifest fallback | new `verify_gt_provenance` (from dbt freshness) — **kills D1 as a class** | new |
@@ -90,12 +91,16 @@ the two concrete poison mechanisms from the July handoffs.
 
 - **Static plane (C1–C3):** hard-fail in pre-commit + CI immediately — cheap,
   always runnable on a clean checkout.
-- **Data plane (C4–C8):** a new `make verify-contract` target (needs GT + DB),
-  also invoked by gt-gate at write-back and by the weekly audit. Introduced
-  **ratcheted**: each invariant starts as warn + baseline; it flips to hard-fail
-  **per-set** as that set passes it. This honors the ArchUnit "keep it green"
-  lesson and matches the repo's existing entropy ratchet — no dumping a wall of
-  red on day one.
+- **Data plane (C0, C4–C8):** a new `make verify-contract` target, also invoked by
+  gt-gate at write-back and by the weekly audit. Introduced **ratcheted**: each
+  invariant starts as warn + baseline; it flips to hard-fail **per-set** as that set
+  passes it. This honors the ArchUnit "keep it green" lesson and matches the repo's
+  existing entropy ratchet — no wall of red on day one. **DB access:** `verify-contract`
+  must query pi over SSH (or accept a local DB snapshot **with a freshness stamp**) —
+  the local `data/db/music_database.db` is never truth (CLAUDE.md); state which per run.
+  **Ratchet baselines** live in a `contract_ratchet.json` (precedent:
+  `guardrails_ratchet.json` / `entropy_ratchet.json`); the first *de-poisoned*
+  re-export is a deliberate baseline reset, not an alarm.
 
 ### 3.4 Placement
 
@@ -144,15 +149,22 @@ joins; nothing bound the `.als`'s own reference layer. Corrections:
   34/14 MB near-miss); and (c) binds to a `track_audio_id`/`recording_id` **by content**
   (hash/fingerprint), failing on unresolved refs *or* refs whose content identity
   differs from the slot's claim. (a)+(b) are cheap and belong in the relink gate
-  itself; (c) is the full identity bind. This is the check that would have caught
-  D1/D20.
+  itself; (c) is the full identity bind. **Binding source for (c):** compare a
+  chromaprint fingerprint (`track_fingerprints`), *not* raw sha256 — local
+  `~/aligning` files legitimately differ byte-wise from canonical pi bytes (stems,
+  transcodes); (a)+(b) already pin exact-bytes identity locally. This is the check
+  that would have caught D1/D20.
 - **C7 scope corrected.** Span-count/duration deltas **cannot** catch an identity
   swap (same spans, wrong song) — so C7 is demoted to a *drop/shift* guard only;
-  identity is C0's job. C7 also needs an explicit tolerance and must treat the
-  first *de-poisoned* export as a deliberate baseline reset (not an alarm).
+  identity is C0's job. **Provisional tolerance:** total audible-span duration within
+  **±2%** and row-count exactly equal vs the last stamp; baseline in
+  `contract_ratchet.json`; the first *de-poisoned* export is a deliberate reset, not
+  an alarm.
 - **C6 made implementable.** "current `.als`" was undefined (4 siblings exist; sha
-  churns per save). C6 requires a **canonical-als registry** (one path + expected
-  content-identity per set) and checks provenance against *that*, not "the newest".
+  churns per save). C6 reads a **canonical-als registry `contract/canonical_als.yaml`**
+  (`set_id → {als_path, content_sha}`) and checks provenance against *that*, not "the
+  newest". This registry is also where the §4 naming convention and the D22
+  convention/path choice get encoded and enforced.
 - **C3 honesty caveat.** The meta-check enforces 1:1 claim↔check bookkeeping but a
   stubbed/`planned` check still renders into the doc — so the doc can still state
   not-yet-enforced things. `SYSTEM_CONTRACT.md` must visibly mark each claim's
@@ -167,5 +179,8 @@ joins; nothing bound the `.als`'s own reference layer. Corrections:
 - `contract/registry.py` exists; `SYSTEM_CONTRACT.md` renders from it; C3 fails
   the build on any claim↔check orphan or doc drift.
 - C1–C3 hard-fail in `make check` / pre-commit / CI.
-- `make verify-contract` runs C4–C8 against GT + DB, ratcheted per-set.
+- `make verify-contract` runs **C0, C4–C8** against GT + DB, ratcheted per-set;
+  **C0's (a)+(b) also run inline in the Phase-1 relink/re-export gate.**
+- `contract/canonical_als.yaml` exists and pins each GT set's canonical `.als` +
+  content sha (encoding the naming convention / D22 choice).
 - The master plan §3 and issue #49 reference this spec; it lands in PR #54.

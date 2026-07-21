@@ -118,7 +118,7 @@ verify before re-doing work:
 And one way that *increases* scope — the new headline discrepancy:
 
 - **D16 — the consolidation is ~7× bigger than stated.** Not "three branches + one
-  worktree." Live state: ~20 local branches, **25 active worktrees** with unmerged
+  worktree." Live state: **~30 local branches**, **26 active worktrees** with unmerged
   commits, one **detached-HEAD** worktree (`fail-closed-audio-resolvers` `fa3d4cc`
   — data-loss risk), and `trm-ablation-framework` **34 ahead / 28 behind** origin
   (diverged, not a fast-forward) atop 89 dirty files. Tracked in **#49**.
@@ -142,7 +142,8 @@ The full D1–D15 register lives in the assault plan. New/changed:
 - **D19 — SSOT invariant unfenced** (#53). D11 was fixed by hand; nothing
   mechanically stops the next hand-typed metric outside `alignment_status.md`.
 - **D20 — Relink-by-name re-injects wrong-version (D5) into GT.** BB12's offline
-  clips must be relinked, but the "obvious" successor files differ in *identity*.
+  clips **were relinked 2026-07-21 (see §4)**; the rule below stands for BB11 + all
+  future relinks, because the "obvious" successor files differ in *identity*.
   **Proven concretely (2026-07-21):** the clip at `stems/121__Manse - All Around/
   instrumental.flac` has two same-name matches — the renumbered `034__Manse - All
   Around/instrumental.flac` (**14 MB**) and the position-121 original in
@@ -188,7 +189,8 @@ data a prior phase has not certified.
    verifier + eval #45, scorer hardening + fixture diagnostics D1). Merge the
    remaining `feat/track-audio-id-index` (D9; its pair #39 is already on main).
 4. Land the GT-gate stack: PR #34 (`make gt-gate` + stamped write-back) then
-   PR #37 (audio round-trip law), after the two Mac-side manual checks.
+   PR #37 (audio round-trip law), after the two outstanding Mac-side manual checks
+   (**name them from PR #34/#37 before executing** — undefined here).
 5. Commit or explicitly discard the `fp-hit-decoder-clean` worktree — ledger the
    FAILED strict prove either way (D15). **[NEW] Per-branch merge gate:** each
    consolidated branch must pass `make check` + its own tests + review *before*
@@ -218,9 +220,9 @@ provably the same object.**
 0. **[NEW] Safety pre-gate (partly done).** `.als` snapshot taken this session;
    codify as `scripts/backup_als.sh` + `make backup-als` and require it green
    before any relocation/re-export (§4, #50).
-1. **Operator decision (blocking, ~30 min)** — the `.als` relocation + path
-   convention (§5). Everything below queues behind it. **Front-loaded** — surfaced
-   with options pre-analyzed so it is a *decision*, not a research session.
+1. **Operator decision (§5)** — relocation is already DONE; what remains is
+   **Collect-All (durable form) + the D22 convention/path reconcile**. The re-export
+   below queues behind the Collect-All choice (it fixes the final paths).
 2. **Capture-rule decision (D2):** stem-provenance precedence. Proposed
    *arranged-audio truth > tracklist claim > file path* — **[NEW] treated as a
    hypothesis**, validated against the Honest `42w3` case **and a counter-example**,
@@ -228,6 +230,15 @@ provably the same object.**
 3. **[NEW] Canonical rollback (#51):** snapshot pi `set_ground_truth` + the
    fixture *before* overwrite; diff old↔new as a reviewed gate artifact; keep a
    one-command revert.
+3b. **[NEW — the actual D1 mechanism] Reconcile manifest↔`.als` clip paths.** The
+   re-export **reproduces stale ids via the `slot_id_map` fallback** until the
+   manifest `local_path`s path-match the `.als` clip paths (handoff Step C; 290/296
+   BB12 clips were path-MISS). Sequence this **after** the Collect-All choice (§5) so
+   it targets the *final* paths — or bind identity through `audio_index.json` /
+   `feat/track-audio-id-index` (merged in Phase 0 step 3), making path-matching moot.
+   Pick one; without it, re-export re-poisons. Note: BB12's manifest already carries
+   **152 locally-applied `recording_id`s** (`resolve_manifest_recording_ids.py
+   --apply`, uncommitted) — commit or re-derive them.
 4. Re-export BB11 + BB12 through `make gt-gate` → fixture regen → id audit
    (`scripts/audit_gt_recording_ids.py` must report **zero** stale ids) →
    transactional write-back (coordinated, AGENTS.md §5).
@@ -340,8 +351,9 @@ moving the audio it points to, or renaming that audio.
     280 local** refs; 560/560 resolve *now*, but renaming anything under the set's
     `tracks/` orphans all 280 — same filename-drift exposure as BB12 had. The prior
     "564/567 local, done" claim was wrong (searched only depth-3 `../../../`; BB11
-    uses depth-2 `../../`). Do **not** treat BB11 as immune. (One ref points into
-    another user's home `…/nsh/Library/…` — investigate.)
+    uses **depth-1 `../`** into its set dir). Do **not** treat BB11 as immune.
+    (The `…/nsh/Library/…` ref is a **device preset** `.adv` (Simple Delay), not
+    audio and not in the 560 audio refs — not an integrity lead.)
   - **BB12 — relocated (2026-07-21), verified reference-neutral:** now
     `~/aligning/_labeling/1fsnxchk/BB12 align Project/bb12_align.als`. Correct
     counts (HTML-unescaped): **589/613 resolve, 24 broken occurrences, 7 unique
@@ -383,20 +395,27 @@ moving the audio it points to, or renaming that audio.
 
 ---
 
-## 5. The one decision only John can make (front-loaded)
+## 5. The decision left for John
 
-Everything in Phase 1 queues behind the `.als` relocation + path convention.
-Options, safest first:
+The BB12 **relocation is DONE** (§4: canonical at `_labeling/1fsnxchk/…`, relinked
+613/613). Two decisions remain:
+
+**(i) Durable form of BB12 — Collect-All vs. keep the tactical file-restore:**
 
 | Option | What happens | Cost | Trade-off |
 |---|---|---|---|
-| **A. Collect All & Save** *(recommended)* | Open BB12 in Live, Collect-All into a canonical project folder; re-export from that self-contained copy | ~30 min + ~5 GB | Permanently ends depth-fragility; the durable answer to the recurring pain |
-| **B. "go" — copy `.als` only** | Copy the 493 KB `.als` to a depth-3 canonical path, refs preserved, renamed | ~2 min | Lightest; sufficient for export; still depth-fragile if audio later moves |
-| **C. "go full" — copy project folder** | Same as B but also copy the whole 5 GB project (Samples/Backup/) | ~5 GB | Ableton opens the copy with its own samples; not self-contained the way Collect-All is |
+| **A. Collect All & Save** *(recommended)* | Open BB12 in Live → Collect-All → all 613 refs internalized into `Samples/` | ~30 min + ~5 GB | Permanently ends depth-fragility **and the `--prune` hazard**; normalizes provenance (D21) |
+| **B. Keep the file-restore state** | Leave BB12 as-is (resolves 613/613 today) | 0 | Works now, but `--prune` stays forbidden and mixed-provenance (D21) persists |
 
-Recommendation: **A**. It costs the same ~30 min as B/C but removes the failure
-*class* instead of dodging it once — consistent with the "gates over vigilance"
-doctrine. Backups are already in place, so A is fully reversible.
+Recommendation: **A** — the only state where `--prune`/renumber can't silently
+re-break the GT. Backups are in place, so it's fully reversible.
+
+**(ii) Convention vs. path reconcile (D22).** BB12's home `_labeling/1fsnxchk/BB12
+align Project/` matches neither the §4-adopted `<set_dir>/<BBNN> align Project/`
+convention nor BB11's in-set-folder layout (the depth-3 refs forced it). Decide:
+relax the convention to allow `_labeling/<set_id>/`, **or** move BB12 into its set
+folder as part of the Collect-All (which frees the depth constraint). Encode the
+choice in the canonical-als registry (contract C6).
 
 ---
 
@@ -433,6 +452,9 @@ closed-experiments ledger and tag every entry 1/2/3 before any revival begins.
 | 3 Re-measure | #44, #2/#3/#4 | (BB11 Whisper + counterfactual notes) |
 | 4 SOTA | #46, #42 | **#52** experiment-revival ledger |
 | 5 Invariants | #8 | **#53** SSOT fence |
+
+Also open in the milestone: **#43** ("human-readable TLDR") — the START HERE block
+partly serves it; keep it as the plain-language digest.
 
 Milestone: **Operation Crush**, due 2026-08-01.
 
