@@ -22,7 +22,7 @@ discrimination, ~2% are boundary/acquisition.**
 
 - **Numbers SSOT:** [docs/alignment_status.md](../../../docs/alignment_status.md).
   Do not hand-type identity/placement metrics elsewhere; regenerate from the scorer.
-- **Sensor freeze is in force** (`workspaces/alignment_prototype/CLAUDE.md`): do NOT
+- **Sensor freeze is in force** (`workspaces/alignment_prototype/docs/trm_decoder_bakeoff.md`): do NOT
   add new probes/channels/priors. Both levers here are *actor/output* changes, not
   perception — they are inside the two sanctioned lanes (decoder + contracts).
 - **Axis rule:** take `claimed_stem` from the matched GT row, never the timeline span.
