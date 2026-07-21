@@ -127,6 +127,13 @@ data a prior phase has not certified.
 6. Unify the EXPERIMENTS ledger; adopt one `alignment_status.md` SSOT (D11, D12).
 7. Resolve/close PR #35 (noise-floor experiment; carry corroboration code only if
    it survives a clean rebase).
+8. **[NEW] Scaffold the Checked System Contract** — `contract/registry.py` +
+   rendered `SYSTEM_CONTRACT.md` + static-plane checks C1–C3, green on day one.
+   Design: [specs/2026-07-21-checked-system-contract-design.md](superpowers/specs/2026-07-21-checked-system-contract-design.md).
+   It turns Crush's data-truth invariants from "verified once by a human" into
+   "verified every build," and its data-plane checks (C4–C7) activate through
+   Phases 1–2. This is the structural counter to the Type-II miss that started
+   Crush — the poison would have failed the build. (#49-adjacent; own issue on land.)
 
 ### Phase 1 — Ground-truth de-poisoning (the centerpiece)
 
@@ -243,6 +250,16 @@ moving the audio it points to, or renaming that audio.
   `~/aligning/_backups/als_snapshot_20260721_091013/` (in-tree) **and**
   `~/als_snapshots/als_snapshot_20260721_091013/` (off-tree mirror, survives an
   `~/aligning` wipe). 16 MB. BB11/BB12 sessions verified as valid gzip.
+- **Collect All & Save status (verified by ref audit):**
+  - **BB11 — done + canonical:** `~/aligning/2nvzlh2k__…/BB11 align Project/BB11 align.als`,
+    564/567 refs local (3 stray = factory devices). Leave it.
+  - **BB12 — NOT done:** 295 local / **321 refs still depth-3 outside**
+    (half-collected — likely deactivated/offline clips skipped), and it sits at a
+    non-canonical path (`_backups/20260616_150150/big bootie 12 labeling Project/big
+    bootie 12 labeling_fast.als`). **Fix (operator, in Live):** Save As →
+    `~/aligning/1fsnxchk__…/BB12 align Project/BB12 align.als` → Collect All & Save,
+    so it mirrors BB11. Do NOT `mv` it (moving orphans the 321). Keep the old copy
+    until the new collect verifies.
 
 **Protocol going forward:**
 1. `scripts/backup_als.sh` (codifies the snapshot) runs green before any
