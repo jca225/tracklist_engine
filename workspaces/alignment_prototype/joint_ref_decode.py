@@ -79,6 +79,16 @@ def _ref_audio_for(span: dict, track: dict, set_dir: Path | None = None) -> str 
     return lp if lp and Path(lp).is_file() else None
 
 
+def _legacy_r0_slope(decoder: str, earliest_slope: float) -> float:
+    """Keep a looptrace A/B from contaminating legacy-routed control spans."""
+    return earliest_slope if decoder == "legacy" else 0.0
+
+
+def _looptrace_earliest_slope(stem: str, earliest_slope: float) -> float:
+    """Apply the measured prior only to its recoverable acappella population."""
+    return earliest_slope if stem == "acappella" else 0.0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--set-id", required=True)
@@ -92,6 +102,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--window-s", type=float, default=12.0, help="matched-filter window")
     p.add_argument("--hop-s", type=float, default=2.0, help="window hop")
+    p.add_argument(
+        "--earliest-slope",
+        type=float,
+        default=0.0,
+        help="earliest-fiber-instance prior: per-window linear penalty (in "
+        "emission units per ref-frame) on the clip-start ref position, breaking "
+        "near-ties between equivalent fiber siblings toward the EARLIEST "
+        "ref-position instance (the GT instance ~0.93 of recoverable rows — "
+        "INSTANCE_SEPARABILITY_FINDINGS.md). 0 = off (default); A/B via "
+        "make scorecard before adoption. Distinct from the warp/continuity jump "
+        "slopes (which prefer the NEAREST instance).",
+    )
     p.add_argument("--hubert-layer", type=int, default=9)
     p.add_argument("--workers", type=int, default=8)
     p.add_argument(
@@ -260,6 +282,7 @@ def main(argv: list[str] | None = None) -> int:
                     ref_path=str(ref_path),
                     belief_window=(s0 - off, s1 - off),
                     enable_loops=enable_loops,
+                    earliest_slope=_looptrace_earliest_slope(stem, args.earliest_slope),
                 )
                 of = meta_p.get("ev_out_frac")
                 if segs_p and of is not None and of >= SEG_V1.gate_out_frac:
@@ -288,6 +311,9 @@ def main(argv: list[str] | None = None) -> int:
                         ref_path=str(ref_path),
                         belief_window=(s0 - off, s1 - off),
                         enable_loops=enable_loops,
+                        earliest_slope=_looptrace_earliest_slope(
+                            stem, args.earliest_slope
+                        ),
                     )
                     of = meta_p.get("ev_out_frac")
                     rate = float(meta_p.get("evidence_rate") or 0.0)
@@ -311,6 +337,7 @@ def main(argv: list[str] | None = None) -> int:
                     song_pairs=song_pairs,
                     ref_path=str(ref_path),
                     enable_loops=enable_loops,
+                    earliest_slope=_looptrace_earliest_slope(stem, args.earliest_slope),
                 )
             if segs:
                 lt_res[idx] = segs
@@ -373,8 +400,9 @@ def main(argv: list[str] | None = None) -> int:
                 wlen,
                 hop,
                 lam_back,
-                0.0,  # fwd_slope: flat (warp-off) — path_decode._job unpacks 12
+                0.0,  # fwd_slope: flat (warp-off) — path_decode._job is variadic (*rest); tuple is now 13 with r0_slope below
                 0.0,  # back_slope: flat — neutral default matches decode_path
+                _legacy_r0_slope(args.decoder, args.earliest_slope),
             )
         )
 

@@ -105,6 +105,7 @@ def _viterbi(
     *,
     fwd_slope: float = 0.0,
     back_slope: float = 0.0,
+    r0_slope: float = 0.0,
 ) -> tuple[float, np.ndarray]:
     """Best piecewise-constant-offset path with a DIRECTIONAL jump penalty.
 
@@ -129,6 +130,16 @@ def _viterbi(
     if lam_back is None:
         lam_back = lam_fwd
     tm, K = reward.shape
+    if r0_slope:
+        # Earliest-fiber-instance prior: a per-window linear penalty on the
+        # absolute clip-start state r0 (larger r0 = later in ref). Applied to
+        # every window so it scales with the emission sum, it breaks a near-tie
+        # between equivalent fiber siblings toward the EARLIEST ref-position
+        # instance (the GT instance ~0.93 of the time — see
+        # INSTANCE_SEPARABILITY_FINDINGS.md) without overriding a genuine
+        # emission gap. Orthogonal to the fwd/back jump slopes (which prefer the
+        # NEAREST instance, a continuity/warp prior, not earliest-in-ref).
+        reward = reward - r0_slope * np.arange(K, dtype=reward.dtype)
     dp = reward[0].astype(np.float64).copy()
     src = np.empty((tm, K), dtype=np.int32)
     ar = np.arange(K)
@@ -234,6 +245,8 @@ def decode_path(
     weight: np.ndarray | None = None,  # per-span-frame fader gain (gain_curve)
     fwd_slope: float = 0.0,  # per-ref-frame forward-jump cost (0 = flat, warp-off)
     back_slope: float = 0.0,  # per-ref-frame backward-jump cost (0 = flat)
+    r0_slope: float = 0.0,  # per-window ref-position prior (0 = off); >0 breaks
+    #                         near-ties toward the earliest fiber instance
 ) -> tuple[list[tuple[float, float, float]], float]:
     """(segments, score). M=(D,Tm) span, R=(D,Tr) ref, both L2-normed per col.
 
@@ -277,7 +290,12 @@ def decode_path(
         lr0 = min(c.size - sh for c, sh, _ in valid)
         e = np.stack([c[sh : sh + lr0] for c, sh, _ in valid]).astype(np.float32)
         score, path_r0 = _viterbi(
-            e, lam, lam_back, fwd_slope=fwd_slope, back_slope=back_slope
+            e,
+            lam,
+            lam_back,
+            fwd_slope=fwd_slope,
+            back_slope=back_slope,
+            r0_slope=r0_slope,
         )  # path over windows
         rel_v = [r for _, _, r in valid]
         if best is None or score > best[0]:
@@ -604,7 +622,9 @@ def _job(args: tuple) -> dict:
         lam_back,
         fwd_sl,
         back_sl,
+        *rest,  # optional trailing r0_slope (earliest-instance prior; 0 if absent)
     ) = args
+    r0_sl = rest[0] if rest else 0.0
     M = np.load(mix_npy, mmap_mode="r")[:, a : a + n]
     R = np.load(ref_npy, mmap_mode="r")
     M = np.ascontiguousarray(M, dtype=np.float32)
@@ -619,6 +639,7 @@ def _job(args: tuple) -> dict:
         lam_back,
         fwd_slope=fwd_sl,
         back_slope=back_sl,
+        r0_slope=r0_sl,
     )
     return {"idx": idx, "segs": segs, "score": round(score, 3)}
 

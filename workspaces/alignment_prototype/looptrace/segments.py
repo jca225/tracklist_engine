@@ -135,6 +135,7 @@ def cover_dp_runs(
     weights: np.ndarray | None = None,
     diagonals: list[Diagonal] | None = None,
     bonus: np.ndarray | None = None,
+    earliest_slope: float = 0.0,
 ) -> tuple[list[DiagonalRun], float]:
     """Decode explicit non-NULL runs, including their mix-time end boundaries.
 
@@ -174,6 +175,20 @@ def cover_dp_runs(
     if bonus is not None:  # zero-sum rival tiebreak, share space (residual.py)
         emis[:-1] += bonus
         emis = np.maximum(emis, 0.0)
+    if earliest_slope:
+        # Earliest-fiber-instance prior: a per-candidate penalty proportional to
+        # the diagonal's ref intercept (earlier = smaller = cheaper), measured
+        # relative to the earliest candidate so it keeps full support and later
+        # instances are pushed down. Accumulated over every grid step (like the
+        # emission itself), it breaks a near-tie between equivalent fiber
+        # siblings toward the EARLIEST ref-position instance (the GT instance
+        # ~0.93 of recoverable rows — INSTANCE_SEPARABILITY_FINDINGS.md) without
+        # overriding a genuine support gap. The looptrace analogue of
+        # path_decode.r0_slope; NULL row (last) is untouched.
+        icpt = np.array([d.intercept_s for d in diags], dtype=np.float64)
+        emis[:-1] = np.maximum(
+            emis[:-1] - earliest_slope * (icpt - icpt.min())[:, None], 0.0
+        )
     n_states, t_steps = emis.shape
     lam = cfg.lam
     score = emis[:, 0].copy()
@@ -231,6 +246,7 @@ def cover_dp(
     weights: np.ndarray | None = None,
     diagonals: list[Diagonal] | None = None,
     bonus: np.ndarray | None = None,
+    earliest_slope: float = 0.0,
 ) -> tuple[list[tuple[float, float, float]], float]:
     """Legacy segment shape over :func:`cover_dp_runs`.
 
@@ -246,6 +262,7 @@ def cover_dp(
         weights=weights,
         diagonals=diagonals,
         bonus=bonus,
+        earliest_slope=earliest_slope,
     )
     last_grid_s = float(
         np.arange(0.0, max(span_dur_s, cfg.grid_step_s), cfg.grid_step_s)[-1]
@@ -257,9 +274,7 @@ def cover_dp(
         # existing looptrace callers historically ended it at the grid centre.
         song_end = run.song_end_s
         if run.mix_end_s >= span_dur_s:
-            song_end = round(
-                float(slope * last_grid_s + run.diagonal.intercept_s), 3
-            )
+            song_end = round(float(slope * last_grid_s + run.diagonal.intercept_s), 3)
         legacy.append((run.mix_start_s, run.song_start_s, song_end))
     return legacy, evidence
 
