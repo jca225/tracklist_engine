@@ -9,7 +9,7 @@ writes a `*_ground_truth.yaml` consumable by `labeling.write_back_ground_truth`.
 Usage (Mac, from repo root):
 
     venvs/audio/bin/python -m labeling.export_als_to_gt \\
-        --als "$HOME/Desktop/big bootie 12 labeling Project/big bootie 12 labeling_fast.als" \\
+        --als "$HOME/aligning/_labeling/1fsnxchk/BB12 align Project/bb12_align.als" \\
         --set-dir "$HOME/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12" \\
         --out labeling/fixtures/bb12_ground_truth.yaml
 
@@ -55,9 +55,12 @@ from labeling.ground_truth.schema import (
 )
 from core.result import Err, Ok
 
+# Canonical BB12 labeling session, relocated 2026-07-21 (master plan §4): the
+# .als project moved to ~/aligning/_labeling/1fsnxchk/, but the set-dir (manifest
+# + tracks/ + stems/) stayed at the old path — hence the split below. The path
+# convention itself (D22) is an open operator decision; update here if it lands.
 DEFAULT_ALS = (
-    Path.home()
-    / "Desktop/big bootie 12 labeling Project/big bootie 12 labeling_fast.als"
+    Path.home() / "aligning/_labeling/1fsnxchk/BB12 align Project/bb12_align.als"
 )
 DEFAULT_SET_DIR = (
     Path.home() / "aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12"
@@ -362,6 +365,11 @@ def _detect_loops(rows: list[ClipRow]) -> list[ClipRow]:
                     ref_start_s=row.ref_start_s,
                     ref_end_s=row.ref_end_s,
                     mix_start_s=row.set_start_s,
+                    mix_end_s=row.set_end_s,
+                    tempo_ratio=tempo_ratio(
+                        row.set_end_s - row.set_start_s,
+                        row.ref_end_s - row.ref_start_s,
+                    ),
                 )
             )
         # LOOP = a bit-identical ref segment re-triggered BACK-TO-BACK more than

@@ -37,9 +37,14 @@ Numbered so issues/PRs can cite them. Evidence paths in parentheses.
 ### A. Ground-truth poisoning (Ableton ≠ programmatic GT)
 
 - **D1 — Stale fixture ids.** `labeling/fixtures/bb12_ground_truth.yaml` at HEAD
-  resolves 14 slots to a *different song's* `track_id` (slot 003 "Emily" → the
-  id of "Pacific Coast Highway (Acappella)"; 028 Beatles→Garrix; 031
-  CCR→Killers). Mechanism: manifest `recording_id=None` ×165 + near-total
+  resolves **3 confirmed slots** to a *different song's* `track_id` — audit-verified
+  2026-07-21: **028** Beatles "Can't Buy Me Love" → Garrix "In The Name Of Love";
+  **031** CCR "Have You Ever Seen The Rain" → Killers "When You Were Young"; **144**
+  Snakehips "All My Friends" → Two Friends "Pacific Coast Highway (Acappella)"
+  (`2uq9800f`). *(The earlier "14 slots" was over-counting by the audit's old
+  ≥2-token matcher + a header-drop bug; both fixed in `audit_gt_recording_ids.py`.
+  Separately: 3 `tlp*` placeholder ids not in the DB, 3 blank-name rows.)*
+  Mechanism: manifest `recording_id=None` ×165 + near-total
   `.als`↔manifest path divergence (290/296 clips path-MISS) → `slot_id_map`
   fallback carries stale ids through `export_als_to_gt`
   (`docs/agent_handoff_als_relocation_20260719.md`). Scorer hardened to show
