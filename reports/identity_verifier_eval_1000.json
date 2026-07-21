@@ -1,0 +1,88 @@
+{
+  "db": "/mnt/storage/data/db/music_database.db",
+  "test_set_ids": [
+    "2nvzlh2k",
+    "1fsnxchk"
+  ],
+  "model_path": null,
+  "train_recordings": 1000,
+  "test_recordings": 282,
+  "same_song": {
+    "metrics": {
+      "n_pairs": 34648,
+      "n_ambiguous": 9,
+      "n_usable": 34639,
+      "accuracy": 0.9999422616126331,
+      "precision": 0.8666666666666667,
+      "recall": 1.0,
+      "f1": 0.9285714285714286,
+      "roc_auc": 0.9999864113587452,
+      "confusion_matrix": [
+        [
+          34624,
+          2
+        ],
+        [
+          0,
+          13
+        ]
+      ]
+    },
+    "worst_cases": [
+      {
+        "ref": "1xl1d8yp Calvin Harris - I Need Your Love",
+        "cand": "tlp2594105 Calvin Harris - I Need Your Love",
+        "label": 0,
+        "predicted": 1,
+        "prob": 0.749
+      },
+      {
+        "ref": "1yk1tlcf Calvin Harris - I Need Your Love",
+        "cand": "tlp2594105 Calvin Harris - I Need Your Love",
+        "label": 0,
+        "predicted": 1,
+        "prob": 0.749
+      }
+    ]
+  },
+  "same_version": {
+    "metrics": {
+      "n_pairs": 17,
+      "n_ambiguous": 9,
+      "n_usable": 8,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "roc_auc": 1.0,
+      "confusion_matrix": [
+        [
+          5,
+          0
+        ],
+        [
+          0,
+          3
+        ]
+      ],
+      "feature_importance": {
+        "mert_cosine": 0.07204337349682494,
+        "bpm_diff": 0.10884497660424683,
+        "bpm_ratio": 0.07684540206250771,
+        "key_distance": 0.014762609940533472,
+        "energy_diff": 0.08165683116865088,
+        "danceability_diff": 0.08041581922329638,
+        "instrumentalness_diff": 0.10887284895077205,
+        "lufs_diff": 0.0,
+        "fingerprint_sim": 0.0033676414181755556,
+        "artist_overlap": 0.0,
+        "title_overlap": 0.0,
+        "version_match": 0.4531904971349922,
+        "remixer_match": 0.0,
+        "stem_match": 0.0,
+        "variant_match": 0.0
+      }
+    },
+    "worst_cases": []
+  }
+}

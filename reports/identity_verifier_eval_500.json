@@ -1,0 +1,73 @@
+{
+  "db": "/mnt/storage/data/db/music_database.db",
+  "test_set_ids": [
+    "2nvzlh2k",
+    "1fsnxchk"
+  ],
+  "model_path": null,
+  "train_recordings": 500,
+  "test_recordings": 282,
+  "same_song": {
+    "metrics": {
+      "n_pairs": 34648,
+      "n_ambiguous": 11,
+      "n_usable": 34637,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "roc_auc": 0.9999864113587452,
+      "confusion_matrix": [
+        [
+          34626,
+          0
+        ],
+        [
+          0,
+          11
+        ]
+      ]
+    },
+    "worst_cases": []
+  },
+  "same_version": {
+    "metrics": {
+      "n_pairs": 17,
+      "n_ambiguous": 12,
+      "n_usable": 5,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "roc_auc": 0.7916666666666666,
+      "confusion_matrix": [
+        [
+          4,
+          0
+        ],
+        [
+          0,
+          1
+        ]
+      ],
+      "feature_importance": {
+        "mert_cosine": 0.06367111609236398,
+        "bpm_diff": 0.15074101067959872,
+        "bpm_ratio": 0.0950043237529257,
+        "key_distance": 0.0,
+        "energy_diff": 0.09434284233035237,
+        "danceability_diff": 0.08227207577178464,
+        "instrumentalness_diff": 0.14655683646015774,
+        "lufs_diff": 0.0,
+        "fingerprint_sim": 0.0,
+        "artist_overlap": 0.0,
+        "title_overlap": 0.0,
+        "version_match": 0.3674117949128169,
+        "remixer_match": 0.0,
+        "stem_match": 0.0,
+        "variant_match": 0.0
+      }
+    },
+    "worst_cases": []
+  }
+}
