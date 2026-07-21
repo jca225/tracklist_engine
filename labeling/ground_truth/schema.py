@@ -39,6 +39,11 @@ class RefSegment:
     ref_start_s: float
     ref_end_s: float
     mix_start_s: float
+    # Derived from the .als (the mix-time end of this segment and its playback
+    # speed ref_span/set_span); optional for backward-compat with pre-enrichment
+    # fixtures. Emitted by export_als_to_gt so they never need hand-editing.
+    mix_end_s: float | None = None
+    tempo_ratio: float | None = None
 
 
 @dataclass(frozen=True)
@@ -145,6 +150,14 @@ def _parse_track(
                 ref_start_s=float(s["ref_start_s"]),
                 ref_end_s=float(s["ref_end_s"]),
                 mix_start_s=float(s["mix_start_s"]),
+                mix_end_s=(
+                    float(s["mix_end_s"]) if s.get("mix_end_s") is not None else None
+                ),
+                tempo_ratio=(
+                    float(s["tempo_ratio"])
+                    if s.get("tempo_ratio") is not None
+                    else None
+                ),
             )
         )
     if is_loop and not segments:
@@ -350,8 +363,12 @@ def dump(gt: GroundTruthSet, *, title: str | None = None) -> str:
             out.append("    ref_segments:")
             for s in t.ref_segments:
                 out.append(f"      - mix_start_s: {_fmt_num(s.mix_start_s)}")
+                if s.mix_end_s is not None:
+                    out.append(f"        mix_end_s:   {_fmt_num(s.mix_end_s)}")
                 out.append(f"        ref_start_s: {_fmt_num(s.ref_start_s)}")
                 out.append(f"        ref_end_s:   {_fmt_num(s.ref_end_s)}")
+                if s.tempo_ratio is not None:
+                    out.append(f"        tempo_ratio: {_fmt_num(s.tempo_ratio)}")
         if t.audible_frac is not None and t.audible_frac < 1.0:
             out.append(f"    audible_frac: {_fmt_num(t.audible_frac)}")
         if t.audible_start_s is not None:

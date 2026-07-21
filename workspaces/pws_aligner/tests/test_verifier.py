@@ -7,11 +7,15 @@ from pathlib import Path
 
 import pytest
 
+from workspaces.pws_aligner.continuous_model import ProbeNoise
 from workspaces.pws_aligner.verifier import (
     JointEstimate,
     calibration_report,
+    continuous_calibration_report,
     prune_confident_errors,
+    sigma_rank_inversions,
 )
+from workspaces.pws_aligner.votes import AbstainReason, Vote
 
 
 # ---------------------------------------------------------------------------
@@ -308,3 +312,55 @@ def test_calibration_report_missing_accuracy_exits(tmp_path: Path) -> None:
             votes_path=votes_path,
             accuracy_path=tmp_path / "missing_acc.json",
         )
+
+
+# ---------------------------------------------------------------------------
+# continuous_calibration_report
+# ---------------------------------------------------------------------------
+
+
+def _vote(probe: str, span_id: str, recording_id: str, offset_s: float) -> Vote:
+    """Helper: build a non-abstained Vote for testing."""
+    return Vote(
+        probe=probe,
+        span_id=span_id,
+        recording_id=recording_id,
+        offset_s=offset_s,
+        confidence=0.8,
+        abstained=False,
+        reason=AbstainReason.NONE,
+        features=(),
+    )
+
+
+def _spans_with_known_residuals():
+    # probe "tight": residuals ~0.1s; probe "loose": residuals ~5s; 12 spans each
+    spans, gt = [], {}
+    for i in range(12):
+        sid = f"s{i}"
+        gt[sid] = ("rec", 100.0)
+        spans.append(
+            (
+                _vote("tight", sid, "rec", 100.0 + (0.1 if i % 2 else -0.1)),
+                _vote("loose", sid, "rec", 100.0 + (5.0 if i % 2 else -5.0)),
+            )
+        )
+    return spans, gt
+
+
+def test_report_measures_mad_per_probe():
+    spans, gt = _spans_with_known_residuals()
+    noise = {"tight": ProbeNoise(0.9, 0.2, 0.9), "loose": ProbeNoise(0.7, 6.0, 0.8)}
+    report = {r.probe: r for r in continuous_calibration_report(noise, spans, gt)}
+    assert abs(report["tight"].measured_mad_s - 0.1) < 1e-6
+    assert abs(report["loose"].measured_mad_s - 5.0) < 1e-6
+    assert report["tight"].n_scored == 12
+
+
+def test_sigma_rank_inversion_tripwire():
+    spans, gt = _spans_with_known_residuals()
+    # Learned sigmas INVERTED vs measured: model trusts the loose probe more.
+    noise = {"tight": ProbeNoise(0.9, 6.0, 0.9), "loose": ProbeNoise(0.7, 0.2, 0.8)}
+    report = continuous_calibration_report(noise, spans, gt)
+    inversions = sigma_rank_inversions(report)
+    assert inversions == [("tight", "loose")] or inversions == [("loose", "tight")]

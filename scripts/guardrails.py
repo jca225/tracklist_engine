@@ -506,6 +506,41 @@ def _warn_collectable_docs() -> None:
         )
 
 
+def _check_gt_als_drift() -> list[Violation]:
+    """Every gated GT yaml must still derive from its committed `.als`.
+
+    Catches hand-edits that drift a ground-truth fixture away from the Ableton
+    source of truth (e.g. BB11 slot 013 relabeled 013w1 -> 013w3). Manifest-free:
+    slot labels come straight from the committed .als, so this runs in CI with no
+    ~/aligning/ present. See labeling/gt_als_gate.py.
+    """
+    if str(REPO_ROOT) not in sys.path:  # `python scripts/guardrails.py` puts
+        sys.path.insert(0, str(REPO_ROOT))  # scripts/ (not repo root) on path
+    try:
+        from labeling.gt_als_gate import check_yaml_matches_als, iter_gated
+    except ImportError as exc:  # lxml/yaml missing -> can't verify; fail loud
+        return [
+            Violation(
+                REPO_ROOT / "labeling" / "gt_als_gate.py",
+                0,
+                "gt_als_drift",
+                f"cannot import gate: {exc}",
+            )
+        ]
+    violations: list[Violation] = []
+    for _set_id, yaml_path, als_path in iter_gated():
+        if not als_path.is_file():
+            # Committed .als absent (should never happen in-repo). Skip rather
+            # than false-alarm; the pre-commit hook applies the same guard.
+            continue
+        ok, reason = check_yaml_matches_als(yaml_path, als_path)
+        if not ok:
+            violations.append(
+                Violation(yaml_path, 0, "gt_als_drift", reason.replace("\n", " | "))
+            )
+    return violations
+
+
 def run_checks() -> list[Violation]:
     violations: list[Violation] = []
     for path in _iter_py_files():
@@ -530,6 +565,7 @@ def run_checks() -> list[Violation]:
                 violations.append(Violation(path, 0, "read_error", str(exc)))
                 continue
             violations.extend(_check_stale_audio_pipeline_docs(path, text))
+    violations.extend(_check_gt_als_drift())
     violations.extend(_check_ratchets())
     # AST-based bug-class fences (subprocess-no-timeout / -no-encoding, bare
     # except) live in entropy_audit.py — the line-based ratchet above can't see a

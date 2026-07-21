@@ -56,6 +56,7 @@ def decode_span(
     discrim: bool = False,
     hybrid: bool = False,
     enable_loops: bool = True,
+    earliest_slope: float = 0.0,
     lm_cfg=LM_V1,
     seg_cfg=SEG_V1,
     loop_cfg=LOOP_V2,
@@ -124,7 +125,14 @@ def decode_span(
                 hyb[0], hyb[1], hyb[2], hyb[3], diags, s, grid, seg_cfg
             )
         sg, _dp_ev = segments.cover_dp(
-            pts, s, dur_dec, seg_cfg, weights=weights, diagonals=diags, bonus=bonus
+            pts,
+            s,
+            dur_dec,
+            seg_cfg,
+            weights=weights,
+            diagonals=diags,
+            bonus=bonus,
+            earliest_slope=earliest_slope,
         )
         ev = segments.path_inlier_evidence(
             pts, sg, s, dur_dec, seg_cfg, weights=weights

@@ -73,7 +73,11 @@ if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
 from workspaces.alignment_prototype.harness.contract import AlignmentResult
-from workspaces.pws_aligner.decode_bridge import posterior_to_placement
+from workspaces.pws_aligner.continuous_model import ContinuousLabelModel
+from workspaces.pws_aligner.decode_bridge import (
+    fused_to_placement,
+    posterior_to_placement,
+)
 from workspaces.pws_aligner.density_gate import choose_aggregator
 from workspaces.pws_aligner.hypotheses import Hypothesis
 from workspaces.pws_aligner.label_model import DawidSkene, MajorityVote
@@ -133,6 +137,10 @@ def run_phase1(
     votes_path: Path | None = None,
     out_dir: Path | None = None,
     bin_s: float = 2.0,
+    model: str = "auto",
+    llm: bool = False,
+    llm_max_spans: int = 5,
+    llm_dj: str = "?",
 ) -> Path:
     """Run PWS aggregation for *set_id* and write the pws_timeline JSON.
 
@@ -148,6 +156,11 @@ def run_phase1(
         ``out/`` directory.
     bin_s:
         Seconds per offset bin (must match what produced the votes file).
+        Ignored when ``model="continuous"`` (no binning in that path).
+    model:
+        Aggregation model to use.  ``"auto"`` (default) selects DawidSkene or
+        MajorityVote via the density gate.  ``"continuous"`` uses
+        ContinuousLabelModel with un-binned offsets.
 
     Returns
     -------
@@ -174,31 +187,95 @@ def run_phase1(
     # Build per-span Vote tuples
     all_votes: list[tuple[Vote, ...]] = [_span_votes(s) for s in span_docs]
 
-    # Choose aggregator based on label density across the set
-    aggregator_name = choose_aggregator(all_votes)
+    # LLM LF: opt-in, budgeted, sidecar-only (never in the fusion path yet).
+    # Without --llm nothing here runs and the anthropic SDK is never imported.
+    if llm:
+        from workspaces.pws_aligner.llm_client import ClaudeClient, run_llm_lf
 
-    if aggregator_name == "label_model":
-        model: DawidSkene | MajorityVote = DawidSkene()
-    else:
-        model = MajorityVote()
-
-    # Fit on all spans (unsupervised)
-    model.fit(all_votes)
-
-    # Predict per span and decode to placement
-    placements: list[dict] = []
-    for span_doc, votes in zip(span_docs, all_votes):
-        posterior = model.predict_proba(votes)
-        placement = posterior_to_placement(
-            str(span_doc["span_id"]), posterior, bin_s=bin_s
+        llm_votes = run_llm_lf(
+            span_docs,
+            ClaudeClient(),
+            max_spans=llm_max_spans,
+            dj=llm_dj,
         )
-        placements.append(placement)
+        llm_path = out_dir / f"{set_id}_llm_votes.json"
+        llm_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "span_id": v.span_id,
+                        "recording_id": v.recording_id,
+                        "label": v.label,
+                        "confidence": v.confidence,
+                        "abstained": v.abstained,
+                        "reason": v.reason.value,
+                    }
+                    for v in llm_votes
+                ],
+                indent=2,
+            )
+        )
+        print(f"wrote {llm_path}  ({len(llm_votes)} LLM votes)")
 
-    # Write probe accuracy when DawidSkene ran
-    if isinstance(model, DawidSkene):
-        acc_path = out_dir / f"{set_id}_pws_probe_accuracy.json"
-        acc_path.write_text(json.dumps(model.probe_accuracy(), indent=2))
-        print(f"wrote {acc_path}")
+    placements: list[dict] = []
+
+    if model == "continuous":
+        # ------------------------------------------------------------------
+        # Continuous-model branch: ContinuousLabelModel with un-binned offsets.
+        # The density gate is BYPASSED here — the continuous model handles all
+        # densities natively (single-vote spans beat NULL structurally via the
+        # null prior weight), so DS/MV density thresholds don't apply.
+        # ------------------------------------------------------------------
+        cont_model = ContinuousLabelModel()
+        cont_model.fit(all_votes)
+        aggregator_name = "continuous"
+
+        for span_doc, votes in zip(span_docs, all_votes):
+            fused = cont_model.predict(votes)
+            placement = fused_to_placement(str(span_doc["span_id"]), fused)
+            placements.append(placement)
+
+        # Write probe noise sidecar
+        noise_path = out_dir / f"{set_id}_pws_probe_noise.json"
+        noise_payload = {
+            probe: {
+                "accuracy": pn.accuracy,
+                "sigma_s": pn.sigma_s,
+                "inlier": pn.inlier,
+            }
+            for probe, pn in cont_model.probe_noise().items()
+        }
+        noise_path.write_text(json.dumps(noise_payload, indent=2))
+        print(f"wrote {noise_path}")
+
+    else:
+        # ------------------------------------------------------------------
+        # Auto branch: choose DawidSkene or MajorityVote via density gate.
+        # ------------------------------------------------------------------
+        # Choose aggregator based on label density across the set
+        aggregator_name = choose_aggregator(all_votes)
+
+        if aggregator_name == "label_model":
+            ds_mv_model: DawidSkene | MajorityVote = DawidSkene()
+        else:
+            ds_mv_model = MajorityVote()
+
+        # Fit on all spans (unsupervised)
+        ds_mv_model.fit(all_votes)
+
+        # Predict per span and decode to placement
+        for span_doc, votes in zip(span_docs, all_votes):
+            posterior = ds_mv_model.predict_proba(votes)
+            placement = posterior_to_placement(
+                str(span_doc["span_id"]), posterior, bin_s=bin_s
+            )
+            placements.append(placement)
+
+        # Write probe accuracy when DawidSkene ran
+        if isinstance(ds_mv_model, DawidSkene):
+            acc_path = out_dir / f"{set_id}_pws_probe_accuracy.json"
+            acc_path.write_text(json.dumps(ds_mv_model.probe_accuracy(), indent=2))
+            print(f"wrote {acc_path}")
 
     # Build pws_timeline.json: copy span fields through, overwrite placement fields
     spans_out: list[dict] = []
@@ -283,6 +360,35 @@ def main(argv: list[str] | None = None) -> int:
         default=2.0,
         help="seconds per offset bin (must match votes-export hook, default 2.0)",
     )
+    p.add_argument(
+        "--model",
+        choices=["auto", "continuous"],
+        default="auto",
+        help=(
+            "aggregation model: 'auto' selects DawidSkene/MajorityVote via the "
+            "density gate; 'continuous' uses ContinuousLabelModel with un-binned "
+            "offsets and writes a _pws_probe_noise.json sidecar (default: auto)"
+        ),
+    )
+    p.add_argument(
+        "--llm",
+        action="store_true",
+        help=(
+            "run the LLM plausibility LF (Claude API) on a handful of spans and "
+            "write a _llm_votes.json sidecar; default OFF — nothing calls the API"
+        ),
+    )
+    p.add_argument(
+        "--llm-max-spans",
+        type=int,
+        default=5,
+        help="budget: maximum spans the LLM LF votes on (default 5)",
+    )
+    p.add_argument(
+        "--llm-dj",
+        default="?",
+        help="DJ name passed as context to the LLM plausibility prompt",
+    )
     args = p.parse_args(argv)
 
     run_phase1(
@@ -290,6 +396,10 @@ def main(argv: list[str] | None = None) -> int:
         votes_path=args.votes,
         out_dir=args.out_dir,
         bin_s=args.bin_s,
+        model=args.model,
+        llm=args.llm,
+        llm_max_spans=args.llm_max_spans,
+        llm_dj=args.llm_dj,
     )
     return 0
 
