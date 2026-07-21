@@ -9,6 +9,13 @@ from __future__ import annotations
 
 from workspaces.pws_aligner.hypotheses import Hypothesis
 
+# TYPE_CHECKING guard avoids a circular import at runtime; FusedSpan is only
+# needed for the type annotation in fused_to_placement.
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from workspaces.pws_aligner.continuous_model import FusedSpan
+
 
 def posterior_to_placement(
     span_id: str,
@@ -42,4 +49,22 @@ def posterior_to_placement(
         "offset_s": 0.0 if is_null else top.offset_bin * bin_s,
         "confidence": float(posterior[top]),
         "abstain": is_null,
+    }
+
+
+def fused_to_placement(span_id: str, fused: "FusedSpan") -> dict:
+    """Continuous-model analog of posterior_to_placement: same output schema,
+    but offset_s is the un-binned fused value (the whole point of the
+    continuous model is not to quantize).
+
+    Output keys are identical to posterior_to_placement:
+        ``span_id``, ``recording_id``, ``offset_s``, ``confidence``, ``abstain``.
+    """
+    abstain = fused.recording_id is None
+    return {
+        "span_id": span_id,
+        "recording_id": fused.recording_id,
+        "offset_s": 0.0 if abstain else round(fused.offset_s, 3),
+        "confidence": round(fused.confidence, 4),
+        "abstain": abstain,
     }

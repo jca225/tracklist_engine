@@ -58,7 +58,12 @@ def ssh_sql(sql: str) -> str:
     return r.stdout.strip()
 
 
-def fetch_pi_rows(*, only_missing: bool) -> tuple[RefRow, ...]:
+def _rows_sql(
+    *,
+    only_missing: bool,
+    all_rows: bool,
+    set_ids: tuple[str, ...] | None,
+) -> str:
     missing = (
         """
       AND NOT EXISTS (
@@ -69,14 +74,48 @@ def fetch_pi_rows(*, only_missing: bool) -> tuple[RefRow, ...]:
         if only_missing
         else ""
     )
-    sql = f"""
+    # Default selection is is_reference=1 rows. That flag is sparse in the
+    # canonical DB (438/19.6k rows, 2026-07-15) so --all-rows widens to the
+    # best row per (recording_id, stem) — same pick rule as
+    # ingest.identity_gate.lookup_reference_row.
+    if all_rows:
+        selection = """
+      ta.recording_id IS NOT NULL AND ta.recording_id != ''
+      AND ta.track_audio_id = (
+        SELECT ta2.track_audio_id FROM track_audio ta2
+        WHERE ta2.recording_id = ta.recording_id AND ta2.stem = ta.stem
+        ORDER BY ta2.is_reference DESC, ta2.downloaded_at DESC LIMIT 1
+      )"""
+    else:
+        selection = "ta.is_reference = 1"
+    scope = ""
+    if set_ids:
+        csv = ",".join(f"'{s}'" for s in set_ids)
+        # slots key recordings on recording_id; legacy rows key on track_id —
+        # match either (same join as the BB gap census).
+        scope = f"""
+      AND EXISTS (
+        SELECT 1 FROM set_track_slots s WHERE s.set_id IN ({csv})
+        AND (s.recording_id = ta.recording_id OR s.recording_id = ta.track_id)
+      )"""
+    return f"""
     SELECT ta.recording_id, ta.stem, ta.path
     FROM track_audio ta
-    WHERE ta.is_reference = 1
+    WHERE {selection}
       AND ta.path IS NOT NULL AND ta.path != ''
+      {scope}
       {missing}
     ORDER BY ta.recording_id, ta.stem
     """
+
+
+def fetch_pi_rows(
+    *,
+    only_missing: bool,
+    all_rows: bool = False,
+    set_ids: tuple[str, ...] | None = None,
+) -> tuple[RefRow, ...]:
+    sql = _rows_sql(only_missing=only_missing, all_rows=all_rows, set_ids=set_ids)
     rows: list[RefRow] = []
     for line in ssh_sql(sql).splitlines():
         if not line.strip():
@@ -86,25 +125,14 @@ def fetch_pi_rows(*, only_missing: bool) -> tuple[RefRow, ...]:
     return tuple(rows)
 
 
-def fetch_local_rows(db_path: Path, *, only_missing: bool) -> tuple[RefRow, ...]:
-    missing = (
-        """
-      AND NOT EXISTS (
-        SELECT 1 FROM track_fingerprints tf
-        WHERE tf.recording_id = ta.recording_id AND tf.stem = ta.stem
-      )
-    """
-        if only_missing
-        else ""
-    )
-    sql = f"""
-    SELECT ta.recording_id, ta.stem, ta.path
-    FROM track_audio ta
-    WHERE ta.is_reference = 1
-      AND ta.path IS NOT NULL AND ta.path != ''
-      {missing}
-    ORDER BY ta.recording_id, ta.stem
-    """
+def fetch_local_rows(
+    db_path: Path,
+    *,
+    only_missing: bool,
+    all_rows: bool = False,
+    set_ids: tuple[str, ...] | None = None,
+) -> tuple[RefRow, ...]:
+    sql = _rows_sql(only_missing=only_missing, all_rows=all_rows, set_ids=set_ids)
     with connect(db_path) as conn:
         cur = conn.execute(sql)
         return tuple(
@@ -129,18 +157,41 @@ def resolve_audio(
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.is_file():
         return dest
+    # Remote paths with spaces/parens (manual-ingest filenames) go through
+    # the remote shell — quote them. (--protect-args is unavailable in
+    # macOS's bundled openrsync, so shlex quoting is the portable fix.)
+    # Bytes mode + tolerant decode: rsync error messages can echo the
+    # filename in non-UTF-8 bytes, and text=True would raise
+    # UnicodeDecodeError and kill the whole run instead of skipping one row.
+    import shlex
+
     r = subprocess.run(
-        ["rsync", "-az", f"{PI_HOST}:{remote}", str(dest)],
+        ["rsync", "-az", f"{PI_HOST}:{shlex.quote(remote)}", str(dest)],
         capture_output=True,
-        text=True,
     )
     if r.returncode != 0:
-        print(
-            f"  rsync failed {row.recording_id}: {r.stderr.strip()[:120]}",
-            file=sys.stderr,
-        )
+        err = r.stderr.decode("utf-8", errors="replace").strip()[:120]
+        print(f"  rsync failed {row.recording_id}: {err}", file=sys.stderr)
         return None
     return dest
+
+
+def _upsert_with_retry(fp, key: FpKey, db_path: Path, *, attempts: int = 10) -> None:
+    """upsert_db with lock-retry: the canonical DB has concurrent writers
+    (vast-loop pushes hold the write lock for seconds while inserting MERT
+    blobs) and core.db.connect uses sqlite's default 5s timeout — a plain
+    upsert dies with 'database is locked' instead of waiting its turn."""
+    import sqlite3 as _sq
+    import time as _t
+
+    for i in range(attempts):
+        try:
+            upsert_db(fp, key, db_path)
+            return
+        except _sq.OperationalError as e:
+            if "locked" not in str(e) or i == attempts - 1:
+                raise
+            _t.sleep(3.0)
 
 
 def push_row_to_pi(key: FpKey, blob: bytes, duration_s: float) -> None:
@@ -148,9 +199,14 @@ def push_row_to_pi(key: FpKey, blob: bytes, duration_s: float) -> None:
     import tempfile
 
     b64 = base64.b64encode(blob).decode("ascii")
+    # busy_timeout=120s: the canonical DB has concurrent writers (the sharded
+    # GPU boxes hold the write lock for seconds pushing MERT blobs). Without
+    # it this remote insert dies with "database is locked" and the fp never
+    # reaches canonical (only the local cache). Matches vast_loop's pusher.
     py = f"""
 import base64, sqlite3
-conn = sqlite3.connect({CANONICAL_DB!r})
+conn = sqlite3.connect({CANONICAL_DB!r}, timeout=120)
+conn.execute('PRAGMA busy_timeout=120000')
 conn.execute('PRAGMA foreign_keys=ON')
 blob = base64.b64decode({b64!r})
 conn.execute(
@@ -190,12 +246,37 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--no-push-pi", action="store_true", help="Cache only (with --db local)"
     )
+    p.add_argument(
+        "--all-rows",
+        action="store_true",
+        help="best row per (recording_id, stem) instead of is_reference=1 only "
+        "(the flag is sparse: 438/19.6k rows as of 2026-07-15)",
+    )
+    p.add_argument(
+        "--set-ids",
+        default=None,
+        help="comma-separated set_id scope (slots joined on recording_id/track_id)",
+    )
     args = p.parse_args(argv)
 
+    set_ids = (
+        tuple(s.strip() for s in args.set_ids.split(",") if s.strip())
+        if args.set_ids
+        else None
+    )
     if args.db is not None:
-        rows = fetch_local_rows(args.db, only_missing=not args.recompute)
+        rows = fetch_local_rows(
+            args.db,
+            only_missing=not args.recompute,
+            all_rows=args.all_rows,
+            set_ids=set_ids,
+        )
     else:
-        rows = fetch_pi_rows(only_missing=not args.recompute)
+        rows = fetch_pi_rows(
+            only_missing=not args.recompute,
+            all_rows=args.all_rows,
+            set_ids=set_ids,
+        )
 
     if args.limit is not None:
         rows = rows[: args.limit]
@@ -215,7 +296,20 @@ def main(argv: list[str] | None = None) -> int:
         if audio is None:
             skip += 1
             continue
-        match compute_from_file(audio):
+        # compute_from_file returns Err for soundfile failures, but the
+        # audioread fallback can raise (e.g. audioread MacError -50 on a
+        # truncated m4a) straight through the match — a single bad file
+        # would otherwise kill the whole run. Catch broadly and skip.
+        try:
+            computed = compute_from_file(audio)
+        except Exception as e:  # noqa: BLE001 — one bad file must not abort the run
+            print(
+                f"  skip {key.recording_id}/{key.stem}: decode raised {e}",
+                file=sys.stderr,
+            )
+            skip += 1
+            continue
+        match computed:
             case Err(msg):
                 print(f"  skip {key.recording_id}/{key.stem}: {msg}", file=sys.stderr)
                 skip += 1
@@ -223,7 +317,7 @@ def main(argv: list[str] | None = None) -> int:
             case Ok(fp):
                 save_cached(fp, key, args.cache_dir)
                 if args.db is not None:
-                    upsert_db(fp, key, args.db)
+                    _upsert_with_retry(fp, key, args.db)
                 elif not args.no_push_pi:
                     # Best-effort: a transient pi SSH hiccup must not abort the
                     # whole run — the local cache is already written above, and
