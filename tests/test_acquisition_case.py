@@ -1,7 +1,9 @@
 """Tests for the acquisition-case schema and the BB12 backfill.
 
-The BB12 backfill is the schema's pressure test: if all 166 hand-resolved GT
+The BB12 backfill is the schema's pressure test: if the hand-resolved GT
 outcomes can't round-trip cleanly through the case record, the schema is wrong.
+(BB12 GT is now derived from the canonical .als: 167 tracks / 164 slot rows →
+155 cases.)
 """
 
 from __future__ import annotations
