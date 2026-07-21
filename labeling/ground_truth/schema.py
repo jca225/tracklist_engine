@@ -106,6 +106,7 @@ class GroundTruthTrack:
     # PREDICT difficulty on unseen mixes. Placement
     # loss is masked; the row stays a training example.
     source_note: str | None = None  # e.g. "Lux Omega — original unavailable"
+    id_source: str = ""  # "" legacy | "content" (bound by sha256/mdat) | "abstain"
 
 
 @dataclass(frozen=True)
@@ -218,6 +219,7 @@ def _parse_track(
     unalignable = bool(t.get("unalignable", False))
     sn_raw = t.get("source_note")
     source_note = str(sn_raw).strip() if sn_raw not in (None, "") else None
+    id_source = str(t.get("id_source") or "").strip()
     return Ok(
         GroundTruthTrack(
             label=label,
@@ -248,6 +250,7 @@ def _parse_track(
             skip_training=skip_training,
             unalignable=unalignable,
             source_note=source_note,
+            id_source=id_source,
         )
     )
 
@@ -389,6 +392,8 @@ def dump(gt: GroundTruthSet, *, title: str | None = None) -> str:
             out.append("    unalignable: true")
         if t.source_note:
             out.append(f'    source_note: "{t.source_note.replace(chr(34), chr(39))}"')
+        if t.id_source:
+            out.append(f"    id_source:   {t.id_source}")
         if t.media_links.any():
             out.append("    media_links:")
             for k, v in t.media_links.as_dict().items():
