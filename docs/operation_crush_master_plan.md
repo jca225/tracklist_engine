@@ -95,6 +95,22 @@ The full D1–D15 register lives in the assault plan. New/changed:
   now by backups; the durable fix (Collect All & Save) is pending the decision in §5.
 - **D19 — SSOT invariant unfenced** (#53). D11 was fixed by hand; nothing
   mechanically stops the next hand-typed metric outside `alignment_status.md`.
+- **D20 — Relink-by-name re-injects wrong-version (D5) into GT.** BB12's offline
+  clips must be relinked, but the successor files differ in *identity*: `117 Mode
+  (Remix)` → `033 Mode (Jay Hardway Remix)` (remixer now named), `127 Bad Day
+  (Acappella).m4a` → `035w2 …​.flac` (format change ⇒ likely a *different rip*, so
+  clip offsets tuned on one may be wrong on the other). Relink MUST bind by content
+  (hash/fingerprint) + `recording_id`, never by name similarity. (Surfaced by the
+  Fable review; folds into the Phase-1 relink and issue #50.)
+- **D21 — BB12 `.als` is mixed-provenance** after the partial Collect-All: some
+  clips point at `tracks/` (new slot numbering), some at frozen `Samples/Imported/`
+  copies carrying *old* numbering + `-1` dedup suffixes — a live D1/D2 (path-stem
+  classify, slot-number parse) surface. The re-export must normalize provenance.
+- **D22 — Stale doc/memory pointers.** Auto-memory (`project_canonical_gt_sessions`,
+  `project_gt_set_status`) and any doc pointing at the old BB12 `_backups/…` path
+  now point at an emptied directory; and BB12's canonical home
+  (`_labeling/1fsnxchk/…`) matches neither the adopted `<set_dir>/<BBNN> align
+  Project/` convention nor BB11's layout — reconcile the convention or the path.
 
 ---
 
@@ -133,7 +149,12 @@ data a prior phase has not certified.
    It turns Crush's data-truth invariants from "verified once by a human" into
    "verified every build," and its data-plane checks (C4–C7) activate through
    Phases 1–2. This is the structural counter to the Type-II miss that started
-   Crush — the poison would have failed the build. (#49-adjacent; own issue on land.)
+   Crush. **Caveat (per Fable review):** only static C1–C3 run in CI day one; the
+   data-plane poison-catchers (C5/C6) run Mac-side (need GT + pi DB) and their
+   named tooling currently lives only on the *unpushed* branch — so "the poison
+   would have failed the build" is the *target*, not yet true. The spec now adds a
+   content-binding `.als`-ref check (the actual poison mechanism); see the spec's
+   revision note. (#49-adjacent; own issue on land.)
 
 ### Phase 1 — Ground-truth de-poisoning (the centerpiece)
 
@@ -255,21 +276,30 @@ moving the audio it points to, or renaming that audio.
   living at `~/aligning/<set_dir>/<BBNN> align Project/bbNN_align.als`. The export's
   `find_default_als` (handoff Step B) must search for this name. Supersedes the
   spaced `BB11 align.als` / `big bootie 12 labeling_fast.als` names.
-- **Collect All & Save status (verified by ref audit):**
-  - **BB11 — done + canonical:** `~/aligning/2nvzlh2k__…/BB11 align Project/bb11_align.als`,
-    564/567 refs local (3 stray = factory devices). Done.
-  - **BB12 — relocated to canonical (2026-07-21):** now
-    `~/aligning/_labeling/1fsnxchk/BB12 align Project/bb12_align.als` (depth-3,
-    out of the misnamed `_backups/`). Collect-All was abandoned — it kept leaking
-    copies into Ableton `BaseFiles/` and physically **cannot** gather 68 external
-    samples that are already missing from disk. Instead a **depth-preserving `mv`**
-    (verified lossless: same 545→511 refs resolve before/after; the Samples/ folder
-    moved intact) put it canonical. **102 refs are broken and pre-existing** (68
-    external candidate/track files gone + 34 local Samples entries never collected)
-    — **not** move damage; a **Phase-1 relink task** (assess which, if any, are
-    GT-bearing vs auxiliary candidate stems). Operator gate: open from the new path
-    in Live to confirm (expect ~102 offline clips; open from the path, not Recent —
-    Recent still points at the old `_backups/` location).
+- **Collect All & Save status (corrected 2026-07-21 after Fable adversarial review —
+  the earlier "102 broken / 68 gone" numbers were a parsing bug: refs containing
+  `&amp;` were not HTML-unescaped, so every "Artist & Artist" track mis-counted as
+  missing).**
+  - **BB11 — resolves today but is NOT self-contained.**
+    `~/aligning/2nvzlh2k__…/BB11 align Project/bb11_align.als`: **280 external /
+    280 local** refs; 560/560 resolve *now*, but renaming anything under the set's
+    `tracks/` orphans all 280 — same filename-drift exposure as BB12 had. The prior
+    "564/567 local, done" claim was wrong (searched only depth-3 `../../../`; BB11
+    uses depth-2 `../../`). Do **not** treat BB11 as immune. (One ref points into
+    another user's home `…/nsh/Library/…` — investigate.)
+  - **BB12 — relocated (2026-07-21), verified reference-neutral:** now
+    `~/aligning/_labeling/1fsnxchk/BB12 align Project/bb12_align.als`. Correct
+    counts (HTML-unescaped): **589/613 resolve, 24 broken occurrences, 7 unique
+    broken paths.** The move was a **depth-preserving `mv`** (this violated §4's own
+    copy-only rule — noted; it happened to be reference-neutral, proven by resolving
+    the pre-move snapshot against the new base → identical 7 broken paths). Collect
+    All **half-ran** earlier (local `Samples/Imported/` grew ~140 refs incl. Ableton
+    `-1` dedup copies) — not "abandoned"; the `.als` is now **mixed-provenance** (some
+    clips → `tracks/` new numbering, some → frozen `Samples/Imported` old numbering),
+    a fresh D1/D2 drift surface (see D21). **Recovery: all 7 broken GT files survive
+    in the project's own `Samples/Imported/` — no re-pull needed**, a mechanical
+    relink (not "assess damage"). Operator gate: open from the new path in Live;
+    ~24 clips show offline until relinked.
 
 **Protocol going forward:**
 1. `scripts/backup_als.sh` (codifies the snapshot) runs green before any

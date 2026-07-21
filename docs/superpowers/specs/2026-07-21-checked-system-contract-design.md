@@ -127,6 +127,36 @@ The contract is the connective tissue that turns the Crush phases from
 - Not a replacement for the per-module `CLAUDE.md` files — those stay as human
   orientation; this contract is the *enforced* subset.
 
+## 6b. Revision note (2026-07-21, post-Fable adversarial review)
+
+An adversarial review found the C-series as first drafted **would not catch the
+one poison mechanism actually demonstrated this session** — `.als` GT linked to
+audio by mutable relative filename, with filenames/positions drifting (`117 Mode
+(Remix)` → `033 Mode (Jay Hardway Remix)`; `.m4a` → `.flac`). C1 fences *code*
+joins; nothing bound the `.als`'s own reference layer. Corrections:
+
+- **C0 (NEW, data-plane, top priority) — `.als` reference integrity.** For every
+  GT `.als`: every audio `RelativePath` (a) resolves on disk **after HTML-unescape**
+  — the review also caught that the un-unescaped parse mis-flags every `&`-containing
+  track — and (b) binds to a `track_audio_id`/`recording_id` **by content**
+  (hash/fingerprint), failing on unresolved refs *or* refs whose content identity
+  differs from the slot's claim. This is the check that would have caught D1/D20.
+- **C7 scope corrected.** Span-count/duration deltas **cannot** catch an identity
+  swap (same spans, wrong song) — so C7 is demoted to a *drop/shift* guard only;
+  identity is C0's job. C7 also needs an explicit tolerance and must treat the
+  first *de-poisoned* export as a deliberate baseline reset (not an alarm).
+- **C6 made implementable.** "current `.als`" was undefined (4 siblings exist; sha
+  churns per save). C6 requires a **canonical-als registry** (one path + expected
+  content-identity per set) and checks provenance against *that*, not "the newest".
+- **C3 honesty caveat.** The meta-check enforces 1:1 claim↔check bookkeeping but a
+  stubbed/`planned` check still renders into the doc — so the doc can still state
+  not-yet-enforced things. `SYSTEM_CONTRACT.md` must visibly mark each claim's
+  enforcement status (enforced / ratcheting / planned).
+- **CI-reach caveat.** C0/C4–C6 need Mac-side GT + pi DB and cannot run in
+  clean-checkout CI; their tooling currently lives only on an unpushed branch.
+  "The poison would fail the build" is the target once these land + a named
+  weekly-audit owner runs the data plane — not true on day one.
+
 ## 6. Definition of done
 
 - `contract/registry.py` exists; `SYSTEM_CONTRACT.md` renders from it; C3 fails
