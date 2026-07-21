@@ -14,6 +14,51 @@
 
 ---
 
+## START HERE (new implementation session)
+
+**What this is:** Operation Crush fixes ground-truth (GT) data-poisoning *before*
+building the aligner — a week was lost to a Type-II error (poisoned GT nobody
+detected). This doc is the operative master; PR **#54** carries it + the spec.
+
+**Read order (minimal tokens):** this §START HERE → §0 (thesis) + §3 (phases) →
+the contract spec [`docs/superpowers/specs/2026-07-21-checked-system-contract-design.md`](superpowers/specs/2026-07-21-checked-system-contract-design.md)
+→ `gh pr view 54` for the diff. Only open the [assault plan](operation_crush_assault_plan.md)
+if you need the D1–D15 detail. **Don't reload the planning conversation** — these
+artifacts are the state.
+
+**State as of 2026-07-21 (verified):**
+- **BB12** relinked **613/613**, canonical at `~/aligning/_labeling/1fsnxchk/BB12 align Project/bb12_align.als`
+  (each restore gated on the `.als`'s `OriginalFileSize`/`OriginalCrc`).
+- **BB11** resolves 560/560 but is **not self-contained** (280 external refs).
+- `.als` backups (in-tree + off-tree) exist; `scripts/backup_als.sh` codifies them.
+- Issues **#40–#48** + **#49–#53** in the Operation Crush milestone; contract
+  **design approved**, spec written (C0 added), pending your spec sign-off.
+
+**Verification policy (token-calibrated):** self-verify with deterministic
+re-checks by default (cheap); an **independent model (Fable) only on
+consequential/milestone steps, batched** (~100–150k tokens each — not per micro-step);
+Haiku for routine second opinions. **Never trust an `.als` ref count without
+`html.unescape` + a re-parse** (a missing unescape produced a wrong "102 broken"
+that reached docs before Fable caught it).
+
+**STOP for explicit human go (never auto-run):** the `trm-ablation-framework`
+34↑/28↓ branch reconcile; any GT mutation / pi `set_ground_truth` write-back;
+merges to `main`; corpus-wide actions.
+
+**Immediate next actions, in order:**
+1. **Phase 0** — worktree census + **rescue the detached-HEAD** `fail-closed-audio-resolvers`
+   (#49); **freeze** the tuning branches; then the branch reconcile *(human-gated)*.
+2. Scaffold the contract: `contract/registry.py` + `SYSTEM_CONTRACT.md` + static
+   checks **C1–C3** (green day one); wire **C0** (`.als` ref content-binding).
+3. **Phase 1** — BB12 durable clean state = **Collect All & Save in Live** (operator);
+   capture-rule decision (D2); canonical GT rollback (#51).
+
+**Standing hazards:** `--prune` is **FORBIDDEN** on `1fsnxchk` until Collect-All
+(re-orphans the 4 restored `tracks/` files); PRs need `gh auth switch --user jca225`
+(the READ account silently drops `--milestone`/`--label`).
+
+---
+
 ## 0. Why Crush exists — the intelligence-framework thesis
 
 Operation Crush is not a cleanup chore. It is the act of building a **trustworthy
