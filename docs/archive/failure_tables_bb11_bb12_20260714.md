@@ -2,6 +2,7 @@
 Generated 2026-07-14 from `ws0-scorer-deinflation` worktree.
 Timelines scored: `2nvzlh2k_predicted_timeline.json` / `1fsnxchk_predicted_timeline.json`.
 GT: `bb11_ground_truth.yaml` (de1ce92) / `bb12_ground_truth.yaml` (de1ce92).
+Tracked as tickets: #2 (ref-offset intro-grab collapse), #3 (repeated-track instance disambiguation — Slide −746 s).
 
 Axis legend:
 - **IDENTITY** — wrong recording picked; GT track name shown, aligner grabbed something else.
