@@ -32,9 +32,11 @@ def test_id_coverage_counts_resolved():
             _Track(None, "abstain"),
             _Track("b", "content"),
             _Track(None, "abstain"),
+            _Track("stale_c", "abstain"),  # non-null track_id but NOT content-bound
         ]
     )
-    assert (resolved, total, frac) == (2, 4, 0.5)
+    # old track_id-truthy code would give (3, 5, 0.6) — "stale_c" would wrongly count
+    assert (resolved, total, frac) == (2, 5, 0.4)
 
 
 def test_id_coverage_empty_is_full():
