@@ -57,7 +57,7 @@ don't enforce.
 
 | id | invariant | bound check | status |
 |----|-----------|-------------|--------|
-| **C1** | No identity-by-mutable-string: GT/audio resolve only by `track_audio_id` / `recording_id`, never filename/slot_label | extend `entropy_audit` fail-closed resolver fences | mostly exists |
+| **C1** | No identity-by-mutable-string, enforced **by construction**: (a) every committed GT row carries `id_source: content \| abstain` — no row is stamped from a filename/slot guess; (b) **GT export is invariant under rename/renumber/relocation** of local audio | (a) new `guardrails._check_id_source` (static); (b) new `tests/labeling/test_export_metamorphic.py` (the renumber-metamorphic test) | new — see "C1 re-specified" below |
 | **C2** | One metric SSOT: no alignment-metric strings outside `docs/alignment_status.md` (**detection pattern + path exemptions — `docs/archive/`, `attic/EXPERIMENTS.md`, corrections logs, memory, discrepancy quotes — spec'd in #53 before implementation**) | new `guardrails._check_ssot_fence` (= #53) | new |
 | **C3** | Contract integrity meta-check: every claim → exactly one live check, every registered check → exactly one claim (bidirectional; orphan either way = red) | new `guardrails._check_contract_registry` | new |
 
@@ -173,6 +173,32 @@ joins; nothing bound the `.als`'s own reference layer. Corrections:
   clean-checkout CI; their tooling currently lives only on an unpushed branch.
   "The poison would fail the build" is the target once these land + a named
   weekly-audit owner runs the data plane — not true on day one.
+- **C1 re-specified (2026-07-21, post root-cause review — supersedes the table's
+  original binding).** A second adversarial review (Fable) found the original C1
+  binding — "extend `entropy_audit` fail-closed resolver fences (mostly exists)"
+  — is a **paper tiger**: `scripts/entropy_audit.py` fences exactly three classes
+  (`net_subprocess_no_timeout`, `_no_encoding`, `bare_except`); there is **no
+  resolver fence at all**, on `main` or any branch. "No identity-by-mutable-string"
+  is a *semantic* property — an AST fence for it is either vacuous or a false-positive
+  flood, and C3's meta-check would happily certify it as "enforced." Replaced with two
+  checks that can actually exist:
+  - **C1a — `id_source` stamp (static, cheap, CI-runnable on a clean checkout).**
+    The exporter stamps every GT row `id_source: content | abstain`.
+    `guardrails._check_id_source` fails on any committed fixture row that is neither
+    — i.e. no row may be stamped from a filename/slot guess.
+  - **C1b — the renumber-metamorphic test (the real class-killer).**
+    `tests/labeling/test_export_metamorphic.py` takes a small synthetic set from the
+    existing `tests/labeling/fixtures/als/` matrix, **renames/renumbers every audio
+    file and moves the `.als` one folder deeper**, re-exports, and asserts the GT is
+    **byte-identical**. Pre-registered invariant: *GT export is invariant under any
+    rename, renumber, or relocation of local audio.* If green, the location-as-identity
+    and guess-ladder diseases are dead in the export path **by construction** — no
+    vigilance. This is only reachable once the guess-ladder is removed: **deleting
+    `slot_id_map` + the weak tiers of `match_manifest_for_path` is a prerequisite**
+    (tracked as a Phase-1 exit criterion in the master plan), because the metamorphic
+    test cannot pass while a renumber can still silently re-key identity. C3 binds to
+    C1a+C1b, not to the non-existent fence. Root cause + full design:
+    memory `project_path_identity_root_cause`; master-plan Root-cause respec.
 
 ## 6. Definition of done
 

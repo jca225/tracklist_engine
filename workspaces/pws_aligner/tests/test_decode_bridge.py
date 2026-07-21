@@ -7,7 +7,11 @@ import json
 import pytest
 
 from workspaces.pws_aligner.hypotheses import Hypothesis
-from workspaces.pws_aligner.decode_bridge import posterior_to_placement
+from workspaces.pws_aligner.decode_bridge import (
+    posterior_to_placement,
+    fused_to_placement,
+)
+from workspaces.pws_aligner.continuous_model import FusedSpan
 
 
 def test_map_hypothesis_becomes_placement():
@@ -225,3 +229,23 @@ def test_abstain_span_roundtrips_msgspec(tmp_path):
     assert decoded.set_id == set_id
     assert len(decoded.spans) == 1
     assert decoded.spans[0].recording_id == ""
+
+
+# ---------------------------------------------------------------------------
+# fused_to_placement tests (Task 2)
+# ---------------------------------------------------------------------------
+
+
+def test_fused_to_placement_keeps_unbinned_offset():
+    placed = fused_to_placement("span_07", FusedSpan("rec_a", 101.37, 0.93, 3))
+    assert placed["recording_id"] == "rec_a"
+    assert abs(placed["offset_s"] - 101.37) < 1e-6  # NOT quantized to a 2s bin
+    assert placed["confidence"] == 0.93
+    assert not placed["abstain"]
+
+
+def test_fused_to_placement_null_abstains():
+    placed = fused_to_placement("span_07", FusedSpan(None, 0.0, 0.88, 0))
+    assert placed["abstain"]
+    assert placed["recording_id"] is None
+    assert placed["offset_s"] == 0.0
