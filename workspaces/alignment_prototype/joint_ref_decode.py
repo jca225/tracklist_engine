@@ -400,7 +400,7 @@ def main(argv: list[str] | None = None) -> int:
                 wlen,
                 hop,
                 lam_back,
-                0.0,  # fwd_slope: flat (warp-off) — path_decode._job unpacks 12
+                0.0,  # fwd_slope: flat (warp-off) — path_decode._job is variadic (*rest); tuple is now 13 with r0_slope below
                 0.0,  # back_slope: flat — neutral default matches decode_path
                 _legacy_r0_slope(args.decoder, args.earliest_slope),
             )
