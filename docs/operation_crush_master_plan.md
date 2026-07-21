@@ -96,12 +96,17 @@ The full D1–D15 register lives in the assault plan. New/changed:
 - **D19 — SSOT invariant unfenced** (#53). D11 was fixed by hand; nothing
   mechanically stops the next hand-typed metric outside `alignment_status.md`.
 - **D20 — Relink-by-name re-injects wrong-version (D5) into GT.** BB12's offline
-  clips must be relinked, but the successor files differ in *identity*: `117 Mode
-  (Remix)` → `033 Mode (Jay Hardway Remix)` (remixer now named), `127 Bad Day
-  (Acappella).m4a` → `035w2 …​.flac` (format change ⇒ likely a *different rip*, so
-  clip offsets tuned on one may be wrong on the other). Relink MUST bind by content
-  (hash/fingerprint) + `recording_id`, never by name similarity. (Surfaced by the
-  Fable review; folds into the Phase-1 relink and issue #50.)
+  clips must be relinked, but the "obvious" successor files differ in *identity*.
+  **Proven concretely (2026-07-21):** the clip at `stems/121__Manse - All Around/
+  instrumental.flac` has two same-name matches — the renumbered `034__Manse - All
+  Around/instrumental.flac` (**14 MB**) and the position-121 original in
+  `_orphan_slot_collisions/` (**34 MB**). *Different sizes = different audio.*
+  Relinking to the renumbered 034 would silently poison a clip whose warp/offsets
+  were tuned against the 34 MB original. (Also: `117 Mode (Remix)` → `033 Mode (Jay
+  Hardway Remix)`; `127 …​.m4a` → `035w2 …​.flac` format change ⇒ likely a different
+  rip.) **Relink rule:** bind by content (hash/fingerprint) + `recording_id` and
+  exact-position original, **never by name/number similarity**. (Folds into Phase-1
+  relink and issue #50.)
 - **D21 — BB12 `.als` is mixed-provenance** after the partial Collect-All: some
   clips point at `tracks/` (new slot numbering), some at frozen `Samples/Imported/`
   copies carrying *old* numbering + `-1` dedup suffixes — a live D1/D2 (path-stem
@@ -296,10 +301,18 @@ moving the audio it points to, or renaming that audio.
     All **half-ran** earlier (local `Samples/Imported/` grew ~140 refs incl. Ableton
     `-1` dedup copies) — not "abandoned"; the `.als` is now **mixed-provenance** (some
     clips → `tracks/` new numbering, some → frozen `Samples/Imported` old numbering),
-    a fresh D1/D2 drift surface (see D21). **Recovery: all 7 broken GT files survive
-    in the project's own `Samples/Imported/` — no re-pull needed**, a mechanical
-    relink (not "assess damage"). Operator gate: open from the new path in Live;
-    ~24 clips show offline until relinked.
+    a fresh D1/D2 drift surface (see D21). **Recovery: broken GT audio survives
+    locally — no re-pull needed.** Relink method used (2026-07-21): *restore the
+    identity-correct file to the path the `.als` expects* (no GT mutation, fully
+    reversible), sourcing from — in priority — (1) the project's own
+    `Samples/Imported/` collected copy (same basename = the labeled-against audio by
+    construction), (2) the exact-position original, incl. from `_orphan_slot_
+    collisions/` quarantine; **never** a renumbered same-name file without a
+    content/size check (see D20). **Status: 6 of 7 restored (609/613 refs resolve).
+    Pending: `stems/121__Manse - All Around/instrumental.flac`** — restore the 34 MB
+    position-121 original from `_orphan_slot_collisions/` (create the dest dir
+    first), NOT the 14 MB `034` renumber. Then this becomes a Phase-1 gated
+    provenance-normalization (D21) before GT re-export.
 
 **Protocol going forward:**
 1. `scripts/backup_als.sh` (codifies the snapshot) runs green before any
