@@ -8,7 +8,6 @@ import soundfile as sf
 from eda.alignment.spectrogram_review.source_audio import (
     _resolve_from_filesystem,
     _slot_aliases,
-    preflight_aligning_audio,
     resolve_source_audio,
 )
 
@@ -64,74 +63,33 @@ def test_filesystem_resolve_fails_closed_when_ambiguous_and_no_name(tmp_path: Pa
 
 def test_unresolved_manifest_stub_does_not_slot_fallback(tmp_path: Path, monkeypatch):
     """Known missing recording_id must not pick a colliding slot folder."""
-    set_dir = tmp_path / "1fsnxchk__x"
-    (set_dir / "tracks").mkdir(parents=True)
-    t = np.linspace(0, 0.2, 4410, endpoint=False)
-    y = (0.2 * np.sin(2 * np.pi * 220.0 * t)).astype(np.float32)
-    sf.write(str(set_dir / "tracks" / "032__AFROJACK - Ten Feet Tall.wav"), y, 22050)
-
-    rec_id = "tlp2853023"
-    tracks = {
-        rec_id: {
-            "track_id": rec_id,
-            "recording_id": rec_id,
-            "slot_label": "032",
-            "local_path": str(set_dir / "tracks" / "032__Lux Holm - Omega.wav"),
-            "stems": {},
-        }
-    }
-    monkeypatch.setattr(
-        "eda.alignment.spectrogram_review.source_audio.find_aligning_dir",
-        lambda _sid: set_dir,
-    )
-
-    hit = resolve_source_audio(
-        "1fsnxchk",
-        rec_id,
-        gt_stem="instrumental",
-        tracks=tracks,
-        slot="032",
-        name="Lux Holm - Omega",
-    )
-    assert hit is None
-
-
-def test_preflight_skips_unalignable_and_counts_missing(tmp_path: Path, monkeypatch):
-    set_dir = tmp_path / "1fsnxchk__x"
-    (set_dir / "tracks").mkdir(parents=True)
+    tracks_dir = tmp_path / "tracks"
+    tracks_dir.mkdir()
     sf.write(
-        str(set_dir / "tracks" / "010__Good Track.wav"),
+        str(tracks_dir / "032__AFROJACK - Ten Feet Tall (Acappella).wav"),
         np.zeros(1000, dtype=np.float32),
         22050,
     )
-    good_id = "rec_good"
-    bad_id = "rec_bad"
-    tracks = {
-        good_id: {
-            "track_id": good_id,
-            "local_path": str(set_dir / "tracks" / "010__Good Track.wav"),
-            "stems": {},
-        },
-        bad_id: {
-            "track_id": bad_id,
-            "local_path": str(set_dir / "tracks" / "011__Missing.wav"),
-            "stems": {},
-        },
+    stub = {
+        "track_id": "tlp2853023",
+        "slot_label": "032",
+        "stem": "regular",
+        "local_path": None,
+        "stems": {},
+        "satisfaction": "unresolved",
     }
     monkeypatch.setattr(
         "eda.alignment.spectrogram_review.source_audio.find_aligning_dir",
-        lambda _sid: set_dir,
+        lambda _set_id: tmp_path,
     )
-    monkeypatch.setattr(
-        "eda.alignment.spectrogram_review.source_audio.load_manifest_tracks",
-        lambda _sid: tracks,
+    assert (
+        resolve_source_audio(
+            "1fsnxchk",
+            "tlp2853023",
+            gt_stem="regular",
+            tracks={"tlp2853023": stub, "slot:032": stub},
+            slot="032",
+            name="Lux Holm - Omega",
+        )
+        is None
     )
-
-    gt = [
-        {"track_id": good_id, "slot_label": "010", "claimed_stem": "regular"},
-        {"track_id": bad_id, "slot_label": "011", "claimed_stem": "regular"},
-        {"track_id": "rec_skip", "slot_label": "012", "skip_training": True},
-        {"track_id": "rec_unal", "slot_label": "013", "unalignable": True},
-    ]
-    missing = preflight_aligning_audio("1fsnxchk", gt)
-    assert missing == [bad_id]

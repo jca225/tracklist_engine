@@ -8,7 +8,7 @@ Outputs a folder with:
 
 Usage:
     venvs/audio/bin/python -m eda.alignment.spectrogram_review.render \\
-        --set-id <set_id> --limit 24
+        --set-id 1fsnxchk --limit 24
 """
 
 from __future__ import annotations
@@ -23,21 +23,22 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-
-def _repo_root() -> Path:
-    here = Path(__file__).resolve().parent
-    for p in [here, *here.parents]:
-        if (p / "workspaces").is_dir() and (p / "eda").is_dir():
-            return p
-    return here.parent.parent
-
-
-_REPO = _repo_root()
+_REPO = Path(__file__).resolve().parents[3]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from eda.alignment.spectrogram_review.audio_clips import cut_mp3
+from eda.alignment.spectrogram_review.ableton_label import (
+    format_ableton_line,
+    resolve_ableton,
+)
+from eda.alignment.spectrogram_review.audible import (
+    mix_truth_span,
+    ref_truth_span,
+    ref_view_window,
+)
+from eda.alignment.spectrogram_review.audio_clips import cut_clip
 from eda.alignment.spectrogram_review.labels import (
+    fmt_clock,
     group_blurb,
     group_title,
     one_liner,
@@ -113,13 +114,17 @@ def _od_square(
     *,
     size: int,
     edge: tuple[int, int, int],
+    truth_label: str = "Truth",
+    guess_label: str = "Our guess",
 ) -> Image.Image:
     y = _load_window(audio, win_start, win_end)
     canvas = to_square(mel_rgb(y, sr=SR), size=size)
     boxes = [
-        TimeBox(actual[0], actual[1], class_name="Truth", color=GT_COLOR, band="top"),
         TimeBox(
-            pred[0], pred[1], class_name="Our guess", color=PRED_COLOR, band="bottom"
+            actual[0], actual[1], class_name=truth_label, color=GT_COLOR, band="top"
+        ),
+        TimeBox(
+            pred[0], pred[1], class_name=guess_label, color=PRED_COLOR, band="bottom"
         ),
     ]
     return draw_od_boxes(
@@ -129,6 +134,26 @@ def _od_square(
         win_end_s=win_end,
         edge_color=edge,
     )
+
+
+def _gt_display_name(card: SpanCard, ab: dict) -> str:
+    """Prefer Ableton/GT clip name — spine names lie when stem was rematched."""
+    gt_name = str(ab.get("ableton_name") or "").strip()
+    return gt_name or card.name
+
+
+def _spine_mismatch_note(card: SpanCard, gt_name: str) -> str:
+    spine = (card.name or "").strip()
+    if not spine or not gt_name:
+        return ""
+    if spine.lower() == gt_name.lower():
+        return ""
+    # Same song, different version/stem wording
+    if spine[:24].lower() in gt_name.lower() or gt_name[:24].lower() in spine.lower():
+        if (card.gt_stem or "") not in spine.lower():
+            return f"Tracklist spine said “{spine}”; Truth is the {stem_plain(card.gt_stem)} GT."
+        return ""
+    return f"Tracklist spine said “{spine}”; Truth follows Ableton GT."
 
 
 def _placeholder(size: int, msg: str) -> Image.Image:
@@ -177,16 +202,36 @@ def _list_html(cards: list[SpanCard]) -> str:
         for i, c in sorted(rows, key=lambda t: t[1].sec_lost, reverse=True):
             badge = "hit" if c.success else "miss"
             badge_txt = "Hit" if c.success else "Miss"
-            search = f"{c.name} {c.slot} {c.cause} {stem_plain(c.gt_stem)}".lower()
+            ab = resolve_ableton(
+                c.set_id,
+                recording_id=c.recording_id,
+                gt_set_start_s=c.gt_set_start_s,
+                fallback_slot=c.slot,
+                fallback_name=c.name,
+                gt_stem=c.gt_stem,
+                pred_set_start_s=c.pred_set_start_s,
+                pred_set_end_s=c.pred_set_end_s,
+                pred_stem=c.pred_stem,
+            )
+            ab_line = format_ableton_line(ab)
+            gt_name = _gt_display_name(c, ab)
+            note = _spine_mismatch_note(c, gt_name)
+            search = (
+                f"{gt_name} {c.name} {c.slot} {c.cause} {stem_plain(c.gt_stem)} "
+                f"{ab_line}"
+            ).lower()
+            meta = f"{one_liner(c)} · Truth stem: {stem_plain(c.gt_stem)}"
+            if note:
+                meta = f"{meta} · {note}"
             btns.append(
                 f'<button type="button" class="clip-btn" data-idx="{i}" '
                 f'data-outcome="{"success" if c.success else "failure"}" '
                 f'data-stem="{html.escape(c.gt_stem)}" '
                 f'data-search="{html.escape(search)}">'
                 f'<span class="badge {badge}">{badge_txt}</span>'
-                f'<div><div class="name">{html.escape(c.name)}</div>'
-                f'<div class="meta">{html.escape(one_liner(c))} · '
-                f"{html.escape(stem_plain(c.gt_stem))}</div></div>"
+                f'<div><div class="name">{html.escape(gt_name)}</div>'
+                f'<div class="meta">{html.escape(meta)}</div>'
+                f'<div class="ableton">{html.escape(ab_line)}</div></div>'
                 f'<span class="hint">Enter ↵</span></button>'
             )
         parts.append(
@@ -223,74 +268,113 @@ def render_player(
         mix_path = mix_cache[card.set_id]
         stem = _safe(f"{i:04d}_{card.set}_{card.slot}")
 
+        ab = resolve_ableton(
+            card.set_id,
+            recording_id=card.recording_id,
+            gt_set_start_s=card.gt_set_start_s,
+            fallback_slot=card.slot,
+            fallback_name=card.name,
+            gt_stem=card.gt_stem,
+            pred_set_start_s=card.pred_set_start_s,
+            pred_set_end_s=card.pred_set_end_s,
+            pred_stem=card.pred_stem,
+        )
+        truth_stem = ab.get("ableton_stem") or card.gt_stem
+
+        # Truth = audible region only (fader / stem silence is not alignable).
+        mix_truth = mix_truth_span(card)
+        truth_lbl = f"Truth · {stem_plain(truth_stem)}"
+        guess_lbl = f"Guess · {stem_plain(card.pred_stem)}"
+
         mix_img = img_dir / f"{stem}_mix.png"
-        mix_mp3 = audio_dir / f"{stem}_mix.mp3"
+        mix_audio = audio_dir / f"{stem}_mix.mp3"
         _od_square(
             mix_path,
             card.win_start_s,
             card.win_end_s,
-            (card.gt_set_start_s, card.gt_set_end_s),
+            mix_truth,
             (card.pred_set_start_s, card.pred_set_end_s),
             size=size,
             edge=edge,
+            truth_label=truth_lbl,
+            guess_label=guess_lbl,
         ).save(mix_img)
-        cut_mp3(mix_path, card.win_start_s, card.win_end_s, mix_mp3)
+        cut_clip(mix_path, card.win_start_s, card.win_end_s, mix_audio)
 
         src = resolve_source_audio(
             card.set_id,
-            card.recording_id,
-            gt_stem=card.gt_stem,
+            ab.get("ableton_recording_id") or card.recording_id,
+            gt_stem=ab.get("ableton_stem") or card.gt_stem,
             tracks=track_cache[card.set_id],
-            slot=card.slot,
-            name=card.name,
+            slot=ab.get("ableton_slot") or card.slot,
+            name=ab.get("ableton_name") or card.name,
         )
         src_img_rel = None
-        src_mp3_rel = None
+        src_audio_rel = None
+        ref_win_lo, ref_win_hi = card.ref_win_start_s, card.ref_win_end_s
         if src is not None:
+            src_truth = ref_truth_span(card, source_path=src)
+            ref_win_lo, ref_win_hi = ref_view_window(card, src_truth)
             src_img = img_dir / f"{stem}_src.png"
-            src_mp3 = audio_dir / f"{stem}_src.mp3"
+            src_audio = audio_dir / f"{stem}_src.mp3"
             _od_square(
                 src,
-                card.ref_win_start_s,
-                card.ref_win_end_s,
-                (card.gt_ref_start_s, card.gt_ref_end_s),
+                ref_win_lo,
+                ref_win_hi,
+                src_truth,
                 (card.pred_ref_start_s, card.pred_ref_end_s),
                 size=size,
                 edge=edge,
+                truth_label=truth_lbl,
+                guess_label=guess_lbl,
             ).save(src_img)
-            if cut_mp3(src, card.ref_win_start_s, card.ref_win_end_s, src_mp3):
+            if cut_clip(src, ref_win_lo, ref_win_hi, src_audio):
                 src_img_rel = f"images/{src_img.name}"
-                src_mp3_rel = f"audio/{src_mp3.name}"
+                src_audio_rel = f"audio/{src_audio.name}"
         else:
             _placeholder(size, "Original song missing").save(
                 img_dir / f"{stem}_src.png"
             )
 
+        gt_name = _gt_display_name(card, ab)
+        note = _spine_mismatch_note(card, gt_name)
+        blurb = one_liner(card)
+        if note:
+            blurb = f"{blurb} {note}"
         items.append(
             {
                 "idx": i,
-                "name": card.name,
+                "name": gt_name,
+                "spine_name": card.name,
                 "slot": card.slot,
                 "set": card.set,
                 "set_id": card.set_id,
                 "success": card.success,
                 "outcome": "success" if card.success else "failure",
                 "stem": card.gt_stem,
+                "pred_stem": card.pred_stem,
                 "group": card.group_key,
                 "group_title": group_title(card.group_key, success=card.success),
-                "blurb": one_liner(card),
+                "blurb": blurb,
+                "ableton_line": format_ableton_line(ab),
+                "ableton_track_num": ab.get("ableton_track_num"),
+                "ableton_slot": ab.get("ableton_slot"),
+                "ableton_name": ab.get("ableton_name"),
+                "mix_time": fmt_clock(
+                    float(ab.get("mix_start_s") or card.gt_set_start_s)
+                ),
                 "mix_img": f"images/{mix_img.name}",
-                "mix_audio": f"audio/{mix_mp3.name}",
+                "mix_audio": f"audio/{mix_audio.name}",
                 "src_img": src_img_rel,
-                "src_audio": src_mp3_rel,
+                "src_audio": src_audio_rel,
                 "mix_dur_s": max(0.05, card.win_end_s - card.win_start_s),
-                "ref_dur_s": max(0.05, card.ref_win_end_s - card.ref_win_start_s),
+                "ref_dur_s": max(0.05, ref_win_hi - ref_win_lo),
             }
         )
         print(
             f"[{i + 1}/{len(cards)}] {card.set} slot={card.slot} "
             f"{'OK' if card.success else 'FAIL'} [{card.group_key}] "
-            f"src={'yes' if src_mp3_rel else 'no'}",
+            f"src={'yes' if src_audio_rel else 'no'}",
             flush=True,
         )
     return items
@@ -315,6 +399,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--max-window-s", type=float, default=90.0)
     p.add_argument("--out-dir", type=Path, default=None)
     p.add_argument("--size", type=int, default=DEFAULT_SIZE)
+    p.add_argument(
+        "--serve",
+        action="store_true",
+        help="after render, start local HTTP server + open browser (fixes silent audio)",
+    )
     args = p.parse_args(argv)
 
     if not args.span_table.is_file():
@@ -363,7 +452,16 @@ def main(argv: list[str] | None = None) -> int:
         list_html=_list_html(cards),
         weak_html=_weak_html(weak),
     )
-    print(f"wrote {out_dir / 'index.html'} — open it, ↑/↓ then Enter, Space to play")
+    print(f"wrote {out_dir / 'index.html'}")
+    print(
+        "Audio needs HTTP (file:// often silent). Serve with:\n"
+        f"  venvs/audio/bin/python -m eda.alignment.spectrogram_review.serve "
+        f"--dir {out_dir}"
+    )
+    if args.serve:
+        from eda.alignment.spectrogram_review.serve import main as serve_main
+
+        return serve_main(["--dir", str(out_dir)])
     return 0
 
 
