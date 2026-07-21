@@ -33,6 +33,7 @@ from labeling.als.models import (
 from labeling.als.cst import dump_als_bytes, load_als_xml, save_als_xml
 from labeling.als.read import (
     build_vol_envelopes,
+    clip_content_identity,
     clip_original_path,
     parse_layer_clips,
     track_display_name,
@@ -70,6 +71,7 @@ __all__ = [
     "save_als_xml",
     # read
     "build_vol_envelopes",
+    "clip_content_identity",
     "clip_original_path",
     "parse_layer_clips",
     "track_display_name",
