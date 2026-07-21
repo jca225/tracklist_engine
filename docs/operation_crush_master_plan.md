@@ -250,16 +250,23 @@ moving the audio it points to, or renaming that audio.
   `~/aligning/_backups/als_snapshot_20260721_091013/` (in-tree) **and**
   `~/als_snapshots/als_snapshot_20260721_091013/` (off-tree mirror, survives an
   `~/aligning` wipe). 16 MB. BB11/BB12 sessions verified as valid gzip.
+- **Canonical GT-session naming convention (adopted 2026-07-21):**
+  **`bbNN_align.als`** — lowercase, underscore, no spaces (agent- and shell-safe),
+  living at `~/aligning/<set_dir>/<BBNN> align Project/bbNN_align.als`. The export's
+  `find_default_als` (handoff Step B) must search for this name. Supersedes the
+  spaced `BB11 align.als` / `big bootie 12 labeling_fast.als` names.
 - **Collect All & Save status (verified by ref audit):**
-  - **BB11 — done + canonical:** `~/aligning/2nvzlh2k__…/BB11 align Project/BB11 align.als`,
-    564/567 refs local (3 stray = factory devices). Leave it.
-  - **BB12 — NOT done:** 295 local / **321 refs still depth-3 outside**
-    (half-collected — likely deactivated/offline clips skipped), and it sits at a
-    non-canonical path (`_backups/20260616_150150/big bootie 12 labeling Project/big
-    bootie 12 labeling_fast.als`). **Fix (operator, in Live):** Save As →
-    `~/aligning/1fsnxchk__…/BB12 align Project/BB12 align.als` → Collect All & Save,
-    so it mirrors BB11. Do NOT `mv` it (moving orphans the 321). Keep the old copy
-    until the new collect verifies.
+  - **BB11 — done + canonical:** `~/aligning/2nvzlh2k__…/BB11 align Project/bb11_align.als`,
+    564/567 refs local (3 stray = factory devices). Done.
+  - **BB12 — renamed but NOT relocated/collected:** now `bb12_align.als`, but still
+    295 local / **321 refs depth-3 outside** (half-collected) **and still inside the
+    misnamed `_backups/20260616_150150/big bootie 12 labeling Project/`** — which is
+    not a backup at all but the *live* project (7.7 G Samples, newest edits) wearing
+    a confusing folder name (the root of the "why does Recent open a backup" issue).
+    **Fix (operator, in Live):** Save As → `~/aligning/1fsnxchk__…/BB12 align
+    Project/bb12_align.als` → Collect All & Save (gets it out of `_backups/`,
+    collects the 321, lands canonical). Do NOT `mv` while half-collected (orphans the
+    321). Keep the old copy until the new collect verifies.
 
 **Protocol going forward:**
 1. `scripts/backup_als.sh` (codifies the snapshot) runs green before any
