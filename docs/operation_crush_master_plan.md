@@ -42,12 +42,16 @@ Haiku for routine second opinions. **Never trust an `.als` ref count without
 that reached docs before Fable caught it).
 
 **STOP for explicit human go (never auto-run):** the `trm-ablation-framework`
-34↑/28↓ branch reconcile; any GT mutation / pi `set_ground_truth` write-back;
-merges to `main`; corpus-wide actions.
+branch reconcile (**61↑/105↓ vs `origin/main`** — 52 genuinely-unique commits +
+9 already-landed, measured 2026-07-21; a real divergence, not a fast-forward);
+any GT mutation / pi `set_ground_truth` write-back; merges to `main`; corpus-wide
+actions.
 
 **Immediate next actions, in order:**
-1. **Phase 0** — worktree census + **rescue the detached-HEAD** `fail-closed-audio-resolvers`
-   (#49); **freeze** the tuning branches; then the branch reconcile *(human-gated)*.
+1. **Phase 0** — worktree census + **prune the (clean) detached-HEAD worktree**
+   `fail-closed-audio-resolvers` (#49 — `fa3d4cc` is already on `origin/main`,
+   working tree clean, so this is *not* a data-loss rescue, just a prune);
+   **freeze** the tuning branches; then the branch reconcile *(human-gated)*.
 2. Scaffold the contract: `contract/registry.py` + `SYSTEM_CONTRACT.md` + static
    checks **C1–C3** (green day one); wire **C0** (`.als` ref content-binding).
 3. **Phase 1** — BB12 durable clean state = **Collect All & Save in Live** (operator);
@@ -56,6 +60,31 @@ merges to `main`; corpus-wide actions.
 **Standing hazards:** `--prune` is **FORBIDDEN** on `1fsnxchk` until Collect-All
 (re-orphans the 4 restored `tracks/` files); PRs need `gh auth switch --user jca225`
 (the READ account silently drops `--milestone`/`--label`).
+
+**Correction log (2026-07-21, post-Fable adversarial review — read before Phase 1):**
+- **GT poison is 3 confirmed cross-song ids, not "14".** The "14" was an artifact
+  of `audit_gt_recording_ids.py`'s over-eager matcher (≥2 shared ≥4-char tokens)
+  *plus* a header-drop parsing bug. Fixed here: the referee now buckets **poison
+  (3: slots 028 Beatles→Garrix, 031 CCR→Killers, 144 Snakehips→Pacific Coast
+  Highway) / not-in-DB (3 `tlp*` placeholders) / unverifiable-blank-name (3)**.
+  It is a **recall-biased screen, not a certifier** — the authoritative de-poison
+  is the `track_audio_id` binding in Phase-1 step 3b, never name overlap.
+- **Reject the hand-patch shortcut.** Patching the 3 fixture ids alone cannot even
+  go green and leaves the poison *carrier* armed. The poison lives in **three
+  derived artifacts that must be regenerated together**: `bb12_ground_truth.yaml`,
+  `labeling/fixtures/id_maps/1fsnxchk_slots.json` (the `slot_id_map` bridge —
+  `export_als_to_gt.py:170-176`, whose "slot_label is deterministic … exact, not
+  a guess" claim is **false** under the 2026-07-15 renumber), and
+  `bb12_ground_truth.inventory.json`. De-poison only via step 3b.
+- **The capture-fidelity "CI fence" is not yet real.** `test_export_capture_fidelity.py`
+  lives only on the unpushed branch (absent on `main`/CI) and self-skips because
+  `DEFAULT_ALS` pointed at a now-deleted Desktop path (repointed here to the
+  canonical `_labeling/1fsnxchk/BB12 align Project/bb12_align.als`). Even when it
+  runs, it re-exports through the same `slot_id_map` and so cannot catch id poison
+  — it fences the loop-merge class, not D1. Phase-1 step 6 "class killed by machine"
+  is the *target*, not yet true.
+- **`make gt-gate` does not exist yet** — PR #34 adds it; nothing may invoke it
+  before #34 merges (Phase-0 step 4 lands it first — ordering is consistent).
 
 ---
 
@@ -118,10 +147,15 @@ verify before re-doing work:
 And one way that *increases* scope — the new headline discrepancy:
 
 - **D16 — the consolidation is ~7× bigger than stated.** Not "three branches + one
-  worktree." Live state: **~30 local branches**, **26 active worktrees** with unmerged
+  worktree." Live state: **~30 local branches**, **~27 active worktrees** with unmerged
   commits, one **detached-HEAD** worktree (`fail-closed-audio-resolvers` `fa3d4cc`
-  — data-loss risk), and `trm-ablation-framework` **34 ahead / 28 behind** origin
-  (diverged, not a fast-forward) atop 89 dirty files. Tracked in **#49**.
+  — **not a data-loss risk after all: `fa3d4cc` is already on `origin/main`, working
+  tree clean; prune it, don't "rescue" it**), and `trm-ablation-framework`
+  **61 ahead / 105 behind `origin/main`** (52 genuinely-unique commits; diverged,
+  not a fast-forward). The 89 dirty files were the sharp edge (~2,500 lines of
+  never-committed contrast/invariance/flywheel work) — **saved 2026-07-21 in local
+  checkpoints**; only the WIP poisoned `bb12_ground_truth.yaml` remains uncommitted.
+  Tracked in **#49**.
 
 ---
 
@@ -177,10 +211,12 @@ data a prior phase has not certified.
 
 ### Phase 0 — Consolidate: land the truth where it is read
 
-1. **[NEW] Worktree/branch census first** (#49). Enumerate all 25 worktrees;
-   classify each **land / discard / park-with-note**; **rescue the detached HEAD
-   onto a named branch before anything else**; then reconcile the 34↑/28↓
-   divergence on `trm-ablation-framework` (supervised, not blind).
+1. **[NEW] Worktree/branch census first** (#49). Enumerate all ~27 worktrees;
+   classify each **land / discard / park-with-note**; **prune the clean
+   detached-HEAD worktree** (`fa3d4cc` is on `origin/main` — no rescue needed);
+   then reconcile the **61↑/105↓ vs `origin/main`** divergence on
+   `trm-ablation-framework` (supervised, not blind — 52 unique commits + 9
+   already-landed; drop the 9 on rebase).
 2. **[NEW] Freeze order** (#49). Pause every tuning/training branch (`e1-*`,
    `cotrain-*`, `acap-oracle-ladder`, `instance-separability`,
    `earliest-instance-tiebreak`) until Phase 3. They may develop *methods*; they
@@ -223,22 +259,28 @@ provably the same object.**
 1. **Operator decision (§5)** — relocation is already DONE; what remains is
    **Collect-All (durable form) + the D22 convention/path reconcile**. The re-export
    below queues behind the Collect-All choice (it fixes the final paths).
-2. **Capture-rule decision (D2):** stem-provenance precedence. Proposed
-   *arranged-audio truth > tracklist claim > file path* — **[NEW] treated as a
-   hypothesis**, validated against the Honest `42w3` case **and a counter-example**,
-   not asserted; then encoded in `labeling/als/identity.py` + regression test.
+2. **~~Capture-rule decision (D2)~~ — SUPERSEDED (2026-07-21, see §9).** The
+   "arranged-audio > tracklist claim > file path" precedence was the wrong question:
+   it re-ranks *strings*. D2 folds into content-binding — `claimed_stem` becomes the
+   **resolved `track_audio` row's stem** (content, not path); `classify_path` is
+   demoted to a *cross-check that flags disagreement, never stamps*. No precedence
+   decision is needed. Do NOT implement the precedence rule.
 3. **[NEW] Canonical rollback (#51):** snapshot pi `set_ground_truth` + the
    fixture *before* overwrite; diff old↔new as a reviewed gate artifact; keep a
    one-command revert.
-3b. **[NEW — the actual D1 mechanism] Reconcile manifest↔`.als` clip paths.** The
-   re-export **reproduces stale ids via the `slot_id_map` fallback** until the
-   manifest `local_path`s path-match the `.als` clip paths (handoff Step C; 290/296
-   BB12 clips were path-MISS). Sequence this **after** the Collect-All choice (§5) so
-   it targets the *final* paths — or bind identity through `audio_index.json` /
-   `feat/track-audio-id-index` (merged in Phase 0 step 3), making path-matching moot.
-   Pick one; without it, re-export re-poisons. Note: BB12's manifest already carries
-   **152 locally-applied `recording_id`s** (`resolve_manifest_recording_ids.py
-   --apply`, uncommitted) — commit or re-derive them.
+3b. **[REVISED 2026-07-21 — bind by content, delete the guesser; see §9] Content
+   catalog binding, not path-matching.** The old "reconcile paths *or* bind via
+   `audio_index` — pick one" left the poison **carrier armed**: the `slot_id_map`
+   fallback (`export_als_to_gt.py:165-178`, live on `main`) re-injects stale ids on the
+   next path drift, and its "slot_label is deterministic — exact, not a guess" claim is
+   false under a renumber. **Mandate the binding, and DELETE the guesser:** resolve
+   every clip through the content-addressed catalog (`OriginalFileSize`+`Crc` →
+   `head_hash` → **else abstain**, evolving `audio_index.json`); **remove `slot_id_map`,
+   `_load_slot_id_map`, the `id_maps/*_slots.json` fixtures, and the weak tiers of
+   `match_manifest_for_path`.** Abstentions (`recording_id: null` + diagnostic) become
+   a human worklist — exactly the 7-mismatch review the BB12 relink already was. Note:
+   BB12's manifest carries **152 locally-applied `recording_id`s**
+   (`resolve_manifest_recording_ids.py --apply`, uncommitted) — commit or re-derive.
 4. Re-export BB11 + BB12 through `make gt-gate` → fixture regen → id audit
    (`scripts/audit_gt_recording_ids.py` must report **zero** stale ids) →
    transactional write-back (coordinated, AGENTS.md §5).
@@ -247,7 +289,11 @@ provably the same object.**
    a *class* killed by machine.
 
 **Exit:** every BB11/BB12 row passes id-audit + audio round-trip + spectrogram
-spot-review; the sha256-bound gate stamp is committed; a retained pre-image exists.
+spot-review; the sha256-bound gate stamp is committed; a retained pre-image exists;
+**[NEW, per §9] `slot_id_map` and the guess-tiers are DELETED (grep-clean outside
+`attic/`), every GT row carries `id_source: content|abstain`, and the renumber-
+metamorphic test (C1b) is green** — otherwise the current exit criteria pass with the
+poison carrier still armed.
 
 ### Phase 2 — Audio truth: right song, right version, canonical everywhere
 
@@ -286,9 +332,11 @@ One regeneration event, one SSOT. Only after Phases 1–2.
 4. Re-run UnmixDB unchanged (synthetic, unaffected) to keep the synthetic-vs-real
    contrast valid.
 5. **[NEW] Counterfactual line:** record not just *that* numbers moved but *how
-   much* poison moved them — a pre-registered expectation ("14 wrong ids should
-   drop identity residual by ~X"). If clean GT barely moves the numbers, that is
-   itself a finding.
+   much* poison moved them — a pre-registered expectation calibrated to the
+   **3 confirmed cross-song ids** (not the retracted "14"; see the Correction
+   log), e.g. "3 wrong ids on a 172-track set should drop identity residual by
+   ~X." If clean GT barely moves the numbers, that is itself a finding — and one
+   the small true count makes *likely*, so register the expectation honestly.
 
 **Exit:** one dated+SHA `alignment_status.md` on main that every doc cites.
 
@@ -398,17 +446,22 @@ moving the audio it points to, or renaming that audio.
 ## 5. The decision left for John
 
 The BB12 **relocation is DONE** (§4: canonical at `_labeling/1fsnxchk/…`, relinked
-613/613). Two decisions remain:
+613/613).
 
-**(i) Durable form of BB12 — Collect-All vs. keep the tactical file-restore:**
+**(i) Durable form of BB12 — DONE (2026-07-21, Fable-verified).** Collect All &
+Save is **complete**: `bb12_align.als` = **307 active audio refs, all inside
+`Samples/`, 0 external, 0 offline** (the earlier "307 collected / 306 external"
+was a `<SourceContext>` historical-ghost miscount — see
+[[feedback_als_ref_parsing_unescape]]). Depth-fragility and the `--prune` hazard are
+now permanently closed **for BB12**. ⚠ Only `bb12_align.als` is the collected session;
+the sibling `bb12.als` / `big bootie 12 labeling_fast.als` / `..._slow_ARCHIVED.als`
+open with 295–317 OFFLINE clips — never open those.
 
-| Option | What happens | Cost | Trade-off |
-|---|---|---|---|
-| **A. Collect All & Save** *(recommended)* | Open BB12 in Live → Collect-All → all 613 refs internalized into `Samples/` | ~30 min + ~5 GB | Permanently ends depth-fragility **and the `--prune` hazard**; normalizes provenance (D21) |
-| **B. Keep the file-restore state** | Leave BB12 as-is (resolves 613/613 today) | 0 | Works now, but `--prune` stays forbidden and mixed-provenance (D21) persists |
-
-Recommendation: **A** — the only state where `--prune`/renumber can't silently
-re-break the GT. Backups are in place, so it's fully reversible.
+**(i-bis) [NEW — BB11 is NOT collected].** BB11's `bb11_align.als` still carries
+**280 external refs** (a mix of depth-1 into its set dir); it resolves today but is
+one `tracks/` rename/renumber from the exact BB12 fire. **Add BB11 Collect All & Save**
+(operator, in Live) to §5 as a required Phase-1 durable-state step, then the same
+content re-export. Until then, `--prune` is forbidden on BB11 too.
 
 **(ii) Convention vs. path reconcile (D22).** BB12's home `_labeling/1fsnxchk/BB12
 align Project/` matches neither the §4-adopted `<set_dir>/<BBNN> align Project/`
@@ -468,3 +521,56 @@ driver verdicts *and the revival ledger's Bucket-1 set* are re-established again
 that baseline; (5) the gates — including `.als` backup and the SSOT fence — run in
 CI so none of this regresses silently. **Then** the intelligence substrate is
 certified and internal application development is empowered to build on it freely.
+
+---
+
+## 9. Root-cause respec (2026-07-21, post-Fable) — the path/identity disease
+
+A deep adversarial review (Fable) of the whole Ableton/`.als`/file-path bug family
+found these fires are not independent — they share a root cause, and Crush as first
+written **detects poisoned outputs while leaving the poison *generators* in the code.**
+This section supersedes the D2 capture-rule decision and re-specs contract C1. Full
+evidence: memory `project_path_identity_root_cause`; enforcement gaps verified on `main`.
+
+**The disease — two coupled failures + one substrate:**
+- **A — location-as-identity.** The same string is both a mutable human label
+  (rename / renumber / Collect-All flatten / move) *and* a machine join key. Exercise
+  the mutability → every join silently breaks or guesses wrong.
+- **B — optional identity + guess-shaped recovery (the deeper half).** Stable ids
+  (`recording_id` / `track_audio_id`) exist and are clean where used, but are
+  **optional at every seam**; on a miss the code **guesses down a fallback ladder**
+  (`match_manifest_for_path` = 6 tiers, `slot_id_map` = a 7th) instead of abstaining.
+  BB12's GT poisoning needed **both** (drift armed B, a mutable slot number fired A).
+- **Substrate — Ableton's relative-path-at-depth model** (unchangeable) — but Live
+  *also* embeds per-clip content identity (`OriginalFileSize`+`OriginalCrc`) our code
+  ignored until now. The project's own `entropy_reduction_plan.md` quantifies the
+  family: id-namespace 18 / stale-artifact 18 / path-resolution 14 / silent-defaults
+  14 / identity-axis 12 fixes, vs ~0 in the typed `.als` codec core.
+
+**Enforcement gaps Fable verified (the plan said X ≠ X enforced):** contract C1's old
+binding ("extend `entropy_audit` fences, mostly exists") is a **paper tiger** —
+`entropy_audit` fences only 3 classes, there is **no resolver fence**; the `slot_id_map`
+carrier is **still live on `main`** (Crush never mandated deleting it); `audio_index`
+is on `main` but the **GT export path never consults it**; C0's `.als` content-bind has
+**zero implementation**; **BB11 is not collected** (280 external refs).
+
+**The fix — one principle:** *paths are locators, never identity; identity binds by
+content, once, at one layer; a missing binding is a loud abstention — there is no ladder.*
+1. Codec reads `OriginalFileSize`/`Crc` into `ParsedClip` (also dissolves the
+   active-ref-vs-SourceContext ambiguity: locator / provenance / identity = three fields).
+2. One content-addressed catalog per set (evolve `labeling/audio_index.json`).
+3. One resolver, no ladder: `(size,crc)` → `head_hash` → **else abstain(Err)**;
+   **delete `slot_id_map` + the weak tiers** (Phase-1 step 3b + exit criterion).
+4. **D2 folds in** — `claimed_stem` = resolved row's stem; `classify_path` demoted to a
+   disagreement-flag. The precedence decision is **canceled** (Phase-1 step 2).
+5. **Class-killer = the renumber-metamorphic test (contract C1b):** rename/renumber
+   every file + move the `.als` one depth, re-export, assert GT **byte-identical**.
+   Green ⇒ diseases A+B dead in the export path *by construction*. Plus C1a: every GT
+   row stamped `id_source: content|abstain`, guardrail-checked.
+
+**Sequencing:** cheap/agent-executable — codec fields, resolver + `slot_id_map`
+deletion, `id_source` stamp + guardrail, metamorphic test (fixture matrix exists).
+Human-gated — abstention worklists, **BB11 Collect-All** (§5 i-bis), fixture/pi writes.
+This *sharpens* Phase 1 and C1; it is not a rival plan. Chromaprint stem/transcode
+binding (C0(c) full form) stays a Phase-2 verifier — `size+crc+head_hash` covers this
+corridor; don't block on it.

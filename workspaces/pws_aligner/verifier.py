@@ -22,7 +22,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import statistics
 import sys
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
@@ -33,6 +35,7 @@ _REPO = Path(__file__).resolve().parents[2]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
+from workspaces.pws_aligner.continuous_model import ProbeNoise
 from workspaces.pws_aligner.hypotheses import Hypothesis, vote_to_hypothesis
 from workspaces.pws_aligner.votes import AbstainReason, Vote
 
@@ -70,6 +73,45 @@ class JointEstimate:
     classes: tuple[str, ...]
     raw_counts: tuple[tuple[int, ...], ...]
     calibrated_joint: tuple[tuple[float, ...], ...]
+
+
+# ---------------------------------------------------------------------------
+# ProbeCalibration
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ProbeCalibration:
+    """Per-probe continuous calibration snapshot.
+
+    Attributes
+    ----------
+    probe:
+        Probe name.
+    learned_sigma_s:
+        Learned offset std-dev from continuous label model.
+    measured_mad_s:
+        Median absolute deviation of offset residuals vs GT on identity-correct votes.
+        None if no identity-correct votes were scored.
+    learned_accuracy:
+        Learned identity accuracy from continuous label model.
+    measured_accuracy:
+        Identity hit-rate over **all non-abstaining** votes for this probe
+        (denominator = every vote that did not abstain, regardless of whether
+        a residual could be measured).  Distinct from ``n_scored``, which
+        counts only the identity-correct subset.  None if no votes were cast.
+    n_scored:
+        Number of identity-correct votes with measurable residuals (the
+        denominator for ``measured_mad_s``).  Always ≤ the non-abstaining
+        vote count used by ``measured_accuracy``.
+    """
+
+    probe: str
+    learned_sigma_s: float
+    measured_mad_s: float | None
+    learned_accuracy: float
+    measured_accuracy: float | None
+    n_scored: int
 
 
 # ---------------------------------------------------------------------------
@@ -398,6 +440,99 @@ def calibration_report(
             "diverges": abs(learned - gt_measured) > _DIVERGE_THRESH,
         }
     return report
+
+
+# ---------------------------------------------------------------------------
+# continuous_calibration_report
+# ---------------------------------------------------------------------------
+
+
+def continuous_calibration_report(
+    noise: dict[str, ProbeNoise],
+    spans: Sequence[Sequence[Vote]],
+    gt: dict[str, tuple[str, float]],
+) -> list[ProbeCalibration]:
+    """Continuous calibration: learned σ vs GT-measured offset residuals.
+
+    For each probe, measures:
+    - learned_sigma_s: from the continuous label model
+    - measured_mad_s: median absolute deviation of |vote offset - GT offset|
+      over identity-correct votes only
+    - learned_accuracy: from the continuous label model
+    - measured_accuracy: fraction of non-abstaining votes matching GT recording_id
+    - n_scored: number of identity-correct votes with residuals
+
+    Parameters
+    ----------
+    noise:
+        {probe_name: ProbeNoise} from the continuous label model.
+    spans:
+        Sequence of spans, each a sequence of votes per probe.
+    gt:
+        {span_id: (recording_id, offset_s)} ground truth placements.
+
+    Returns
+    -------
+    List of ProbeCalibration records, one per probe (in sorted order).
+    """
+    residuals: dict[str, list[float]] = defaultdict(list)
+    id_hits: dict[str, list[bool]] = defaultdict(list)
+    for span in spans:
+        for v in span:
+            if v.abstained or v.recording_id is None or v.span_id not in gt:
+                continue
+            gt_rec, gt_off = gt[v.span_id]
+            hit = v.recording_id == gt_rec
+            id_hits[v.probe].append(hit)
+            if hit:
+                residuals[v.probe].append(abs(v.offset_s - gt_off))
+    out = []
+    for probe, n in sorted(noise.items()):
+        res = sorted(residuals.get(probe, []))
+        hits = id_hits.get(probe, [])
+        out.append(
+            ProbeCalibration(
+                probe=probe,
+                learned_sigma_s=n.sigma_s,
+                measured_mad_s=statistics.median(res) if res else None,
+                learned_accuracy=n.accuracy,
+                measured_accuracy=(sum(hits) / len(hits)) if hits else None,
+                n_scored=len(res),
+            )
+        )
+    return out
+
+
+def sigma_rank_inversions(
+    report: list[ProbeCalibration], min_n: int = 10
+) -> list[tuple[str, str]]:
+    """Flag rank inversions: learned σ order contradicts measured MAD order.
+
+    When the model trusts the wrong probes (as in the DS gate failure),
+    learned σ ordering will invert relative to measured noise. This function
+    flags pairs where the ranking contradicts.
+
+    Parameters
+    ----------
+    report:
+        List of ProbeCalibration records from continuous_calibration_report.
+    min_n:
+        Minimum n_scored required to include a probe in the check.
+
+    Returns
+    -------
+    List of (probe_a, probe_b) tuples where learned_sigma_s rank contradicts
+    measured_mad_s rank. Empty list = model is well-calibrated.
+    """
+    scored = [r for r in report if r.measured_mad_s is not None and r.n_scored >= min_n]
+    bad = []
+    for i, a in enumerate(scored):
+        for b in scored[i + 1 :]:
+            learned = a.learned_sigma_s - b.learned_sigma_s
+            measured = a.measured_mad_s - b.measured_mad_s  # type: ignore[operator]
+            if learned * measured < 0:
+                bad.append((a.probe, b.probe))
+    return bad
 
 
 # ---------------------------------------------------------------------------
