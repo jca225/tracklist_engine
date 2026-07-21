@@ -43,16 +43,27 @@ def mdat_sha256(path: str | Path) -> str | None:
                 hdrlen = 16
             else:
                 hdrlen = 8
-            payload = size - hdrlen
             if typ == b"mdat":
-                remaining = payload
-                while remaining > 0:
-                    chunk = f.read(min(_CHUNK, remaining))
-                    if not chunk:
-                        break
-                    h.update(chunk)
-                    remaining -= len(chunk)
+                # Found mdat: hash its payload
+                if size == 0:
+                    # ISO-BMFF size==0 means "box extends to end of file"
+                    while True:
+                        chunk = f.read(_CHUNK)
+                        if not chunk:
+                            break
+                        h.update(chunk)
+                else:
+                    # Normal bounded box
+                    payload = size - hdrlen
+                    remaining = payload
+                    while remaining > 0:
+                        chunk = f.read(min(_CHUNK, remaining))
+                        if not chunk:
+                            break
+                        h.update(chunk)
+                        remaining -= len(chunk)
                 return h.hexdigest()
             if size == 0:
                 return None
+            payload = size - hdrlen
             f.seek(payload, 1)

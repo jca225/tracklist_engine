@@ -44,3 +44,16 @@ def test_mdat_hash_none_for_non_mp4(tmp_path: Path) -> None:
     p = tmp_path / "not.mp4"
     p.write_bytes(b"fLaC" + b"\x00" * 100)
     assert mdat_sha256(p) is None
+
+
+def test_mdat_size_zero_extends_to_eof(tmp_path: Path) -> None:
+    """ISO-BMFF size==0 means 'box extends to end of file'."""
+    p = tmp_path / "size_zero.m4a"
+    # ftyp box, then mdat with size=0 (extends to EOF)
+    payload = b"END-OF-FILE-AUDIO-PAYLOAD" * 100
+    # ftyp box: size=24 (8-byte header + 16-byte body)
+    ftyp = struct.pack(">I", 24) + b"ftyp" + b"isom" + b"\x00\x00\x02\x00" + b"isomiso2"
+    mdat_header = struct.pack(">I", 0) + b"mdat"  # size=0 means extends to EOF
+    p.write_bytes(ftyp + mdat_header + payload)
+    # mdat_sha256 should hash the payload, not return empty-string hash
+    assert mdat_sha256(p) == hashlib.sha256(payload).hexdigest()
