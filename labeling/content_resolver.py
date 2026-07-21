@@ -4,8 +4,8 @@ The one resolver, with **no fallback ladder**: a clip binds to identity by
 content — Ableton's own `OriginalFileSize`+`OriginalCrc`, then a head hash of the
 resolved bytes — and on a miss it **abstains loudly** with a diagnostic. It never
 guesses identity from a filename or slot number. Deleting the old guess-ladder
-(`slot_id_map`, the weak tiers of `match_manifest_for_path`) in favour of this is
-what kills the GT-poisoning class by construction.
+(the slot-label id bridge, the weak tiers of `match_manifest_for_path`) in favour
+of this is what kills the GT-poisoning class by construction.
 
 Paths are locators, never identity: the only role `clip.path` plays here is as
 the argument handed to an injected `head_hash_of` when content bytes must be read.
