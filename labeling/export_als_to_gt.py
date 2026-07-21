@@ -47,6 +47,12 @@ from labeling.als import (
     track_display_name,
 )
 from labeling.als.validate import has_errors, validate_session
+from labeling.content_hash import file_sha256, mdat_sha256
+from labeling.content_resolver import (
+    CatalogEntry,
+    ContentCatalog,
+    resolve_clip_identity,
+)
 from labeling.ground_truth.schema import (
     GroundTruthSet,
     GroundTruthTrack,
@@ -159,6 +165,67 @@ def _mix_track(root) -> object | None:
         if track_display_name(track_el) == "1-mix":
             return track_el
     return None
+
+
+def _load_content_catalog(set_dir: Path) -> ContentCatalog | None:
+    """Read `set_dir/content_catalog.json` into a `ContentCatalog`, or None if absent.
+
+    Registers TWO `CatalogEntry` rows per catalog entry (one keyed on
+    `content_sha256`, one on `payload_sha256` when present) so a clip can bind
+    either by full-file bytes or by the tag-invariant mdat payload — both
+    pointing at the same identity.
+    """
+    p = set_dir / "content_catalog.json"
+    if not p.is_file():
+        return None
+    payload = json.loads(p.read_text())
+    entries: list[CatalogEntry] = []
+    for e in payload.get("entries") or []:
+        rid = e.get("recording_id")
+        taid = str(e.get("track_audio_id") or "")
+        stem = str(e.get("stem") or "regular")
+        for key in (e.get("content_sha256"), e.get("payload_sha256")):
+            if key:
+                entries.append(
+                    CatalogEntry(
+                        track_audio_id=taid,
+                        recording_id=rid,
+                        stem=stem,
+                        head_hash=str(key),
+                    )
+                )
+    return ContentCatalog.from_entries(entries)
+
+
+def _content_bind(
+    clip: ParsedClip, catalog: ContentCatalog | None
+) -> tuple[str | None, str]:
+    """(recording_id, id_source): bind a clip by content, or abstain.
+
+    Two passes: `head_hash_of=file_sha256` (the full-file hash — matches a
+    pristine downloaded master); on a miss, for an mp4-family path
+    (`.m4a`/`.mp4`/`.m4b`), a second pass with `head_hash_of=mdat_sha256` (the
+    tag-invariant mdat payload — matches a locally iTunes-tagged copy of the
+    same master). A missing file or any OSError abstains; this never raises.
+    """
+    if catalog is None:
+        return None, "abstain"
+
+    def _safe(hasher):
+        def _inner(path: str) -> str | None:
+            try:
+                return hasher(path)
+            except OSError:
+                return None
+
+        return _inner
+
+    r = resolve_clip_identity(clip, catalog, head_hash_of=_safe(file_sha256))
+    if not r.is_ok() and clip.path.lower().endswith((".m4a", ".mp4", ".m4b")):
+        r = resolve_clip_identity(clip, catalog, head_hash_of=_safe(mdat_sha256))
+    if r.is_ok():
+        return r.value.recording_id, "content"
+    return None, "abstain"
 
 
 def _clip_row(
