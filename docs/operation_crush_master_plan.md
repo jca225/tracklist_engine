@@ -42,12 +42,16 @@ Haiku for routine second opinions. **Never trust an `.als` ref count without
 that reached docs before Fable caught it).
 
 **STOP for explicit human go (never auto-run):** the `trm-ablation-framework`
-34↑/28↓ branch reconcile; any GT mutation / pi `set_ground_truth` write-back;
-merges to `main`; corpus-wide actions.
+branch reconcile (**61↑/105↓ vs `origin/main`** — 52 genuinely-unique commits +
+9 already-landed, measured 2026-07-21; a real divergence, not a fast-forward);
+any GT mutation / pi `set_ground_truth` write-back; merges to `main`; corpus-wide
+actions.
 
 **Immediate next actions, in order:**
-1. **Phase 0** — worktree census + **rescue the detached-HEAD** `fail-closed-audio-resolvers`
-   (#49); **freeze** the tuning branches; then the branch reconcile *(human-gated)*.
+1. **Phase 0** — worktree census + **prune the (clean) detached-HEAD worktree**
+   `fail-closed-audio-resolvers` (#49 — `fa3d4cc` is already on `origin/main`,
+   working tree clean, so this is *not* a data-loss rescue, just a prune);
+   **freeze** the tuning branches; then the branch reconcile *(human-gated)*.
 2. Scaffold the contract: `contract/registry.py` + `SYSTEM_CONTRACT.md` + static
    checks **C1–C3** (green day one); wire **C0** (`.als` ref content-binding).
 3. **Phase 1** — BB12 durable clean state = **Collect All & Save in Live** (operator);
@@ -56,6 +60,31 @@ merges to `main`; corpus-wide actions.
 **Standing hazards:** `--prune` is **FORBIDDEN** on `1fsnxchk` until Collect-All
 (re-orphans the 4 restored `tracks/` files); PRs need `gh auth switch --user jca225`
 (the READ account silently drops `--milestone`/`--label`).
+
+**Correction log (2026-07-21, post-Fable adversarial review — read before Phase 1):**
+- **GT poison is 3 confirmed cross-song ids, not "14".** The "14" was an artifact
+  of `audit_gt_recording_ids.py`'s over-eager matcher (≥2 shared ≥4-char tokens)
+  *plus* a header-drop parsing bug. Fixed here: the referee now buckets **poison
+  (3: slots 028 Beatles→Garrix, 031 CCR→Killers, 144 Snakehips→Pacific Coast
+  Highway) / not-in-DB (3 `tlp*` placeholders) / unverifiable-blank-name (3)**.
+  It is a **recall-biased screen, not a certifier** — the authoritative de-poison
+  is the `track_audio_id` binding in Phase-1 step 3b, never name overlap.
+- **Reject the hand-patch shortcut.** Patching the 3 fixture ids alone cannot even
+  go green and leaves the poison *carrier* armed. The poison lives in **three
+  derived artifacts that must be regenerated together**: `bb12_ground_truth.yaml`,
+  `labeling/fixtures/id_maps/1fsnxchk_slots.json` (the `slot_id_map` bridge —
+  `export_als_to_gt.py:170-176`, whose "slot_label is deterministic … exact, not
+  a guess" claim is **false** under the 2026-07-15 renumber), and
+  `bb12_ground_truth.inventory.json`. De-poison only via step 3b.
+- **The capture-fidelity "CI fence" is not yet real.** `test_export_capture_fidelity.py`
+  lives only on the unpushed branch (absent on `main`/CI) and self-skips because
+  `DEFAULT_ALS` pointed at a now-deleted Desktop path (repointed here to the
+  canonical `_labeling/1fsnxchk/BB12 align Project/bb12_align.als`). Even when it
+  runs, it re-exports through the same `slot_id_map` and so cannot catch id poison
+  — it fences the loop-merge class, not D1. Phase-1 step 6 "class killed by machine"
+  is the *target*, not yet true.
+- **`make gt-gate` does not exist yet** — PR #34 adds it; nothing may invoke it
+  before #34 merges (Phase-0 step 4 lands it first — ordering is consistent).
 
 ---
 
@@ -118,10 +147,15 @@ verify before re-doing work:
 And one way that *increases* scope — the new headline discrepancy:
 
 - **D16 — the consolidation is ~7× bigger than stated.** Not "three branches + one
-  worktree." Live state: **~30 local branches**, **26 active worktrees** with unmerged
+  worktree." Live state: **~30 local branches**, **~27 active worktrees** with unmerged
   commits, one **detached-HEAD** worktree (`fail-closed-audio-resolvers` `fa3d4cc`
-  — data-loss risk), and `trm-ablation-framework` **34 ahead / 28 behind** origin
-  (diverged, not a fast-forward) atop 89 dirty files. Tracked in **#49**.
+  — **not a data-loss risk after all: `fa3d4cc` is already on `origin/main`, working
+  tree clean; prune it, don't "rescue" it**), and `trm-ablation-framework`
+  **61 ahead / 105 behind `origin/main`** (52 genuinely-unique commits; diverged,
+  not a fast-forward). The 89 dirty files were the sharp edge (~2,500 lines of
+  never-committed contrast/invariance/flywheel work) — **saved 2026-07-21 in local
+  checkpoints**; only the WIP poisoned `bb12_ground_truth.yaml` remains uncommitted.
+  Tracked in **#49**.
 
 ---
 
@@ -177,10 +211,12 @@ data a prior phase has not certified.
 
 ### Phase 0 — Consolidate: land the truth where it is read
 
-1. **[NEW] Worktree/branch census first** (#49). Enumerate all 25 worktrees;
-   classify each **land / discard / park-with-note**; **rescue the detached HEAD
-   onto a named branch before anything else**; then reconcile the 34↑/28↓
-   divergence on `trm-ablation-framework` (supervised, not blind).
+1. **[NEW] Worktree/branch census first** (#49). Enumerate all ~27 worktrees;
+   classify each **land / discard / park-with-note**; **prune the clean
+   detached-HEAD worktree** (`fa3d4cc` is on `origin/main` — no rescue needed);
+   then reconcile the **61↑/105↓ vs `origin/main`** divergence on
+   `trm-ablation-framework` (supervised, not blind — 52 unique commits + 9
+   already-landed; drop the 9 on rebase).
 2. **[NEW] Freeze order** (#49). Pause every tuning/training branch (`e1-*`,
    `cotrain-*`, `acap-oracle-ladder`, `instance-separability`,
    `earliest-instance-tiebreak`) until Phase 3. They may develop *methods*; they
@@ -286,9 +322,11 @@ One regeneration event, one SSOT. Only after Phases 1–2.
 4. Re-run UnmixDB unchanged (synthetic, unaffected) to keep the synthetic-vs-real
    contrast valid.
 5. **[NEW] Counterfactual line:** record not just *that* numbers moved but *how
-   much* poison moved them — a pre-registered expectation ("14 wrong ids should
-   drop identity residual by ~X"). If clean GT barely moves the numbers, that is
-   itself a finding.
+   much* poison moved them — a pre-registered expectation calibrated to the
+   **3 confirmed cross-song ids** (not the retracted "14"; see the Correction
+   log), e.g. "3 wrong ids on a 172-track set should drop identity residual by
+   ~X." If clean GT barely moves the numbers, that is itself a finding — and one
+   the small true count makes *likely*, so register the expectation honestly.
 
 **Exit:** one dated+SHA `alignment_status.md` on main that every doc cites.
 
