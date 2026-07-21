@@ -739,9 +739,9 @@ ID_COVERAGE_MIN = 0.5
 
 
 def id_coverage(tracks) -> tuple[int, int, float]:
-    """(resolved, total, fraction) of GT tracks carrying a recording_id."""
+    """(content-bound, total, fraction) of GT tracks whose id came from content."""
     total = len(tracks)
-    resolved = sum(1 for t in tracks if getattr(t, "track_id", None))
+    resolved = sum(1 for t in tracks if getattr(t, "id_source", "") == "content")
     return resolved, total, (resolved / total if total else 1.0)
 
 
@@ -826,11 +826,16 @@ def main(argv: list[str] | None = None) -> int:
     # would silently corrupt canonical set_ground_truth on write-back. Refuse.
     resolved, total, coverage = id_coverage(gt.tracks)
     if total and coverage < ID_COVERAGE_MIN and not args.allow_invalid:
+        abstained = [
+            t.slot_label or t.label
+            for t in gt.tracks
+            if getattr(t, "id_source", "") != "content"
+        ]
         print(
             f"REFUSING to export: only {resolved}/{total} tracks ({coverage:.0%}) "
-            f"resolved a recording_id (min {ID_COVERAGE_MIN:.0%}). The .als clip "
-            "file-refs likely don't match the manifest — stale after a rename; run "
-            "labeling/relink_als_after_tag.py, or pass --allow-invalid to override.",
+            f"content-bound (min {ID_COVERAGE_MIN:.0%}). Abstained: "
+            f"{', '.join(abstained[:30])}. Rebuild content_catalog.json (re-pull), "
+            "or pass --allow-invalid to override.",
             file=sys.stderr,
         )
         return 1

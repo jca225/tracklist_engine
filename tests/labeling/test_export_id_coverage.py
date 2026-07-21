@@ -1,11 +1,13 @@
-"""GT export must refuse to write a fixture that resolved almost no recording_ids.
+"""GT export must refuse to write a fixture that content-bound almost no ids.
 
-``resolve_identity`` fills ``track_id`` ONLY on an exact manifest match. A stale
-``.als`` whose clip file-refs no longer match the manifest (e.g. not relinked
-after a slot/tag rename) resolves ~0 ids; the exporter would otherwise write a
-fixture that joins to nothing downstream and would corrupt canonical
-``set_ground_truth`` on write-back. Regression for the BB12 re-export
-(2026-07-12) which resolved 1/163 track_ids and was written silently.
+``_content_bind`` fills ``recording_id`` (and sets ``id_source="content"``) ONLY
+on a content-catalog hash match (sha256 of the file, or the tag-invariant mdat
+hash). A stale ``.als``/missing ``content_catalog.json`` resolves ~0 ids; the
+exporter would otherwise write a fixture that joins to nothing downstream and
+would corrupt canonical ``set_ground_truth`` on write-back. Regression for the
+BB12 re-export (2026-07-12) which resolved 1/163 track_ids and was written
+silently; re-based on content binding (not raw ``track_id``) so a stale/poisoned
+id can no longer count as resolved.
 """
 
 from __future__ import annotations
@@ -20,11 +22,17 @@ from tests.labeling.synth_session import LayerSpec, session_als_file
 @dataclass
 class _Track:
     track_id: str | None
+    id_source: str = ""
 
 
 def test_id_coverage_counts_resolved():
     resolved, total, frac = id_coverage(
-        [_Track("a"), _Track(None), _Track("b"), _Track(None)]
+        [
+            _Track("a", "content"),
+            _Track(None, "abstain"),
+            _Track("b", "content"),
+            _Track(None, "abstain"),
+        ]
     )
     assert (resolved, total, frac) == (2, 4, 0.5)
 
@@ -41,7 +49,7 @@ def _empty_manifest(tmp_path):
 
 
 def test_export_refuses_when_ids_unresolved(tmp_path, capsys):
-    # An audible clip against an empty manifest -> track_id never resolves ->
+    # An audible clip with no content_catalog.json -> never content-binds ->
     # coverage 0 < ID_COVERAGE_MIN -> refuse, and write nothing.
     als = session_als_file(tmp_path, layer_specs=(LayerSpec("layer-audible"),))
     _empty_manifest(tmp_path)
@@ -51,7 +59,9 @@ def test_export_refuses_when_ids_unresolved(tmp_path, capsys):
 
     assert rc == 1
     assert not out.exists()
-    assert "recording_id" in capsys.readouterr().err  # coverage-gate message
+    err = capsys.readouterr().err
+    assert "content-bound" in err  # coverage-gate message
+    assert "Abstained:" in err  # lists the abstained slots
 
 
 def test_export_allow_invalid_overrides_coverage(tmp_path):
