@@ -365,6 +365,11 @@ def _detect_loops(rows: list[ClipRow]) -> list[ClipRow]:
                     ref_start_s=row.ref_start_s,
                     ref_end_s=row.ref_end_s,
                     mix_start_s=row.set_start_s,
+                    mix_end_s=row.set_end_s,
+                    tempo_ratio=tempo_ratio(
+                        row.set_end_s - row.set_start_s,
+                        row.ref_end_s - row.ref_start_s,
+                    ),
                 )
             )
         # LOOP = a bit-identical ref segment re-triggered BACK-TO-BACK more than
