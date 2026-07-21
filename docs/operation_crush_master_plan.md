@@ -91,7 +91,8 @@ The full D1–D15 register lives in the assault plan. New/changed:
   poison with poison and loses the diff.
 - **D18 — `.als` depth-fragility unguarded** (#50). `.als` files reference samples
   by *relative path at fixed depth*; any move to a new depth or any audio
-  rename orphans all references at once (BB12 = 574 refs at depth 3). Mitigated
+  rename orphans all references at once (BB12 now = 318 external depth-3 refs +
+  295 local `Samples/` after a partial Collect-All; was ~574 pre-collect). Mitigated
   now by backups; the durable fix (Collect All & Save) is pending the decision in §5.
 - **D19 — SSOT invariant unfenced** (#53). D11 was fixed by hand; nothing
   mechanically stops the next hand-typed metric outside `alignment_status.md`.
@@ -104,9 +105,12 @@ The full D1–D15 register lives in the assault plan. New/changed:
   Relinking to the renumbered 034 would silently poison a clip whose warp/offsets
   were tuned against the 34 MB original. (Also: `117 Mode (Remix)` → `033 Mode (Jay
   Hardway Remix)`; `127 …​.m4a` → `035w2 …​.flac` format change ⇒ likely a different
-  rip.) **Relink rule:** bind by content (hash/fingerprint) + `recording_id` and
-  exact-position original, **never by name/number similarity**. (Folds into Phase-1
-  relink and issue #50.)
+  rip.) **Relink rule (mechanical, no external data needed):** gate every relink on
+  the `.als`'s own recorded **`OriginalFileSize` + `OriginalCrc`** — it is embedded
+  ground truth about the exact bytes labeled against, retiring the "same basename =
+  same file" assumption entirely; then confirm `recording_id`. **Never** relink by
+  name/number similarity. (Folds into Phase-1 relink and issue #50; this is also the
+  basis for the contract's C0.)
 - **D21 — BB12 `.als` is mixed-provenance** after the partial Collect-All: some
   clips point at `tracks/` (new slot numbering), some at frozen `Samples/Imported/`
   copies carrying *old* numbering + `-1` dedup suffixes — a live D1/D2 (path-stem
@@ -267,7 +271,8 @@ Three curves, never one scalar (identity ~solved; walls are placement + structur
 Live set." The cause is structural, so the protection must be structural.
 
 **Mechanism.** An `.als` stores *relative sample paths at a fixed folder depth*,
-not the audio itself. BB12's `.als` points three folders up (574 refs). Any of
+not the audio itself. BB12's `.als` points three folders up (318 external refs +
+295 now-local after a partial Collect-All). Any of
 these orphans every reference at once: moving the `.als` to a different depth,
 moving the audio it points to, or renaming that audio.
 
@@ -302,17 +307,23 @@ moving the audio it points to, or renaming that audio.
     `-1` dedup copies) — not "abandoned"; the `.als` is now **mixed-provenance** (some
     clips → `tracks/` new numbering, some → frozen `Samples/Imported` old numbering),
     a fresh D1/D2 drift surface (see D21). **Recovery: broken GT audio survives
-    locally — no re-pull needed.** Relink method used (2026-07-21): *restore the
-    identity-correct file to the path the `.als` expects* (no GT mutation, fully
-    reversible), sourcing from — in priority — (1) the project's own
-    `Samples/Imported/` collected copy (same basename = the labeled-against audio by
-    construction), (2) the exact-position original, incl. from `_orphan_slot_
-    collisions/` quarantine; **never** a renumbered same-name file without a
-    content/size check (see D20). **Status: 6 of 7 restored (609/613 refs resolve).
-    Pending: `stems/121__Manse - All Around/instrumental.flac`** — restore the 34 MB
-    position-121 original from `_orphan_slot_collisions/` (create the dest dir
-    first), NOT the 14 MB `034` renumber. Then this becomes a Phase-1 gated
-    provenance-normalization (D21) before GT re-export.
+    locally — no re-pull needed. Relink DONE 2026-07-21: 7/7 restored, 613/613 refs
+    resolve** (verified twice, incl. an independent Fable pass). Method: *restore the
+    identity-correct file to the path the `.als` expects* (no GT mutation, reversible),
+    each match **gated on the `.als`'s own recorded `OriginalFileSize`/`OriginalCrc`**
+    (the file identity *at labeling time* — the correct key, embedded in the `.als`;
+    698 of them). Manse `121` proved it: the labeled-against original is the 35,441,994-
+    byte quarantine file (crc 18999, May 7), **not** the same-named 14,833,697-byte
+    `034` renumber (Jul 15).
+    - **⚠ Standing hazard — `--prune` is FORBIDDEN on `1fsnxchk` until Collect-All.**
+      `prune_orphans` deletes untagged `tracks/` files absent from the manifest; the
+      4 restored `tracks/` files (117/127/140/140w1) qualify → a future `pull --prune`
+      would silently re-orphan the GT. (Confirmed in `pull_set_for_alignment.py`.)
+    - **Durable end-state (needs operator in Live):** file-restore is tactical; do
+      **Collect All & Save** to internalize all 613 refs into `Samples/`, making
+      prune/renumber permanently irrelevant, then normalize provenance (D21) and
+      re-export through the gates. Human gate (open in Live, confirm 613 resolve)
+      mandatory before any fixture overwrite / pi write-back.
 
 **Protocol going forward:**
 1. `scripts/backup_als.sh` (codifies the snapshot) runs green before any

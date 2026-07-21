@@ -137,10 +137,15 @@ joins; nothing bound the `.als`'s own reference layer. Corrections:
 
 - **C0 (NEW, data-plane, top priority) — `.als` reference integrity.** For every
   GT `.als`: every audio `RelativePath` (a) resolves on disk **after HTML-unescape**
-  — the review also caught that the un-unescaped parse mis-flags every `&`-containing
-  track — and (b) binds to a `track_audio_id`/`recording_id` **by content**
+  — the review caught that the un-unescaped parse mis-flags every `&`-containing
+  track; (b) the resolved file **matches the `.als`'s own recorded `OriginalFileSize`
+  + `OriginalCrc`** for that `FileRef` (embedded ground truth about the exact bytes
+  labeled against — mechanical, no external data, and the check that caught the Manse
+  34/14 MB near-miss); and (c) binds to a `track_audio_id`/`recording_id` **by content**
   (hash/fingerprint), failing on unresolved refs *or* refs whose content identity
-  differs from the slot's claim. This is the check that would have caught D1/D20.
+  differs from the slot's claim. (a)+(b) are cheap and belong in the relink gate
+  itself; (c) is the full identity bind. This is the check that would have caught
+  D1/D20.
 - **C7 scope corrected.** Span-count/duration deltas **cannot** catch an identity
   swap (same spans, wrong song) — so C7 is demoted to a *drop/shift* guard only;
   identity is C0's job. C7 also needs an explicit tolerance and must treat the
