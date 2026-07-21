@@ -902,11 +902,15 @@ def main() -> int:
                 timeout=1800,
                 check=True,
             ).stdout
+            data = json.loads(cat)
+            n = len(data.get("entries", []))
             (dest_root / "content_catalog.json").write_text(cat)
-            n = len(json.loads(cat).get("entries", []))
             print(f"wrote content_catalog.json ({n} entries)")
         except (subprocess.SubprocessError, OSError, ValueError) as e:
-            print(f"WARNING: content_catalog.json not written: {e}", file=sys.stderr)
+            detail = getattr(e, "stderr", "") or e
+            print(
+                f"WARNING: content_catalog.json not written: {detail}", file=sys.stderr
+            )
 
         from labeling.audio_index import build_audio_index, write_audio_index
 
