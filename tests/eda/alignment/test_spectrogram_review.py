@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+import pytest
+
+# EDA-viz tool tests: Pillow is not in requirements-ci.txt (minimal CI env), and the
+# spectrogram_review package imports PIL transitively (spectrogram.py). Skip cleanly
+# where the optional viz dep is absent rather than erroring at collection.
+pytest.importorskip("PIL")
+
 import numpy as np
 from PIL import Image
 
