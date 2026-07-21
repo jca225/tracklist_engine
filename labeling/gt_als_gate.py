@@ -12,8 +12,9 @@ compares them to the committed yaml. It is **manifest-free on purpose**: a full
 re-export (``export_als_to_gt.collect_kept_clip_rows``) hard-requires the set's
 pull-inventory manifest for ``mix_duration_s`` + ``set_id``, which is absent in
 CI (no ``~/aligning/``). But ``slot_from_path(clip.path)`` is deterministic from the
-``.als`` clip path alone, and the entire drift class is a ``slot_label`` value
-change — so a slot-label structural check needs no manifest.
+``.als`` clip path alone, and the drift that bit us (a ``slot_label`` *value*
+change) is exactly a slot-label vocabulary change — so a slot-label structural
+check needs no manifest.
 
 **Invariant.** The *set* of ``slot_label`` values in the yaml equals the *set* of
 ``slot_from_path`` values over the ``.als``'s non-silent, non-mix clips.
@@ -32,6 +33,29 @@ either way — which is exactly the ``013w3`` bug this catches.
 Empty / mix-placeholder clips (a dragged-in ``mix.m4a`` / ``instrumental-N.flac``
 whose path carries no ``NNN__`` slot token) yield no slot label on either side and
 are excluded from the comparison — they carry no slot identity to verify.
+
+**What this gate does NOT catch** (bounded blind spots of a *set* check — a drift
+is caught iff it changes the distinct-label *vocabulary*, which the 518065f-style
+"remap a label to a value not in the .als" edit does, so the class that bit us is
+covered; these do not):
+
+- **Label↔row association** — swapping ``slot_label`` between two yaml rows (right
+  vocabulary, wrong track/timing). Missed.
+- **Multiplicity** — duplicating a row, or deleting one of a slot's duplicate rows.
+  The yaml has 10 rows on duplicated labels (029×3, 029w2×3, 036×2, 037×2); edits
+  among those keep the set invariant. Missed.
+- **Relabel *within* the existing vocabulary** — retagging a duplicated-label row
+  to another label already present. Missed. (A relabel of a *uniquely*-labelled row
+  — 131 of 141 labels — IS caught, because it removes that label from the set.)
+- **Non-label fields** — ``set_start_s``/``set_end_s`` timing, ``ref_*``,
+  ``claimed_stem``, ``track_id``, ``track`` name. All invisible here (timings need
+  the manifest/warp mapper this gate omits). Missed.
+
+Also one **fail-safe false-positive** to expect first: ``collect_kept_clip_rows``
+additionally drops clips for *manifest-driven* reasons (outside mix-warp span,
+parking, non-positive span, micro-sliver) that this gate cannot see, so a future
+legitimate re-export where a slot survives *only* via such a clip would trip the
+gate on a correct yaml — forcing human reconciliation rather than passing silently.
 """
 
 from __future__ import annotations
