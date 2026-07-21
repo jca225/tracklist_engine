@@ -73,20 +73,19 @@ _REPO = Path(__file__).resolve().parent.parent
 # Registry of (set_id -> committed .als) for gated sets. The gate runs over every
 # entry here (guardrails + pre-commit). Only sets whose canonical `.als` is
 # checked into the repo belong here.
-#
-# TODO(1fsnxchk / BB12): add once BB12's canonical labeling `.als` is resolved.
-# The BB12 session path is unsettled (the project moved to
-# ~/aligning/_labeling/1fsnxchk/ while the set-dir stayed put — see
-# export_als_to_gt.DEFAULT_ALS and master-plan §4 / D22), so we do NOT commit a
-# BB12 `.als` or gate it yet. When it lands: copy the canonical .als to
-# labeling/fixtures/als/1fsnxchk.als and add "1fsnxchk": ... below.
+# BB12's canonical .als is `bb12_align.als` (== export_als_to_gt.DEFAULT_ALS),
+# identified empirically: its export matches the committed bb12 slot set exactly
+# (the project moved to ~/aligning/_labeling/1fsnxchk/ while the set-dir stayed
+# put — master-plan §4 / D22). Committed at labeling/fixtures/als/1fsnxchk.als.
 GATED_SETS: dict[str, Path] = {
     "2nvzlh2k": _REPO / "labeling" / "fixtures" / "als" / "2nvzlh2k.als",  # BB11
+    "1fsnxchk": _REPO / "labeling" / "fixtures" / "als" / "1fsnxchk.als",  # BB12
 }
 
 # Committed GT yaml fixture per gated set (companion to GATED_SETS). Same keys.
 GATED_GT_YAMLS: dict[str, Path] = {
     "2nvzlh2k": _REPO / "labeling" / "fixtures" / "bb11_ground_truth.yaml",  # BB11
+    "1fsnxchk": _REPO / "labeling" / "fixtures" / "bb12_ground_truth.yaml",  # BB12
 }
 
 

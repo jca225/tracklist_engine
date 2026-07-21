@@ -213,8 +213,11 @@ def _bb12_cases() -> list[AcquisitionCase]:
 
 def test_bb12_backfill_covers_every_row():
     cases = _bb12_cases()
-    # 166 GT rows collapse to 152 cases after slot_label remap + merges.
-    assert len(cases) == 152
+    # BB12 GT is now regenerated from the canonical .als (bb12_align.als) — the
+    # committed yaml == export, gated by labeling/gt_als_gate.py. 164 GT slot
+    # rows collapse to 155 cases after merges. (Was 152 on the pre-.als,
+    # hand-drifted old-scheme fixture.)
+    assert len(cases) == 155
     # Every case has a recording identity and a claim.
     assert all(c.claim.recording_id for c in cases)
     # Every case has at least one attempt reconstructed.
@@ -228,17 +231,16 @@ def test_bb12_status_partition():
         by_status[c.status] += 1
     assert by_status[CaseStatus.UNRESOLVABLE] == 2  # the two mix-extract hosts
     assert by_status[CaseStatus.HUMAN_REVIEW] == 41  # unresolved_manifest beds
-    assert by_status[CaseStatus.RESOLVED] == 109
+    assert by_status[CaseStatus.RESOLVED] == 112  # 109 -> 112 on the .als regen
 
 
 def test_bb12_preference_pairs_are_online_over_demucs():
     cases = _bb12_cases()
     pref = [c for c in cases if c.training.preference_pairs]
-    # Was 4 pre-2026-07-14. The GT re-export with the fixed interpreter dropped
-    # 3 deactivated-track spans (demucs ref_source 34->31), each of which had
-    # formed a preference pair — so 3 phantom pairs correctly disappear. The
-    # invariant below (online winner beats demucs loser) is what actually matters.
-    assert len(pref) == 2
+    # Data-dependent count (was 4 pre-2026-07-14, 2 on the old-scheme fixture,
+    # 1 after regenerating from the canonical .als). The count is not the point;
+    # the invariant below (online winner beats the demucs loser) is what must hold.
+    assert len(pref) == 1
     for c in pref:
         # winner is the online candidate; loser is the separated stem
         assert c.resolution is not None

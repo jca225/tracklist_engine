@@ -83,8 +83,8 @@ def test_registry_keys_are_consistent():
     # Every gated set must carry both a committed .als and a GT yaml.
     assert set(GATED_SETS) == set(GATED_GT_YAMLS)
     assert BB11 in GATED_SETS
-    # BB12 is deferred pending its canonical .als — must NOT be gated yet.
-    assert "1fsnxchk" not in GATED_SETS
+    # BB12's canonical .als (bb12_align.als) is now committed and gated.
+    assert "1fsnxchk" in GATED_SETS
 
 
 @pytest.mark.parametrize("set_id,yaml_path,als_path", iter_gated())
