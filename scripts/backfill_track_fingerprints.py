@@ -76,8 +76,10 @@ def _rows_sql(
     )
     # Default selection is is_reference=1 rows. That flag is sparse in the
     # canonical DB (438/19.6k rows, 2026-07-15) so --all-rows widens to the
-    # best row per (recording_id, stem) — same pick rule as
-    # ingest.identity_gate.lookup_reference_row.
+    # best row per (recording_id, stem): same ORDER BY as
+    # ingest.identity_gate.lookup_reference_row, but additionally partitioned
+    # per (recording_id, stem) — that per-stem partition is this script's own
+    # addition, not part of identity_gate's pick rule.
     if all_rows:
         selection = """
       ta.recording_id IS NOT NULL AND ta.recording_id != ''
@@ -90,7 +92,10 @@ def _rows_sql(
         selection = "ta.is_reference = 1"
     scope = ""
     if set_ids:
-        csv = ",".join(f"'{s}'" for s in set_ids)
+        # This string is inlined into a sqlite3 CLI command over SSH (ssh_sql),
+        # so bound params aren't available on that path — escape single quotes
+        # (SQL-literal doubling) so a quote in a set id can't break/inject.
+        csv = ",".join("'" + s.replace("'", "''") + "'" for s in set_ids)
         # slots key recordings on recording_id; legacy rows key on track_id —
         # match either (same join as the BB gap census).
         scope = f"""
