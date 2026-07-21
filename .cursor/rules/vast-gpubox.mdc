@@ -1,0 +1,19 @@
+---
+description: Always use gpubox for Vast.ai lifecycle (rent/attach/destroy)
+globs:
+  - docs/vast_coordination.md
+  - scripts/gpubox*.py
+  - scripts/vast*.py
+  - scripts/vast*.sh
+  - .claude/skills/vast-box/**
+  - .cursor/skills/vast-jobs/**
+---
+
+# Vast → gpubox only
+
+- **Always use gpubox** (`~/workspace/gpubox`) for Vast rent, race, attach, logs,
+  pull, and destroy: `Box.launch` / `Box.attach` / `Box.destroy`.
+- **Never** raw `curl` to `console.vast.ai` or ad-hoc rent for normal jobs.
+- Destroy only registry-owned runs you claimed; never touch untracked /
+  other-agent boxes (`docs/vast_coordination.md`).
+- Alignment example: `scripts/gpubox_agentic_both.py`.
