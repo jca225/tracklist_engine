@@ -258,15 +258,18 @@ moving the audio it points to, or renaming that audio.
 - **Collect All & Save status (verified by ref audit):**
   - **BB11 — done + canonical:** `~/aligning/2nvzlh2k__…/BB11 align Project/bb11_align.als`,
     564/567 refs local (3 stray = factory devices). Done.
-  - **BB12 — renamed but NOT relocated/collected:** now `bb12_align.als`, but still
-    295 local / **321 refs depth-3 outside** (half-collected) **and still inside the
-    misnamed `_backups/20260616_150150/big bootie 12 labeling Project/`** — which is
-    not a backup at all but the *live* project (7.7 G Samples, newest edits) wearing
-    a confusing folder name (the root of the "why does Recent open a backup" issue).
-    **Fix (operator, in Live):** Save As → `~/aligning/1fsnxchk__…/BB12 align
-    Project/bb12_align.als` → Collect All & Save (gets it out of `_backups/`,
-    collects the 321, lands canonical). Do NOT `mv` while half-collected (orphans the
-    321). Keep the old copy until the new collect verifies.
+  - **BB12 — relocated to canonical (2026-07-21):** now
+    `~/aligning/_labeling/1fsnxchk/BB12 align Project/bb12_align.als` (depth-3,
+    out of the misnamed `_backups/`). Collect-All was abandoned — it kept leaking
+    copies into Ableton `BaseFiles/` and physically **cannot** gather 68 external
+    samples that are already missing from disk. Instead a **depth-preserving `mv`**
+    (verified lossless: same 545→511 refs resolve before/after; the Samples/ folder
+    moved intact) put it canonical. **102 refs are broken and pre-existing** (68
+    external candidate/track files gone + 34 local Samples entries never collected)
+    — **not** move damage; a **Phase-1 relink task** (assess which, if any, are
+    GT-bearing vs auxiliary candidate stems). Operator gate: open from the new path
+    in Live to confirm (expect ~102 offline clips; open from the path, not Recent —
+    Recent still points at the old `_backups/` location).
 
 **Protocol going forward:**
 1. `scripts/backup_als.sh` (codifies the snapshot) runs green before any
