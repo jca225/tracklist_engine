@@ -12,5 +12,9 @@ if [[ ! -x "$PYTHON" ]]; then
 fi
 
 "$PYTHON" scripts/guardrails.py
+# GT-yaml must still derive from its committed .als (manifest-free slot-label
+# gate). Redundant with guardrails but surfaces a drift's slot diff directly;
+# self-guards to a no-op for any gated set whose committed .als is absent.
+"$PYTHON" -m labeling.gt_als_gate
 bash scripts/typecheck.sh
 "$PYTHON" -m pytest tests/ -q
