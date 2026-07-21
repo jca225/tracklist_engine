@@ -223,3 +223,79 @@ Concrete recommendation:
   predictive model (per the plan's own hedge that "MERT is probably wrong and
   chroma is the cheapest, not the ceiling") — but only after the verb-log model
   is shown insufficient. Chroma is closed as a headline lever.
+
+---
+
+# P1: HuBERT-token Information Dynamics + subjective BB prior
+
+*Run date: 2026-07-11. Script: `lab/information_dynamics/bb_mashup_pir_v1.py`,
+math in `markov_infodyn.py`. Metrics: `aux.db :: analysis_results /
+bb_mashup_pir_v1`. Backfilled from branch `eda/mashup-pir-infodyn` on 2026-07-21;
+relocated `eda/information_dynamics/` → `lab/information_dynamics/`.*
+
+**Motivation.** P0 came back NULL and named its own bottleneck — *chroma is too
+coarse.* John's steer: the null is chroma-specific, not a refutation of
+content-based compatibility; whether a **richer song-object** predicts it is
+open. Second steer: measure surprise against a **subjective, BB-native** prior
+(the paper's whole thesis — surprise is defined relative to the observer's
+stylistic expectations), not a blank slate.
+
+**Method (faithful port of Abdallah & Plumbley 2009).** Swap chroma-KL for the
+paper's closed-form Markov info-dynamics over HuBERT tokens:
+
+- **BB-native observer** — HuBERT-L9 frames of the **held-out BB10** full mix
+  (leakage-free vs the BB11/BB12 test sets) → K=24 k-means codebook + a
+  first-order transition matrix = a BB listener's vocabulary + expectations.
+- **Per candidate** (real vocal+bed = pos; same vocal over a key/BPM-compatible
+  NON-co-occurring bed = neg; pairs reused verbatim from P0 v2) — render the
+  combined audio on the set tempo grid, sum, tokenize with the BB codebook,
+  truncate to a **fixed 18 s token window** (so length can't leak — v2 makes
+  negatives shorter than positives), and compute: entropy rate, **PIR =
+  Ḣ(a²)−Ḣ(a)** (the paper's inverted-U quantity), redundancy, and
+  **surprise under the BB prior**.
+- **Interaction control** — the same measures for the BED ALONE and VOCAL ALONE.
+  The *pairing* hypothesis survives only if combined beats the marginals.
+
+n = 113 pos / 334 neg usable (238 of 685 pairs dropped: shorter than the 18 s
+window after tempo-stretch — expected, but a 35 % dropout worth noting).
+LOSO BB11↔BB12, key baseline 0.493, 95 % CI half-width ≈ ±0.046.
+
+## AUC table
+
+| Measure | LOSO AUC | note |
+|---|---|---|
+| `surp_mean_bed` | 0.589 | **control** (bed alone) |
+| `surp_lift_vs_bed` (combined − bed) | 0.586 | best *combined* feature |
+| `pir_bed` | 0.538 | control |
+| **`pir_comb`** (the flagship) | **0.534** | ~baseline |
+| `pir_vocal` | 0.507 | control |
+| `er_comb`, `redun_comb`, `surp_mean/max/var_comb` | 0.466–0.484 | ≤ baseline |
+| multi-LR (8 combined feats) | 0.601 | likely mild overfit; singles ≤0.586 |
+
+## Verdict: **PIR / inverted-U is NULL here; cross-model surprise is WEAK.**
+
+1. **The flagship measure failed cleanly.** Combined-audio PIR does not separate
+   real mashups from clashing ones (AUC 0.534), and the inverted-U did **not**
+   appear: mean PIR is *identical* across classes (pos 0.5275 vs neg 0.5313) and
+   so is entropy rate (2.170 vs 2.174). Real mashups do **not** sit at a PIR
+   sweet spot.
+2. **The interaction control is the decisive evidence** — margin = pir_comb −
+   pir_bed = **−0.004**. The combined signal ≈ the bed-alone signal; the
+   *pairing* adds nothing. This is a clean negative, not a tuning miss.
+3. **One faint, honest thread survives** — surprise-relative-to-the-BB-prior
+   (~0.586–0.589) is consistently the top family, ~1.9σ above chance and
+   directionally consistent with P0's `mean_kl` (good pairings a little *more*
+   surprising). But it is below the 0.60 GO bar, at the CI edge, and largely
+   **bed-dominated** (`surp_mean_bed` alone is the single best feature).
+
+**What this does and does not rule out.** It rules out *HuBERT-token, first-order
+Markov* information dynamics — intrinsic PIR *and* subjective-prior surprise — as
+a mashup-compatibility ranker on BB. It does **not** rule out a richer *model
+class*: a K=24 hard-token first-order Markov chain discards most of HuBERT's
+richness (24 states, 1-step memory). The genuinely-open version the paper points
+to (its "richness" axis) is a **learned autoregressive predictor over the
+continuous embeddings** — that door stays open, but it is no longer cheap, and
+the interaction control here is a caution that combined-audio IDyn may be
+bed-dominated regardless of model class. Consistent with P0's closing note:
+revisit info-dynamics only via a *learned* space, and prefer the verb-log
+preference model (needs usage data) for the arrangement-quality lane.

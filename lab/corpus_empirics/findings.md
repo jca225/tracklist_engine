@@ -639,3 +639,157 @@ Reproduction: measurement (heavy, reads `~/aligning` + mix audio, Mac-only)
 → per-clip CSV `workspaces/alignment_prototype/out/pitch_detune_clips.csv`; analysis
 [lab/corpus_empirics/bb_pitch_detune.py](bb_pitch_detune.py). Results in `aux.analysis_results` under
 `analysis_name='bb_pitch_detune_v1'`.
+
+## Mashup generator's grammar: empirical rules from BB11+BB12 hand-labeled GT
+
+*Run date: 2026-07-11 (backfilled from branch `synthetic-warp-wiring` on 2026-07-21;
+relocated `eda/corpus_empirics/` → `lab/corpus_empirics/`).*
+
+The naive compiler (whole vocal of A from bar 16, flat gain, over instrumental of B) fails
+because it ignores how Two Friends actually structure their mixes. Six structural metrics were
+computed from the BB11+BB12 hand-labeled ground truth (315 training-eligible spans across two
+~1-hour mixes), sourced directly from `labeling/fixtures/bb{11,12}_ground_truth.yaml` via the
+GT loader. Durations for 79 of 192 acappella spans were available locally; bed-phrase alignment
+used the BB11 beat grid (1922 measure boundaries, bar-level) for BB11 spans and a 2.0 s/bar
+fallback for BB12 (no local beat grid).
+
+### 1. Span length — the three stems live on completely different timescales
+
+| stem | n | p25 | median | p75 | p90 |
+|---|---|---|---|---|---|
+| **acappella** | 192 | 16.4 s | **29.2 s** | 39.8 s | 57.3 s |
+| instrumental | 50 | 56.7 s | **77.3 s** | 96.9 s | 109.9 s |
+| regular | 73 | 45.2 s | **57.2 s** | 80.6 s | 101.4 s |
+| all | 315 | 22.5 s | **39.1 s** | 67.2 s | 94.5 s |
+
+The all-spans median (39.1 s) matches the expected BB average from earlier work. But the
+per-stem split reveals the real structure: **acappella spans are dramatically shorter** than
+beds — median 29 s vs 77 s (instrumental) and 57 s (regular). This isn't a sampling artifact;
+it reflects the stacking pattern: beds run for nearly a minute while three or four acappella
+snippets rotate over them.
+
+### 2. Vocal source position — DJs pull from the first third of the song, using ~13% of it
+
+| metric | p25 | median | p75 |
+|---|---|---|---|
+| normalized start (ref_start / track_duration) | 0.01 | **0.11** | 0.20 |
+| normalized coverage (used fraction of track) | 0.08 | **0.13** | 0.23 |
+| absolute ref_start_s | 2.4 s | **27.0 s** | 44.4 s |
+
+n=79 acappella spans with known track duration (113 spans missing local duration data — these
+are tracks not yet in the local dev DB; pi-storage has 197 of 285 unique GT tracks with
+duration but only 18 have a non-null value there, so the 79 comes from the local copy).
+
+The median normalized start of **0.11** means DJs drop in about 11% into the source song —
+roughly at the first chorus, not at the very start. The **p75 of 0.20** means three-quarters
+of vocal entries come from within the first fifth of the source track. Median coverage is
+**13%** — DJs use a small window, not the whole song.
+
+### 3. Loop / multiseg fraction — nearly half of all spans are non-trivial edits
+
+| stem | n | multiseg % | loop % | jump % |
+|---|---|---|---|---|
+| acappella | 192 | **36%** | 19% | 17% |
+| **instrumental** | 50 | **64%** | 32% | 32% |
+| regular | 73 | **58%** | 8% | 49% |
+| all | 315 | **45%** | 18% | 27% |
+
+"Loop" = ref_segments that step backwards (repeated phrase); "jump" = multiple segments
+without a step-back (cuts to different song sections). Instrumentals and regular tracks are
+more heavily edited than acappellas — 64% and 58% multiseg vs 36% for acappellas. The high
+jump rate on regular tracks (49%) reflects DJs cutting between sections of the bed song; the
+loop rate on instrumentals (32%) reflects repeated-chorus structures.
+
+### 4. Entry alignment — vocal entries are NOT phrase-locked to the bed
+
+Beat grid alignment (BB11 only, n=92): median distance from vocal set_start to nearest
+bar downbeat = **0.43 s** (p25=0.17 s, p75=0.64 s); 33% of entries fall within 0.25 s of
+a downbeat. This is above-chance alignment (a random entry in a 2-second bar would put ~12%
+within 0.25 s), but it is far from strict phrase-locking.
+
+Bed phrase offset (n=189, both sets): when a vocal enters, it is on average **32.6 s after
+the bed started** (p25=8.8 s, p75=52.1 s). Expressed in bars (2 s/bar proxy):
+
+| metric | value |
+|---|---|
+| Fraction on 8-bar boundary (±0.5 bar) | **12%** |
+| Fraction on 16-bar boundary (±0.5 bar) | **7%** |
+| Mod-8 bar offset p25/median/p75 | 1.5 / 3.5 / 5.4 |
+| Mod-16 bar offset p25/median/p75 | 2.3 / 4.6 / 9.5 |
+
+The mod-8 distribution is near-uniform (p25=1.5, median=3.5, p75=5.4 out of 8 bars). If
+entries were strongly phrase-locked, the median would cluster near 0 or 8. The low boundary
+fractions (12%/7%) confirm: **Two Friends do not reliably enter vocals on phrase boundaries
+of the bed**. The 33% beat-aligned fraction at the bar level (not phrase level) is the main
+structural signal.
+
+**Caveat**: the bar-dur proxy (2.0 s/bar) for BB12 introduces uncertainty. BB11 (with the
+real beat grid) shows the same near-uniform mod-8 distribution, suggesting the finding is
+not an artifact of the fallback.
+
+### 5. Vocal density and rests — 77% vocal-on fraction, gaps median 10 s
+
+| metric | value |
+|---|---|
+| Overall vocal-on fraction (both sets) | **77%** |
+| Per-set (BB11 / BB12) | 76% / 78% |
+| Rest gap p25 | 2.7 s |
+| Rest gap median | **10.4 s** |
+| Rest gap p75 | 24.6 s |
+| Rest gap p90 | 37.5 s |
+
+The mix has an acappella span active **77% of the time**. Rest gaps (between consecutive
+acappella intervals, n=94) have a median of 10.4 s — brief instrumental-only windows before
+the next vocal layer enters. The p90 of 37.5 s represents the longer purely-instrumental
+sections at the start of new tracks.
+
+### 6. Ducking — GT gain_curves show only −0.5 dB average duck
+
+| metric | value |
+|---|---|
+| Bed spans with explicit gain_curve | 99 (of 123 total) |
+| Bed spans without gain_curve (flat unity) | 24 |
+| Mean bed gain during vocal overlap | 0.850 linear |
+| Mean bed gain outside vocal overlap | 0.895 linear |
+| **dB delta (overlap vs non-overlap)** | **−0.5 dB** |
+
+Only 99 of 123 bed spans carry explicit gain_curve annotations; the 24 without are treated
+as flat unity (gain = 1.0). The −0.5 dB delta represents the annotated fader rides during
+vocal overlap. This is not the full picture of perceptual ducking: Two Friends' primary
+tool is level-setting at track load time (the initial gain the bed is brought in at), not
+dynamic compression-style automation during overlap. The GT only logs gain_curve breakpoints
+that the annotator explicitly saw as non-unity; many spans may have a lower absolute mix
+level that the GT schema does not capture because it isn't derived relative to a loudness
+reference.
+
+**Implication for modeling** (concrete compiler-v2 rules derived from this corpus):
+
+1. **Cap vocal spans at ~30 s** (median 29.2 s); the hard ceiling that covers 90% is 57 s.
+   Spans longer than 60 s are outliers (<<10% of GT). A flat "vocal from bar 16 to the end"
+   strategy typically produces 90–210 s vocal spans — 3–7× too long.
+2. **Drop into the vocal at the first chorus** (median normalized entry 0.11 = ~11% into
+   the track, absolute median 27 s into the reference). Do not start from bar 16 (≈ 40–60 s
+   in most songs); start at ~15–40 s.  The vocal used covers ~13% of the reference track
+   (median), not the whole song.
+3. **Treat beds as long-running (~77 s) and non-trivially edited** (64% of instrumental spans
+   are looped or jumped). Instrumental and regular tracks are not played straight through.
+4. **Accept near-uniform bed-phrase entry timing** — vocal entries are not strongly locked to
+   the 8- or 16-bar phrase grid of the bed. Hitting a downbeat at the bar level (33% of entries
+   within 0.25 s of a bar) is the actual pattern; hard-enforcing 8-bar phrase locking would
+   violate how ~88% of real entries work.
+5. **Target 77% vocal-on time** with rest gaps of 10–25 s. Continuous vocal coverage (100%)
+   is wrong; long instrumental-only sections (gaps > 40 s) are the tail, not the norm.
+6. **Ducking is subtle** (−0.5 dB annotated average) and should not be modeled as aggressive
+   compression-style sidechain. The bed is set at a lower absolute level before the vocal
+   enters, not dynamically compressed during overlap. Do not implement a fixed −3 to −6 dB
+   sidechain duck without listening evidence from individual spans.
+
+**Sample-size note**: n=315 spans from 2 sets by 1 DJ (Two Friends). Rules are valid as
+grammar priors for Two Friends style. Transfer to other DJs needs the DJ-density finding
+above (Two Friends density ≈ 0.15 — high, but not the highest). Metric 2 has reduced
+coverage (79/192 acappellas) due to missing track durations in the local dev DB; pi-storage
+has 18 non-null of 197 is_reference rows for these tracks, suggesting broad coverage gaps
+in the duration field that would need a backfill before corpus-wide application.
+
+Reproduction: [lab/corpus_empirics/bb_mashup_grammar.py](bb_mashup_grammar.py).
+Results in `aux.analysis_results` under `analysis_name='bb_mashup_grammar_v1'`.
