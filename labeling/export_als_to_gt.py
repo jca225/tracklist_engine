@@ -176,14 +176,22 @@ def _load_content_catalog(set_dir: Path) -> ContentCatalog | None:
     either by full-file bytes or by the tag-invariant mdat payload — both
     pointing at the same identity.
 
-    A content hash key that maps to more than one DISTINCT `recording_id`
-    across the catalog is AMBIGUOUS — the same bytes were ingested under two
-    different recordings (duplicate rip / mashup constituent / wrong-version).
-    Binding confidently to either would be the exact confidently-wrong-id
-    poison this branch kills, so such a key is dropped entirely: a clip whose
-    bytes hash to it falls through to abstain instead of last-wins-binding.
-    This is decided per hash key — a row can keep a clean `content_sha256`
-    while its `payload_sha256` (or vice-versa) is excluded as ambiguous.
+    A content hash key that maps to more than one DISTINCT identity AXIS
+    TUPLE `(recording_id, stem, variant)` across the catalog is AMBIGUOUS —
+    the same bytes were ingested under two different identities (duplicate
+    rip / mislabeled stem / mashup constituent / wrong-version). Keying on
+    bare `recording_id` alone is NOT enough: two rows can share a
+    `recording_id` but disagree on `stem` (e.g. a duplicate-rip mislabeled as
+    the acappella of its own regular master), and that must still abstain —
+    right work, wrong stem, is a wrong label. Binding confidently to either
+    would be the exact confidently-wrong-id poison this branch kills, so such
+    a key is dropped entirely: a clip whose bytes hash to it falls through to
+    abstain instead of last-wins-binding. This is decided per hash key — a
+    row can keep a clean `content_sha256` while its `payload_sha256` (or
+    vice-versa) is excluded as ambiguous. `variant` is not yet emitted by the
+    catalog builder (Task A2 adds it) so it reads as `None` for every row
+    today; keying on it anyway is forward-compatible — no further change is
+    needed once A2 starts emitting it.
     """
     p = set_dir / "content_catalog.json"
     if not p.is_file():
@@ -191,18 +199,16 @@ def _load_content_catalog(set_dir: Path) -> ContentCatalog | None:
     payload = json.loads(p.read_text())
     rows = payload.get("entries") or []
 
-    # Pass 1: collect every recording_id seen under each hash key, across
-    # both key types, so an ambiguous key can be identified before any
-    # CatalogEntry is emitted.
-    recording_ids_by_key: dict[str, set[str | None]] = {}
+    # Pass 1: collect every (recording_id, stem, variant) axis tuple seen
+    # under each hash key, across both key types, so an ambiguous key can be
+    # identified before any CatalogEntry is emitted.
+    axes_by_key: dict[str, set[tuple[str | None, str | None, str | None]]] = {}
     for e in rows:
-        rid = e.get("recording_id")
+        axis = (e.get("recording_id"), e.get("stem"), e.get("variant"))
         for key in (e.get("content_sha256"), e.get("payload_sha256")):
             if key:
-                recording_ids_by_key.setdefault(str(key), set()).add(rid)
-    ambiguous_keys = {
-        key for key, rids in recording_ids_by_key.items() if len(rids) > 1
-    }
+                axes_by_key.setdefault(str(key), set()).add(axis)
+    ambiguous_keys = {key for key, axes in axes_by_key.items() if len(axes) > 1}
 
     # Pass 2: emit CatalogEntry rows, skipping any key found ambiguous above.
     entries: list[CatalogEntry] = []
