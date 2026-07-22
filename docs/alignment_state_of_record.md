@@ -1,7 +1,8 @@
 # Alignment — State of Record (current best + settled decisions)
 
-> **As of 2026-07-22 @ `1201a75`** (branch `main`).
-> **Operation Crush has EXITED** (decision #15): the GT is de-poisoned +
+> **As of 2026-07-22 @ `6fba71f`** (branch `main`).
+> **Operation Crush has EXITED** (decision #15, soundness) with its **completeness
+> closure specced + planned** (decision #16). The GT is de-poisoned +
 > content-addressed on canonical pi. This unblocks the post-Crush re-measure —
 > the first *honest* alignment numbers (§3). The current best still spans
 > unmerged branches: TRM/flywheel work is on `trm-ablation-framework`; the
@@ -92,6 +93,24 @@ and co-training seam). Harness: `harness/`. Agentic loop: `agentic/`.
 ## 2. Settled decisions (append-only; status = SETTLED | SUPERSEDED-BY-#N)
 
 > Append new entries at the top. Never rewrite history — supersede it.
+
+**#16 — Crush completeness rule set (the final exit): sound multi-channel binding,
+certificate-gated.** `2026-07-22` · SETTLED (rules) / OPEN (implementation). Crush's
+soundness exit (#15) left ~40% of GT clips abstaining — honest, but recoverable. The
+recoverable set is *identity-preserving churn* (retry / re-separate / retag: same song,
+new bytes) whose old hashes were discarded. Rule set (twice Fable-reviewed): identity
+is a **per-axis** product `Work×Version×Stem×Variant×Remixer` (soundness must hold on
+every axis); **bind across a generation boundary only with a CERTIFICATE** (payload-hash
+equality / derivation+parent-hash / perceptual+duration), **never** by op name
+(retry/rescue is not identity-preserving — the wrong-version-from-preview-clip class);
+`relink`/`detach`/re-selection **tombstone** prior generations; a content-history hash
+ledger keyed `(recording_id, stem, variant, kind)` + FLAC-PCM/mdat payload keys are the
+*sound* completeness lever (recover the churn abstains as byte-exact binds, no new trust
+assumption); fuzzy is axis-lossy → rival-relative per-axis gate, ε-sound, excluded from
+write-back. Lifts BB12 66%→~82% with **zero** new wrong labels. Spec:
+[gt-identity-binding-completeness-design](superpowers/specs/2026-07-22-gt-identity-binding-completeness-design.md)
+(v1–v4); plan: [gt-binding-completeness-plan](superpowers/plans/2026-07-22-gt-binding-completeness-plan.md)
+(phases A–E). This is the definitive Crush closure; numbers → alignment_status.md after re-export.
 
 **#15 — Operation Crush EXITED: GT is de-poisoned and content-addressed on
 canonical.** `2026-07-22` · SETTLED. The `slot_id_map` path/slot-guess binding is
