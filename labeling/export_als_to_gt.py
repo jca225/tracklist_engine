@@ -175,18 +175,43 @@ def _load_content_catalog(set_dir: Path) -> ContentCatalog | None:
     `content_sha256`, one on `payload_sha256` when present) so a clip can bind
     either by full-file bytes or by the tag-invariant mdat payload — both
     pointing at the same identity.
+
+    A content hash key that maps to more than one DISTINCT `recording_id`
+    across the catalog is AMBIGUOUS — the same bytes were ingested under two
+    different recordings (duplicate rip / mashup constituent / wrong-version).
+    Binding confidently to either would be the exact confidently-wrong-id
+    poison this branch kills, so such a key is dropped entirely: a clip whose
+    bytes hash to it falls through to abstain instead of last-wins-binding.
+    This is decided per hash key — a row can keep a clean `content_sha256`
+    while its `payload_sha256` (or vice-versa) is excluded as ambiguous.
     """
     p = set_dir / "content_catalog.json"
     if not p.is_file():
         return None
     payload = json.loads(p.read_text())
+    rows = payload.get("entries") or []
+
+    # Pass 1: collect every recording_id seen under each hash key, across
+    # both key types, so an ambiguous key can be identified before any
+    # CatalogEntry is emitted.
+    recording_ids_by_key: dict[str, set[str | None]] = {}
+    for e in rows:
+        rid = e.get("recording_id")
+        for key in (e.get("content_sha256"), e.get("payload_sha256")):
+            if key:
+                recording_ids_by_key.setdefault(str(key), set()).add(rid)
+    ambiguous_keys = {
+        key for key, rids in recording_ids_by_key.items() if len(rids) > 1
+    }
+
+    # Pass 2: emit CatalogEntry rows, skipping any key found ambiguous above.
     entries: list[CatalogEntry] = []
-    for e in payload.get("entries") or []:
+    for e in rows:
         rid = e.get("recording_id")
         taid = str(e.get("track_audio_id") or "")
         stem = str(e.get("stem") or "regular")
         for key in (e.get("content_sha256"), e.get("payload_sha256")):
-            if key:
+            if key and str(key) not in ambiguous_keys:
                 entries.append(
                     CatalogEntry(
                         track_audio_id=taid,

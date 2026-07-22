@@ -46,6 +46,30 @@ def test_mdat_hash_none_for_non_mp4(tmp_path: Path) -> None:
     assert mdat_sha256(p) is None
 
 
+def test_mdat_corrupt_box_size_returns_none(tmp_path: Path) -> None:
+    """A box declaring size=2 (< 8-byte header) is malformed -> None, no crash/hang.
+
+    Before the fix, `payload = size - hdrlen` goes negative (2 - 8 = -6) and
+    `f.seek(payload, 1)` seeks BACKWARD, which can loop forever re-reading the
+    same corrupt header instead of terminating.
+    """
+    p = tmp_path / "corrupt.m4a"
+    corrupt_box = struct.pack(">I", 2) + b"free"  # size=2 is impossible (< hdrlen)
+    p.write_bytes(corrupt_box + b"\x00" * 100)
+    assert mdat_sha256(p) is None
+
+
+def test_mdat_truncated_extended_size_returns_none(tmp_path: Path) -> None:
+    """size=1 (64-bit extended-size marker) truncated before the 8-byte size field.
+
+    Before the fix, `struct.unpack(">Q", f.read(8))` raises `struct.error` when
+    fewer than 8 bytes remain — an uncaught crash on a corrupt/truncated file.
+    """
+    p = tmp_path / "truncated_ext.m4a"
+    p.write_bytes(struct.pack(">I", 1) + b"free")  # size=1 marker, no ext bytes follow
+    assert mdat_sha256(p) is None
+
+
 def test_mdat_size_zero_extends_to_eof(tmp_path: Path) -> None:
     """ISO-BMFF size==0 means 'box extends to end of file'."""
     p = tmp_path / "size_zero.m4a"

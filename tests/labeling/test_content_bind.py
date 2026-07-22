@@ -74,6 +74,72 @@ def test_missing_file_abstains(tmp_path: Path) -> None:
     assert _content_bind(_clip(str(tmp_path / "gone.m4a")), cat) == (None, "abstain")
 
 
+def test_collision_same_hash_different_recording_ids_abstains(tmp_path: Path) -> None:
+    """Two catalog rows share content_sha256 but disagree on recording_id.
+
+    This is the exact poison this branch kills: same audio bytes ingested
+    under two different recording_ids (duplicate rip / mashup constituent /
+    wrong-version). A clip whose bytes hash to that shared value must NOT
+    bind confidently to either — it must abstain.
+    """
+    f = tmp_path / "collide.m4a"
+    f.write_bytes(b"COLLIDING-BYTES" * 100)
+    sha = hashlib.sha256(f.read_bytes()).hexdigest()
+    _catalog(
+        tmp_path,
+        [
+            {
+                "content_sha256": sha,
+                "payload_sha256": None,
+                "recording_id": "recA",
+                "track_audio_id": "ta1",
+                "stem": "regular",
+            },
+            {
+                "content_sha256": sha,
+                "payload_sha256": None,
+                "recording_id": "recB",
+                "track_audio_id": "ta2",
+                "stem": "regular",
+            },
+        ],
+    )
+    cat = _load_content_catalog(tmp_path)
+    assert _content_bind(_clip(str(f)), cat) == (None, "abstain")
+
+
+def test_same_recording_id_two_rows_still_binds(tmp_path: Path) -> None:
+    """A hash mapping to a single recording_id across two rows still binds.
+
+    e.g. a regular master and its own variant row that happen to share
+    nothing ambiguous — only a DISTINCT recording_id conflict is ambiguous.
+    """
+    f = tmp_path / "shared.m4a"
+    f.write_bytes(b"SHARED-BYTES" * 100)
+    sha = hashlib.sha256(f.read_bytes()).hexdigest()
+    _catalog(
+        tmp_path,
+        [
+            {
+                "content_sha256": sha,
+                "payload_sha256": None,
+                "recording_id": "recSame",
+                "track_audio_id": "ta1",
+                "stem": "regular",
+            },
+            {
+                "content_sha256": sha,
+                "payload_sha256": None,
+                "recording_id": "recSame",
+                "track_audio_id": "ta2",
+                "stem": "regular",
+            },
+        ],
+    )
+    cat = _load_content_catalog(tmp_path)
+    assert _content_bind(_clip(str(f)), cat) == ("recSame", "content")
+
+
 def test_binds_tagged_master_by_mdat(tmp_path: Path) -> None:
     import struct
     from labeling.content_hash import mdat_sha256

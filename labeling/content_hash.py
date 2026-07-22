@@ -29,41 +29,55 @@ def file_sha256(path: str | Path) -> str:
 
 
 def mdat_sha256(path: str | Path) -> str | None:
-    """sha256 of the first top-level `mdat` box payload, or None if there is none."""
+    """sha256 of the first top-level `mdat` box payload, or None if there is none.
+
+    Fails closed on a malformed box: a non-zero declared `size` smaller than
+    the box's own header (< 8, or < 16 for a 64-bit extended-size box) cannot
+    hold a real payload, so it returns None rather than seeking to a bogus
+    (possibly backward) offset. A `struct.error` from a truncated/corrupt
+    header (e.g. a 64-bit extended-size marker with no size bytes left to
+    read) is likewise treated as "malformed" -> None, never propagated.
+    """
     h = hashlib.sha256()
-    with open(path, "rb") as f:
-        while True:
-            hdr = f.read(8)
-            if len(hdr) < 8:
-                return None
-            size = struct.unpack(">I", hdr[:4])[0]
-            typ = hdr[4:8]
-            if size == 1:  # 64-bit extended size
-                size = struct.unpack(">Q", f.read(8))[0]
-                hdrlen = 16
-            else:
-                hdrlen = 8
-            if typ == b"mdat":
-                # Found mdat: hash its payload
-                if size == 0:
-                    # ISO-BMFF size==0 means "box extends to end of file"
-                    while True:
-                        chunk = f.read(_CHUNK)
-                        if not chunk:
-                            break
-                        h.update(chunk)
+    try:
+        with open(path, "rb") as f:
+            while True:
+                hdr = f.read(8)
+                if len(hdr) < 8:
+                    return None
+                size = struct.unpack(">I", hdr[:4])[0]
+                typ = hdr[4:8]
+                if size == 1:  # 64-bit extended size
+                    size = struct.unpack(">Q", f.read(8))[0]
+                    hdrlen = 16
                 else:
-                    # Normal bounded box
-                    payload = size - hdrlen
-                    remaining = payload
-                    while remaining > 0:
-                        chunk = f.read(min(_CHUNK, remaining))
-                        if not chunk:
-                            break
-                        h.update(chunk)
-                        remaining -= len(chunk)
-                return h.hexdigest()
-            if size == 0:
-                return None
-            payload = size - hdrlen
-            f.seek(payload, 1)
+                    hdrlen = 8
+                if size != 0 and size < hdrlen:
+                    # Malformed: declared size can't even cover its own header.
+                    return None
+                if typ == b"mdat":
+                    # Found mdat: hash its payload
+                    if size == 0:
+                        # ISO-BMFF size==0 means "box extends to end of file"
+                        while True:
+                            chunk = f.read(_CHUNK)
+                            if not chunk:
+                                break
+                            h.update(chunk)
+                    else:
+                        # Normal bounded box
+                        payload = size - hdrlen
+                        remaining = payload
+                        while remaining > 0:
+                            chunk = f.read(min(_CHUNK, remaining))
+                            if not chunk:
+                                break
+                            h.update(chunk)
+                            remaining -= len(chunk)
+                    return h.hexdigest()
+                if size == 0:
+                    return None
+                payload = size - hdrlen
+                f.seek(payload, 1)
+    except struct.error:
+        return None
