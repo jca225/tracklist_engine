@@ -1,13 +1,15 @@
 # Alignment — State of Record (current best + settled decisions)
 
-> **As of 2026-07-22 @ `6fba71f`** (branch `main`).
-> **Operation Crush has EXITED** (decision #15, soundness) with its **completeness
-> closure specced + planned** (decision #16). The GT is de-poisoned +
-> content-addressed on canonical pi. This unblocks the post-Crush re-measure —
-> the first *honest* alignment numbers (§3). The current best still spans
-> unmerged branches: TRM/flywheel work is on `trm-ablation-framework`; the
-> co-training/grammar/transition artifacts below remain on
-> `cotrain-corpus-harvest` and must be reconciled before use.
+> **As of 2026-07-22 @ `7737c09`** (branch `main`).
+> **Operation Crush has EXITED** (decision #15, soundness) and its **completeness
+> closure is now SHIPPING** — Phase A (sound correctness + axis plumbing) is done
+> on PR #75 (decision #17); Phases B–E remain. The GT is de-poisoned +
+> content-addressed on canonical pi, and the binder now carries the full identity
+> axis product to the GT row. This unblocks the post-Crush re-measure — the first
+> *honest* alignment numbers (§3), sequenced after Phase B. The current best still
+> spans unmerged branches: TRM/flywheel work is on `trm-ablation-framework`; the
+> co-training/grammar/transition artifacts below remain on `cotrain-corpus-harvest`
+> and must be reconciled before use.
 >
 > **What this doc is.** The single *living* answer to "what is the aligner at its
 > best right now, and what have we settled on — so build ON this, don't
@@ -50,8 +52,10 @@ set audio}` and emits an Ableton-round-trippable structure (per-span
 `ref_segments` for non-straight spans), trained on manual Ableton GT. Stem
 discovery + version/variant QA are **ingest**, not the aligner. Target output
 grammar = "Turing-complete over DJ moves" (see §2, decision #7). **The GT substrate
-it validates against is now content-addressed** — every identity is bound by audio
-content or honestly abstained, never a path/slot guess (decision #15).
+it validates against is now content-addressed and axis-complete** — every identity is
+bound by audio content or honestly abstained, never a path/slot guess (decision #15), and
+the bind now carries `stem`+`variant` through to the GT row so a right-work/wrong-stem or
+wrong-variant label cannot slip (decision #17, Phase A).
 
 **Per-axis best current approach:**
 
@@ -94,8 +98,26 @@ and co-training seam). Harness: `harness/`. Agentic loop: `agentic/`.
 
 > Append new entries at the top. Never rewrite history — supersede it.
 
+**#17 — Crush completeness Phase A SHIPPED: sound correctness + axis plumbing.**
+`2026-07-22` · SETTLED (Phase A) / OPEN (Phases B–E). First execution of the #16 rule set,
+local-only (no pi/DB writes, no new data), on **PR #75** (`gt-binding-completeness`, 5
+commits, subagent-driven + opus whole-branch review). A1 = ambiguity hard-abstain keyed on
+`(recording_id, stem, variant)` at both `_load_content_catalog` and `from_entries` (an
+ambiguous hash abstains, never last-writer-wins); A2 = `stem`+`variant` plumbed
+catalog→bind→`GroundTruthTrack.claimed_variant`, sourced from the content bind when bound;
+A3 = catalog stem-derivation correctness (`ta.stem='regular'` parent filter, strict
+stem-name map, `kind` master/separated); A4 = catalog scope = true `pull_set_for_alignment`
+parity (`COALESCE(recording_id,track_id)` + dual-key match); fix wave = separated stems
+inherit the parent's `variant` (a real per-axis-soundness bug the whole-branch review
+caught). `tests/labeling/` green, gt_als_gate unchanged. **Next = Phase B** (content-history
+hash ledger + FLAC-PCM key) — the sound completeness lever, **gated on a coordinated pi
+deploy** (pi ~92 behind, issue #73; do not force-deploy). Residual: the catalog still omits
+the pull's `dj_set_track_media_links` UNION, so sided/`tlp` slots stay catalog-invisible
+(safe — they abstain; candidate Phase-A′ or fold into Phase C prov). Numbers →
+alignment_status.md after Phase E re-export.
+
 **#16 — Crush completeness rule set (the final exit): sound multi-channel binding,
-certificate-gated.** `2026-07-22` · SETTLED (rules) / OPEN (implementation). Crush's
+certificate-gated.** `2026-07-22` · SETTLED (rules) / SHIPPING (Phase A done — #17; B–E open). Crush's
 soundness exit (#15) left ~40% of GT clips abstaining — honest, but recoverable. The
 recoverable set is *identity-preserving churn* (retry / re-separate / retag: same song,
 new bytes) whose old hashes were discarded. Rule set (twice Fable-reviewed): identity
@@ -256,14 +278,39 @@ from scorers. Dead ends live in the EXPERIMENTS ledger.
   Open: calibrate per-probe confidence on BB GT before accepting pseudo-labels.
 - **PWS phase-1b continuous lane** remains unmerged and is a fusion fallback,
   not the primary placement/structure lever.
-- **Post-Crush re-measure — the immediate next action (Rolling Thunder RT1
-  kickoff).** Canonical write-back is DONE (decision #15), so the blocker is
-  cleared. Run the scorers on the de-poisoned GT (`make scorecard` / `make race`
-  over BB11+BB12 on the `_lt` timeline, + the TRM `path_decode.trajectory_acc`
-  re-run) and regenerate [alignment_status.md](alignment_status.md) — the **first
-  honest post-Crush numbers**. Every prior headline was measured on poisoned GT and
-  is provisional until this runs. This is the RT1 starting gun (aligner on certified
-  labels); see [operation_rolling_thunder_proposed.md](operation_rolling_thunder_proposed.md).
+- **Crush completeness Phase B — the immediate next build (decision #17 → #16).**
+  Content-history hash ledger keyed `(recording_id, stem, variant, kind)` + never-drop-hash
+  acquisition hooks + certificate-gated bind-across + FLAC-PCM/mdat payload keys + relink/
+  detach tombstones (plan tasks B1–B4). This is the *sound* completeness lever (recovers the
+  ~40% churn abstains as byte-exact binds, lifts BB12 66%→~80%+ with zero new wrong labels).
+  **GATE: Phase B touches canonical pi**, which is ~92 commits behind with live parallel WIP
+  (issue #73) — a real `make deploy` is a **separately coordinated task; do not force-deploy**
+  (Phase A stayed local to avoid exactly this). Then re-export → GATE write-back → the
+  re-measure below.
+- **Audio coverage reality (census 2026-07-22).** For the two GT sets, **every GT row is
+  backed by present audio**: all 543 BB11+BB12 referenced files are on disk (8 show "missing"
+  only via the issue-#74 mojibake path bug — files present under correct UTF-8). Six truly
+  audio-less slots exist (4 are `tlp` sided-rows) but **carry zero `set_ground_truth` rows** —
+  un-aligned tracklist spine, never enter the binder, not a GT gap. At corpus scale only
+  **~8.6%** (18,805/218,467 distinct tracks) have audio and `is_reference` is essentially
+  unpopulated (443 rows) — the ingest frontier, not gating alignment. Do NOT read the 8.6% as
+  an aligner problem; it's acquisition.
+- **Post-Crush re-measure — Rolling Thunder RT1 kickoff, now sequenced AFTER Phase B.**
+  Canonical write-back is DONE (decision #15) so the soundness blocker is cleared, but the
+  *honest* numbers should be measured on the **completeness-recovered** GT (post-Phase-B
+  re-export), not the 66%-bound interim. Run the scorers on the de-poisoned GT (`make
+  scorecard` / `make race` over BB11+BB12 on the `_lt` timeline, + the TRM
+  `path_decode.trajectory_acc` re-run) and regenerate [alignment_status.md](alignment_status.md)
+  — the **first honest post-Crush numbers**. Every prior headline was measured on poisoned GT
+  and is provisional. RT1 starting gun; see
+  [operation_rolling_thunder_proposed.md](operation_rolling_thunder_proposed.md).
+- **`labeling/` package reorganization — PARKED by owner (2026-07-22, "do later").** Raised
+  after Phase A; assessment: the recurring bug class is SSOT drift (A4 = catalog vs pull
+  reimplementing slot→audio resolution), not disorganization broadly. Pilot when resumed =
+  extract the ONE shared slot→audio resolver + functional split of the two ~930-line files
+  (`export_als_to_gt.py`, `pull_set_for_alignment.py`) + centralize/document tuning constants
+  + excise the `BLINK_182_SLOTS` set-specific hack. **NOT** a class rewrite (house style is
+  functional); **NOT** whole-repo (module renames break pi systemd entrypoints).
 - **Strategic fork (owner decision):** publish the re-characterization now or
   hold it for a SOTA-at-scale paper after the flywheel runs.
 
