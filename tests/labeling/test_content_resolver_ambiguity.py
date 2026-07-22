@@ -72,6 +72,32 @@ def test_from_entries_drops_size_crc_on_same_recording_different_stem():
     assert (100, 200) not in cat.by_size_crc
 
 
+def test_from_entries_keeps_size_crc_when_axis_agrees():
+    # Symmetry with test_from_entries_keeps_key_when_axis_tuple_agrees, but
+    # for the by_size_crc path: a benign duplicate (identical (file_size, crc)
+    # AND identical (recording_id, stem, variant)) must still resolve.
+    entries = [
+        CatalogEntry(
+            track_audio_id="ta1",
+            recording_id="rec1",
+            stem="regular",
+            file_size=100,
+            crc=200,
+        ),
+        CatalogEntry(
+            track_audio_id="ta2",
+            recording_id="rec1",
+            stem="regular",
+            file_size=100,
+            crc=200,
+        ),
+    ]
+    cat = ContentCatalog.from_entries(entries)
+    assert (100, 200) in cat.by_size_crc
+    assert cat.by_size_crc[(100, 200)].recording_id == "rec1"
+    assert cat.by_size_crc[(100, 200)].stem == "regular"
+
+
 def test_from_entries_keeps_key_when_axis_tuple_agrees():
     # Benign duplicate: same (recording_id, stem) on both rows — not ambiguous.
     entries = [

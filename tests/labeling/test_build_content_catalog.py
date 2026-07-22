@@ -25,23 +25,29 @@ def test_build_catalog_covers_track_audio_and_stems(tmp_path: Path) -> None:
     conn = _db(tmp_path)
     vocals = tmp_path / "vocals.flac"
     vocals.write_bytes(b"VOCALS-STEM-BYTES" * 100)
+    instr = tmp_path / "instrumental.flac"
+    instr.write_bytes(b"INSTRUMENTAL-STEM-BYTES" * 100)
     conn.executemany(
         "INSERT INTO set_track_slots VALUES(?,?,?,?)",
-        [("s", 0, "recA", "recA"), ("s", 1, "recB", "recB")],
+        [("s", 0, "recA", "recA"), ("s", 1, "recB", "recB"), ("s", 2, "recC", "recC")],
     )
     conn.executemany(
         "INSERT INTO track_audio VALUES(?,?,?,?,?,?,?)",
         [
             (1, "recA", "regular", "shaA", "/x/a.m4a", "extended", "recA"),
             (2, "recB", "acappella", "shaB", "/x/b.m4a", None, "recB"),
+            (3, "recC", "regular", "shaC", "/x/c.m4a", "regular", "recC"),
         ],
     )
     conn.execute("INSERT INTO track_stems VALUES(1, 'vocals', ?)", (str(vocals),))
+    conn.execute("INSERT INTO track_stems VALUES(3, 'instrumental', ?)", (str(instr),))
 
     out = build_catalog(
         conn,
         "s",
-        file_sha256=lambda p: "STEMHASH" if p == str(vocals) else "?",
+        file_sha256=lambda p: {str(vocals): "STEMHASH", str(instr): "INSTRHASH"}.get(
+            p, "?"
+        ),
         mdat_sha256=lambda p: None,  # skip real mp4 parsing in unit test
     )
     got = {
@@ -56,8 +62,14 @@ def test_build_catalog_covers_track_audio_and_stems(tmp_path: Path) -> None:
         "shaB",
         "master",
     ) in got  # NULL variant -> regular
-    # demucs vocals of recA's regular parent -> acappella, kind='separated'
-    assert ("recA", "acappella", "regular", "STEMHASH", "separated") in got
+    # demucs vocals of recA's regular parent -> acappella, kind='separated'.
+    # A separation preserves the parent master's length, so a stem of an
+    # extended parent is itself extended — the stem must inherit variant,
+    # not hardcode "regular".
+    assert ("recA", "acappella", "extended", "STEMHASH", "separated") in got
+    # Positive control: a stem of a variant='regular' parent still emits
+    # 'regular' (not just always echoing whatever the last parent was).
+    assert ("recC", "instrumental", "regular", "INSTRHASH", "separated") in got
     assert out["set_id"] == "s"
 
 
@@ -87,6 +99,41 @@ def test_legacy_slot_null_recording_id_track_id_keyed_audio_is_included(
     assert ("legZ", "shaZ", "master") in got, (
         "legacy track_id-keyed slot/audio must be included with COALESCEd identity"
     )
+
+
+def test_legacy_slot_null_recording_id_track_id_keyed_stems_is_included(
+    tmp_path: Path,
+) -> None:
+    """Legacy-shape coverage for the SECOND (track_stems) loop's dual-key
+    match: a set_track_slots row with recording_id=NULL, track_id='legS', a
+    regular track_audio parent keyed the same way (recording_id=NULL,
+    track_id='legS'), and a demucs vocals stem under it. All of this
+    module's other tests use rows where recording_id==track_id, so a
+    wrong-column/param-order regression in the track_stems loop's
+    `ta.track_id IN (...) OR ta.recording_id IN (...)` clause would slip
+    past them undetected."""
+    conn = _db(tmp_path)
+    vocals = tmp_path / "legacy_vocals.flac"
+    vocals.write_bytes(b"LEGACY-VOCALS-BYTES" * 100)
+    conn.execute("INSERT INTO set_track_slots VALUES(?,?,?,?)", ("s", 0, None, "legS"))
+    conn.execute(
+        "INSERT INTO track_audio VALUES(?,?,?,?,?,?,?)",
+        (4, None, "regular", "shaS", "/x/s.m4a", "regular", "legS"),
+    )
+    conn.execute("INSERT INTO track_stems VALUES(4, 'vocals', ?)", (str(vocals),))
+
+    out = build_catalog(
+        conn,
+        "s",
+        file_sha256=lambda p: "LEGACYSTEMHASH" if p == str(vocals) else "?",
+        mdat_sha256=lambda p: None,
+    )
+
+    got = {
+        (e["recording_id"], e["stem"], e["content_sha256"], e["kind"])
+        for e in out["entries"]
+    }
+    assert ("legS", "acappella", "LEGACYSTEMHASH", "separated") in got
 
 
 def test_track_audio_for_recording_not_in_this_sets_slots_is_excluded(
