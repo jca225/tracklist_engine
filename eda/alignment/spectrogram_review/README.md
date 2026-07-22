@@ -3,7 +3,7 @@
 Human inspection of BB11/BB12 alignment spans: dual MIX | SOURCE spectrograms with OD-style **Truth** / **Our guess** boxes, Ableton labels, and playable windows.
 
 **Session state / next work:** see  
-[docs/agent_handoff_spectrogram_review_gt_capture_20260719.md](../../../docs/agent_handoff_spectrogram_review_gt_capture_20260719.md).
+[docs/archive/agent_handoff_spectrogram_review_gt_capture_20260719.md](../../../docs/archive/agent_handoff_spectrogram_review_gt_capture_20260719.md).
 
 **Important:** if Truth disagrees with what you hear, suspect **Ableton GT capture** (`labeling/export_als_to_gt.py`), not the player math. Scorer success needs `traj_strict ≥ 0.5` (±2 s).
 
