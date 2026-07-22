@@ -284,3 +284,50 @@ When a slot has N candidate acappellas (`stems/<slot>/candidates/vocals/…`), `
 12. **Ledger records losing candidates** (score, margin, reason) so re-selection is a new generation, not a silent un-bind.
 
 **Recommend Fable re-review v3** — the per-axis soundness split and the acquisition-op partition (preserve vs move `id*`) are new proof obligations that deserve the same adversarial pass v1 got.
+
+---
+
+# v4 — corrections after Fable review of v3 (2026-07-22) — the definitive rules
+
+Fable reviewed v3 and found the **frame right but two v3 rules unsound**. These corrections are load-bearing for the Crush completeness exit.
+
+## v4.1 — THE headline: bind-across requires a **certificate**, never an op name (fixes v3.2)
+v3.2 keyed the ledger's "bind across generations ✓" on the *op's name*. **Unsound.** `retry/rescue` is not identity-preserving: the main rescue path took `hits[0]` unvalidated (the documented **wrong-version-from-preview-clip** class — 46s preview → ORIGINAL bytes stamped under a remix row; ~106 suspects pending; memory `project_wrong_version_preview_clip`, `project_ytmusic_search_vs_scraped_links`), and can fetch a radio edit where the row was `extended` (a **variant** move). Binding across such a boundary would re-stamp the version poison *with a soundness label* — the exact thing Crush exists to kill.
+
+**Rule (replaces the v3.2 table's ✓ column):** a generation pair `(g_old, g_new)` may be bound across **iff it carries a verified equivalence certificate**, independent of which op produced it:
+- **payload-hash equality** — `mdat`/FLAC-PCM-MD5 equal ⟹ identity-preserving re-encode/retag. *(the only unconditionally-sound bind-across.)*
+- **derivation record with matching parent-generation hash** — a separation/stem-derive is bind-across only if its *parent generation's* hash matches (re-separating **after a parent replace** carries the new parent's identity, which may have moved).
+- **perceptual + duration certificate (fuzz-grade)** — retry/rescue is demoted here: bind-across only if same-recording perceptually **and** duration-consistent. This honestly rates rescue bridging at gated-fuzz strength, not free.
+
+Op labels are **priors** that select which certificate to check; the certificate is the rule.
+
+## v4.2 — Invalidation events (the append-only ledger is not enough)
+An append-only "never drop a sha256" ledger (v2.2) keeps a **mis-attached generation soundly bindable forever**. The correction ledger already names the ops that *retroactively move or void* identity — `relink` (recording reassign), `detach` (abstain) — and **re-selection-for-cause** (a candidate winner later found wrong, e.g. a cover slipped the gate). These need a **tombstone / re-key event class**: a generation can be *invalidated* (no longer a legal bind target) and its exported GT rows flagged for **re-audit**. Distinguish the two re-selection causes: *better-rip-of-same-recording* → bind-across with certificate; *winner-was-wrong* → tombstone + re-audit prior GT. Without invalidation, relink/detach are silently ignored by the ledger.
+
+## v4.3 — Axis-correctness is FOUR per-axis assumptions, each with a live violation class (refines v3.1)
+"Content/prov resolve one `track_audio` row = one axis point" is true for **resolution**, not **correctness**. Assumption (ii) splits into four, each already-documented:
+| Axis | Violation class | Memory |
+|---|---|---|
+| recording (ρ) | wrong-recording mis-attach (`20911`) | `project_stem_cand_wrong_recording_gap` |
+| stem | 'Acappella' **label** ≠ acappella **audio** | `project_acappella_label_vs_audio` |
+| version | preview-clip → ORIGINAL bytes under a remix row | `project_wrong_version_preview_clip` |
+| variant | radio edit stored where `extended` claimed | `project_short_edit_vs_scraped_duration` |
+Content resolution is axis-*exact* (the row carries the axes); it is axis-*correct* only under all four. Also: `track_audio` is UNIQUE on `(recording_id, platform, player_id)` — **multiple rips per axis point** (not 1:1), `sha256` nullable, some points realized only via `track_stems`. Restate v3.1's "distinct row per point" as "a byte-match resolves *one* row, which sits at *one* point."
+
+## v4.4 — Newly exposed code-level pain points (extend the P-table)
+| # | Pain point | Location | Fix |
+|---|---|---|---|
+| P13 | Axis-level ambiguity leak: ambiguity drop keyed on `recording_id` only; `from_entries` last-writer-wins | [export_als_to_gt.py:197](../../labeling/export_als_to_gt.py#L197), `content_resolver.py:44` | drop per `(recording_id, stem, variant)`; `from_entries` rejects conflicting dupes |
+| P14 | Separated-stem-of-non-regular-parent: catalog `track_stems` join has no `ta.stem='regular'` filter → acappella-parent's residual cataloged as `instrumental` | [build_content_catalog.py:63](../../labeling/build_content_catalog.py#L63) | filter parent `stem='regular'`; carry `kind` |
+| P15 | Component stems (drums/bass/other) have **no point** in `Stem={regular,acappella,instrumental}`; `_STEM_TO_AXIS` raw-passthrough leaks unknown stem names | `core/identity.py:41`, `build_content_catalog.py:79` | either extend codomain or hard-abstain component-stem clips (no raw passthrough) |
+| P16 | `variant` never plumbed: absent from catalog build, `CatalogEntry`, and `_content_bind` (returns `recording_id` alone, discards even `stem`) | `build_content_catalog.py:41`, `export_als_to_gt.py:253` | plumb `stem`+`variant` through catalog→entry→bind→GT row |
+| P17 | No invalidation events for relink/detach/re-selection vs append-only ledger | v2.2 ledger | tombstone / re-key event class (v4.2) |
+
+## v4.5 — Corrected fuzzy gate and candidate binding
+- **Fuzzy version rides free** — fingerprint sim is *weakest* at version (remix shares vocals/chroma with original: the equivalence-floor). And per-axis marginal gates miss **correlated** errors: *extended remix vs regular original* passes fingerprint (same work), stem (both regular), and duration (an extended remix can match the original's length) — all three marginals pass, version **and** variant both wrong. **Fix:** `B_fuzz` = **rival-relative selection** over all same-work catalog rows (every axis point × generation), requiring a margin over each rival *per differing axis*; where rivals differ only on an axis fuzz can't discriminate, emit `⊥` on that axis (partial identity). Absolute thresholds cannot do this. Replace "vocal-presence" for the stem axis with **instrumental-residual-silence** (the working `project_acappella_label_vs_audio` test).
+- **Candidate binding (fixes v3.3):** the winner-similarity gate would bind a clip that references a **rejected** candidate (annotator overrode; content abstains because the loser was never ingested) to the winner — wrong artifact, confidently stamped; and the gate's own `margin=0.0` default admits winner-choice among good candidates is near-arbitrary. **Fix:** rejected candidates' hashes/embeddings enter the catalog as **negative entries** — a byte-match to a rejected file hard-abstains; fuzz must beat the *rejected rivals'* fingerprints, not clear an absolute bar. The winner/rejected same-sha dupe case is benign (byte-equal = same audio).
+
+## v4.6 — Ledger chain key (final)
+`content_history` chain key = **`(recording_id, stem, variant, kind)`**, `kind ∈ {master, separated, derived}` (a demucs-vocals lineage and a downloaded-acappella-master lineage must not merge). **Not** `track_audio_id` (replace mints a new id; chains must span rows). `version`/`remixer` are excluded from the key — `recording_id` pins them (recording PK is `(work_id, version, version_artist, stem, variant)`) — **but** each generation stamps denormalized `(version, stem, variant, kind, op, source)` as the stability audit trail, with the caveat that SQLite treats NULL `version_artist` as distinct (anonymous-remix siblings are separate ids, invisible to the key) and that a future in-place `recording.version` mutation would break the redundancy. The key's stem/variant are the **`track_audio` row's** realization values, not the recording row's (additive `acquire_variant` hangs acappella rows under regular recordings — they disagree by design).
+
+**This is the definitive rule set for the Crush completeness exit.** The implementation plan (sibling) executes it: certificate-gated bind-across, tombstones, axis-plumbed catalog, per-axis fuzz, negative candidate entries.
