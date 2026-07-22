@@ -215,3 +215,72 @@ FLAC's STREAMINFO stores an MD5 of the *decoded PCM* — tag-invariant **and** l
 8. Re-export both sets; expect 66%→~82%+ (BB12) with **zero** new wrong labels; re-write-back consuming sound strata only.
 
 **Net:** content-first + historical-content + physically-grounded prov + free FLAC/mdat payload keys + gated perceptual, all σ-free, with soundness **stratified and honest** rather than blanket-claimed. The hash ledger + PCM-MD5 alone recover most of the recoverable set with **no new trust assumptions** — the cheapest sound path, missed by v1.
+
+---
+
+# v3 — identity is a product of axes, and acquisition is a separate space
+
+v1/v2 wrote the binding codomain as a scalar `ρ(a) ∈ R`. That is wrong: the repo already keys playable identity on **three orthogonal axes** (`core/identity.py`, `RecordingAxes`), and *how the audio was obtained* is a **fourth, orthogonal** space that drives the entire drift/churn problem. Making both explicit changes what "sound" and "complete" must mean.
+
+## v3.1 — The real identity codomain (WHAT it is)
+
+```
+id*(c) ∈  Work × Version × Stem × Variant × (Remixer?)
+Version ∈ {original, remix, rework, altversion, edit, bootleg, mashup}   # track_metadata.version
+Stem    ∈ {regular, acappella, instrumental}                            # track_audio.stem
+Variant ∈ {regular, extended}                                           # track_audio.variant
+key = version__stem__variant   (remixer → recording.version_artist)
+```
+A binding is **correct only if correct on every axis.** "Right work, wrong stem" (bound the instrumental when the clip is the acappella) and "right work, wrong variant" (bound the radio edit when the clip is the extended) are **wrong labels**, not partial credit. So Soundness (S) must be *per-axis*.
+
+**Key structural fact (discharges most of the risk):** each `(work, version, stem, variant)` point is a **distinct `track_audio` row with its own `sha256`** (acappella/instrumental variants get their own `track_audio_id` — memory `project_variant_mert`). Therefore:
+
+- **Content and provenance are axis-exact for free.** A byte-match (Thm 1) or a copy-fact (Thm 3′) resolves to *one specific `track_audio` row*, which *is* a single point `(work, version, stem, variant)`. Content/prov **cannot** confuse stem or variant — the row carries them. This is a strength, now stated.
+- **The hash ledger must be keyed at axis granularity.** `content_history` keys on `track_audio_id` (which pins all axes), *not* bare `recording_id`. A clip of the *acappella* must bind only to acappella-row generations; a naïve `recording_id`-keyed ledger would let it bind a `regular`-row generation of the same work — a stem-axis error. **Ledger key = (recording_id, stem, variant) generation-chain**, and demucs/roformer stem entries carry the derived `stem` axis (`vocals→acappella`, `instrumental→instrumental`) exactly as `build_content_catalog` already does.
+
+**`B_fuzz` is axis-LOSSY — the sharp caveat.** A perceptual fingerprint matches the *work/version* but is weak-to-blind on the other axes:
+- **Stem:** chromaprint/HuBERT of an acappella vs the instrumental of the *same work* can score high (shared harmony/lyrics) — a fuzzy match does **not** certify the stem axis.
+- **Variant:** a 3-min radio edit vs a 6-min extended of the same work partial-matches — a fuzzy match does **not** certify the variant axis.
+
+So the `B_fuzz` gate (v2, §5.2) must be **per-axis**, not a single similarity: (a) work/version by fingerprint sim + margin, (b) **stem** by an independent vocal-presence/instrumental-null test (the HuBERT-L9 vocal gate already does this — `candidate_vocal_gate.py`), (c) **variant** by duration/coverage ratio. A clip binds by fuzz only if *all three* pass; otherwise abstain or bind only the axes that pass and mark the rest `⊥` (partial identity is honest; a guessed stem is not).
+
+## v3.2 — The acquisition-provenance space (HOW it was obtained) — orthogonal to identity
+
+Your "how was it downloaded / needed to retry / choose between candidates / regular that became extended" is a **separate axis from what the audio is.** It is the *dynamics* that generate the `content_history` generations and, crucially, decides **which acquisition operations preserve `id*` (the ledger may bind across them) vs move `id*` (the ledger must NOT).** Proposed taxonomy, grounded in the actual flows:
+
+| Acquisition op | Repo flow | Effect on `id*` axes | Ledger rule |
+|---|---|---|---|
+| **fetch** (initial) | `ingest.main` (yt-dlp/SC/YTM), `spotdl` | establishes the point | new generation @ these axes |
+| **retry / rescue** | `redownload_via_ytmusic/spotdl`, `mac_push_acquire` | **preserves** axes, new bytes (better/other rip) | same-axis generation — **bind across** ✓ |
+| **re-separate** | Demucs→Roformer, Mac re-stem | **preserves** (work,version,variant); realizes stem | same (recording,stem) generation — **bind across** ✓ (the 26-stem class) |
+| **retag / re-encode** | `tag_aligning_folder`, codec change | **preserves** all axes (T) | same-axis generation — **bind across** ✓ (mdat/FLAC-PCM key) |
+| **candidate-select** | `candidate_vocal_gate` (HuBERT winner of N acappellas) | **picks one** of several *same-work* alternatives; losers may be **different recordings** (covers, live, wrong source) | bind **only the chosen** `track_audio_id`; **never** a rejected alternative — see v3.3 |
+| **extend-derive** | acquire/construct extended | **MOVES** variant `regular→extended` | **different axis point** — a `regular` generation is **NOT** a valid bind for an `extended` clip ✗ |
+| **version-correct** | `replace_track_audio --axis version` | **MOVES** version (`original↔remix`, wrong-remix→right) | old generation is a **different point** — **do not bind across** ✗ |
+| **stem-correct** | `acquire_variant`, `replace_stem_audio` | establishes/moves stem | axis-scoped generation |
+
+The `track_audio_correction` ledger already speaks this language: `axis ∈ {version, variant, stem, recording}`, `action ∈ {replace, add, relink, detach}`. **The content-history ledger is the byte-level shadow of the correction ledger**: every correction/acquisition event appends a generation stamped with `(track_audio_id, recording_id, version, stem, variant, sha256, payload_sha256, op, source, generation, ts)`. Binding to a historical generation is sound iff that generation's axes equal the clip's true axes — which the axis-granular key (v3.1) enforces mechanically.
+
+**This is the answer to "how did we even get this issue," at the axis level:** the churn that manufactures incompleteness (P9) is *identity-preserving* acquisition ops (retry, re-separate, retag) whose only sin is changing the bytes — exactly the ops the ledger should let us bind across, and currently can't because it discards the old hash. Whereas the ops that *move* the axis (extend, version-correct, candidate-swap) **should** cause a mismatch — abstaining there is correct, not a bug.
+
+## v3.3 — The candidate-selection sub-problem (choosing between acappellas/instrumentals)
+
+When a slot has N candidate acappellas (`stems/<slot>/candidates/vocals/…`), `candidate_vocal_gate` scores each against the studio recording's *own separated vocals* (HuBERT-L9 matched filter) and emits a winner (high score + margin) or abstains (`WINNER.txt` → `ingest_candidate_winners`). The GT clip references the **chosen** candidate. Binding must therefore:
+
+1. **Prefer content/prov/ledger** — they resolve the *exact chosen* `track_audio_id` byte-for-byte; they cannot drift to a rejected candidate. (This is why content bound 84/84 candidates cleanly — candidates are pristine downloads with stable hashes.)
+2. **Constrain `B_fuzz`** — a fingerprint of the chosen acappella will *also* score high against **rejected same-work candidates** (they are the same song). So fuzz must match against the **specific chosen artifact's** fingerprint (or the recording's own separated vocals, as the gate does), **never** the work generically — else it can bind a cover/live/wrong-source loser. Formally: `B_fuzz` for a candidate-slot is gated on similarity to *the ingested winner's* embedding, with the gate's `⊥` inherited from `candidate_vocal_gate`'s own abstain (low margin / all-bad, e.g. Mumford "The Cave" all-choir-covers).
+3. **Record the alternatives.** The acquisition ledger stores the losing candidates + why (score, margin) — both as training signal and so a later re-selection (better candidate arrives) is a *new generation*, not a silent overwrite that un-binds the old GT.
+
+## v3.4 — Consequences for the theorems
+- **Thm 1/3 (content/prov):** strengthen — they are **axis-exact** because they resolve a specific `track_audio_id`. State this; it is a soundness *bonus*, not a caveat.
+- **Thm 5′ (composition):** the `id_source` stratification becomes **per-axis**: `content`/`provenance`/`historical-content` rows are sound on all four axes; `fuzzy` rows are sound only on the axes their per-axis sub-gate passed — the stamp must record *which axes* fuzz certified.
+- **Thm 6′ (completeness):** the residual `⊥` now includes a legitimate **partial-identity** state: "work known, stem/variant unverifiable" is a *more complete and still sound* label than full `⊥`. Completeness-maximality is defined per-axis.
+- **Ledger (v2.2) key correction:** `(recording_id, stem, variant)` generation-chains, not `recording_id` — otherwise the ledger itself introduces stem/variant-axis errors.
+
+## v3.5 — Added implementation items (extend v2.7)
+9. **Axis-granular `content_history` key** `(recording_id, stem, variant, generation)`; each generation stamps `(version, stem, variant, op, source)` mirroring `track_audio_correction`.
+10. **Per-axis `B_fuzz` gate:** work/version (fingerprint+margin) ∧ stem (vocal-presence / instrumental-null) ∧ variant (duration ratio); emit partial identity + per-axis `id_source`.
+11. **Candidate binding:** fuzz for candidate slots gated on the *ingested winner's* embedding (reuse `candidate_vocal_gate`), inheriting its abstain; never bind a rejected same-work alternative.
+12. **Ledger records losing candidates** (score, margin, reason) so re-selection is a new generation, not a silent un-bind.
+
+**Recommend Fable re-review v3** — the per-axis soundness split and the acquisition-op partition (preserve vs move `id*`) are new proof obligations that deserve the same adversarial pass v1 got.
