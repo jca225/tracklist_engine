@@ -204,3 +204,57 @@ def chain(
             # empty chain, never a crash.
             return []
     return [dict(r) for r in rows]
+
+
+def tombstone_on(
+    conn: sqlite3.Connection,
+    recording_id: str,
+    *,
+    stem: str | None = None,
+    variant: str | None = None,
+    kind: str | None = None,
+) -> int:
+    """Invalidate (valid→0) the generations on a chain, on an existing
+    connection; return the count invalidated. The caller owns the commit.
+
+    A ``relink`` (the audio was attached to the wrong recording) or ``detach``
+    (abstain) means the generations recorded under this recording/stem are no
+    longer a legal bind target (spec v4.2). We flip ``valid`` rather than delete
+    — the hash is kept for audit, and ``chain(valid_only=True)`` already hides
+    it from binding. The narrowest specified scope is invalidated: pass only
+    ``recording_id`` to tombstone the whole recording, or add ``stem``/
+    ``variant``/``kind`` to narrow it. Tolerates a not-yet-created table
+    (returns 0) for auto-pull safety (issue #73)."""
+    clauses = ["recording_id = ?"]
+    params: list[object] = [recording_id]
+    for col, val in (("stem", stem), ("variant", variant), ("kind", kind)):
+        if val is not None:
+            clauses.append(f"{col} = ?")
+            params.append(val)
+    where = " AND ".join(clauses)
+    try:
+        cur = conn.execute(
+            f"UPDATE content_history SET valid = 0 WHERE {where} AND valid = 1",
+            tuple(params),
+        )
+    except sqlite3.OperationalError:
+        return 0  # no table yet → nothing to invalidate
+    return cur.rowcount
+
+
+def tombstone(
+    db_path: Path,
+    recording_id: str,
+    *,
+    stem: str | None = None,
+    variant: str | None = None,
+    kind: str | None = None,
+) -> Result[int, DbError]:
+    """Standalone tombstone wrapper (owns its transaction)."""
+    try:
+        with connect(db_path) as conn:
+            n = tombstone_on(conn, recording_id, stem=stem, variant=variant, kind=kind)
+            conn.commit()
+            return Ok(n)
+    except sqlite3.Error as e:
+        return Err(DbError(kind="integrity", detail=str(e)))
