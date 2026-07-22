@@ -30,7 +30,8 @@ PIP="$REPO/venvs/web_crawler/bin/pip"
 
 cd "$REPO" || { echo "[autopull] FATAL: $REPO not found"; exit 1; }
 
-log() { echo "[autopull $(date -Is)] $*"; }
+# %z (not GNU-only `-Is`) so the timestamp works on BSD/macOS workers too.
+log() { echo "[autopull $(date +%Y-%m-%dT%H:%M:%S%z)] $*"; }
 
 # --- No-clobber guard: refuse on uncommitted TRACKED changes ------------------
 if ! git diff --quiet || ! git diff --cached --quiet; then
@@ -51,6 +52,20 @@ fi
 # --- Diverged guard: only fast-forward -----------------------------------------
 if ! git merge-base --is-ancestor "$LOCAL" "$REMOTE"; then
   log "SKIP: HEAD ${LOCAL:0:9} is not an ancestor of origin/$BRANCH — diverged, refusing (issue #73)"
+  exit 0
+fi
+
+# --- Migration/schema guard: HOLD (don't pull) to keep schema+code coordinated -
+# A change to a DB migration or the canonical schema requires a deliberate,
+# human-run migrate+deploy (migrations are not idempotent — see scripts/CLAUDE.md).
+# Auto-fast-forwarding here would land new code on the canonical box before the
+# schema it expects is applied. So we stop the line and wait for a coordinated
+# deploy (issue #73 / Crush Phase B GATE) rather than sync blindly.
+MIGRATION_CHANGED=$(git diff --name-only "$LOCAL" "$REMOTE" -- \
+  scripts/migrations web_crawler/database/schema.sql)
+if [ -n "$MIGRATION_CHANGED" ]; then
+  log "MIGRATION PENDING — holding at ${LOCAL:0:9}; run a coordinated migrate+deploy by hand:"
+  printf '%s\n' "$MIGRATION_CHANGED" | sed 's/^/[autopull]   /'
   exit 0
 fi
 
