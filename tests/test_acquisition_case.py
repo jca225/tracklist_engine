@@ -215,12 +215,13 @@ def _bb12_cases() -> list[AcquisitionCase]:
 
 def test_bb12_backfill_covers_every_row():
     cases = _bb12_cases()
-    # BB12 GT is now regenerated from the canonical .als (bb12_align.als) — the
-    # committed yaml == export, gated by labeling/gt_als_gate.py. 164 GT slot
-    # rows collapse to 155 cases after merges. (Was 152 on the pre-.als,
-    # hand-drifted old-scheme fixture.)
-    assert len(cases) == 155
-    # Every case has a recording identity and a claim.
+    # BB12 GT is content-addressed after the Operation Crush de-poison (2026-07-22,
+    # state-of-record decision #15): every identity binds by audio content or
+    # abstains. 155 -> 157 cases — the de-poison re-groups some slots, and the 55
+    # abstained rows (track_id=None) fall to the `mix:`-synthetic-id fallback in
+    # _group_key, so they still form cases. yaml == export, gated by gt_als_gate.py.
+    assert len(cases) == 157
+    # Every case still has a (real or `mix:`-synthetic) recording id and a claim.
     assert all(c.claim.recording_id for c in cases)
     # Every case has at least one attempt reconstructed.
     assert all(c.attempts for c in cases)
@@ -233,16 +234,19 @@ def test_bb12_status_partition():
         by_status[c.status] += 1
     assert by_status[CaseStatus.UNRESOLVABLE] == 2  # the two mix-extract hosts
     assert by_status[CaseStatus.HUMAN_REVIEW] == 41  # unresolved_manifest beds
-    assert by_status[CaseStatus.RESOLVED] == 112  # 109 -> 112 on the .als regen
+    assert (
+        by_status[CaseStatus.RESOLVED] == 114
+    )  # 112 -> 114 on the content-addressed de-poison (#15)
 
 
 def test_bb12_preference_pairs_are_online_over_demucs():
     cases = _bb12_cases()
     pref = [c for c in cases if c.training.preference_pairs]
-    # Data-dependent count (was 4 pre-2026-07-14, 2 on the old-scheme fixture,
-    # 1 after regenerating from the canonical .als). The count is not the point;
-    # the invariant below (online winner beats the demucs loser) is what must hold.
-    assert len(pref) == 1
+    # Data-dependent count (4 pre-2026-07-14 -> 2 old-scheme -> 1 .als-regen -> 0
+    # after the content-addressed de-poison (#15), which abstained the one slot that
+    # still had a surviving online>demucs pair). The count is not the point; the
+    # invariant below (online winner beats the demucs loser) must hold — vacuously now.
+    assert len(pref) == 0
     for c in pref:
         # winner is the online candidate; loser is the separated stem
         assert c.resolution is not None

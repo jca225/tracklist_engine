@@ -1,10 +1,12 @@
 # Alignment — State of Record (current best + settled decisions)
 
-> **As of 2026-07-18 @ `8623eac`** (branch `trm-ablation-framework`).
-> The current best spans unmerged branches: TRM/flywheel work is on
-> `trm-ablation-framework`; the co-training/grammar/transition artifacts called
-> out below remain on `cotrain-corpus-harvest` and must be reconciled before use
-> from the TRM branch.
+> **As of 2026-07-22 @ `1201a75`** (branch `main`).
+> **Operation Crush has EXITED** (decision #15): the GT is de-poisoned +
+> content-addressed on canonical pi. This unblocks the post-Crush re-measure —
+> the first *honest* alignment numbers (§3). The current best still spans
+> unmerged branches: TRM/flywheel work is on `trm-ablation-framework`; the
+> co-training/grammar/transition artifacts below remain on
+> `cotrain-corpus-harvest` and must be reconciled before use.
 >
 > **What this doc is.** The single *living* answer to "what is the aligner at its
 > best right now, and what have we settled on — so build ON this, don't
@@ -46,7 +48,9 @@ three curves. Full frame:
 set audio}` and emits an Ableton-round-trippable structure (per-span
 `ref_segments` for non-straight spans), trained on manual Ableton GT. Stem
 discovery + version/variant QA are **ingest**, not the aligner. Target output
-grammar = "Turing-complete over DJ moves" (see §2, decision #7).
+grammar = "Turing-complete over DJ moves" (see §2, decision #7). **The GT substrate
+it validates against is now content-addressed** — every identity is bound by audio
+content or honestly abstained, never a path/slot guess (decision #15).
 
 **Per-axis best current approach:**
 
@@ -88,6 +92,21 @@ and co-training seam). Harness: `harness/`. Agentic loop: `agentic/`.
 ## 2. Settled decisions (append-only; status = SETTLED | SUPERSEDED-BY-#N)
 
 > Append new entries at the top. Never rewrite history — supersede it.
+
+**#15 — Operation Crush EXITED: GT is de-poisoned and content-addressed on
+canonical.** `2026-07-22` · SETTLED. The `slot_id_map` path/slot-guess binding is
+dead. BB11 (`2nvzlh2k`) + BB12 (`1fsnxchk`) were re-pulled → re-exported via the
+content-addressed `export_als_to_gt` → `write_back_ground_truth` applied to
+canonical `set_ground_truth` + read-back verified. **Every identity binding is now
+`id_source ∈ {content, abstain}` — zero path/slot guesses survive** (BB12: 110
+content / 57 abstain; BB11: 84 / 64). Slots 028=Beatles, 031=CCR bind
+correct-by-content; 144 & 148w1 abstain (148w1 = the `track_audio_id 20911`
+wrong-recording fix shipped in PR #72's same-song guard). Poison ids at 028/031/144
+= 0. Canonical backup: `pi:~/crush_exit_backups/set_ground_truth_bb11_bb12_*.sql`
+(315 rows). This closes decision #4's pending write-back and is the precondition for
+Rolling Thunder RT1. (Numbers themselves → `alignment_status.md` after the scorer
+re-run.) Related infra filed: PR #72 merged; issues #73 (deploy discipline) + #74
+(path-mojibake locale root cause).
 
 **#14 — TRM architecture is viable; synthetic-only substitution is refuted,
 so the next data path is real pseudo-labels.** `2026-07-18` · SETTLED
@@ -163,7 +182,7 @@ bed, NOT varispeed.** `2026-07-12` · SETTLED. A detune-aware channel serves the
 aligner; vocal band 200–3500 Hz.
 
 **#4 — GT export drops deactivated clips and is gain/audibility-aware.**
-`2026-07-12` · SETTLED (code) / pending canonical write-back.
+`2026-07-12` · SETTLED (code) / canonical write-back DONE `2026-07-22` (see #15).
 
 **#3 — Scorer de-inflation.** `2026-07-12` · SETTLED. Score over played +
 gain-audible intervals and report `gap_hallucination_frac`.
@@ -218,10 +237,14 @@ from scorers. Dead ends live in the EXPERIMENTS ledger.
   Open: calibrate per-probe confidence on BB GT before accepting pseudo-labels.
 - **PWS phase-1b continuous lane** remains unmerged and is a fusion fallback,
   not the primary placement/structure lever.
-- **Pending canonical write-back.** The scorer de-inflation + GT-export fixes
-  need re-export → pi write-back → rescore → regenerate
-  [alignment_status.md](alignment_status.md). Until then, newer trajectory
-  diagnostics are provisional.
+- **Post-Crush re-measure — the immediate next action (Rolling Thunder RT1
+  kickoff).** Canonical write-back is DONE (decision #15), so the blocker is
+  cleared. Run the scorers on the de-poisoned GT (`make scorecard` / `make race`
+  over BB11+BB12 on the `_lt` timeline, + the TRM `path_decode.trajectory_acc`
+  re-run) and regenerate [alignment_status.md](alignment_status.md) — the **first
+  honest post-Crush numbers**. Every prior headline was measured on poisoned GT and
+  is provisional until this runs. This is the RT1 starting gun (aligner on certified
+  labels); see [operation_rolling_thunder_proposed.md](operation_rolling_thunder_proposed.md).
 - **Strategic fork (owner decision):** publish the re-characterization now or
   hold it for a SOTA-at-scale paper after the flywheel runs.
 
