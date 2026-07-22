@@ -47,6 +47,12 @@ from labeling.als import (
     track_display_name,
 )
 from labeling.als.validate import has_errors, validate_session
+from labeling.content_hash import file_sha256, mdat_sha256
+from labeling.content_resolver import (
+    CatalogEntry,
+    ContentCatalog,
+    resolve_clip_identity,
+)
 from labeling.ground_truth.schema import (
     GroundTruthSet,
     GroundTruthTrack,
@@ -150,6 +156,7 @@ class ClipRow:
     audible_end_s: float | None = None
     gain_curve: GainCurve = ()
     skip_training: bool = False
+    id_source: str = ""
 
 
 def _mix_track(root) -> object | None:
@@ -161,24 +168,104 @@ def _mix_track(root) -> object | None:
     return None
 
 
+def _load_content_catalog(set_dir: Path) -> ContentCatalog | None:
+    """Read `set_dir/content_catalog.json` into a `ContentCatalog`, or None if absent.
+
+    Registers TWO `CatalogEntry` rows per catalog entry (one keyed on
+    `content_sha256`, one on `payload_sha256` when present) so a clip can bind
+    either by full-file bytes or by the tag-invariant mdat payload — both
+    pointing at the same identity.
+
+    A content hash key that maps to more than one DISTINCT `recording_id`
+    across the catalog is AMBIGUOUS — the same bytes were ingested under two
+    different recordings (duplicate rip / mashup constituent / wrong-version).
+    Binding confidently to either would be the exact confidently-wrong-id
+    poison this branch kills, so such a key is dropped entirely: a clip whose
+    bytes hash to it falls through to abstain instead of last-wins-binding.
+    This is decided per hash key — a row can keep a clean `content_sha256`
+    while its `payload_sha256` (or vice-versa) is excluded as ambiguous.
+    """
+    p = set_dir / "content_catalog.json"
+    if not p.is_file():
+        return None
+    payload = json.loads(p.read_text())
+    rows = payload.get("entries") or []
+
+    # Pass 1: collect every recording_id seen under each hash key, across
+    # both key types, so an ambiguous key can be identified before any
+    # CatalogEntry is emitted.
+    recording_ids_by_key: dict[str, set[str | None]] = {}
+    for e in rows:
+        rid = e.get("recording_id")
+        for key in (e.get("content_sha256"), e.get("payload_sha256")):
+            if key:
+                recording_ids_by_key.setdefault(str(key), set()).add(rid)
+    ambiguous_keys = {
+        key for key, rids in recording_ids_by_key.items() if len(rids) > 1
+    }
+
+    # Pass 2: emit CatalogEntry rows, skipping any key found ambiguous above.
+    entries: list[CatalogEntry] = []
+    for e in rows:
+        rid = e.get("recording_id")
+        taid = str(e.get("track_audio_id") or "")
+        stem = str(e.get("stem") or "regular")
+        for key in (e.get("content_sha256"), e.get("payload_sha256")):
+            if key and str(key) not in ambiguous_keys:
+                entries.append(
+                    CatalogEntry(
+                        track_audio_id=taid,
+                        recording_id=rid,
+                        stem=stem,
+                        head_hash=str(key),
+                    )
+                )
+    return ContentCatalog.from_entries(entries)
+
+
+def _content_bind(
+    clip: ParsedClip, catalog: ContentCatalog | None
+) -> tuple[str | None, str]:
+    """(recording_id, id_source): bind a clip by content, or abstain.
+
+    Two passes: `head_hash_of=file_sha256` (the full-file hash — matches a
+    pristine downloaded master); on a miss, for an mp4-family path
+    (`.m4a`/`.mp4`/`.m4b`), a second pass with `head_hash_of=mdat_sha256` (the
+    tag-invariant mdat payload — matches a locally iTunes-tagged copy of the
+    same master). A missing file or any OSError abstains; this never raises.
+    """
+    if catalog is None:
+        return None, "abstain"
+
+    def _safe(hasher):
+        def _inner(path: str) -> str | None:
+            try:
+                return hasher(path)
+            except OSError:
+                return None
+
+        return _inner
+
+    r = resolve_clip_identity(clip, catalog, head_hash_of=_safe(file_sha256))
+    if not r.is_ok() and clip.path.lower().endswith((".m4a", ".mp4", ".m4b")):
+        r = resolve_clip_identity(clip, catalog, head_hash_of=_safe(mdat_sha256))
+    if r.is_ok():
+        return r.value.recording_id, "content"
+    return None, "abstain"
+
+
 def _clip_row(
     clip: ParsedClip,
     mapper: ArrangementMapper,
     manifest,
-    slot_id_map: dict[str, str] | None = None,
+    catalog: ContentCatalog | None = None,
 ) -> ClipRow | None:
     set_start = mapper.arr_to_set_sec(clip.arr_start)
     set_end = mapper.arr_to_set_sec(clip.arr_end)
     if set_start is None or set_end is None:
         return None
-    recording_id, slot_label, display, claimed_stem = resolve_identity(clip, manifest)
-    if recording_id is None and slot_id_map and slot_label:
-        # Path-based manifest match missed (stale .als after a slot/tag rename).
-        # Fall back to a slot_label -> recording_id bridge exported from the
-        # last known-good GT fixture. slot_label is deterministic from the .als
-        # path and unchanged by a manifest renumber, so this is exact, not a
-        # guess (id_maps built only from slots with a unique recording_id).
-        recording_id = slot_id_map.get(slot_label)
+    _rid_unused, slot_label, display, claimed_stem = resolve_identity(clip, manifest)
+    recording_id, id_source = _content_bind(clip, catalog)
     _, ref_source = classify_path(clip.path)
     ref_start = clip.ref_start_s()
     ref_end = clip.ref_end_s()
@@ -216,6 +303,7 @@ def _clip_row(
         audible_end_s=aud_end_out,
         gain_curve=gain_curve,
         skip_training=skip,
+        id_source=id_source,
     )
 
 
@@ -477,21 +565,8 @@ def _to_gt_track(row: ClipRow) -> GroundTruthTrack:
         skip_training=row.skip_training,
         unalignable=note is not None,
         source_note=note,
+        id_source=row.id_source,
     )
-
-
-def _load_slot_id_map(set_id: str) -> dict[str, str]:
-    """slot_label -> recording_id bridge for a set, if one is checked in.
-
-    Rescues re-export when a stale .als (clip file-refs not relinked after a
-    slot/tag rename) no longer path-matches the manifest. Built only from slots
-    that carry a unique recording_id in the source fixture, so the bridge is
-    exact. Absent file -> empty map (no bridging)."""
-    p = _REPO / "labeling" / "fixtures" / "id_maps" / f"{set_id}_slots.json"
-    if not p.is_file():
-        return {}
-    raw = json.loads(p.read_text())
-    return {str(k): str(v) for k, v in raw.items() if v}
 
 
 def collect_kept_clip_rows(
@@ -509,7 +584,7 @@ def collect_kept_clip_rows(
     set_id = str(manifest_json.get("set_id") or "").strip()
     if not set_id:
         raise ValueError("manifest.json missing set_id")
-    slot_id_map = _load_slot_id_map(set_id)
+    catalog = _load_content_catalog(set_dir)
     mix_duration_s = float(manifest_json.get("mix_duration_s") or 0.0)
 
     root = load_als_xml(als_path)
@@ -539,7 +614,7 @@ def collect_kept_clip_rows(
             )
             continue
         for part in split_clip_at_mix_span_edges(clip, mapper):
-            row = _clip_row(part, mapper, manifest, slot_id_map)
+            row = _clip_row(part, mapper, manifest, catalog)
             if row is None:
                 review.append(
                     ReviewRow(
@@ -689,9 +764,9 @@ ID_COVERAGE_MIN = 0.5
 
 
 def id_coverage(tracks) -> tuple[int, int, float]:
-    """(resolved, total, fraction) of GT tracks carrying a recording_id."""
+    """(content-bound, total, fraction) of GT tracks whose id came from content."""
     total = len(tracks)
-    resolved = sum(1 for t in tracks if getattr(t, "track_id", None))
+    resolved = sum(1 for t in tracks if getattr(t, "id_source", "") == "content")
     return resolved, total, (resolved / total if total else 1.0)
 
 
@@ -776,11 +851,16 @@ def main(argv: list[str] | None = None) -> int:
     # would silently corrupt canonical set_ground_truth on write-back. Refuse.
     resolved, total, coverage = id_coverage(gt.tracks)
     if total and coverage < ID_COVERAGE_MIN and not args.allow_invalid:
+        abstained = [
+            t.slot_label or t.label
+            for t in gt.tracks
+            if getattr(t, "id_source", "") != "content"
+        ]
         print(
             f"REFUSING to export: only {resolved}/{total} tracks ({coverage:.0%}) "
-            f"resolved a recording_id (min {ID_COVERAGE_MIN:.0%}). The .als clip "
-            "file-refs likely don't match the manifest — stale after a rename; run "
-            "labeling/relink_als_after_tag.py, or pass --allow-invalid to override.",
+            f"content-bound (min {ID_COVERAGE_MIN:.0%}). Abstained: "
+            f"{', '.join(abstained[:30])}. Rebuild content_catalog.json (re-pull), "
+            "or pass --allow-invalid to override.",
             file=sys.stderr,
         )
         return 1

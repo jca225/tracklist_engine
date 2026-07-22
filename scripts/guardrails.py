@@ -40,6 +40,30 @@ VARIANT_TAG_ALLOW_FILES = frozenset(
 
 STALE_MODULE_SKIP_FILES = frozenset({REPO_ROOT / "scripts" / "guardrails.py"})
 
+# Operation Crush (2026-07-21): slot_id_map stamped a frozen
+# slot_label -> recording_id fixture onto GT export clips, silently rebinding
+# a clip to a DIFFERENT SONG whenever the .als slot numbering drifted from the
+# fixture. Deleted (labeling/export_als_to_gt.py) in favor of content-addressed
+# binding (sha256/mdat match, abstain on miss) — see
+# docs/operation_crush_master_plan.md. These two test files name the deleted
+# mechanism only in docstrings, to document the property their test guards
+# against; they are not a reintroduction of it.
+SLOT_ID_MAP_ALLOW_FILES = frozenset(
+    {
+        REPO_ROOT / "tests" / "labeling" / "test_content_identity_metamorphic.py",
+        REPO_ROOT / "tests" / "labeling" / "test_export_content_identity.py",
+    }
+)
+
+# Only the *_slots.json fixture family that _load_slot_id_map consumed is the
+# poison — NOT the whole labeling/fixtures/id_maps/ directory, which also
+# carries an unrelated, still-live tlp*->recording_id namespace-bridge fixture
+# (e.g. id_maps/2nvzlh2k.json, built from set_track_slots for the BB11 scorer;
+# see workspaces/alignment_prototype/{infer,score_timeline_vs_gt}.py and
+# eda/alignment/failure_analysis/build_span_table.py). Widening this to the
+# bare directory path would flag that unrelated, currently-in-use mechanism.
+SLOT_ID_MAP_FIXTURE_RE = re.compile(r"labeling/fixtures/id_maps/[\w./-]*_slots\.json")
+
 DOC_STALE_PIPELINE_RE = re.compile(
     r"audio_pipeline/(?:analysis|adapters|main)",
 )
@@ -144,6 +168,32 @@ def _check_stale_data_analysis(path: Path, text: str) -> list[Violation]:
         for pat, detail in patterns:
             if pat.search(line):
                 violations.append(Violation(path, lineno, "stale_module", detail))
+                break
+    return violations
+
+
+def _check_stale_slot_id_map(path: Path, text: str) -> list[Violation]:
+    if path in STALE_MODULE_SKIP_FILES or path in SLOT_ID_MAP_ALLOW_FILES:
+        return []
+    if "attic" in path.relative_to(REPO_ROOT).parts:
+        return []
+    patterns = (
+        (
+            re.compile(r"\bslot_id_map\b"),
+            "slot_id_map is the deleted GT id-poison — bind identity by "
+            "content (Operation Crush)",
+        ),
+        (
+            SLOT_ID_MAP_FIXTURE_RE,
+            "labeling/fixtures/id_maps/*_slots.json is the deleted GT "
+            "id-poison fixture — bind identity by content (Operation Crush)",
+        ),
+    )
+    violations: list[Violation] = []
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        for pat, detail in patterns:
+            if pat.search(line):
+                violations.append(Violation(path, lineno, "poison_slot_id_map", detail))
                 break
     return violations
 
@@ -553,6 +603,7 @@ def run_checks() -> list[Violation]:
             continue
         violations.extend(_check_stale_audio_pipeline(path, text))
         violations.extend(_check_stale_data_analysis(path, text))
+        violations.extend(_check_stale_slot_id_map(path, text))
         violations.extend(_check_variant_tag(path, text))
         violations.extend(_check_adapter_parents(path, text))
         violations.extend(_check_als_core_boundary(path, text))

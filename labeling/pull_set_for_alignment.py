@@ -886,11 +886,35 @@ def main() -> int:
         )
     if not args.dry_run:
         (dest_root / "manifest.json").write_text(json.dumps(manifest, indent=2))
+
+        # Content catalog sidecar (Operation Crush): sha256/mdat -> recording_id
+        # for content-addressed GT identity. Built on pi (canonical DB + files).
+        try:
+            cat = subprocess.run(
+                [
+                    "ssh",
+                    "pi-storage",
+                    "cd ~/tracklist_engine && python3 -m labeling.build_content_catalog "
+                    + args.set_id,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=1800,
+                check=True,
+            ).stdout
+            data = json.loads(cat)
+            n = len(data.get("entries", []))
+            (dest_root / "content_catalog.json").write_text(cat)
+            print(f"wrote content_catalog.json ({n} entries)")
+        except (subprocess.SubprocessError, OSError, ValueError) as e:
+            detail = getattr(e, "stderr", "") or e
+            print(
+                f"WARNING: content_catalog.json not written: {detail}", file=sys.stderr
+            )
+
         from labeling.audio_index import build_audio_index, write_audio_index
 
-        write_audio_index(
-            dest_root, build_audio_index(dest_root, manifest["tracks"])
-        )
+        write_audio_index(dest_root, build_audio_index(dest_root, manifest["tracks"]))
 
     if args.fetch_candidates and not args.dry_run and succeeded:
         _run_fetch_candidates(dest_root, satisfaction_by_label)

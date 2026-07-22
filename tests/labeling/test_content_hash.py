@@ -1,0 +1,83 @@
+"""content_hash: full-file sha256 == track_audio.sha256; mdat hash is tag-invariant."""
+
+from __future__ import annotations
+
+import hashlib
+import struct
+from pathlib import Path
+
+from labeling.content_hash import file_sha256, mdat_sha256
+
+
+def _write_min_mp4(path: Path, mdat_payload: bytes, tag_blob: bytes) -> None:
+    # ftyp, then a 'moov'->'udta' carrying tag_blob, then 'mdat' with payload.
+    def box(typ: bytes, body: bytes) -> bytes:
+        return struct.pack(">I", len(body) + 8) + typ + body
+
+    ftyp = box(b"ftyp", b"isom" + b"\x00\x00\x02\x00" + b"isomiso2")
+    udta = box(b"udta", box(b"\xa9nam", tag_blob))
+    moov = box(b"moov", udta)
+    mdat = box(b"mdat", mdat_payload)
+    path.write_bytes(ftyp + moov + mdat)
+
+
+def test_file_sha256_matches_hashlib(tmp_path: Path) -> None:
+    p = tmp_path / "x.bin"
+    p.write_bytes(b"hello world" * 1000)
+    assert file_sha256(p) == hashlib.sha256(p.read_bytes()).hexdigest()
+
+
+def test_mdat_hash_is_tag_invariant(tmp_path: Path) -> None:
+    payload = b"AUDIO-PAYLOAD-BYTES" * 500
+    a = tmp_path / "a.m4a"
+    b = tmp_path / "b.m4a"
+    _write_min_mp4(a, payload, tag_blob=b"tags-before")
+    _write_min_mp4(b, payload, tag_blob=b"COMPLETELY-DIFFERENT-LONGER-TAGS")
+    # Different container metadata -> different full-file hash ...
+    assert file_sha256(a) != file_sha256(b)
+    # ... but identical audio payload -> identical mdat hash.
+    assert mdat_sha256(a) == mdat_sha256(b)
+    assert mdat_sha256(a) == hashlib.sha256(payload).hexdigest()
+
+
+def test_mdat_hash_none_for_non_mp4(tmp_path: Path) -> None:
+    p = tmp_path / "not.mp4"
+    p.write_bytes(b"fLaC" + b"\x00" * 100)
+    assert mdat_sha256(p) is None
+
+
+def test_mdat_corrupt_box_size_returns_none(tmp_path: Path) -> None:
+    """A box declaring size=2 (< 8-byte header) is malformed -> None, no crash/hang.
+
+    Before the fix, `payload = size - hdrlen` goes negative (2 - 8 = -6) and
+    `f.seek(payload, 1)` seeks BACKWARD, which can loop forever re-reading the
+    same corrupt header instead of terminating.
+    """
+    p = tmp_path / "corrupt.m4a"
+    corrupt_box = struct.pack(">I", 2) + b"free"  # size=2 is impossible (< hdrlen)
+    p.write_bytes(corrupt_box + b"\x00" * 100)
+    assert mdat_sha256(p) is None
+
+
+def test_mdat_truncated_extended_size_returns_none(tmp_path: Path) -> None:
+    """size=1 (64-bit extended-size marker) truncated before the 8-byte size field.
+
+    Before the fix, `struct.unpack(">Q", f.read(8))` raises `struct.error` when
+    fewer than 8 bytes remain — an uncaught crash on a corrupt/truncated file.
+    """
+    p = tmp_path / "truncated_ext.m4a"
+    p.write_bytes(struct.pack(">I", 1) + b"free")  # size=1 marker, no ext bytes follow
+    assert mdat_sha256(p) is None
+
+
+def test_mdat_size_zero_extends_to_eof(tmp_path: Path) -> None:
+    """ISO-BMFF size==0 means 'box extends to end of file'."""
+    p = tmp_path / "size_zero.m4a"
+    # ftyp box, then mdat with size=0 (extends to EOF)
+    payload = b"END-OF-FILE-AUDIO-PAYLOAD" * 100
+    # ftyp box: size=24 (8-byte header + 16-byte body)
+    ftyp = struct.pack(">I", 24) + b"ftyp" + b"isom" + b"\x00\x00\x02\x00" + b"isomiso2"
+    mdat_header = struct.pack(">I", 0) + b"mdat"  # size=0 means extends to EOF
+    p.write_bytes(ftyp + mdat_header + payload)
+    # mdat_sha256 should hash the payload, not return empty-string hash
+    assert mdat_sha256(p) == hashlib.sha256(payload).hexdigest()
