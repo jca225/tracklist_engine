@@ -77,9 +77,9 @@ def build_catalog(conn, set_id, *, file_sha256=_file_sha256, mdat_sha256=_mdat_s
     # (ta.stem='regular'). If the parent is itself an acappella/instrumental
     # master, its separated residual is not the recording's real acappella/
     # instrumental — cataloguing it would be a wrong-stem-axis entry (P14).
-    for taid, rid, stem_name, spath in conn.execute(
+    for taid, rid, stem_name, spath, variant in conn.execute(
         f"SELECT ts.track_audio_id, COALESCE(ta.recording_id, ta.track_id) AS rid, "
-        f"ts.stem_name, ts.path "
+        f"ts.stem_name, ts.path, ta.variant "
         f"FROM track_stems ts JOIN track_audio ta ON ta.track_audio_id=ts.track_audio_id "
         f"WHERE (ta.track_id IN ({qmarks}) OR ta.recording_id IN ({qmarks})) "
         f"AND ta.stem='regular' AND ts.stem_name IN ('vocals','instrumental')",
@@ -103,11 +103,10 @@ def build_catalog(conn, set_id, *, file_sha256=_file_sha256, mdat_sha256=_mdat_s
                 "recording_id": rid,
                 "track_audio_id": str(taid),
                 "stem": axis,
-                # Safe default: a separated stem really inherits the parent
-                # track_audio's variant, but wiring that through is a
-                # follow-on refinement. Emitting a default here just keeps
-                # the key present/non-crashing.
-                "variant": "regular",
+                # A separation preserves the parent master's length, so the
+                # separated stem inherits the parent track_audio's variant
+                # (mirrors the master loop's `variant or "regular"`).
+                "variant": variant or "regular",
                 "kind": "separated",
             }
         )
