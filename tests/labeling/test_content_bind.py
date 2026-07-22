@@ -46,7 +46,12 @@ def test_binds_by_full_file_sha256(tmp_path: Path) -> None:
         ],
     )
     cat = _load_content_catalog(tmp_path)
-    assert _content_bind(_clip(str(f)), cat) == ("recX", "content")
+    assert _content_bind(_clip(str(f)), cat) == (
+        "recX",
+        "acappella",
+        "regular",
+        "content",
+    )
 
 
 def test_abstains_when_bytes_not_in_catalog(tmp_path: Path) -> None:
@@ -65,13 +70,18 @@ def test_abstains_when_bytes_not_in_catalog(tmp_path: Path) -> None:
         ],
     )
     cat = _load_content_catalog(tmp_path)
-    assert _content_bind(_clip(str(f)), cat) == (None, "abstain")
+    assert _content_bind(_clip(str(f)), cat) == (None, None, None, "abstain")
 
 
 def test_missing_file_abstains(tmp_path: Path) -> None:
     _catalog(tmp_path, [])
     cat = _load_content_catalog(tmp_path)
-    assert _content_bind(_clip(str(tmp_path / "gone.m4a")), cat) == (None, "abstain")
+    assert _content_bind(_clip(str(tmp_path / "gone.m4a")), cat) == (
+        None,
+        None,
+        None,
+        "abstain",
+    )
 
 
 def test_collision_same_hash_different_recording_ids_abstains(tmp_path: Path) -> None:
@@ -105,7 +115,7 @@ def test_collision_same_hash_different_recording_ids_abstains(tmp_path: Path) ->
         ],
     )
     cat = _load_content_catalog(tmp_path)
-    assert _content_bind(_clip(str(f)), cat) == (None, "abstain")
+    assert _content_bind(_clip(str(f)), cat) == (None, None, None, "abstain")
 
 
 def test_same_recording_id_two_rows_still_binds(tmp_path: Path) -> None:
@@ -137,7 +147,12 @@ def test_same_recording_id_two_rows_still_binds(tmp_path: Path) -> None:
         ],
     )
     cat = _load_content_catalog(tmp_path)
-    assert _content_bind(_clip(str(f)), cat) == ("recSame", "content")
+    assert _content_bind(_clip(str(f)), cat) == (
+        "recSame",
+        "regular",
+        "regular",
+        "content",
+    )
 
 
 def test_binds_tagged_master_by_mdat(tmp_path: Path) -> None:
@@ -167,4 +182,9 @@ def test_binds_tagged_master_by_mdat(tmp_path: Path) -> None:
         ],
     )
     cat = _load_content_catalog(tmp_path)
-    assert _content_bind(_clip(str(f)), cat) == ("recM", "content")
+    assert _content_bind(_clip(str(f)), cat) == (
+        "recM",
+        "regular",
+        "regular",
+        "content",
+    )

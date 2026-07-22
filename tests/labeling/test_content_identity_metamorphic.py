@@ -57,4 +57,9 @@ def test_renumber_preserves_content_identity(tmp_path: Path) -> None:
     cat = _load_content_catalog(tmp_path)
     # Identical bytes under two different slot numbers -> identical identity.
     assert _content_bind(_clip(str(a)), cat) == _content_bind(_clip(str(b)), cat)
-    assert _content_bind(_clip(str(a)), cat) == ("beatles", "content")
+    assert _content_bind(_clip(str(a)), cat) == (
+        "beatles",
+        "acappella",
+        "regular",
+        "content",
+    )
