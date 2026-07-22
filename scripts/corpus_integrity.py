@@ -26,7 +26,10 @@ import argparse
 import os
 import sqlite3
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
+
+from core.mojibake import is_double_encoded_utf8
 
 
 @dataclass(frozen=True)
@@ -35,9 +38,29 @@ class Invariant:
     severity: str  # "ERROR" | "WARN"
     title: str
     # count_sql returns one row, one column: the number of violations.
-    count_sql: str
+    count_sql: str = ""
     # sample_sql returns a few offending rows for the report (optional).
     sample_sql: str = ""
+    # py_check is for invariants SQL can't express (e.g. a Python string test).
+    # It returns ALL offending rows; count = len(rows), samples = rows[:N].
+    py_check: Callable[[sqlite3.Connection], list[tuple]] | None = None
+
+
+def _mojibake_path_rows(conn: sqlite3.Connection) -> list[tuple]:
+    """track_audio rows whose `path` is double-encoded UTF-8 (issue #74).
+
+    Not expressible in SQL — the test is a latin-1<->utf-8 round-trip on the
+    Python string. Scans every non-empty path; cheap even at corpus scale.
+    """
+    rows = conn.execute(
+        "SELECT track_audio_id, recording_id, path FROM track_audio "
+        "WHERE path IS NOT NULL AND path != ''"
+    ).fetchall()
+    return [
+        (taid, rid, path[-45:])
+        for taid, rid, path in rows
+        if is_double_encoded_utf8(path)
+    ]
 
 
 INVARIANTS: tuple[Invariant, ...] = (
@@ -161,6 +184,14 @@ INVARIANTS: tuple[Invariant, ...] = (
         "WHERE stem='regular' AND variant='regular' "
         "GROUP BY recording_id HAVING COUNT(DISTINCT platform)>1)",
     ),
+    Invariant(
+        "mojibake_path",
+        "ERROR",
+        "track_audio.path is double-encoded (mojibake) UTF-8 — resolves on pi's "
+        "iso8859-1 locale by accident but breaks UTF-8 clients / GT pulls "
+        "(issue #74)",
+        py_check=_mojibake_path_rows,
+    ),
 )
 
 
@@ -168,11 +199,17 @@ def _scalar(conn: sqlite3.Connection, sql: str) -> int:
     return int(conn.execute(sql).fetchone()[0])
 
 
+def _count(conn: sqlite3.Connection, inv: Invariant) -> int:
+    if inv.py_check is not None:
+        return len(inv.py_check(conn))
+    return _scalar(conn, inv.count_sql)
+
+
 def evaluate(conn: sqlite3.Connection) -> list[tuple[Invariant, int]]:
     """Count violations of every invariant against an open connection.
     Separated from `run` so the checker is unit-testable against a crafted
     in-memory DB (a checker that can silently rot is worse than no checker)."""
-    return [(inv, _scalar(conn, inv.count_sql)) for inv in INVARIANTS]
+    return [(inv, _count(conn, inv)) for inv in INVARIANTS]
 
 
 def run(db_path: str, *, show_samples: bool) -> int:
@@ -189,7 +226,9 @@ def run(db_path: str, *, show_samples: bool) -> int:
                 errors += 1
             else:
                 warns += 1
-            if inv.sample_sql:
+            if inv.py_check is not None:
+                failed_samples.append((inv, inv.py_check(conn)[:8]))
+            elif inv.sample_sql:
                 failed_samples.append((inv, conn.execute(inv.sample_sql).fetchall()))
         flag = "" if n == 0 else ("  <== " + inv.severity)
         print(f"{inv.severity:<6}{n:>8}  {inv.title}{flag}")
