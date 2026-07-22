@@ -1,7 +1,7 @@
 # Design: Oracle instance-selection separability + cross-set transfer (Task A)
 
 **Date:** 2026-07-18 · **Branch:** `instance-separability` (off PR #16 `worktree-acap-oracle-ladder`)
-**Origin:** `docs/agent_handoff_north_star_n2_20260718.md` → Task A (flagship)
+**Origin:** `docs/archive/agent_handoff_north_star_n2_20260718.md` → Task A (flagship)
 **Status:** design, pending implementation plan
 
 ## One-line

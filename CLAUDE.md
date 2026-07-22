@@ -260,17 +260,3 @@ Mechanical checks catch rename drift, stale module names, and wrong adapter path
 - `data/`, `profiles/`, `logs/` are gitignored — only `data/djs/*.json` job files are tracked
 - Tests/imports run from repo root with `venvs/audio/bin/python`.
 
-# Python Style Guide: Rust-Flavoured Functional Python
-
-The Python style for the project — "Rust-flavoured" in the parts the code
-actually practices, not a strict regime:
-
-- **Explicit & typed** — full type hints, `from __future__ import annotations`,
-  explicit over clever.
-- **Immutable** — frozen dataclasses for records (`data_models.py`, `StemRow`);
-  construct new values rather than mutate in place.
-- **Pure functions, composed** — small single-purpose functions assembled in a
-  thin `main()` (e.g. `scripts/acquire_variant.py`); keep I/O at the edges.
-- **Errors as values in core, fail-fast at the edge** — library/core code
-  returns a `Result` (`core/result.py`); CLI scripts and entrypoints
-  exit on error with `sys.exit`. Don't retrofit monadic Results onto scripts.

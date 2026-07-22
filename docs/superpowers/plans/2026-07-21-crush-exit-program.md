@@ -81,6 +81,11 @@ are GATEs.
 ## Out of scope (tracked, not this program)
 
 - Full-corpus mis-link cleanup (Phase-1 suspects not touching BB11/BB12).
+- **The systemic fix for the wrong-recording mis-attach class** (this program only
+  cleans the GT-affecting instances in Phase 2). The prevent+represent+remediate full
+  fix — ledger `recording` axis, fail-closed same-song guard on `acquire_variant`,
+  corpus audit — is its own effort (PR #70):
+  [docs/superpowers/specs/2026-07-22-stem-recording-misattach-fix-design.md](../specs/2026-07-22-stem-recording-misattach-fix-design.md).
 - Same-title / wrong-version `track_audio` registration errors (the acknowledged blind
   spot content binding inherits) — owned by ingest/identity, separate effort.
 - Step 3 audio round-trip law (#37).

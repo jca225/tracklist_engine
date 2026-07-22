@@ -27,6 +27,20 @@ _CAT = ContentCatalog.from_entries(
     ]
 )
 
+_CAT_ACAP_EXT = ContentCatalog.from_entries(
+    [
+        CatalogEntry(
+            track_audio_id="ta2",
+            recording_id="rec2",
+            stem="acappella",
+            variant="extended",
+            file_size=300,
+            crc=400,
+            head_hash="def",
+        )
+    ]
+)
+
 
 def _clip(file_size=None, crc=None, path="x.flac") -> ParsedClip:
     return ParsedClip(
@@ -83,3 +97,12 @@ def test_head_hash_miss_still_abstains():
         head_hash_of=lambda _p: "no-such-hash",
     )
     assert not r.is_ok()
+
+
+def test_resolved_identity_carries_stem_and_variant_together():
+    # A2: the bind must resolve a COMPLETE axis point (recording_id, stem,
+    # variant) — not stem alone with variant thrown away out-of-band.
+    r = resolve_clip_identity(_clip(file_size=300, crc=400), _CAT_ACAP_EXT)
+    assert r.is_ok()
+    assert r.value.stem == "acappella"
+    assert r.value.variant == "extended"

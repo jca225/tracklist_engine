@@ -2,8 +2,12 @@
 
 Records one row each time a track's downloaded audio is replaced or a variant
 added because the auto-acquired version was the wrong *identity* along one of
-the three axes (version / variant / stem). See core/identity.py.
+the four axes (version / variant / stem / recording). See core/identity.py.
+The `recording` axis covers a stem mis-attached to the wrong work/recording
+entirely, corrected via the `relink` action (reassign to the right recording)
+or `detach` (abstain — unlink with no replacement).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -18,8 +22,8 @@ from core.errors import DbError
 from core.identity import normalize_stem
 from core.result import Err, Ok, Result
 
-AXES = ("version", "variant", "stem")
-ACTIONS = ("replace", "add")
+AXES = ("version", "variant", "stem", "recording")
+ACTIONS = ("replace", "add", "relink", "detach")
 
 
 @dataclass(frozen=True)
@@ -37,7 +41,9 @@ class Correction:
     new_platform: str | None = None
     new_player_id: str | None = None
     new_url: str | None = None
-    stem_value: str | None = None     # regular | acappella | instrumental
+    old_recording_id: str | None = None
+    new_recording_id: str | None = None
+    stem_value: str | None = None  # regular | acappella | instrumental
     reason: str | None = None
     source: str | None = None
 
@@ -55,14 +61,29 @@ def log_correction(db_path: Path, c: Correction) -> Result[int, DbError]:
                   (set_id, position, track_id, axis, action,
                    old_track_audio_id, old_platform, old_player_id, old_url,
                    new_track_audio_id, new_platform, new_player_id, new_url,
+                   old_recording_id, new_recording_id,
                    stem_value, reason, source)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    c.set_id, c.position, c.track_id, c.axis, c.action,
-                    c.old_track_audio_id, c.old_platform, c.old_player_id, c.old_url,
-                    c.new_track_audio_id, c.new_platform, c.new_player_id, c.new_url,
-                    c.stem_value, c.reason, c.source,
+                    c.set_id,
+                    c.position,
+                    c.track_id,
+                    c.axis,
+                    c.action,
+                    c.old_track_audio_id,
+                    c.old_platform,
+                    c.old_player_id,
+                    c.old_url,
+                    c.new_track_audio_id,
+                    c.new_platform,
+                    c.new_player_id,
+                    c.new_url,
+                    c.old_recording_id,
+                    c.new_recording_id,
+                    c.stem_value,
+                    c.reason,
+                    c.source,
                 ),
             )
             conn.commit()
@@ -100,9 +121,13 @@ def _main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         description="Append a correction-ledger row (standalone / manual path).",
     )
-    p.add_argument("--db", type=Path,
-                   default=Path(os.environ.get("TRACKLIST_DB",
-                                               "/mnt/storage/data/db/music_database.db")))
+    p.add_argument(
+        "--db",
+        type=Path,
+        default=Path(
+            os.environ.get("TRACKLIST_DB", "/mnt/storage/data/db/music_database.db")
+        ),
+    )
     p.add_argument("--track-id", required=True)
     p.add_argument("--axis", required=True, choices=AXES)
     p.add_argument("--action", required=True, choices=ACTIONS)
@@ -118,8 +143,11 @@ def _main(argv: list[str] | None = None) -> int:
     old = snapshot_row(a.db, a.old_taid) if a.old_taid is not None else None
     new = snapshot_row(a.db, a.new_taid) if a.new_taid is not None else None
     c = Correction(
-        track_id=a.track_id, axis=a.axis, action=a.action,
-        set_id=a.set_id, position=a.position,
+        track_id=a.track_id,
+        axis=a.axis,
+        action=a.action,
+        set_id=a.set_id,
+        position=a.position,
         old_track_audio_id=a.old_taid,
         old_platform=(old or {}).get("platform"),
         old_player_id=(old or {}).get("player_id"),
@@ -129,7 +157,8 @@ def _main(argv: list[str] | None = None) -> int:
         new_player_id=(new or {}).get("player_id"),
         new_url=(new or {}).get("source_url"),
         stem_value=a.stem or (new or {}).get("stem"),
-        reason=a.reason, source=a.source,
+        reason=a.reason,
+        source=a.source,
     )
     r = log_correction(a.db, c)
     match r:
