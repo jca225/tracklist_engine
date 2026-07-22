@@ -38,9 +38,9 @@ def build_catalog(conn, set_id, *, file_sha256=_file_sha256, mdat_sha256=_mdat_s
         return {"set_id": set_id, "entries": entries}
     qmarks = ",".join("?" * len(recs))
 
-    for taid, rid, stem, sha, path in conn.execute(
-        f"SELECT track_audio_id, recording_id, stem, sha256, path FROM track_audio "
-        f"WHERE recording_id IN ({qmarks})",
+    for taid, rid, stem, sha, path, variant in conn.execute(
+        f"SELECT track_audio_id, recording_id, stem, sha256, path, variant "
+        f"FROM track_audio WHERE recording_id IN ({qmarks})",
         recs,
     ):
         payload = None
@@ -57,6 +57,7 @@ def build_catalog(conn, set_id, *, file_sha256=_file_sha256, mdat_sha256=_mdat_s
                 "recording_id": rid,
                 "track_audio_id": str(taid),
                 "stem": stem or "regular",
+                "variant": variant or "regular",
             }
         )
 
@@ -77,6 +78,11 @@ def build_catalog(conn, set_id, *, file_sha256=_file_sha256, mdat_sha256=_mdat_s
                 "recording_id": rid,
                 "track_audio_id": str(taid),
                 "stem": _STEM_TO_AXIS.get(stem_name, stem_name),
+                # Safe default: a separated stem really inherits the parent
+                # track_audio's variant, but wiring that through is Task A3
+                # (the stem-derivation loop refinement). Emitting a default
+                # here just keeps the key present/non-crashing.
+                "variant": "regular",
             }
         )
     return {"set_id": set_id, "entries": entries}

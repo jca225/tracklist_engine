@@ -21,7 +21,7 @@ from typing import Any
 
 import yaml
 
-from core.identity import normalize_stem
+from core.identity import normalize_stem, normalize_variant
 from core.result import Err, Ok, Result
 
 
@@ -106,6 +106,7 @@ class GroundTruthTrack:
     # PREDICT difficulty on unseen mixes. Placement
     # loss is masked; the row stays a training example.
     source_note: str | None = None  # e.g. "Lux Omega — original unavailable"
+    claimed_variant: str = "regular"  # regular | extended (mirrors claimed_stem)
     id_source: str = ""  # "" legacy | "content" (bound by sha256/mdat) | "abstain"
 
 
@@ -226,6 +227,9 @@ def _parse_track(
             track_id=track_id,
             claimed_stem=normalize_stem(
                 str(t.get("claimed_stem") or t.get("version_tag") or "").strip() or None
+            ),
+            claimed_variant=normalize_variant(
+                str(t.get("claimed_variant") or "").strip() or None
             ),
             set_start_s=float(t["set_start_s"]),
             set_end_s=float(t["set_end_s"]),
@@ -349,6 +353,8 @@ def dump(gt: GroundTruthSet, *, title: str | None = None) -> str:
             out.append(f"    track_id:    {t.track_id}")
         if t.claimed_stem and t.claimed_stem != "regular":
             out.append(f"    claimed_stem: {t.claimed_stem}")
+        if t.claimed_variant and t.claimed_variant != "regular":
+            out.append(f"    claimed_variant: {t.claimed_variant}")
         if t.ref_source and t.ref_source != "reference":
             out.append(f"    ref_source:  {t.ref_source}")
         out.append(f"    set_start_s: {_fmt_num(t.set_start_s)}")
