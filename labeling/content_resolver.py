@@ -30,6 +30,7 @@ class CatalogEntry:
     file_size: int | None = None
     crc: int | None = None
     head_hash: str | None = None
+    variant: str = "regular"  # regular | extended
 
 
 @dataclass(frozen=True)
@@ -39,13 +40,39 @@ class ContentCatalog:
 
     @classmethod
     def from_entries(cls, entries: Iterable[CatalogEntry]) -> "ContentCatalog":
+        """Build the two content-hash indices, hard-abstaining on axis conflicts.
+
+        A key (size,crc) or head_hash that maps to entries disagreeing on the
+        identity axis tuple `(recording_id, stem, variant)` is dropped entirely
+        rather than last-writer-wins: getting the work right but the
+        stem/variant wrong is a wrong label, so an ambiguous key must resolve
+        to nothing (a lookup miss → abstain), not an arbitrarily chosen entry.
+        """
         by_sc: dict[tuple[int, int], CatalogEntry] = {}
         by_hh: dict[str, CatalogEntry] = {}
+        sc_axes: dict[tuple[int, int], set[tuple[str | None, str, str]]] = {}
+        hh_axes: dict[str, set[tuple[str | None, str, str]]] = {}
+        sc_ambiguous: set[tuple[int, int]] = set()
+        hh_ambiguous: set[str] = set()
         for e in entries:
+            axis = (e.recording_id, e.stem, e.variant)
             if e.file_size is not None and e.crc is not None:
-                by_sc[(e.file_size, e.crc)] = e
+                sc_key = (e.file_size, e.crc)
+                axes = sc_axes.setdefault(sc_key, set())
+                axes.add(axis)
+                if len(axes) > 1:
+                    sc_ambiguous.add(sc_key)
+                by_sc[sc_key] = e
             if e.head_hash:
+                axes = hh_axes.setdefault(e.head_hash, set())
+                axes.add(axis)
+                if len(axes) > 1:
+                    hh_ambiguous.add(e.head_hash)
                 by_hh[e.head_hash] = e
+        for key in sc_ambiguous:
+            del by_sc[key]
+        for key in hh_ambiguous:
+            del by_hh[key]
         return cls(by_size_crc=by_sc, by_head_hash=by_hh)
 
 
@@ -54,6 +81,7 @@ class ClipIdentity:
     track_audio_id: str
     recording_id: str | None
     stem: str
+    variant: str
     matched_by: str  # "size_crc" | "head_hash"
 
 
@@ -86,6 +114,7 @@ def resolve_clip_identity(
                     track_audio_id=entry.track_audio_id,
                     recording_id=entry.recording_id,
                     stem=entry.stem,
+                    variant=entry.variant,
                     matched_by="size_crc",
                 )
             )
@@ -100,6 +129,7 @@ def resolve_clip_identity(
                         track_audio_id=entry.track_audio_id,
                         recording_id=entry.recording_id,
                         stem=entry.stem,
+                        variant=entry.variant,
                         matched_by="head_hash",
                     )
                 )

@@ -103,7 +103,8 @@ re-running is not idempotent for the renames — check before applying.
 
 `migrate_identity_axes.sql` · `migrate_phase4_recording.sql` ·
 `migrate_layer_role.sql` · `migrate_set_ground_truth_p1.sql` ·
-`migrate_set_mert_measures.sql` · `migrate_slot_satisfaction_view.sql`
+`migrate_set_mert_measures.sql` · `migrate_slot_satisfaction_view.sql` ·
+`migrate_correction_recording_axis.sql` (track_audio_correction recording axis)
 
 ## attic/ — completed one-offs (ledger)
 

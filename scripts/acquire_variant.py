@@ -148,6 +148,41 @@ def canonical_ingest(args: argparse.Namespace) -> int:
             "is the default; use --promote-reference to opt in"
         )
     promote = args.promote_reference
+
+    from ingest.stem_guard_runner import (
+        probe_url_title,
+        recording_context,
+        title_gate,
+        content_gate,
+        log_detach,
+    )
+
+    ctx = recording_context(args.db, track_id)
+    acquired_title = args.acquired_title
+    if acquired_title is None and args.url:
+        acquired_title = probe_url_title(args.url, YT_DLP)
+    elif acquired_title is None and args.file:
+        acquired_title = args.name or args.file.stem
+
+    tv = title_gate(acquired_title or "", ctx.title)
+    if not tv.accept and not args.force:
+        log_detach(
+            args.db,
+            recording_id=track_id,
+            set_id=args.set_id,
+            position=(None if args.slot is None else str(args.slot)),
+            acquired_title=acquired_title or "",
+            verdict=tv,
+        )
+        logging.error(
+            "same-song guard REFUSED (title): %s — not attaching. "
+            "Re-run with --force to override.",
+            tv.reason,
+        )
+        return 3
+    if not tv.accept and args.force:
+        logging.warning("same-song guard OVERRIDDEN (--force) despite: %s", tv.reason)
+
     if args.url:
         rc = rta._replace_via_url(
             args.db,
@@ -174,7 +209,31 @@ def canonical_ingest(args: argparse.Namespace) -> int:
         sys.exit("canonical ingest needs --url or --file")
 
     if rc == 0:
-        _identity_check(args.db, track_id, stem_axis)
+        # Content-gate + reap MUST target the row this call just inserted, not
+        # whichever row _lookup_audio_path's is_reference/downloaded_at
+        # ordering happens to prefer (a stale is_reference=1 sibling would
+        # otherwise win, so the gate checks the wrong file and a refuse would
+        # reap the GOOD row while the bad new one survives).
+        row = _lookup_latest_audio_row(args.db, track_id, stem_axis)
+        cv = content_gate(stem_axis, ctx.regular_path, row[1]) if row else None
+        if cv is not None and not cv.accept and not args.force:
+            log_detach(
+                args.db,
+                recording_id=track_id,
+                set_id=args.set_id,
+                position=(None if args.slot is None else str(args.slot)),
+                acquired_title=acquired_title or "",
+                verdict=cv,
+            )
+            logging.error(
+                "same-song guard REFUSED (content): %s — reaping row %s.",
+                cv.reason,
+                row[0],
+            )
+            _reap_audio_row(args.db, args.audio_root, row[0])
+            return 3
+        if cv is not None and not cv.accept and args.force:
+            logging.warning("content guard OVERRIDDEN (--force) despite: %s", cv.reason)
         if not args.no_log:
             _log_to_ledger(args, track_id, stem_axis)
     return rc
@@ -221,6 +280,41 @@ def _lookup_audio_path(
             (track_id, stem_axis),
         ).fetchone()
     return (int(row[0]), row[1]) if row else None
+
+
+def _lookup_latest_audio_row(
+    db_path: Path, track_id: str, stem_axis: str
+) -> tuple[int, str] | None:
+    """Like `_lookup_audio_path`, but orders by `track_audio_id DESC` — i.e.
+    the row this process just wrote, not whichever row is_reference/
+    downloaded_at ordering happens to prefer. AUTOINCREMENT guarantees the
+    newest INSERT has the highest id. Used by the post-insert content gate +
+    reap so they always act on the just-acquired candidate, even when an
+    older promoted (`is_reference=1`) sibling already exists for the same
+    (recording_id, stem) pair. Deliberately separate from `_lookup_audio_path`
+    (shared by the advisory `_identity_check`, which wants the best-known
+    row, not necessarily the newest) rather than changing that helper's
+    ordering."""
+    import sqlite3
+
+    with sqlite3.connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT track_audio_id, path FROM track_audio "
+            "WHERE recording_id = ? AND stem = ? "
+            "ORDER BY track_audio_id DESC LIMIT 1",
+            (track_id, stem_axis),
+        ).fetchone()
+    return (int(row[0]), row[1]) if row else None
+
+
+def _reap_audio_row(db_path: Path, audio_root: Path, track_audio_id: int) -> None:
+    """Delete a just-inserted wrong-recording row + unlink its file (no wrong row survives)."""
+    sys.path.insert(0, str(REPO_ROOT))
+    from scripts import replace_track_audio as rta
+
+    # _delete_old_row_if_exists(db_path, audio_root, track_audio_id, keep_path=None)
+    # deletes the row, cascades (analysis/stems/features/MERT), and unlinks the object file.
+    rta._delete_old_row_if_exists(db_path, audio_root, track_audio_id)
 
 
 def _identity_check(db_path: Path, track_id: str, stem_axis: str) -> None:
@@ -301,6 +395,16 @@ def main() -> int:
         "--player-id",
         default=None,
         help="player_id for --file (defaults to filename stem)",
+    )
+    ap.add_argument(
+        "--force",
+        action="store_true",
+        help="Bypass the same-song guard (loud, ledgered). Default: fail-closed.",
+    )
+    ap.add_argument(
+        "--acquired-title",
+        default=None,
+        help="Source title for the title-token guard (defaults to a yt-dlp probe in URL mode / --name / filename).",
     )
     ap.add_argument(
         "--db",

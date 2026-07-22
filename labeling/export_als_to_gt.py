@@ -157,6 +157,7 @@ class ClipRow:
     gain_curve: GainCurve = ()
     skip_training: bool = False
     id_source: str = ""
+    claimed_variant: str = "regular"
 
 
 def _mix_track(root) -> object | None:
@@ -176,14 +177,19 @@ def _load_content_catalog(set_dir: Path) -> ContentCatalog | None:
     either by full-file bytes or by the tag-invariant mdat payload — both
     pointing at the same identity.
 
-    A content hash key that maps to more than one DISTINCT `recording_id`
-    across the catalog is AMBIGUOUS — the same bytes were ingested under two
-    different recordings (duplicate rip / mashup constituent / wrong-version).
-    Binding confidently to either would be the exact confidently-wrong-id
-    poison this branch kills, so such a key is dropped entirely: a clip whose
-    bytes hash to it falls through to abstain instead of last-wins-binding.
-    This is decided per hash key — a row can keep a clean `content_sha256`
-    while its `payload_sha256` (or vice-versa) is excluded as ambiguous.
+    A content hash key that maps to more than one DISTINCT identity AXIS
+    TUPLE `(recording_id, stem, variant)` across the catalog is AMBIGUOUS —
+    the same bytes were ingested under two different identities (duplicate
+    rip / mislabeled stem / mashup constituent / wrong-version). Keying on
+    bare `recording_id` alone is NOT enough: two rows can share a
+    `recording_id` but disagree on `stem` (e.g. a duplicate-rip mislabeled as
+    the acappella of its own regular master), and that must still abstain —
+    right work, wrong stem, is a wrong label. Binding confidently to either
+    would be the exact confidently-wrong-id poison this branch kills, so such
+    a key is dropped entirely: a clip whose bytes hash to it falls through to
+    abstain instead of last-wins-binding. This is decided per hash key — a
+    row can keep a clean `content_sha256` while its `payload_sha256` (or
+    vice-versa) is excluded as ambiguous.
     """
     p = set_dir / "content_catalog.json"
     if not p.is_file():
@@ -191,18 +197,22 @@ def _load_content_catalog(set_dir: Path) -> ContentCatalog | None:
     payload = json.loads(p.read_text())
     rows = payload.get("entries") or []
 
-    # Pass 1: collect every recording_id seen under each hash key, across
-    # both key types, so an ambiguous key can be identified before any
-    # CatalogEntry is emitted.
-    recording_ids_by_key: dict[str, set[str | None]] = {}
+    # Pass 1: collect every (recording_id, stem, variant) axis tuple seen
+    # under each hash key, across both key types, so an ambiguous key can be
+    # identified before any CatalogEntry is emitted. Both stem and variant
+    # default to "regular" here (matching Pass 2 below) so the same missing
+    # field can't read as two different axis values across the two passes.
+    axes_by_key: dict[str, set[tuple[str | None, str, str]]] = {}
     for e in rows:
-        rid = e.get("recording_id")
+        axis = (
+            e.get("recording_id"),
+            str(e.get("stem") or "regular"),
+            str(e.get("variant") or "regular"),
+        )
         for key in (e.get("content_sha256"), e.get("payload_sha256")):
             if key:
-                recording_ids_by_key.setdefault(str(key), set()).add(rid)
-    ambiguous_keys = {
-        key for key, rids in recording_ids_by_key.items() if len(rids) > 1
-    }
+                axes_by_key.setdefault(str(key), set()).add(axis)
+    ambiguous_keys = {key for key, axes in axes_by_key.items() if len(axes) > 1}
 
     # Pass 2: emit CatalogEntry rows, skipping any key found ambiguous above.
     entries: list[CatalogEntry] = []
@@ -210,6 +220,7 @@ def _load_content_catalog(set_dir: Path) -> ContentCatalog | None:
         rid = e.get("recording_id")
         taid = str(e.get("track_audio_id") or "")
         stem = str(e.get("stem") or "regular")
+        variant = str(e.get("variant") or "regular")
         for key in (e.get("content_sha256"), e.get("payload_sha256")):
             if key and str(key) not in ambiguous_keys:
                 entries.append(
@@ -217,6 +228,7 @@ def _load_content_catalog(set_dir: Path) -> ContentCatalog | None:
                         track_audio_id=taid,
                         recording_id=rid,
                         stem=stem,
+                        variant=variant,
                         head_hash=str(key),
                     )
                 )
@@ -225,17 +237,20 @@ def _load_content_catalog(set_dir: Path) -> ContentCatalog | None:
 
 def _content_bind(
     clip: ParsedClip, catalog: ContentCatalog | None
-) -> tuple[str | None, str]:
-    """(recording_id, id_source): bind a clip by content, or abstain.
+) -> tuple[str | None, str | None, str | None, str]:
+    """(recording_id, stem, variant, id_source): bind a clip by content, or abstain.
 
     Two passes: `head_hash_of=file_sha256` (the full-file hash — matches a
     pristine downloaded master); on a miss, for an mp4-family path
     (`.m4a`/`.mp4`/`.m4b`), a second pass with `head_hash_of=mdat_sha256` (the
     tag-invariant mdat payload — matches a locally iTunes-tagged copy of the
     same master). A missing file or any OSError abstains; this never raises.
+
+    A content bind resolves a COMPLETE axis point — `stem` and `variant` come
+    off the matched `ClipIdentity`, not derived out-of-band from the path.
     """
     if catalog is None:
-        return None, "abstain"
+        return None, None, None, "abstain"
 
     def _safe(hasher):
         def _inner(path: str) -> str | None:
@@ -250,8 +265,8 @@ def _content_bind(
     if not r.is_ok() and clip.path.lower().endswith((".m4a", ".mp4", ".m4b")):
         r = resolve_clip_identity(clip, catalog, head_hash_of=_safe(mdat_sha256))
     if r.is_ok():
-        return r.value.recording_id, "content"
-    return None, "abstain"
+        return r.value.recording_id, r.value.stem, r.value.variant, "content"
+    return None, None, None, "abstain"
 
 
 def _clip_row(
@@ -265,7 +280,17 @@ def _clip_row(
     if set_start is None or set_end is None:
         return None
     _rid_unused, slot_label, display, claimed_stem = resolve_identity(clip, manifest)
-    recording_id, id_source = _content_bind(clip, catalog)
+    recording_id, bind_stem, bind_variant, id_source = _content_bind(clip, catalog)
+    if id_source == "content":
+        # A content bind resolved a specific track_audio row: its stem/variant
+        # are the SOUND identity and must win over the weaker path/manifest
+        # guess (resolve_identity above) — right work, wrong stem is a wrong
+        # label. On abstain, keep the path/manifest claimed_stem as today and
+        # default claimed_variant to "regular" (no sound bind to read it from).
+        claimed_stem = bind_stem or claimed_stem
+        claimed_variant = bind_variant or "regular"
+    else:
+        claimed_variant = "regular"
     _, ref_source = classify_path(clip.path)
     ref_start = clip.ref_start_s()
     ref_end = clip.ref_end_s()
@@ -295,6 +320,7 @@ def _clip_row(
         slot_label=slot_label,
         display=display,
         claimed_stem=claimed_stem,
+        claimed_variant=claimed_variant,
         ref_source=ref_source,
         tempo_ratio=tempo_ratio(set_span, ref_span),
         pitch_shift_semi=clip.pitch_coarse,
@@ -548,6 +574,7 @@ def _to_gt_track(row: ClipRow) -> GroundTruthTrack:
         label=row.display,
         track_id=row.recording_id,
         claimed_stem=row.claimed_stem,
+        claimed_variant=row.claimed_variant,
         set_start_s=row.set_start_s,
         set_end_s=row.set_end_s,
         ref_start_s=row.ref_start_s,
