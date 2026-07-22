@@ -209,7 +209,12 @@ def canonical_ingest(args: argparse.Namespace) -> int:
         sys.exit("canonical ingest needs --url or --file")
 
     if rc == 0:
-        row = _lookup_audio_path(args.db, track_id, stem_axis)
+        # Content-gate + reap MUST target the row this call just inserted, not
+        # whichever row _lookup_audio_path's is_reference/downloaded_at
+        # ordering happens to prefer (a stale is_reference=1 sibling would
+        # otherwise win, so the gate checks the wrong file and a refuse would
+        # reap the GOOD row while the bad new one survives).
+        row = _lookup_latest_audio_row(args.db, track_id, stem_axis)
         cv = content_gate(stem_axis, ctx.regular_path, row[1]) if row else None
         if cv is not None and not cv.accept and not args.force:
             log_detach(
@@ -272,6 +277,31 @@ def _lookup_audio_path(
             "SELECT track_audio_id, path FROM track_audio "
             "WHERE recording_id = ? AND stem = ? "
             "ORDER BY is_reference DESC, downloaded_at DESC LIMIT 1",
+            (track_id, stem_axis),
+        ).fetchone()
+    return (int(row[0]), row[1]) if row else None
+
+
+def _lookup_latest_audio_row(
+    db_path: Path, track_id: str, stem_axis: str
+) -> tuple[int, str] | None:
+    """Like `_lookup_audio_path`, but orders by `track_audio_id DESC` — i.e.
+    the row this process just wrote, not whichever row is_reference/
+    downloaded_at ordering happens to prefer. AUTOINCREMENT guarantees the
+    newest INSERT has the highest id. Used by the post-insert content gate +
+    reap so they always act on the just-acquired candidate, even when an
+    older promoted (`is_reference=1`) sibling already exists for the same
+    (recording_id, stem) pair. Deliberately separate from `_lookup_audio_path`
+    (shared by the advisory `_identity_check`, which wants the best-known
+    row, not necessarily the newest) rather than changing that helper's
+    ordering."""
+    import sqlite3
+
+    with sqlite3.connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT track_audio_id, path FROM track_audio "
+            "WHERE recording_id = ? AND stem = ? "
+            "ORDER BY track_audio_id DESC LIMIT 1",
             (track_id, stem_axis),
         ).fetchone()
     return (int(row[0]), row[1]) if row else None

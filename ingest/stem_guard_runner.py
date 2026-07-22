@@ -96,17 +96,34 @@ def log_detach(
     position: str | None,
     acquired_title: str,
     verdict: GuardVerdict,
+    rolled_back_taid: int | None = None,
 ) -> None:
-    """Record a wrong-recording detach (abstain) in the correction ledger."""
+    """Record a wrong-recording detach (abstain) in the correction ledger.
+
+    `rolled_back_taid`: pass the track_audio_id being reaped when an earlier
+    call already committed a 'replace'/'add' correction for that same row
+    before this gate ran (e.g. `replace_track_audio.main()` logs its own
+    ledger row internally, ahead of `replace_stem_audio.py`'s post-replace
+    content gate). Without this, the ledger keeps an orphaned "replace
+    succeeded" row for audio that no longer exists — this makes the rollback
+    explicit in the detach row's reason instead.
+    """
+    reason = f"[{verdict.channel}] {verdict.reason} (acquired={acquired_title!r})"
+    if rolled_back_taid is not None:
+        reason += (
+            f" — rolls back prior replace/add of taid={rolled_back_taid} "
+            "(that row has been reaped; ignore any earlier ledger row for it)"
+        )
     c = Correction(
         track_id=recording_id,  # see spec: track_id overloaded to recording_id for axis='recording'
         axis="recording",
         action="detach",
         set_id=set_id,
         position=position,
+        old_track_audio_id=rolled_back_taid,
         old_recording_id=recording_id,
         new_recording_id=None,
-        reason=f"[{verdict.channel}] {verdict.reason} (acquired={acquired_title!r})",
+        reason=reason,
         source="same_song_guard",
     )
     log_correction(db_path, c)

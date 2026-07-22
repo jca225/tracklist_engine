@@ -153,9 +153,19 @@ def main(argv: list[str] | None = None) -> int:
         from ingest.stem_guard_runner import content_gate, log_detach, recording_context
 
         ctx = recording_context(a.db, track_id)
-        row = av._lookup_audio_path(a.db, track_id, stem)
+        # Target the row THIS call just wrote (highest track_audio_id), not
+        # whichever row is_reference/downloaded_at ordering prefers — a
+        # pre-existing promoted sibling for (recording_id, stem) would
+        # otherwise be gated/reaped instead of the new candidate.
+        row = av._lookup_latest_audio_row(a.db, track_id, stem)
         cv = content_gate(stem, ctx.regular_path, row[1]) if row else None
         if cv is not None and not cv.accept and not a.force:
+            # rta.main() above already committed a 'stem/replace' correction
+            # for this row (its internal ledger write fires before this
+            # gate). rolled_back_taid makes the detach row state explicitly
+            # that the prior replace is being undone, so the ledger doesn't
+            # read as a misleading "replace succeeded" for audio that's about
+            # to be deleted.
             log_detach(
                 a.db,
                 recording_id=track_id,
@@ -163,6 +173,7 @@ def main(argv: list[str] | None = None) -> int:
                 position=a.position,
                 acquired_title="",
                 verdict=cv,
+                rolled_back_taid=row[0],
             )
             print(
                 f"same-song guard REFUSED (content): {cv.reason} — reaping row {row[0]}.",
