@@ -47,7 +47,7 @@ Numbered so issues/PRs can cite them. Evidence paths in parentheses.
   Mechanism: manifest `recording_id=None` ×165 + near-total
   `.als`↔manifest path divergence (290/296 clips path-MISS) → `slot_id_map`
   fallback carries stale ids through `export_als_to_gt`
-  (`docs/agent_handoff_als_relocation_20260719.md`). Scorer hardened to show
+  (`docs/archive/agent_handoff_als_relocation_20260719.md`). Scorer hardened to show
   these as honest misses (`d700e94`, unpushed); **the fixture itself is still
   poisoned.** Re-export is blocked on the operator's `.als` relocation /
   path-normalization decision.
@@ -55,7 +55,7 @@ Numbered so issues/PRs can cite them. Evidence paths in parentheses.
   stamps `claimed_stem` from the sample *file path*, so an instrumental
   `online_candidate` file under an acappella slot exports as instrumental GT
   (BB12 `42w3` Honest; model + ear agree, label wrong —
-  `docs/agent_handoff_spectrogram_review_gt_capture_20260719.md`,
+  `docs/archive/agent_handoff_spectrogram_review_gt_capture_20260719.md`,
   `eda/alignment/failure_analysis/FOLLOWUPS.md` WS0). The capture rule
   (path-stem vs arranged stem vs tracklist claim) is **undecided**.
 - **D3 — `fibers/gt_als.py` bypasses the silence filter.** The deactivated-track

@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-21
 **Status:** design, pending implementation plan
-**Tracking:** #40, #47, #51, #63; handoff `docs/crush_handoff_depoison_20260721.md`
+**Tracking:** #40, #47, #51, #63; handoff `docs/archive/crush_handoff_depoison_20260721.md`
 **Crush exit gate:** BB11+BB12 pass L0–L4, pi read-back exact, one clean SSOT re-measure.
 
 ## Problem

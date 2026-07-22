@@ -14,6 +14,7 @@ in `workspaces/alignment_prototype/attic/EXPERIMENTS.md`).
 
 ## Alignment — placement & structure (the walls)
 
+- [dj_set_alignment_math.md](dj_set_alignment_math.md) — the constituent-alignment math model: a set as two independently aligned lanes (mix↔constituent instrumental, mix↔constituent vocals); foundational formalism for placement/identity.
 - [acappella_warp_decode_plan.md](acappella_warp_decode_plan.md) — why widening the warp grid *regresses*; lever is placement + learned model, not a bigger DP grid.
 - [fine_placement_plan.md](fine_placement_plan.md) — sub-bar placement via chroma/fingerprint fusion + banded DTW over the coarse window; foundational placement research.
 - [loop_tracing_research_brief.md](loop_tracing_research_brief.md) — acappella loop/jump tracing; the multiseg self-similarity wall (~34% of GT loss). Open problem.
