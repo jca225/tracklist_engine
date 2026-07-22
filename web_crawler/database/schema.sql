@@ -750,3 +750,35 @@ CREATE TABLE IF NOT EXISTS track_audio_correction (
 );
 CREATE INDEX IF NOT EXISTS idx_track_audio_correction_track ON track_audio_correction(track_id);
 CREATE INDEX IF NOT EXISTS idx_track_audio_correction_set   ON track_audio_correction(set_id);
+
+-- content_history: append-only byte-level shadow of track_audio_correction.
+-- Every acquisition/correction event appends a generation with the artifact's
+-- hashes + four identity axes; a `replace`/re-separate records the retiring
+-- sha256 BEFORE the row is deleted so a GT clip on the old bytes still
+-- content-binds exactly (never-drop-hash, spec v2.2). Chain key =
+-- (recording_id, stem, variant, kind); NO FK on track_audio_id (a replace
+-- deletes that row — an ON DELETE CASCADE would defeat the ledger). valid=0 is
+-- a tombstone (v4.2): kept for audit, not a legal bind target. DDL kept
+-- identical to ingest/content_history.py::SCHEMA (single source, no drift).
+CREATE TABLE IF NOT EXISTS content_history (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    recording_id    TEXT NOT NULL,
+    version         TEXT,                      -- denormalized axis audit (v4.6); recording_id pins it
+    stem            TEXT NOT NULL,             -- track_audio row's realization value (regular|acappella|instrumental)
+    variant         TEXT NOT NULL,             -- regular|extended
+    kind            TEXT NOT NULL,             -- master|separated|derived
+    track_audio_id  INTEGER,                   -- row this generation realized (nullable; replace mints a new id)
+    content_sha256  TEXT,                      -- full-file sha256 (== track_audio.sha256)
+    payload_sha256  TEXT,                      -- mdat / FLAC decoded-PCM MD5 (tag-invariant)
+    op              TEXT,                      -- fetch|retry|re-separate|retag|replace|relink|detach|...
+    source          TEXT,                      -- replace_track_audio|acquire_variant|manual|...
+    generation      INTEGER NOT NULL DEFAULT 0,
+    valid           INTEGER NOT NULL DEFAULT 1,-- tombstone: 0 = invalidated, not a legal bind target (v4.2)
+    ts              DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CHECK (kind IN ('master','separated','derived')),
+    CHECK (valid IN (0,1))
+);
+CREATE INDEX IF NOT EXISTS idx_content_history_chain
+    ON content_history(recording_id, stem, variant, kind, generation);
+CREATE INDEX IF NOT EXISTS idx_content_history_content_sha ON content_history(content_sha256);
+CREATE INDEX IF NOT EXISTS idx_content_history_payload_sha ON content_history(payload_sha256);

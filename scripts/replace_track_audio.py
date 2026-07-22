@@ -77,6 +77,7 @@ from ingest.guards import duration_sane
 from core.models import AudioAsset, MediaSource, soundcloud_api_url
 from core.result import Err, Ok
 from core.identity import DEFAULT_STEM, normalize_stem
+from ingest.content_history import Generation, append_generation_on
 from ingest.corrections import Correction, latest_row, log_correction, snapshot_row
 
 _log = logging.getLogger("replace_track_audio")
@@ -221,10 +222,19 @@ def _delete_old_row_if_exists(
     audio_root: Path,
     track_audio_id: int,
     keep_path: str | None = None,
+    op: str = "replace",
 ) -> None:
     """Delete the existing track_audio row + cascade-delete its analysis,
     stems, features, MERT measures. Also unlink the on-disk audio file
     and the stems dir (they belong to the old track_audio_id).
+
+    Before the DELETE, the retiring row's sha256 is appended to
+    `content_history` **in the same transaction** (never-drop-hash, spec P9/B2):
+    the redownload/replace churn otherwise deletes the only sound evidence of
+    the old bytes, silently un-binding every GT clip pinned to them. Recording
+    and deleting atomically means the churn can never lose the hash — a GT clip
+    on the old bytes still content-binds exactly next export. `op` distinguishes
+    a primary replace from a sibling `purge`.
 
     `keep_path` guards the file unlink: if the old row's path equals the
     freshly-inserted asset's path (same track_id/platform/player_id
@@ -232,12 +242,29 @@ def _delete_old_row_if_exists(
     delete it."""
     with connect(db_path) as conn:
         row = conn.execute(
-            "SELECT path FROM track_audio WHERE track_audio_id = ?",
+            "SELECT path, recording_id, stem, variant, sha256 "
+            "FROM track_audio WHERE track_audio_id = ?",
             (track_audio_id,),
         ).fetchone()
         if row is None:
             return
-        old_path = row[0]
+        old_path = row["path"]
+        # Record the retiring bytes BEFORE deleting them (same txn). A NULL
+        # sha256 has no evidence to preserve — just delete.
+        if row["sha256"]:
+            append_generation_on(
+                conn,
+                Generation(
+                    recording_id=row["recording_id"],
+                    stem=row["stem"],
+                    variant=row["variant"],
+                    kind="master",  # track_audio download rows are masters
+                    content_sha256=row["sha256"],
+                    track_audio_id=track_audio_id,
+                    op=op,
+                    source="replace_track_audio",
+                ),
+            )
         conn.execute(
             "DELETE FROM track_audio WHERE track_audio_id = ?", (track_audio_id,)
         )
@@ -284,7 +311,7 @@ def _purge_sibling_rows(
             (track_id, keep_taid),
         ).fetchall()
     for (taid,) in siblings:
-        _delete_old_row_if_exists(db_path, audio_root, int(taid))
+        _delete_old_row_if_exists(db_path, audio_root, int(taid), op="purge")
     if siblings:
         _log.info("purged %d sibling row(s) for track_id=%s", len(siblings), track_id)
 

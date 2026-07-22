@@ -3,6 +3,8 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from labeling.build_content_catalog import build_catalog
 
 
@@ -71,6 +73,36 @@ def test_build_catalog_covers_track_audio_and_stems(tmp_path: Path) -> None:
     # 'regular' (not just always echoing whatever the last parent was).
     assert ("recC", "instrumental", "regular", "INSTRHASH", "separated") in got
     assert out["set_id"] == "s"
+
+
+def test_flac_payload_key_wired_for_masters_and_stems(tmp_path: Path) -> None:
+    """B3/P11: a FLAC master and a FLAC separated stem now carry a
+    payload_sha256 (decoded-PCM MD5) — previously the stem population always
+    emitted payload None, needlessly abstaining on re-encoded/re-containered
+    FLACs. mdat stays for mp4; the dispatcher picks by extension."""
+    conn = _db(tmp_path)
+    conn.execute(
+        "INSERT INTO set_track_slots VALUES(?,?,?,?)", ("s", 0, "recF", "recF")
+    )
+    conn.execute(
+        "INSERT INTO track_audio VALUES(?,?,?,?,?,?,?)",
+        (1, "recF", "regular", "shaF", "/x/master.flac", "regular", "recF"),
+    )
+    stem = tmp_path / "vocals.flac"
+    stem.write_bytes(b"x")
+    conn.execute("INSERT INTO track_stems VALUES(1, 'vocals', ?)", (str(stem),))
+
+    payloads = {"/x/master.flac": "PCM_MASTER", str(stem): "PCM_VOX"}
+    out = build_catalog(
+        conn,
+        "s",
+        file_sha256=lambda p: "STEMSHA",
+        mdat_sha256=lambda p: pytest.fail("mdat must not be called for .flac"),
+        flac_pcm_md5=lambda p: payloads.get(str(p)),
+    )
+    by_stem = {e["stem"]: e for e in out["entries"]}
+    assert by_stem["regular"]["payload_sha256"] == "PCM_MASTER"  # FLAC master
+    assert by_stem["acappella"]["payload_sha256"] == "PCM_VOX"  # FLAC separated stem
 
 
 def test_legacy_slot_null_recording_id_track_id_keyed_audio_is_included(
