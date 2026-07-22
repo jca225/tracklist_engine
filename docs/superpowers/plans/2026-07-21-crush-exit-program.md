@@ -73,6 +73,38 @@ are GATEs.
 3.5 `/align-checkpoint` → regenerate `docs/alignment_status.md` on the de-poisoned GT —
     the first honest post-Crush numbers. **This is Crush exit.**
 
+## Phase 4 — FULL fix of the stem mis-attach class (separate ingest-hardening effort)
+
+The null-abstain of `20911` (Phase 2) is a **safe interim, not a full fix**: it makes
+148w1 abstain but gives no correct identity, leaves `track_id` dangling, and does not
+touch the root cause. The full fix is its own brainstorm→plan→build effort (like Crush
+was), because `acquire_variant` only attaches to an EXISTING recording (`WHERE
+recording_id=?`), minting goes through the identity path (the `MINT_RECORDING`
+gap-class in `core/slot_inventory.py` exists precisely because this is unautomated),
+and the lesson-#19 same-song guard was never built. Four parts:
+
+4.1 **Represent it.** The correction ledger `CHECK (axis IN version/variant/stem)`
+    can't express a wrong-recording mis-attach, so it's invisible (it logs as a legit
+    `stem/add`). Add a `recording`/`relink` axis or a `detach`/`relink` action so
+    mis-attaches are recordable and auditable.
+4.2 **Prevent it** (the lesson-#19 guard, requirement D7, never built). Before
+    `acquire_variant` / stem-candidate ingestion attaches an acappella/instrumental to
+    recording R, verify the candidate is the SAME SONG as R — title-token gate + an
+    audio channel (HuBERT vocal gate / chroma). Mismatch → refuse/abstain (Fellegi-
+    Sunter review band), never silently attach to the base slot's recording.
+4.3 **Remediate + mint.** Productionize the ledger mis-attach scan
+    (`scratchpad/ledger_scan.py`, this session) as a corpus audit. For each live
+    mis-attach: re-link to the correct recording if one exists; else **MINT** a
+    recording for the song (the `MINT_RECORDING` path) + link; else clean-DELETE (not
+    just null) if no valid asset. Replace the `20911` null-patch: mint a "Come On Over
+    Baby (All I Want Is You)" recording + re-link IF the karaoke-cover audio is
+    acceptable, else acquire the correct acappella. (Live scope today: `20911` only;
+    the 06-09 batch of ~22 was already remediated to 3 correct + 1 survivor.)
+4.4 **Manual-capture flow + deploy.** A reliable "register this manually-downloaded
+    file to this slot/recording, content-verified" path (the user's recurring pain:
+    hand-downloaded correct versions never captured). Then land + DEPLOY the guard —
+    undeployed hardening is exactly the lesson-#19 / pi-92-behind failure mode.
+
 ## Rollback
 
 - Phase 2: restore the snapshotted `track_audio` rows.
