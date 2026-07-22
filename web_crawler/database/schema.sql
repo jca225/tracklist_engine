@@ -736,12 +736,14 @@ CREATE TABLE IF NOT EXISTS track_audio_correction (
     new_platform        TEXT,
     new_player_id       TEXT,
     new_url             TEXT,
+    old_recording_id    TEXT,              -- wrong recording a stem was attached to
+    new_recording_id    TEXT,              -- corrected recording (NULL = detach/abstain)
     stem_value          TEXT,              -- stem-axis value (regular|acappella|instrumental)
     reason              TEXT,              -- free-text why it was wrong
     source              TEXT,              -- replace_track_audio | acquire_variant | manual
     created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
-    CHECK (axis IN ('version','variant','stem')),
-    CHECK (action IN ('replace','add'))
+    CHECK (axis IN ('version','variant','stem','recording')),
+    CHECK (action IN ('replace','add','relink','detach'))
 );
 CREATE INDEX IF NOT EXISTS idx_track_audio_correction_track ON track_audio_correction(track_id);
 CREATE INDEX IF NOT EXISTS idx_track_audio_correction_set   ON track_audio_correction(set_id);
