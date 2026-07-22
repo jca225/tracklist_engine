@@ -114,6 +114,13 @@ def append_generation(db_path: Path, g: Generation) -> Result[int, DbError]:
         return Err(DbError(kind="bad_valid", detail=f"valid={g.valid!r} not in (0,1)"))
     try:
         with connect(db_path) as conn:
+            # Self-heal: ensure the table exists before writing. The pi's
+            # auto-pull timer (issue #73) ships code without running migrations,
+            # so a never-drop-hash hook can land before the backfill migration
+            # runs — this makes the first append create the table rather than
+            # crash with "no such table". The migration then only owns the
+            # generation-0 backfill of pre-existing rows.
+            conn.executescript(SCHEMA)
             gen = (
                 g.generation if g.generation is not None else _next_generation(conn, g)
             )
@@ -168,5 +175,11 @@ def chain(
         q += " AND valid = 1"
     q += " ORDER BY generation, id"
     with connect(db_path) as conn:
-        rows = conn.execute(q, (recording_id, stem, variant, kind)).fetchall()
+        try:
+            rows = conn.execute(q, (recording_id, stem, variant, kind)).fetchall()
+        except sqlite3.OperationalError:
+            # Table not created yet (code auto-landed before the migration ran,
+            # issue #73). "No history recorded" is the correct semantic — an
+            # empty chain, never a crash.
+            return []
     return [dict(r) for r in rows]

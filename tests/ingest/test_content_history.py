@@ -127,6 +127,24 @@ def test_valid_flag_defaults_true_and_filters(db: Path):
     assert {g["content_sha256"] for g in live_only} == {"live"}
 
 
+def test_append_self_heals_missing_table(tmp_path: Path):
+    """The pi auto-pull timer (issue #73) ships code without running
+    migrations, so a hook can fire before content_history exists. append must
+    create the table rather than crash; chain must read it back."""
+    p = tmp_path / "no_table.db"
+    p.touch()  # empty DB, no content_history
+    r = append_generation(p, _gen(content_sha256="firstever"))
+    assert isinstance(r, Ok)
+    ch = chain(p, "rec_congrats", "regular", "regular", "master")
+    assert [g["content_sha256"] for g in ch] == ["firstever"]
+
+
+def test_chain_on_missing_table_returns_empty(tmp_path: Path):
+    p = tmp_path / "empty.db"
+    p.touch()
+    assert chain(p, "whatever", "regular", "regular", "master") == []
+
+
 # --- migration: backfill + idempotency + DDL drift guard ---
 
 _TRACK_AUDIO = """
