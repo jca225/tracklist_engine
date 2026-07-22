@@ -76,6 +76,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--no-log", action="store_true")
     p.add_argument("--no-promote-reference", action="store_true")
     p.add_argument(
+        "--force",
+        action="store_true",
+        help="Bypass the same-song content guard (loud, ledgered). Default: fail-closed.",
+    )
+    p.add_argument(
         "--db",
         type=Path,
         default=Path(
@@ -144,8 +149,45 @@ def main(argv: list[str] | None = None) -> int:
             rta_args.extend(["--player-id", a.player_id])
 
     rc = rta.main(rta_args)
-    if rc == 0 and not a.no_identity_check:
-        av._identity_check(a.db, track_id, stem)
+    if rc == 0:
+        from ingest.stem_guard_runner import content_gate, log_detach, recording_context
+
+        ctx = recording_context(a.db, track_id)
+        # Target the row THIS call just wrote (highest track_audio_id), not
+        # whichever row is_reference/downloaded_at ordering prefers — a
+        # pre-existing promoted sibling for (recording_id, stem) would
+        # otherwise be gated/reaped instead of the new candidate.
+        row = av._lookup_latest_audio_row(a.db, track_id, stem)
+        cv = content_gate(stem, ctx.regular_path, row[1]) if row else None
+        if cv is not None and not cv.accept and not a.force:
+            # rta.main() above already committed a 'stem/replace' correction
+            # for this row (its internal ledger write fires before this
+            # gate). rolled_back_taid makes the detach row state explicitly
+            # that the prior replace is being undone, so the ledger doesn't
+            # read as a misleading "replace succeeded" for audio that's about
+            # to be deleted.
+            log_detach(
+                a.db,
+                recording_id=track_id,
+                set_id=a.set_id,
+                position=a.position,
+                acquired_title="",
+                verdict=cv,
+                rolled_back_taid=row[0],
+            )
+            print(
+                f"same-song guard REFUSED (content): {cv.reason} — reaping row {row[0]}.",
+                file=sys.stderr,
+            )
+            rta._delete_old_row_if_exists(a.db, a.audio_root, row[0])
+            return 3
+        if cv is not None and not cv.accept and a.force:
+            print(
+                f"content guard OVERRIDDEN (--force) despite: {cv.reason}",
+                file=sys.stderr,
+            )
+        if not a.no_identity_check:
+            av._identity_check(a.db, track_id, stem)
     return rc
 
 
