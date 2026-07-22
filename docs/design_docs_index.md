@@ -31,6 +31,7 @@ in `workspaces/alignment_prototype/attic/EXPERIMENTS.md`).
 - [acquisition_as_decision_model.md](acquisition_as_decision_model.md) — acquisition as `CaseClaim`/`Attempt`/`Resolution`; corrections-ledger → checks wiring for the pseudo-label flywheel.
 - [genre_aware_key_plan.md](genre_aware_key_plan.md) — hierarchical genre → multi-profile KeyExtractor to de-bias key extraction on non-EDM; improves ML feature quality.
 - [stem_quality_ranking_plan.md](stem_quality_ranking_plan.md) — stem-candidate quality ranking (Q-phases); Q1 verdict = no scorer beats the prior, Q2 human labels mandatory.
+- [mojibake_locale_fix_runbook.md](mojibake_locale_fix_runbook.md) — issue #74 `track_audio.path` double-encoding: code defenses (shipped) + the ordered pi UTF-8-locale fix → row-repair runbook (staged for a coordinated deploy).
 
 ## Benchmark & paper
 

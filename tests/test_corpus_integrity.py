@@ -118,6 +118,21 @@ def test_same_platform_dup_regular_fires(conn: sqlite3.Connection) -> None:
     assert _counts(conn)["same_platform_dup_regular"] == 1
 
 
+def test_mojibake_path_fires_and_clean_is_silent(conn: sqlite3.Connection) -> None:
+    # A correctly-stored non-ASCII path is clean; its double-encoded form fires.
+    correct = "/o/R1/Sign Of The Times – Acapella.m4a"  # real en-dash U+2013
+    mojibake = correct.encode("utf-8").decode("latin-1")  # â€" — issue #74
+    _add_audio(conn, "R1", taid=1, path=correct)
+    assert _counts(conn)["mojibake_path"] == 0
+    _add_audio(conn, "R2", taid=2, path=mojibake)
+    assert _counts(conn)["mojibake_path"] == 1
+
+
+def test_mojibake_path_is_error_severity() -> None:
+    inv = next(i for i in ci.INVARIANTS if i.key == "mojibake_path")
+    assert inv.severity == "ERROR"
+
+
 def test_every_invariant_key_is_covered() -> None:
     # guards against an invariant being added without a schema-valid count query
     c = _fresh_conn()

@@ -5,13 +5,16 @@ Domain code never imports sqlite3 directly; it calls these functions.
 
 from __future__ import annotations
 
+import logging
 import os
 import sqlite3
 from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path
 from typing import Iterator, TypedDict
 
 from core.errors import DbError
+from core.mojibake import repair_double_encoded_utf8
 from core.models import (
     AudioAsset,
     MediaSource,
@@ -24,6 +27,8 @@ from core.models import (
     youtube_url,
 )
 from core.result import Err, Ok, Result
+
+_log = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -516,7 +521,32 @@ def _ensure_recording(conn: sqlite3.Connection, asset: AudioAsset) -> None:
     )
 
 
+def _repair_asset_path(asset: AudioAsset) -> AudioAsset:
+    """Normalize a double-encoded (mojibake) `path` to correct UTF-8 before it
+    is stored (issue #74).
+
+    A pi process under a non-UTF-8 locale can hand us a mojibake path (the
+    on-disk file is correct; the *string* is double-encoded). We repair rather
+    than reject: `insert_audio_or_reap` unlinks `asset.path` on failure, and a
+    mojibake string resolves to the real file under iso8859-1 — so rejecting
+    would delete good audio. Repairing keeps the stored path correct and the
+    reap comparison consistent. (The durable cure is the pi UTF-8 locale fix,
+    issue #74 step 1, shipped alongside this guard.)
+    """
+    clean = repair_double_encoded_utf8(asset.path)
+    if clean != asset.path:
+        _log.warning(
+            "track_audio.path was double-encoded (mojibake); normalized to UTF-8 "
+            "before insert (issue #74): %r -> %r",
+            asset.path,
+            clean,
+        )
+        return replace(asset, path=clean)
+    return asset
+
+
 def insert_audio(db_path: Path, asset: AudioAsset) -> Result[int, DbError]:
+    asset = _repair_asset_path(asset)
     try:
         with _connect(db_path) as conn:
             _ensure_recording(conn, asset)
@@ -573,12 +603,16 @@ def insert_audio_or_reap(db_path: Path, asset: AudioAsset) -> Result[int, DbErro
     already registered at a *different* path — the just-downloaded file is reaped
     so only the canonical row's path remains on disk.
     """
+    # Repair up front so the reap paths below match the value insert_audio stores
+    # (a mojibake string resolves to the real file on pi — unlinking it would
+    # delete good audio; issue #74).
+    asset = _repair_asset_path(asset)
     r = insert_audio(db_path, asset)
     match r:
         case Err(_):
             try:
                 Path(asset.path).unlink(missing_ok=True)
-            except OSError:
+            except (OSError, UnicodeError):
                 pass  # best-effort reap; the reconcile sweep is the backstop
             return r
         case Ok(track_audio_id):
@@ -593,6 +627,6 @@ def insert_audio_or_reap(db_path: Path, asset: AudioAsset) -> Result[int, DbErro
             ).fetchone()
         if row is not None and row[0] != asset.path:
             Path(asset.path).unlink(missing_ok=True)
-    except (OSError, sqlite3.DatabaseError):
+    except (OSError, UnicodeError, sqlite3.DatabaseError):
         pass  # best-effort; reconcile_orphans is the backstop
     return r

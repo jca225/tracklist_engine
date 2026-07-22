@@ -44,6 +44,7 @@ the taxonomy lives in this index. Two subdirectories hold the rest:
 - `match_stem_library.py` — map staged stem-library files (Discord corpus) → recordings; `--verify` = HuBERT/chromaprint audio verify (GPU: `vast_stem_verify.sh`); decision bands `auto_accept`/`accept`/`review`/`abstain` (audio folds into the band).
 - `discord_scrape.py` / `discord_grab.sh` — Discord stem-corpus retrieval (staging on pi; ToS-risk acknowledged in-file).
 - `promote_identity_overrides.py` — `labeling/identity_overrides/<set>.yaml` → `set_track_slots.recording_id`.
+- `repair_mojibake_paths.py` — repair double-encoded (mojibake) `track_audio.path` rows (issue #74 step 2). Dry-run by default; **refuses `--apply` unless the FS encoding is UTF-8** (the pi locale fix must land first) and skips any row whose repaired path isn't on disk. Runbook: [../docs/mojibake_locale_fix_runbook.md](../docs/mojibake_locale_fix_runbook.md).
 
 **Labeling / GT loop** (see [../labeling/CLAUDE.md](../labeling/CLAUDE.md)):
 - `aligning_refresh.py` — chain inline_tag + relink + fill_als after pull.

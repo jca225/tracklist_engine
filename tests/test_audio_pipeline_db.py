@@ -1,4 +1,5 @@
 """Tests for the DB adapter using an in-memory SQLite with the real schema."""
+
 from __future__ import annotations
 
 import sqlite3
@@ -11,7 +12,9 @@ from core.models import AudioAsset
 from core.result import Ok, Err
 
 
-_SCHEMA_PATH = Path(__file__).resolve().parent.parent / "web_crawler" / "database" / "schema.sql"
+_SCHEMA_PATH = (
+    Path(__file__).resolve().parent.parent / "web_crawler" / "database" / "schema.sql"
+)
 
 
 @pytest.fixture
@@ -41,7 +44,7 @@ def db_path(tmp_path: Path) -> Path:
             ("S_TEST", "tlp-1", "T1", "youtube", "vid-abc"),
             ("S_TEST", "tlp-1", "T1", "spotify", "sp-xyz"),
             ("S_TEST", "tlp-2", "T2", "spotify", "sp-only"),
-            ("S_TEST", "tlp-3", None,  "youtube", "vid-orphan"),
+            ("S_TEST", "tlp-3", None, "youtube", "vid-orphan"),
         ],
     )
     conn.commit()
@@ -51,12 +54,13 @@ def db_path(tmp_path: Path) -> Path:
 
 # ---------- load_set_tracks --------------------------------------------------
 
+
 def test_load_set_tracks_groups_sources_by_canonical_id(db_path: Path):
     r = db_adapter.load_set_tracks(db_path, "S_TEST")
     assert isinstance(r, Ok)
 
     by_id = {t.track_id: t for t in r.value}
-    assert set(by_id.keys()) == {"T1", "T2"}    # T3 filtered: null track_id
+    assert set(by_id.keys()) == {"T1", "T2"}  # T3 filtered: null track_id
 
     t1 = by_id["T1"]
     platforms = sorted(s.platform for s in t1.sources)
@@ -72,15 +76,20 @@ def test_load_set_tracks_unknown_set_returns_empty_ok(db_path: Path):
 
 # ---------- insert_audio + already_downloaded round-trip --------------------
 
+
 def test_insert_then_already_downloaded_round_trip(db_path: Path):
     asset = AudioAsset(
         track_audio_id=None,
-        track_id="T1", platform="youtube",
+        track_id="T1",
+        platform="youtube",
         source_url="https://www.youtube.com/watch?v=vid-abc",
         player_id="vid-abc",
-        path="/tmp/fake.m4a", sha256="deadbeef",
-        duration_s=210.5, sample_rate=44100,
-        codec="m4a", bitrate_kbps=128,
+        path="/tmp/fake.m4a",
+        sha256="deadbeef",
+        duration_s=210.5,
+        sample_rate=44100,
+        codec="m4a",
+        bitrate_kbps=128,
     )
 
     first = db_adapter.insert_audio(db_path, asset)
@@ -103,19 +112,29 @@ def test_insert_audio_persists_stem_axis(db_path: Path):
     """A variant asset persists its stem; the default stays 'regular'."""
     original = AudioAsset(
         track_audio_id=None,
-        track_id="T1", platform="youtube",
+        track_id="T1",
+        platform="youtube",
         source_url="https://www.youtube.com/watch?v=orig",
         player_id="orig",
-        path="/tmp/orig.m4a", sha256="aa",
-        duration_s=200.0, sample_rate=44100, codec="m4a", bitrate_kbps=128,
+        path="/tmp/orig.m4a",
+        sha256="aa",
+        duration_s=200.0,
+        sample_rate=44100,
+        codec="m4a",
+        bitrate_kbps=128,
     )
     variant = AudioAsset(
         track_audio_id=None,
-        track_id="T1", platform="youtube_music",
+        track_id="T1",
+        platform="youtube_music",
         source_url="https://www.youtube.com/watch?v=inst",
         player_id="inst",
-        path="/tmp/inst.m4a", sha256="bb",
-        duration_s=200.0, sample_rate=44100, codec="m4a", bitrate_kbps=128,
+        path="/tmp/inst.m4a",
+        sha256="bb",
+        duration_s=200.0,
+        sample_rate=44100,
+        codec="m4a",
+        bitrate_kbps=128,
         stem="instrumental",
     )
     ro = db_adapter.insert_audio(db_path, original)
@@ -123,17 +142,51 @@ def test_insert_audio_persists_stem_axis(db_path: Path):
     assert isinstance(ro, Ok) and isinstance(rv, Ok) and ro.value != rv.value
 
     with sqlite3.connect(db_path) as conn:
-        tags = dict(conn.execute(
-            "SELECT track_audio_id, stem FROM track_audio "
-            "WHERE track_audio_id IN (?, ?)",
-            (ro.value, rv.value),
-        ).fetchall())
+        tags = dict(
+            conn.execute(
+                "SELECT track_audio_id, stem FROM track_audio "
+                "WHERE track_audio_id IN (?, ?)",
+                (ro.value, rv.value),
+            ).fetchall()
+        )
     assert tags[ro.value] == "regular"
     assert tags[rv.value] == "instrumental"
 
 
+def test_insert_audio_normalizes_mojibake_path(db_path: Path):
+    """A double-encoded (mojibake) path is repaired to correct UTF-8 before it
+    is stored — the recurrence guard for issue #74. Disk→DB→UTF-8-client
+    round-trips without corruption."""
+    correct = "/mnt/storage/objects/T9/T9__youtube__Sign Of The Times – Acapella.m4a"
+    mojibake = correct.encode("utf-8").decode("latin-1")  # â€" — how pi stored it
+    assert mojibake != correct
+    asset = AudioAsset(
+        track_audio_id=None,
+        track_id="T9",
+        platform="youtube",
+        source_url="https://www.youtube.com/watch?v=sott",
+        player_id="sott",
+        path=mojibake,
+        sha256="cc",
+        duration_s=200.0,
+        sample_rate=44100,
+        codec="m4a",
+        bitrate_kbps=128,
+        stem="acappella",
+    )
+    r = db_adapter.insert_audio(db_path, asset)
+    assert isinstance(r, Ok)
+    with sqlite3.connect(db_path) as conn:
+        stored = conn.execute(
+            "SELECT path FROM track_audio WHERE track_audio_id=?", (r.value,)
+        ).fetchone()[0]
+    assert stored == correct, f"path not normalized: {stored!r}"
+
+
 def test_insert_audio_or_reap_removes_file_on_failure(
-    db_path: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    db_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Failed insert must not leave the downloaded file on disk."""
     from core.errors import DbError
@@ -164,7 +217,8 @@ def test_insert_audio_or_reap_removes_file_on_failure(
 
 
 def test_insert_audio_or_reap_reaps_dedup_orphan_at_new_path(
-    db_path: Path, tmp_path: Path,
+    db_path: Path,
+    tmp_path: Path,
 ) -> None:
     """INSERT OR IGNORE dedup: retry at a new path must not leave a disk orphan."""
     canonical = tmp_path / "canonical.m4a"
