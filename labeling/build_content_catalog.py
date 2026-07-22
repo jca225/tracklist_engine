@@ -58,15 +58,29 @@ def build_catalog(conn, set_id, *, file_sha256=_file_sha256, mdat_sha256=_mdat_s
                 "track_audio_id": str(taid),
                 "stem": stem or "regular",
                 "variant": variant or "regular",
+                "kind": "master",
             }
         )
 
+    # A separated (demucs/roformer) stem is only a valid acappella/instrumental
+    # catalog entry when its parent track_audio row is the regular master
+    # (ta.stem='regular'). If the parent is itself an acappella/instrumental
+    # master, its separated residual is not the recording's real acappella/
+    # instrumental — cataloguing it would be a wrong-stem-axis entry (P14).
     for taid, rid, stem_name, spath in conn.execute(
         f"SELECT ts.track_audio_id, ta.recording_id, ts.stem_name, ts.path "
         f"FROM track_stems ts JOIN track_audio ta ON ta.track_audio_id=ts.track_audio_id "
-        f"WHERE ta.recording_id IN ({qmarks}) AND ts.stem_name IN ('vocals','instrumental')",
+        f"WHERE ta.recording_id IN ({qmarks}) AND ta.stem='regular' "
+        f"AND ts.stem_name IN ('vocals','instrumental')",
         recs,
     ):
+        # Strict lookup (not a raw passthrough, P15): component stems
+        # (drums/bass/other) have no point in {regular,acappella,instrumental}
+        # and must be excluded, not emitted under their raw name. This is
+        # belt-and-suspenders alongside the WHERE clause above.
+        axis = _STEM_TO_AXIS.get(stem_name)
+        if axis is None:
+            continue
         try:
             csha = file_sha256(str(spath))
         except OSError:
@@ -77,12 +91,13 @@ def build_catalog(conn, set_id, *, file_sha256=_file_sha256, mdat_sha256=_mdat_s
                 "payload_sha256": None,
                 "recording_id": rid,
                 "track_audio_id": str(taid),
-                "stem": _STEM_TO_AXIS.get(stem_name, stem_name),
+                "stem": axis,
                 # Safe default: a separated stem really inherits the parent
-                # track_audio's variant, but wiring that through is Task A3
-                # (the stem-derivation loop refinement). Emitting a default
-                # here just keeps the key present/non-crashing.
+                # track_audio's variant, but wiring that through is a
+                # follow-on refinement. Emitting a default here just keeps
+                # the key present/non-crashing.
                 "variant": "regular",
+                "kind": "separated",
             }
         )
     return {"set_id": set_id, "entries": entries}
