@@ -40,6 +40,14 @@ CREATE INDEX IF NOT EXISTS idx_content_history_payload_sha ON content_history(pa
 -- (v4.6). Caveat: sibling rips of the same (recording,stem,variant) each get
 -- generation 0 (the ordinal is an audit index, not the bind key — binding is by
 -- hash equality regardless of ordinal, so the collision is cosmetic).
+--
+-- `recording_id IS NOT NULL` guard: content_history.recording_id is NOT NULL
+-- (the chain key pins identity by recording), but canonical carries a few
+-- identity-incomplete rips (sha256 present, recording_id still NULL — the ingest
+-- frontier). Without this filter the INSERT aborts on the first such row and
+-- backfills nothing (found live: 1 row nulled the whole 19,608-row seed). Those
+-- rows cannot participate in a recording-keyed chain anyway, so skipping them is
+-- correct, not lossy.
 INSERT INTO content_history
   (recording_id, stem, variant, kind, track_audio_id, content_sha256,
    generation, op, source)
@@ -48,6 +56,7 @@ SELECT
     ta.sha256, 0, 'fetch', 'backfill_migration'
 FROM track_audio ta
 WHERE ta.sha256 IS NOT NULL
+  AND ta.recording_id IS NOT NULL
   AND NOT EXISTS (
       SELECT 1 FROM content_history ch
       WHERE ch.track_audio_id = ta.track_audio_id
