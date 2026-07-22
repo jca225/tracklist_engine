@@ -712,11 +712,14 @@ CREATE INDEX IF NOT EXISTS idx_track_id_links_target ON track_id_links(linked_tr
 
 
 -- Append-only correction ledger. One row each time a track's downloaded audio
--- is replaced or a variant added because the auto-acquired version was the
--- wrong identity along one of the three axes:
---   axis='version'  wrong arrangement (got the original, wanted the remix)
---   axis='variant'  wrong edit length (got radio/regular, wanted extended)
---   axis='stem'     wrong/poor component (acappella vs instrumental vs full)
+-- is replaced, relinked, detached, or a variant added because the
+-- auto-acquired version was the wrong identity along one of the four axes:
+--   axis='version'    wrong arrangement (got the original, wanted the remix)
+--   axis='variant'    wrong edit length (got radio/regular, wanted extended)
+--   axis='stem'       wrong/poor component (acappella vs instrumental vs full)
+--   axis='recording'  wrong recording — a stem was mis-attached to the wrong
+--                      work/recording entirely (relink to the right one, or
+--                      detach with new_recording_id=NULL to abstain)
 -- These rows are the training signal for the future acquisition gates. NO
 -- foreign keys on purpose: a correction must OUTLIVE the track_audio rows it
 -- references (a 'replace' deletes the old row), so it snapshots the old/new
@@ -726,8 +729,8 @@ CREATE TABLE IF NOT EXISTS track_audio_correction (
     set_id              TEXT,              -- set where the mistake was noticed (nullable)
     position            TEXT,              -- published section no. / slot label (free text)
     track_id            TEXT NOT NULL,     -- 1001tracklists data-trackid being corrected
-    axis                TEXT NOT NULL,     -- version | variant | stem
-    action              TEXT NOT NULL,     -- replace (destructive) | add (additive)
+    axis                TEXT NOT NULL,     -- version | variant | stem | recording
+    action              TEXT NOT NULL,     -- replace (destructive) | add (additive) | relink (recording reassign) | detach (abstain, unlink)
     old_track_audio_id  INTEGER,           -- retired row id (NULL for a pure add)
     old_platform        TEXT,
     old_player_id       TEXT,

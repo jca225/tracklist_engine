@@ -48,3 +48,22 @@ def test_duration_mismatch_refuses():
     v = same_song_guard("Good Time", "Good Time", "acappella", long_ref, short_cand)
     assert v.accept is False
     assert v.channel == "content"
+
+
+def test_fallback_to_original_accepts():
+    # identical fingerprints, equal duration -> sim ~1.0, dur_ratio 1.0 ->
+    # classify() returns FALLBACK_TO_ORIGINAL, which is NOT in _CONTENT_REFUSE.
+    # Core invariant: a wrong-STEM-but-same-song signal must not refuse.
+    fp = _fp(1)
+    v = same_song_guard("", "", "instrumental", fp, fp)
+    assert v.accept is True
+    assert v.channel is None
+
+
+def test_weak_signal_acappella_accepts():
+    # different-seed fingerprints, equal duration -> classify() always returns
+    # WEAK_SIGNAL for acappella once duration passes (chroma is weak by design
+    # for vocals-only content), which is NOT in _CONTENT_REFUSE.
+    fp_a, fp_b = _fp(1), _fp(2)
+    v = same_song_guard("", "", "acappella", fp_a, fp_b)
+    assert v.accept is True

@@ -2,7 +2,10 @@
 
 Records one row each time a track's downloaded audio is replaced or a variant
 added because the auto-acquired version was the wrong *identity* along one of
-the three axes (version / variant / stem). See core/identity.py.
+the four axes (version / variant / stem / recording). See core/identity.py.
+The `recording` axis covers a stem mis-attached to the wrong work/recording
+entirely, corrected via the `relink` action (reassign to the right recording)
+or `detach` (abstain — unlink with no replacement).
 """
 
 from __future__ import annotations

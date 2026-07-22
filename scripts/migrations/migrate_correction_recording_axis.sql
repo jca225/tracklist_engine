@@ -1,5 +1,14 @@
 -- Add the 'recording' axis + detach/relink actions to track_audio_correction.
 -- SQLite cannot ALTER a CHECK constraint, so rebuild the table (no FKs to worry about).
+--
+-- ** APPLY EXACTLY ONCE. ** This script is not idempotent and not safe to
+-- re-run: a second run renames the already-migrated table to
+-- track_audio_correction_old and re-copies it through an INSERT column list
+-- that OMITS old_recording_id/new_recording_id (those columns did not exist
+-- pre-migration), silently NULLing out any recording-axis data written since
+-- the first run. Check the table's CHECK constraint (or a saved run-log)
+-- before applying — if `axis IN (...,'recording')` already appears, do NOT
+-- run this again.
 PRAGMA foreign_keys=OFF;
 BEGIN TRANSACTION;
 

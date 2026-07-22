@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Read-only scan for stem-candidate wrong-recording mis-attaches.
 
-Seed of Crush Phase-4 part 3 (audit). Here it also backs the validation test:
-parse the acquired song from each stem/add correction's reason and (given a DB)
-compare to the target recording's title via labels_overlap. NO mutations.
+Seed of Crush Phase-4 part 3 (audit). This is the read-only seed only: it
+parses the acquired song out of each stem/add correction's `reason` field
+and lists it. It does NOT compare against a recording's DB title — that
+DB-title comparison (via `labels_overlap`) is deferred to Part 3. NO
+mutations here.
 """
 
 from __future__ import annotations
@@ -16,8 +18,6 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
-
-from core.labels import labels_overlap  # noqa: E402
 
 _FILE_RE = re.compile(r"file:\s*(?P<name>[^;]+)", re.IGNORECASE)
 _SLOT_PREFIX = re.compile(r"^\d+(?:w\d+)?__")
