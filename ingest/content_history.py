@@ -99,6 +99,59 @@ def _next_generation(conn: sqlite3.Connection, g: Generation) -> int:
     return int(row["n"])
 
 
+def _validate(g: Generation) -> DbError | None:
+    if g.kind not in KINDS:
+        return DbError(kind="bad_kind", detail=f"{g.kind!r} not in {KINDS}")
+    if g.valid not in (0, 1):
+        return DbError(kind="bad_valid", detail=f"valid={g.valid!r} not in (0,1)")
+    return None
+
+
+def append_generation_on(conn: sqlite3.Connection, g: Generation) -> int:
+    """Insert a generation on an existing connection; return the new row id.
+
+    For callers that must record a generation **atomically with their own
+    mutation** — e.g. `replace_track_audio` recording the retiring row's sha256
+    in the *same transaction* as the DELETE, so the churn can never delete the
+    evidence (spec P9). The caller owns the commit. Raises ``ValueError`` on
+    invalid input and propagates ``sqlite3.Error`` (so it rolls back with the
+    caller's transaction).
+    """
+    err = _validate(g)
+    if err is not None:
+        raise ValueError(f"{err.kind}: {err.detail}")
+    # Self-heal: ensure the table exists before writing. The pi's auto-pull
+    # timer (issue #73) ships code without running migrations, so a
+    # never-drop-hash hook can land before the backfill migration runs — this
+    # makes the first append create the table rather than crash with "no such
+    # table". The migration then only owns the generation-0 backfill.
+    conn.executescript(SCHEMA)
+    gen = g.generation if g.generation is not None else _next_generation(conn, g)
+    cur = conn.execute(
+        """
+        INSERT INTO content_history
+          (recording_id, version, stem, variant, kind, track_audio_id,
+           content_sha256, payload_sha256, op, source, generation, valid)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            g.recording_id,
+            g.version,
+            g.stem,
+            g.variant,
+            g.kind,
+            g.track_audio_id,
+            g.content_sha256,
+            g.payload_sha256,
+            g.op,
+            g.source,
+            gen,
+            g.valid,
+        ),
+    )
+    return int(cur.lastrowid)
+
+
 def append_generation(db_path: Path, g: Generation) -> Result[int, DbError]:
     """Append a generation to its chain. Returns the new row id.
 
@@ -108,46 +161,14 @@ def append_generation(db_path: Path, g: Generation) -> Result[int, DbError]:
     equality regardless of ordinal — so a concurrent-writer race on the ordinal
     cannot produce a wrong label, only a duplicated ordinal.
     """
-    if g.kind not in KINDS:
-        return Err(DbError(kind="bad_kind", detail=f"{g.kind!r} not in {KINDS}"))
-    if g.valid not in (0, 1):
-        return Err(DbError(kind="bad_valid", detail=f"valid={g.valid!r} not in (0,1)"))
+    err = _validate(g)
+    if err is not None:
+        return Err(err)
     try:
         with connect(db_path) as conn:
-            # Self-heal: ensure the table exists before writing. The pi's
-            # auto-pull timer (issue #73) ships code without running migrations,
-            # so a never-drop-hash hook can land before the backfill migration
-            # runs — this makes the first append create the table rather than
-            # crash with "no such table". The migration then only owns the
-            # generation-0 backfill of pre-existing rows.
-            conn.executescript(SCHEMA)
-            gen = (
-                g.generation if g.generation is not None else _next_generation(conn, g)
-            )
-            cur = conn.execute(
-                """
-                INSERT INTO content_history
-                  (recording_id, version, stem, variant, kind, track_audio_id,
-                   content_sha256, payload_sha256, op, source, generation, valid)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    g.recording_id,
-                    g.version,
-                    g.stem,
-                    g.variant,
-                    g.kind,
-                    g.track_audio_id,
-                    g.content_sha256,
-                    g.payload_sha256,
-                    g.op,
-                    g.source,
-                    gen,
-                    g.valid,
-                ),
-            )
+            rid = append_generation_on(conn, g)
             conn.commit()
-            return Ok(int(cur.lastrowid))
+            return Ok(rid)
     except sqlite3.Error as e:
         return Err(DbError(kind="integrity", detail=str(e)))
 
