@@ -44,11 +44,17 @@ def test_build_catalog_covers_track_audio_and_stems(tmp_path: Path) -> None:
         mdat_sha256=lambda p: None,  # skip real mp4 parsing in unit test
     )
     got = {
-        (e["recording_id"], e["stem"], e["variant"], e["content_sha256"])
+        (e["recording_id"], e["stem"], e["variant"], e["content_sha256"], e["kind"])
         for e in out["entries"]
     }
-    assert ("recA", "regular", "extended", "shaA") in got
-    assert ("recB", "acappella", "regular", "shaB") in got  # NULL variant -> regular
-    # demucs vocals -> acappella; stem-loop default variant (Task A3 refines this)
-    assert ("recA", "acappella", "regular", "STEMHASH") in got
+    assert ("recA", "regular", "extended", "shaA", "master") in got
+    assert (
+        "recB",
+        "acappella",
+        "regular",
+        "shaB",
+        "master",
+    ) in got  # NULL variant -> regular
+    # demucs vocals of recA's regular parent -> acappella, kind='separated'
+    assert ("recA", "acappella", "regular", "STEMHASH", "separated") in got
     assert out["set_id"] == "s"
