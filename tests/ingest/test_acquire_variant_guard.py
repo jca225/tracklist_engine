@@ -14,7 +14,8 @@ _SCHEMA = """
 CREATE TABLE work (work_id TEXT PRIMARY KEY, title TEXT);
 CREATE TABLE recording (recording_id TEXT PRIMARY KEY, work_id TEXT, full_name TEXT);
 CREATE TABLE track_audio (
-  track_audio_id INTEGER PRIMARY KEY, recording_id TEXT, stem TEXT, path TEXT,
+  track_audio_id INTEGER PRIMARY KEY, recording_id TEXT, stem TEXT,
+  variant TEXT DEFAULT 'regular', sha256 TEXT, path TEXT,
   platform TEXT, player_id TEXT, source_url TEXT,
   is_reference INTEGER DEFAULT 0, downloaded_at DATETIME);
 CREATE TABLE track_audio_correction (

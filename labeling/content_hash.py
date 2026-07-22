@@ -28,6 +28,43 @@ def file_sha256(path: str | Path) -> str:
     return h.hexdigest()
 
 
+def flac_pcm_md5(path: str | Path) -> str | None:
+    """The MD5 of the *decoded PCM* stored in a FLAC file's STREAMINFO block, or
+    None if absent / not a FLAC / the encoder left it unset (all-zero).
+
+    This is the FLAC analogue of `mdat_sha256` for the stem population (mdat is
+    mp4-only; separated stems are FLAC). STREAMINFO precedes the VORBIS_COMMENT
+    tag block and encodes the *decoded audio*, so this value is BOTH
+    tag-invariant AND lossless-re-encode-invariant — a stem re-encoded or
+    re-containered hashes to the same value (spec v2.3 / P11). Some encoders
+    leave the signature all-zero; that is "unknown", returned as None (never a
+    false payload key).
+
+    FLAC layout: 4-byte magic ``fLaC``, then metadata blocks; the first block is
+    always STREAMINFO (type 0), a 34-byte payload whose last 16 bytes are the
+    MD5. OSError propagates (the caller wraps it, as it does for mdat).
+    """
+    with open(path, "rb") as f:
+        if f.read(4) != b"fLaC":
+            return None
+        hdr = f.read(4)
+        if len(hdr) < 4:
+            return None
+        block_type = hdr[0] & 0x7F
+        if block_type != 0:  # STREAMINFO must be the first metadata block
+            return None
+        length = int.from_bytes(hdr[1:4], "big")
+        if length < 34:  # malformed — STREAMINFO is exactly 34 bytes
+            return None
+        payload = f.read(34)
+        if len(payload) < 34:
+            return None
+        md5 = payload[18:34]
+        if md5 == b"\x00" * 16:
+            return None  # encoder left the signature unset
+        return md5.hex()
+
+
 def mdat_sha256(path: str | Path) -> str | None:
     """sha256 of the first top-level `mdat` box payload, or None if there is none.
 

@@ -21,6 +21,7 @@ from core.db import connect
 from core.errors import DbError
 from core.identity import normalize_stem
 from core.result import Err, Ok, Result
+from ingest.content_history import tombstone_on
 
 AXES = ("version", "variant", "stem", "recording")
 ACTIONS = ("replace", "add", "relink", "detach")
@@ -86,6 +87,15 @@ def log_correction(db_path: Path, c: Correction) -> Result[int, DbError]:
                     c.source,
                 ),
             )
+            # Invalidation event (spec v4.2 / B4): a relink (audio was on the
+            # wrong recording) or detach (abstain) means the content_history
+            # generations recorded under the OLD recording are no longer a legal
+            # bind target — tombstone them in the same transaction so a future
+            # historical bind can't resurrect the mis-attached bytes. Scope to
+            # the old recording + stem axis (variant/kind unfiltered — the whole
+            # old attachment is suspect). No-op when there is no old recording.
+            if c.action in ("relink", "detach") and c.old_recording_id:
+                tombstone_on(conn, c.old_recording_id, stem=c.stem_value)
             conn.commit()
             return Ok(int(cur.lastrowid))
     except sqlite3.Error as e:

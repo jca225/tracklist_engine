@@ -2,8 +2,10 @@
 
 Emits {content_sha256, payload_sha256, recording_id, track_audio_id, stem} per
 audio artifact a GT clip can reference: every track_audio row for the set's
-recordings (content_sha256 from the DB; payload_sha256 = mdat hash for m4a), plus
-demucs vocals/instrumental stems (hashed here — track_stems has no stored hash).
+recordings (content_sha256 from the DB; payload_sha256 = tag-invariant mdat hash
+for m4a / decoded-PCM MD5 for FLAC), plus demucs vocals/instrumental stems
+(hashed here — track_stems has no stored hash; FLAC stems also get a PCM-MD5
+payload key so a re-encoded/re-containered stem still binds — spec v2.3/P11).
 
 stdlib only; run under pi's bare python3:
     python3 -m labeling.build_content_catalog <set_id>   # prints JSON to stdout
@@ -17,6 +19,7 @@ import sys
 from pathlib import Path
 
 from labeling.content_hash import file_sha256 as _file_sha256
+from labeling.content_hash import flac_pcm_md5 as _flac_pcm_md5
 from labeling.content_hash import mdat_sha256 as _mdat_sha256
 
 _DB = "/mnt/storage/data/db/music_database.db"
@@ -24,7 +27,31 @@ _M4A_EXT = (".m4a", ".mp4", ".m4b")
 _STEM_TO_AXIS = {"vocals": "acappella", "instrumental": "instrumental"}
 
 
-def build_catalog(conn, set_id, *, file_sha256=_file_sha256, mdat_sha256=_mdat_sha256):
+def _payload_for(path, mdat_sha256, flac_pcm_md5):
+    """Tag-invariant payload key by container: mdat for mp4, decoded-PCM MD5 for
+    FLAC, else None. The FLAC key gives the stem population (payload was always
+    None before) a free sound channel that survives re-encode/re-container
+    (spec v2.3/P11). OSError → None (matches the mdat call site's guard)."""
+    p = str(path or "")
+    lp = p.lower()
+    try:
+        if lp.endswith(_M4A_EXT):
+            return mdat_sha256(p)
+        if lp.endswith(".flac"):
+            return flac_pcm_md5(p)
+    except OSError:
+        return None
+    return None
+
+
+def build_catalog(
+    conn,
+    set_id,
+    *,
+    file_sha256=_file_sha256,
+    mdat_sha256=_mdat_sha256,
+    flac_pcm_md5=_flac_pcm_md5,
+):
     # Widened to the pull's own resolution (labeling/pull_set_for_alignment.py
     # `wanted` CTE, set_track_slots arm): COALESCE(recording_id, track_id) so a
     # legacy/Rvmor-gap slot (NULL recording_id, track_id-only identity) is not
@@ -53,13 +80,7 @@ def build_catalog(conn, set_id, *, file_sha256=_file_sha256, mdat_sha256=_mdat_s
         f"FROM track_audio WHERE track_id IN ({qmarks}) OR recording_id IN ({qmarks})",
         recs + recs,
     ):
-        payload = None
-        p = str(path or "")
-        if p.lower().endswith(_M4A_EXT):
-            try:
-                payload = mdat_sha256(p)
-            except OSError:
-                payload = None
+        payload = _payload_for(path, mdat_sha256, flac_pcm_md5)
         entries.append(
             {
                 "content_sha256": sha,
@@ -99,7 +120,7 @@ def build_catalog(conn, set_id, *, file_sha256=_file_sha256, mdat_sha256=_mdat_s
         entries.append(
             {
                 "content_sha256": csha,
-                "payload_sha256": None,
+                "payload_sha256": _payload_for(spath, mdat_sha256, flac_pcm_md5),
                 "recording_id": rid,
                 "track_audio_id": str(taid),
                 "stem": axis,
