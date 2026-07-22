@@ -26,7 +26,8 @@ def _db(tmp_path: Path) -> sqlite3.Connection:
         CREATE TABLE set_track_slots(set_id TEXT, row_index INTEGER,
             recording_id TEXT, track_id TEXT);
         CREATE TABLE track_audio(track_audio_id INTEGER PRIMARY KEY,
-            recording_id TEXT, stem TEXT, sha256 TEXT, path TEXT, variant TEXT);
+            recording_id TEXT, stem TEXT, sha256 TEXT, path TEXT, variant TEXT,
+            track_id TEXT);
         CREATE TABLE track_stems(track_audio_id INTEGER, stem_name TEXT, path TEXT);
         """
     )
@@ -49,10 +50,10 @@ def test_separated_stem_under_acappella_parent_is_excluded(tmp_path: Path) -> No
         [("s", 0, "recA", "recA"), ("s", 1, "recB", "recB")],
     )
     conn.executemany(
-        "INSERT INTO track_audio VALUES(?,?,?,?,?,?)",
+        "INSERT INTO track_audio VALUES(?,?,?,?,?,?,?)",
         [
-            (1, "recA", "regular", "shaA", "/x/a.m4a", "regular"),
-            (2, "recB", "acappella", "shaB", "/x/b.m4a", "regular"),
+            (1, "recA", "regular", "shaA", "/x/a.m4a", "regular", "recA"),
+            (2, "recB", "acappella", "shaB", "/x/b.m4a", "regular", "recB"),
         ],
     )
     conn.executemany(
@@ -102,8 +103,8 @@ def test_component_stem_names_are_excluded_not_passed_through(tmp_path: Path) ->
         "INSERT INTO set_track_slots VALUES(?,?,?,?)", ("s", 0, "recA", "recA")
     )
     conn.execute(
-        "INSERT INTO track_audio VALUES(?,?,?,?,?,?)",
-        (1, "recA", "regular", "shaA", "/x/a.m4a", "regular"),
+        "INSERT INTO track_audio VALUES(?,?,?,?,?,?,?)",
+        (1, "recA", "regular", "shaA", "/x/a.m4a", "regular", "recA"),
     )
     conn.execute("INSERT INTO track_stems VALUES(1, 'drums', ?)", (str(drums),))
 
@@ -130,8 +131,8 @@ def test_every_entry_carries_kind(tmp_path: Path) -> None:
         "INSERT INTO set_track_slots VALUES(?,?,?,?)", ("s", 0, "recA", "recA")
     )
     conn.execute(
-        "INSERT INTO track_audio VALUES(?,?,?,?,?,?)",
-        (1, "recA", "regular", "shaA", "/x/a.m4a", "regular"),
+        "INSERT INTO track_audio VALUES(?,?,?,?,?,?,?)",
+        (1, "recA", "regular", "shaA", "/x/a.m4a", "regular", "recA"),
     )
     conn.execute("INSERT INTO track_stems VALUES(1, 'vocals', ?)", (str(vocals),))
 
