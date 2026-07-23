@@ -43,6 +43,7 @@ from tokenizer.identity_axes import (
 from tokenizer.track_tokenizer import parse_track_row as parse_track_main
 from tokenizer.track_tokenizer import TrackRow
 from tokenizer.suggestion_tokenizer import parse_suggestion_row
+from tokenizer.text_tokenizer import parse_bItmH_row
 
 log = logging.getLogger("tokenizer.materialize")
 
@@ -208,6 +209,31 @@ def _flush_suggestions(conn: sqlite3.Connection, buf: list[tuple]) -> None:
     conn.commit()
 
 
+def _notice_tuple(tok, set_id: str, row_index: int) -> tuple:
+    """set_notices row from a text_tokenizer TextRowToken (bItmH notice/section)."""
+    return (
+        set_id,
+        row_index,
+        tok.row_type,
+        tok.text,
+        json.dumps(tok.links, ensure_ascii=False) if tok.links else None,
+        json.dumps(tok.icons, ensure_ascii=False) if tok.icons else None,
+        json.dumps(tok.parsed, ensure_ascii=False) if tok.parsed else None,
+    )
+
+
+def _flush_notices(conn: sqlite3.Connection, buf: list[tuple]) -> None:
+    if not buf:
+        return
+    conn.executemany(
+        "INSERT OR REPLACE INTO set_notices ("
+        "set_id, row_index, row_type, text, links_json, icons_json, parsed_json"
+        ") VALUES (?,?,?,?,?,?,?)",
+        buf,
+    )
+    conn.commit()
+
+
 def _flush_metadata(conn: sqlite3.Connection, rows: list[dict[str, Any]]) -> None:
     if not rows:
         return
@@ -346,6 +372,7 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
     metadata = _MetadataAccumulator()
     slot_buf: list[tuple] = []
     sug_buf: list[tuple] = []
+    notice_buf: list[tuple] = []
     counts = {"track": 0, "slot": 0, "suggestion": 0, "text": 0, "errors": 0}
     # Per-set w/ layering: primary label + w/ counter (matches pull_set_for_alignment).
     slot_state: dict[str, tuple[str | None, int]] = {}
@@ -452,11 +479,19 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
                     counts["suggestion"] += 1
 
                 elif "bItmH" in outer_classes:
+                    tok = parse_bItmH_row(raw)
+                    notice_buf.append(
+                        _notice_tuple(tok, row["set_id"], int(row["row_index"]))
+                    )
                     counts["text"] += 1
 
             except Exception as e:
                 counts["errors"] += 1
                 log.debug("row_id=%s error: %s", row["row_id"], e)
+
+            if len(notice_buf) >= _BATCH_INSERT:
+                _flush_notices(conn, notice_buf)
+                notice_buf.clear()
 
             if len(sug_buf) >= _BATCH_INSERT:
                 _flush_suggestions(conn, sug_buf)
@@ -480,6 +515,7 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
     # Final tail flushes
     _flush_slots(conn, slot_buf)
     _flush_suggestions(conn, sug_buf)
+    _flush_notices(conn, notice_buf)
 
     # Upsert track_metadata (single big batch — ~50k rows expected)
     md_rows = metadata.finalize_rows()
