@@ -1,7 +1,0 @@
-=== BB12 reverted ===
-  ALL       n= 21  traj-acc(<2s) mean  43%
-  multiseg  n=  7  traj-acc(<2s) mean  35%
-=== BB11 reverted ===
-  ALL       n= 17  traj-acc(<2s) mean  44%
-  multiseg  n=  7  traj-acc(<2s) mean  21%
-.....x.................                                                  [100%]

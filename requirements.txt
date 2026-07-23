@@ -1,17 +1,1 @@
-beautifulsoup4==4.14.3
-lxml>=5.2  # ~3x faster BS parser; tokenizer/_parser.py picks it up if present
-ddddocr==1.6.1
-numpy==2.2.6
-Pillow>=10.4.0
-playwright==1.58.0
-python-dotenv==1.2.1
-PyYAML==6.0.3
-
-# jobqueue: server (pi-storage) + client (pi-worker)
-fastapi>=0.115
-uvicorn[standard]>=0.30
-httpx>=0.27
-
-# taste-prior scrape loop (pi-worker): personalization/taste_cluster.py
-scipy>=1.13
-scikit-learn>=1.5
+# reqs

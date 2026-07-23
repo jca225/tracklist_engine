@@ -1,6 +1,0 @@
-  oddratio             n=  5  traj-acc(<2s) mean  32%  >=80% covered:  20%
-  by stem:
-    acappella          n= 21  traj-acc(<2s) mean  44%  >=80% covered:  38%
-  oddratio             n=  4  traj-acc(<2s) mean  75%  >=80% covered:  75%
-  by stem:
-    acappella          n= 17  traj-acc(<2s) mean  35%  >=80% covered:  35%
