@@ -7,8 +7,11 @@ tempo+key (BB12 was filled by hand to ``<title> [126bpm 8B]``). Each
 carries the inline tag (see inline_tag_aligning_folder.py), so we copy the
 file's tag into the clip name, replacing ``[?]``.
 
-Edits only the clip ``<Name>`` attribute text (a targeted string substitution on
-the decompressed XML — no lxml re-serialization, no structural change), so none
+Routed through the ``labeling.als`` codec (``cst`` for the gzip<->XML boundary,
+``write.write_clip_names`` for the mutation): the clip's ``Name`` Value
+attribute is set directly on the parsed element rather than string-substituted
+in the decompressed XML text, so lxml's own attribute escaping applies instead
+of a hand-rolled one. Structurally this touches only ``AudioClip/Name`` — none
 of the deep-copy crash hazards apply. A timestamped backup is written and you
 should still open the session in Live to confirm.
 
@@ -20,7 +23,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import gzip
 import html
 import re
 import sys
@@ -28,12 +30,15 @@ from pathlib import Path
 
 from lxml import etree
 
+_REPO = Path(__file__).resolve().parents[2]
+if str(_REPO) not in sys.path:
+    sys.path.insert(0, str(_REPO))
+
+from labeling.als.cst import load_als_xml, save_als_xml  # noqa: E402
+from labeling.als.write import write_clip_names  # noqa: E402
+
 # trailing inline tag on a filename stem: [126bpm 8B] or [no-features]
 _FILE_TAG = re.compile(r"(\[(?:\d+bpm [^\]]+|no-features)\])\s*$")
-
-
-def xml_escape(s: str) -> str:
-    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def file_tag_for(path_value: str) -> str | None:
@@ -51,10 +56,9 @@ def file_tag_for(path_value: str) -> str | None:
     return None
 
 
-def build_name_edits(als_path: Path) -> tuple[dict[str, str], list[str]]:
+def build_name_edits(root: etree._Element) -> tuple[dict[str, str], list[str]]:
     """Return ({old_name -> new_name}, conflicts). Maps each clip whose Name has
     ``[?]`` to the same Name with ``[?]`` replaced by its file's tag."""
-    root = etree.fromstring(gzip.decompress(als_path.read_bytes()))
     edits: dict[str, str] = {}
     conflicts: list[str] = []
     for clip in root.iter("AudioClip"):
@@ -78,21 +82,19 @@ def build_name_edits(als_path: Path) -> tuple[dict[str, str], list[str]]:
     return edits, conflicts
 
 
-def apply_edits(als_path: Path, edits: dict[str, str], *, dry_run: bool) -> int:
-    xml = gzip.decompress(als_path.read_bytes()).decode("utf-8")
-    total = 0
-    for old, new in edits.items():
-        needle = f'Value="{xml_escape(old)}"'
-        repl = f'Value="{xml_escape(new)}"'
-        hits = xml.count(needle)
-        if hits:
-            xml = xml.replace(needle, repl)
-            total += hits
+def apply_edits(
+    als_path: Path,
+    root: etree._Element,
+    edits: dict[str, str],
+    *,
+    dry_run: bool,
+) -> int:
+    total = write_clip_names(root, edits)
     if total and not dry_run:
         backup = als_path.with_suffix(als_path.suffix + ".prefill.bak")
         if not backup.exists():
             backup.write_bytes(als_path.read_bytes())
-        als_path.write_bytes(gzip.compress(xml.encode("utf-8")))
+        save_als_xml(root, als_path)
     return total
 
 
@@ -115,11 +117,12 @@ def main() -> int:
         if not als.is_file():
             print(f"  [skip] missing: {als.name}")
             continue
-        edits, conflicts = build_name_edits(als)
+        root = load_als_xml(als)
+        edits, conflicts = build_name_edits(root)
         if not edits:
             print(f"  [--] {als.name}: no '[?]' clip names to fill")
             continue
-        applied = apply_edits(als, edits, dry_run=args.dry_run)
+        applied = apply_edits(als, root, edits, dry_run=args.dry_run)
         verb = "would fill" if args.dry_run else "filled"
         print(
             f"  [{'dry' if args.dry_run else 'ok'}] {als.name}: "

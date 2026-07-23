@@ -55,7 +55,12 @@ from labeling.als.semantics import (
     tempo_ratio,
 )
 from labeling.als.tags import strip_user_tags
-from labeling.als.write import write_locators, write_tempo_envelope
+from labeling.als.write import (
+    write_clip_names,
+    write_clip_source_paths,
+    write_locators,
+    write_tempo_envelope,
+)
 
 __all__ = [
     # models
@@ -102,6 +107,8 @@ __all__ = [
     # tags
     "strip_user_tags",
     # write
+    "write_clip_names",
+    "write_clip_source_paths",
     "write_locators",
     "write_tempo_envelope",
 ]
