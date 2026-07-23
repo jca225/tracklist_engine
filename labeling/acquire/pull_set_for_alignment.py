@@ -894,7 +894,7 @@ def main() -> int:
                 f"WARNING: content_catalog.json not written: {detail}", file=sys.stderr
             )
 
-        from labeling.identity.audio_index import build_audio_index, write_audio_index
+        from labeling.acquire.audio_index import build_audio_index, write_audio_index
 
         write_audio_index(dest_root, build_audio_index(dest_root, manifest["tracks"]))
 

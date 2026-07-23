@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from labeling.identity.audio_index import (
+from labeling.acquire.audio_index import (
     build_audio_index,
     load_audio_index,
     lookup_ref,

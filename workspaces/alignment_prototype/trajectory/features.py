@@ -22,7 +22,7 @@ from pathlib import Path
 
 import numpy as np
 
-from labeling.identity.audio_index import has_audio_index, load_audio_index, lookup_ref
+from labeling.acquire.audio_index import has_audio_index, load_audio_index, lookup_ref
 from workspaces.alignment_prototype.continuity_refine import _FEAT_CACHE
 from workspaces.alignment_prototype.path_decode import _ensure_feat
 from workspaces.alignment_prototype.recon_probe import _melmag, find_mix_stems
