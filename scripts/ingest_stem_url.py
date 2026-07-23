@@ -569,7 +569,7 @@ def _run_pull(args: argparse.Namespace) -> int:
     if not args.set_id:
         print("--pull requires --set-id", file=sys.stderr)
         return 2
-    pull = REPO / "labeling" / "pull_set_for_alignment.py"
+    pull = REPO / "labeling" / "acquire" / "pull_set_for_alignment.py"
     cmd = [
         sys.executable,
         str(pull),
