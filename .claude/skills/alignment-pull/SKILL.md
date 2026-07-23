@@ -81,7 +81,7 @@ These renames are **one-sided, Mac-only mutations** — they never propagate bac
 3. `labeling/prep/tag_aligning_folder.py ~/aligning/<set>` → inject BPM + key into M4A tags
 4. Drag into Ableton, do the alignment work
 5. (sometime later) `labeling/acquire/pull_set_for_alignment.py <set_id> --prune --dry-run` then `--prune` → refresh if pi-storage state has changed
-6. Write back GT via `python -m labeling.write_back_ground_truth --db ... --yaml ...`, then delete the folder
+6. Write back GT via `python -m labeling.commit.write_back_ground_truth --db ... --yaml ...`, then delete the folder
 
 ## Phase-cancel instrumental extraction
 
@@ -99,4 +99,4 @@ cancel.py adaptive --smooth 0.5 --fft 4096 --cap 4
 - ❌ Manually renaming files back to canonical names ("cleaning up" the annotator's tags). The tags are intentional — Ableton shows them in the browser, dramatically speeding alignment.
 - ❌ Treating the `~/aligning/<set>/` folder as a permanent archive. It's ephemeral; delete after write-back.
 - ❌ Editing `manifest.json` by hand. It's regenerated on every pull.
-- ❌ Writing alignment results back to local `data/db/music_database.db` — that's the stale dev copy. Write-back goes to pi-storage via `labeling.write_back_ground_truth`.
+- ❌ Writing alignment results back to local `data/db/music_database.db` — that's the stale dev copy. Write-back goes to pi-storage via `labeling.commit.write_back_ground_truth`.
