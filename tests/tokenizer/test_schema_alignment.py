@@ -41,7 +41,9 @@ def test_inline_materialize_ddl_matches_schema_for_written_tables():
     # output tables on a fresh DB. It MUST stay column-identical to the canonical
     # schema.sql for the tables it writes, or a fresh-DB run silently drops columns
     # (the exact bug fixed on this branch: layer_role/constituents_json).
-    for table in ("set_track_slots", "track_suggestions"):
+    # NOTE: This compares column NAMES only; it does not verify column types/defaults,
+    # nor that dataclass structs cover every writable column (a future gotcha).
+    for table in ("set_track_slots", "track_suggestions", "track_metadata"):
         inline = _columns_from_ddl(_MATERIALIZE_DDL, table)
         canonical = _table_columns(table)
         assert inline == canonical, (
