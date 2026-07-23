@@ -41,8 +41,8 @@ from tokenizer.identity_axes import (
     scrape_claimed_version,
 )
 from tokenizer.track_tokenizer import parse_track_row as parse_track_main
-from tokenizer.track_tokenizer import TrackRow
 from tokenizer.suggestion_tokenizer import parse_suggestion_row
+from tokenizer.model import TrackRow  # canonical surface (re-export)
 from tokenizer import model
 
 log = logging.getLogger("tokenizer.materialize")
