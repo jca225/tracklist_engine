@@ -346,6 +346,7 @@ def render_player(
                 "idx": i,
                 "name": gt_name,
                 "spine_name": card.name,
+                "recording_id": card.recording_id,
                 "slot": card.slot,
                 "set": card.set,
                 "set_id": card.set_id,
