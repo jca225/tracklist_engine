@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from labeling.export_als_to_gt import id_coverage
+from labeling.extract.export_als_to_gt import id_coverage
 from labeling.schema import GroundTruthTrack
 
 

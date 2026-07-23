@@ -390,7 +390,7 @@ def import_als(als_path: Path, gt_out: Path | None) -> int:
     for c in clips:
         if c.silence_reason:
             # Deactivated track / disabled clip / fader-0: the human silenced it,
-            # so it is not a confirmed fiber instance. Mirrors export_als_to_gt,
+            # so it is not a confirmed fiber instance. Mirrors extract/export_als_to_gt,
             # which drops silenced clips — a deactivated clip is not GT even though
             # Live keeps it in the arrangement.
             continue

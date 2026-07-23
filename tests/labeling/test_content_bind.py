@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from labeling.als.models import ParsedClip, WarpMarkers
-from labeling.export_als_to_gt import _content_bind, _load_content_catalog
+from labeling.extract._shared import _content_bind, _load_content_catalog
 
 
 def _clip(path: str) -> ParsedClip:

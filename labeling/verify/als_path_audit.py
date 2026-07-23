@@ -28,7 +28,7 @@ from labeling.als import (
     match_manifest_for_path,
     slot_from_path,
 )
-from labeling.export_als_to_gt import (
+from labeling.extract._shared import (
     DEFAULT_ALS,
     DEFAULT_SET_DIR,
     ClipRow,

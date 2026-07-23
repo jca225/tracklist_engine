@@ -16,7 +16,7 @@ from pathlib import Path
 
 from labeling.als.models import ParsedClip, WarpMarkers
 from labeling.als import build_manifest_index
-from labeling.export_als_to_gt import _clip_row, _content_bind, _load_content_catalog
+from labeling.extract._shared import _clip_row, _content_bind, _load_content_catalog
 
 
 def _mapper():

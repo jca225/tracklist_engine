@@ -21,7 +21,8 @@ _REPO = Path(__file__).resolve().parent.parent.parent
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from labeling.export_als_to_gt import DEFAULT_ALS, DEFAULT_SET_DIR, export_gt
+from labeling.extract._shared import DEFAULT_ALS, DEFAULT_SET_DIR
+from labeling.extract.export_als_to_gt import export_gt
 from labeling.schema import GroundTruthSet, GroundTruthTrack, load
 from core.result import Err, Ok
 

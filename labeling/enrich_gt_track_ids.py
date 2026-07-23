@@ -35,7 +35,7 @@ from labeling.als import (
     labels_overlap,
     match_manifest_for_path,
 )
-from labeling.export_als_to_gt import (
+from labeling.extract._shared import (
     DEFAULT_ALS,
     DEFAULT_SET_DIR,
     ClipRow,

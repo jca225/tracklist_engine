@@ -35,7 +35,7 @@ _REPO = Path(__file__).resolve().parent.parent.parent
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from labeling.export_als_to_gt import (
+from labeling.extract._shared import (
     DEFAULT_ALS,
     DEFAULT_SET_DIR,
     _placeholder_note,

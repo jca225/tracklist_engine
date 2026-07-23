@@ -1,4 +1,5 @@
 """Tests for GT track_id enrichment."""
+
 from __future__ import annotations
 
 from dataclasses import replace
@@ -9,7 +10,7 @@ from labeling.enrich_gt_track_ids import (
     enrich_track,
     lookup_db_label,
 )
-from labeling.export_als_to_gt import ClipRow
+from labeling.extract._shared import ClipRow
 from labeling.als import ParsedClip, WarpMarkers
 from labeling.schema import GroundTruthTrack
 
@@ -63,11 +64,14 @@ def test_lookup_db_label_unique():
         SlotRow("281u6p4x", "acappella", "Post Malone - Congratulations (Acappella)"),
         SlotRow("mtck04x", "regular", "Manse - Freeze Time"),
     )
-    assert lookup_db_label(
-        "Post Malone - Congratulations  Acapella",
-        "acappella",
-        slots,
-    ) == "281u6p4x"
+    assert (
+        lookup_db_label(
+            "Post Malone - Congratulations  Acapella",
+            "acappella",
+            slots,
+        )
+        == "281u6p4x"
+    )
 
 
 def test_enrich_track_db_label_when_no_manifest_path_match():
