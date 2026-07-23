@@ -42,11 +42,22 @@
 > - **89%/82% (recall over adjudicable):** measured over only the ~66% that survived
 >   export — the abstained third is non-random, so this is not the honest whole.
 >
-> **The fix is GT completion**: re-bind the abstained appearances from the
-> audio-verified `.als` identity (local, sound — audio verification is a *stronger*
-> gate than payload-hash). Until then, treat all identity figures below as
-> provisional. Placement/trajectory are time-based and less abstention-sensitive
-> but still measured over bound appearances only.
+> **The fix is GT completion** (re-bind the abstained appearances). The sound
+> bridge is **content-hashing the stem files** (Crush Phase B: FLAC-PCM payload
+> keys) — NOT slot number (the `.als` uses the stems-folder scheme 066/144–155,
+> the manifest/pi the tracklist scheme 001–042; bridging by slot is the
+> coordinate-mismatch poison Crush eliminated) and NOT song name (~26% clean).
+> **Best honest number available now:** GT-bound recall **89%/82%** over the
+> ~57–67% adjudicable appearances (the bound `track_id`s are themselves
+> audio-sound — als_audit 281/290, 264/271 OK), but that subset is non-random.
+>
+> **DEAD END (verified 2026-07-23, do not retry):** a GT-independent audio check
+> — verify each aligner prediction against the mix by chroma matched filter —
+> does NOT work: a wrong-recording control scored 100% present (`best_score` min
+> 0.64 for *any* recording vs a 60-min mix). Chroma can't discriminate identity;
+> anything that can (fingerprint/MERT) is the signal the aligner already used
+> (circular). There is no sound GT-independent identity metric — the honest
+> number genuinely requires the completed GT.
 >
 > **RT1 methodology (independent of the above, valid):** the scorecard is now
 > form-centric — a GT appearance no span covers counts as full recall loss
