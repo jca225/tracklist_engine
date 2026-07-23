@@ -210,7 +210,8 @@ CREATE TABLE IF NOT EXISTS track_suggestions (
     pos INTEGER, track_slug TEXT, track_display TEXT, artist_title TEXT,
     suggester_user_id INTEGER, suggester_name TEXT,
     suggestion_timestamp TEXT, is_remix INTEGER, has_youtube INTEGER,
-    has_soundcloud INTEGER, has_spotify INTEGER
+    has_soundcloud INTEGER, has_spotify INTEGER,
+    parsed_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 """
 
