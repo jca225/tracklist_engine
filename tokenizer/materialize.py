@@ -215,6 +215,7 @@ CREATE TABLE IF NOT EXISTS set_track_slots (
     claimed_stem TEXT NOT NULL DEFAULT 'regular',
     claimed_variant TEXT NOT NULL DEFAULT 'regular',
     full_name TEXT, title TEXT, artists_json TEXT, duration_seconds INTEGER,
+    layer_role TEXT, constituents_json TEXT,
     parsed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (set_id, row_index)
 );
