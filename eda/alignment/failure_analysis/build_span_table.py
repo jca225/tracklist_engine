@@ -44,6 +44,7 @@ from workspaces.alignment_prototype.path_decode import (
     gt_placement_onset,
     trajectory_acc,
 )
+from workspaces.alignment_prototype.never_matched import assign_spans_to_forms
 from workspaces.alignment_prototype.score_timeline_vs_gt import (
     _pred_segs_from_span,
     norm_slot,
@@ -94,6 +95,9 @@ FIELDS = [
     "gap_halluc",  # frac of silent-gap seconds the prediction fills (precision)
     # ref-offset scorability (straight non-odd clips only, mirrors harness)
     "ref_offset_scored",
+    # RT1: 1 = synthetic row for a GT form no predicted span was assigned to
+    # (form-centric recall loss; traj_strict=0, no prediction to score)
+    "coverage_miss",
 ]
 
 
@@ -142,6 +146,11 @@ def _rows_for_set(set_id: str, label: str, gt_path: Path, suffix: str) -> list[d
     gt_rows, gt_by_tid = _load_gt(gt_path, set_id)
     audit = _load_audit(set_id)
 
+    # RT1: injective per-recording span->form assignment (no reuse), so a reprise
+    # scores each span against its own form and unmatched forms surface as recall
+    # loss instead of vanishing under the old nearest-only collapse.
+    assigned, unmatched_forms = assign_spans_to_forms(gt_rows, timeline["spans"])
+
     out: list[dict] = []
     for s in timeline["spans"]:
         slot = norm_slot(s["slot_label"])
@@ -165,10 +174,12 @@ def _rows_for_set(set_id: str, label: str, gt_path: Path, suffix: str) -> list[d
                 any(str(r["track_id"]) == s["recording_id"] for r in overlapping)
             )
 
-        # placement + ref + trajectory: nearest same-recording GT row
-        rows = gt_by_tid.get(s["recording_id"])
-        if not rows:
-            # predicted a recording GT never places at this time -> no GT anchor.
+        # placement + ref + trajectory: the injectively-assigned GT form (RT1).
+        # No form -> either the recording is absent from GT, or this span lost the
+        # per-recording assignment to a nearer sibling span (a spurious extra
+        # prediction). Both are no-GT-anchor rows.
+        g = assigned.get(id(s))
+        if g is None:
             out.append(
                 {
                     "set": label,
@@ -182,10 +193,10 @@ def _rows_for_set(set_id: str, label: str, gt_path: Path, suffix: str) -> list[d
                     "span_class": "",
                     "identity_hit": id_hit,
                     "ref_offset_scored": 0,
+                    "coverage_miss": 0,
                 }
             )
             continue
-        g = min(rows, key=lambda r: abs(float(r["set_start_s"]) - s["set_start_s"]))
         gset = float(g["set_start_s"])
         gdur = float(g["set_end_s"]) - gset
         span_cls = _span_class(g)
@@ -249,18 +260,53 @@ def _rows_for_set(set_id: str, label: str, gt_path: Path, suffix: str) -> list[d
                 "traj_strict": round(float(strict), 4),
                 "gap_halluc": round(gap_hallucination_frac(segs, g), 4),
                 "ref_offset_scored": int(scored),
+                "coverage_miss": 0,
             }
         )
 
-    # coverage: GT recordings NEVER matched by any predicted span (upstream loss)
-    matched = {s["recording_id"] for s in timeline["spans"]}
-    never = [
-        r for r in gt_rows if r.get("track_id") and str(r["track_id"]) not in matched
-    ]
+    # RT1 coverage: emit a synthetic row per GT FORM no span was assigned to, so
+    # its audible seconds re-enter the impact-weighted loss denominator as full
+    # loss (traj_strict=0). This is form-level, not the old recording-level check
+    # (a recording matched by SOME span could still lose a form to the collapse).
+    cov_secs = 0.0
+    for g in unmatched_forms:
+        span_cls = _span_class(g)
+        gt_segs = g.get("ref_segments")
+        gset = float(g["set_start_s"])
+        aud = round(audible_seconds(g), 2)
+        cov_secs += aud
+        out.append(
+            {
+                "set": label,
+                "set_id": set_id,
+                "slot": norm_slot(g.get("slot_label") or ""),
+                "recording_id": str(g["track_id"]),
+                "name": str(g.get("track", ""))[:60],
+                "gt_stem": g.get("claimed_stem") or "regular",
+                "pred_stem": "",  # no prediction was assigned to this form
+                "stem_mismatch": "",
+                "span_class": span_cls,  # in analyze's matched set -> counts loss
+                "gt_set_start_s": round(gset, 2),
+                "gt_ref_start_s": round(float(g.get("ref_start_s") or 0.0), 2),
+                "gt_duration_s": round(float(g["set_end_s"]) - gset, 2),
+                "gt_audible_s": aud,
+                "tempo_ratio": round(float(g.get("tempo_ratio") or 1.0), 4),
+                "is_loop": int(bool(g.get("is_loop"))),
+                "pitch_shift_semi": g.get("pitch_shift_semi") or 0,
+                "n_ref_segments": len(gt_segs) if gt_segs else 1,
+                "audible_frac": g.get("audible_frac"),
+                "identity_hit": "",  # no prediction -> nothing to judge identity on
+                "set_start_err_s": "",  # no prediction -> excluded from median
+                "ref_offset_err_s": "",
+                "traj_strict": 0.0,  # unrecovered appearance -> full loss
+                "ref_offset_scored": 0,
+                "coverage_miss": 1,
+            }
+        )
     print(
         f"[{label}] spans={len(timeline['spans'])}  "
         f"rows_emitted={len(out)}  "
-        f"GT recordings never matched (upstream/coverage loss)={len({str(r['track_id']) for r in never})}"
+        f"unmatched GT forms (recall loss)={len(unmatched_forms)} ({cov_secs:.0f}s audible)"
     )
     return out
 
@@ -294,17 +340,30 @@ def main(argv: list[str] | None = None) -> int:
     # faithfulness cross-check: aggregate identity / placement vs the harness's
     # printed numbers so we know the per-span table reproduces score_timeline_vs_gt.
     for label in ("BB12", "BB11"):
-        rs = [r for r in all_rows if r["set"] == label and r.get("span_class")]
         ids = [
             r["identity_hit"]
             for r in all_rows
             if r["set"] == label and r["identity_hit"] != ""
         ]
-        pe = np.array([r["set_start_err_s"] for r in rs])
+        # median over rows WITH a prediction (matched, non-coverage); the <15s
+        # RATE counts unmatched forms as fails (RT1 signed-off metric rule).
+        placed = [
+            r
+            for r in all_rows
+            if r["set"] == label and r.get("span_class") and r.get("coverage_miss") != 1
+        ]
+        n_cov = sum(
+            1 for r in all_rows if r["set"] == label and r.get("coverage_miss") == 1
+        )
+        pe = np.array([r["set_start_err_s"] for r in placed], dtype=float)
+        lt15 = int((pe < 15).sum())
+        rate_den = len(pe) + n_cov
         print(
             f"[{label}] xcheck: identity {sum(ids)}/{len(ids)} "
             f"({100 * sum(ids) / max(1, len(ids)):.0f}%)  "
-            f"set_start median={np.median(pe):.1f}s <15s={100 * (pe < 15).mean():.0f}%"
+            f"set_start median={np.median(pe):.1f}s (n={len(pe)})  "
+            f"<15s={100 * lt15 / max(1, rate_den):.0f}% "
+            f"(of {rate_den}, incl {n_cov} unrecovered forms)"
         )
     return 0
 
