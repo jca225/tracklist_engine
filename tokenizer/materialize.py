@@ -133,17 +133,78 @@ class _MetadataAccumulator:
 # -----------------------------------------------------------------------------
 
 
+def _suggestion_tuple(sug, set_id: str) -> tuple:
+    """Full track_suggestions row from a SuggestionRow (payload that materialize
+    previously dropped: data_type / cue / poll / labels / media)."""
+
+    def b(x):
+        return int(bool(x)) if x is not None else None
+
+    labels_json = (
+        json.dumps([[n, p] for n, p in sug.labels], ensure_ascii=False)
+        if sug.labels
+        else None
+    )
+    return (
+        sug.sug_id,
+        set_id,
+        sug.tlp_id,
+        sug.pos,
+        sug.track_slug,
+        sug.track_display,
+        sug.artist_title,
+        sug.suggester_user_id,
+        sug.suggester_name,
+        sug.suggestion_timestamp,
+        b(sug.is_remix),
+        b(sug.has_youtube),
+        b(sug.has_soundcloud),
+        b(sug.has_spotify),
+        sug.data_type,
+        sug.cue_seconds,
+        sug.play_cue_seconds,
+        sug.suggester_guest_id,
+        sug.suggester_kind,
+        sug.track_page_path,
+        sug.track_id_numeric,
+        b(sug.is_id_remix),
+        b(sug.has_apple),
+        b(sug.has_affiliate),
+        b(sug.has_live_video),
+        sug.poll_correct,
+        sug.poll_not_correct,
+        sug.poll_unsure,
+        labels_json,
+        sug.google_search_url,
+    )
+
+
 def _flush_suggestions(conn: sqlite3.Connection, buf: list[tuple]) -> None:
     if not buf:
         return
-    conn.executemany(
-        "INSERT OR REPLACE INTO track_suggestions ("
-        "sug_id, set_id, tlp_id, pos, track_slug, track_display, artist_title, "
-        "suggester_user_id, suggester_name, suggestion_timestamp, "
-        "is_remix, has_youtube, has_soundcloud, has_spotify"
-        ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        buf,
-    )
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(track_suggestions)")}
+    if "data_type" in cols:
+        conn.executemany(
+            "INSERT OR REPLACE INTO track_suggestions ("
+            "sug_id, set_id, tlp_id, pos, track_slug, track_display, artist_title, "
+            "suggester_user_id, suggester_name, suggestion_timestamp, "
+            "is_remix, has_youtube, has_soundcloud, has_spotify, "
+            "data_type, cue_seconds, play_cue_seconds, suggester_guest_id, "
+            "suggester_kind, track_page_path, track_id_numeric, is_id_remix, "
+            "has_apple, has_affiliate, has_live_video, poll_correct, "
+            "poll_not_correct, poll_unsure, labels_json, google_search_url"
+            ") VALUES (" + ",".join("?" * 30) + ")",
+            buf,
+        )
+    else:
+        conn.executemany(
+            "INSERT OR REPLACE INTO track_suggestions ("
+            "sug_id, set_id, tlp_id, pos, track_slug, track_display, artist_title, "
+            "suggester_user_id, suggester_name, suggestion_timestamp, "
+            "is_remix, has_youtube, has_soundcloud, has_spotify"
+            ") VALUES (" + ",".join("?" * 14) + ")",
+            [row[:14] for row in buf],
+        )
     conn.commit()
 
 
@@ -387,26 +448,7 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
 
                 elif "sugTog" in outer_classes:
                     sug = parse_suggestion_row(outer)
-                    sug_buf.append(
-                        (
-                            sug.sug_id,
-                            row["set_id"],
-                            sug.tlp_id,
-                            sug.pos,
-                            sug.track_slug,
-                            sug.track_display,
-                            sug.artist_title,
-                            sug.suggester_user_id,
-                            sug.suggester_name,
-                            sug.suggestion_timestamp,
-                            int(bool(sug.is_remix))
-                            if sug.is_remix is not None
-                            else None,
-                            int(bool(sug.has_youtube)),
-                            int(bool(sug.has_soundcloud)),
-                            int(bool(sug.has_spotify)),
-                        )
-                    )
+                    sug_buf.append(_suggestion_tuple(sug, row["set_id"]))
                     counts["suggestion"] += 1
 
                 elif "bItmH" in outer_classes:
