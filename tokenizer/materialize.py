@@ -44,6 +44,7 @@ from tokenizer.track_tokenizer import parse_track_row as parse_track_main
 from tokenizer.track_tokenizer import TrackRow
 from tokenizer.suggestion_tokenizer import parse_suggestion_row
 from tokenizer.text_tokenizer import parse_bItmH_row
+from tokenizer.id_tokenizer import parse_track_row as parse_id_row
 
 log = logging.getLogger("tokenizer.materialize")
 
@@ -234,6 +235,65 @@ def _flush_notices(conn: sqlite3.Connection, buf: list[tuple]) -> None:
     conn.commit()
 
 
+def _id_meta_tuple(idt, set_id: str, row_index: int, tlp_id, is_id: bool) -> tuple:
+    """set_slot_id_meta row from an id_tokenizer IDTrack (ID / unknown row)."""
+
+    def b(x):
+        return int(bool(x))
+
+    return (
+        set_id,
+        row_index,
+        tlp_id,
+        b(is_id),
+        b(idt.protected),
+        b(idt.rbcst),
+        idt.watchers,
+        idt.spotify_presave_count,
+    )
+
+
+def _flush_id_meta(conn: sqlite3.Connection, buf: list[tuple]) -> None:
+    if not buf:
+        return
+    conn.executemany(
+        "INSERT OR REPLACE INTO set_slot_id_meta ("
+        "set_id, row_index, tlp_id, is_id, protected, rbcst, watchers, presave_count"
+        ") VALUES (?,?,?,?,?,?,?,?)",
+        buf,
+    )
+    conn.commit()
+
+
+def _id_link_tuples(idt, set_id: str, tlp_id) -> list[tuple]:
+    """track_id_links rows from an IDTrack's cross-tracklist linked_items."""
+    return [
+        (
+            set_id,
+            tlp_id,
+            li.user_name,
+            li.user_href,
+            li.user_followers_text,
+            li.linked_tracklist_href,
+            li.linked_tracklist_text,
+        )
+        for li in idt.linked_items
+    ]
+
+
+def _flush_id_links(conn: sqlite3.Connection, buf: list[tuple]) -> None:
+    if not buf:
+        return
+    conn.executemany(
+        "INSERT OR REPLACE INTO track_id_links ("
+        "set_id, tlp_id, linker_user_name, linker_user_href, "
+        "linker_user_followers, linked_tracklist_href, linked_tracklist_text"
+        ") VALUES (?,?,?,?,?,?,?)",
+        buf,
+    )
+    conn.commit()
+
+
 def _flush_metadata(conn: sqlite3.Connection, rows: list[dict[str, Any]]) -> None:
     if not rows:
         return
@@ -373,6 +433,8 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
     slot_buf: list[tuple] = []
     sug_buf: list[tuple] = []
     notice_buf: list[tuple] = []
+    id_meta_buf: list[tuple] = []
+    id_link_buf: list[tuple] = []
     counts = {"track": 0, "slot": 0, "suggestion": 0, "text": 0, "errors": 0}
     # Per-set w/ layering: primary label + w/ counter (matches pull_set_for_alignment).
     slot_state: dict[str, tuple[str | None, int]] = {}
@@ -469,9 +531,35 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
                         )
                         counts["slot"] += 1
 
+                        # ID / unknown rows: capture 1001tracklists' ID-resolution
+                        # workflow (protected/rbcst/watchers + cross-tracklist
+                        # linked-ID hints). Reuse the already-parsed `outer` Tag.
+                        is_id_row = tr.is_ided or (outer.get("data-isid") == "true")
+                        if is_id_row:
+                            idt = parse_id_row(outer)
+                            id_meta_buf.append(
+                                _id_meta_tuple(
+                                    idt,
+                                    sid,
+                                    int(row["row_index"]),
+                                    tr.data_id,
+                                    is_id_row,
+                                )
+                            )
+                            if idt.linked_items and tr.data_id is not None:
+                                id_link_buf.extend(
+                                    _id_link_tuples(idt, sid, tr.data_id)
+                                )
+
                         if len(slot_buf) >= _BATCH_INSERT:
                             _flush_slots(conn, slot_buf)
                             slot_buf.clear()
+                        if len(id_meta_buf) >= _BATCH_INSERT:
+                            _flush_id_meta(conn, id_meta_buf)
+                            id_meta_buf.clear()
+                        if len(id_link_buf) >= _BATCH_INSERT:
+                            _flush_id_links(conn, id_link_buf)
+                            id_link_buf.clear()
 
                 elif "sugTog" in outer_classes:
                     sug = parse_suggestion_row(outer)
@@ -516,6 +604,8 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
     _flush_slots(conn, slot_buf)
     _flush_suggestions(conn, sug_buf)
     _flush_notices(conn, notice_buf)
+    _flush_id_meta(conn, id_meta_buf)
+    _flush_id_links(conn, id_link_buf)
 
     # Upsert track_metadata (single big batch — ~50k rows expected)
     md_rows = metadata.finalize_rows()
