@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from core.result import Err, Ok
-from labeling.ground_truth.schema import GroundTruthTrack, load
+from labeling.schema import GroundTruthTrack, load
 from workspaces.alignment_prototype.dataset import track_to_target
 from workspaces.alignment_prototype.external.unmixdb import UnmixMix, UnmixTrackSpan
 from workspaces.alignment_prototype.records import SlotCandidate, SpanTarget

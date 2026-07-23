@@ -15,7 +15,7 @@ from eda.alignment.boundaries import (
 )
 from eda.alignment.mix_structure_probe import _synthetic_artifact, run_probe
 from eda.alignment.tokenize import fit_vq_kmeans
-from labeling.ground_truth.schema import GroundTruthSet, GroundTruthTrack, load
+from labeling.schema import GroundTruthSet, GroundTruthTrack, load
 from core.result import Ok
 
 

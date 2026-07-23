@@ -11,7 +11,7 @@ from labeling.enrich_gt_track_ids import (
 )
 from labeling.export_als_to_gt import ClipRow
 from labeling.als import ParsedClip, WarpMarkers
-from labeling.ground_truth.schema import GroundTruthTrack
+from labeling.schema import GroundTruthTrack
 
 
 def _track(**kwargs) -> GroundTruthTrack:

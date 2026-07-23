@@ -24,7 +24,7 @@ import csv
 import statistics
 from pathlib import Path
 
-from labeling.ground_truth.schema import GroundTruthTrack, load
+from labeling.schema import GroundTruthTrack, load
 
 REPO = Path(__file__).resolve().parents[3]
 FIXTURES = REPO / "labeling" / "fixtures"

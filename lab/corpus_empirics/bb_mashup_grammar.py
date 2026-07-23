@@ -38,7 +38,7 @@ _REPO = Path(__file__).resolve().parent.parent.parent
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from labeling.ground_truth.schema import GroundTruthSet, GroundTruthTrack, load
+from labeling.schema import GroundTruthSet, GroundTruthTrack, load
 from core.result import Ok, Err
 
 AUX_DB = _REPO / "data/analysis/aux.db"

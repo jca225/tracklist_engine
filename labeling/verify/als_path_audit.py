@@ -6,9 +6,10 @@ Identity labels come from the ALS path; manifest is pull inventory only.
 
 Usage::
 
-    venvs/audio/bin/python -m labeling.als_path_audit \\
+    venvs/audio/bin/python -m labeling.verify.als_path_audit \\
         --out labeling/fixtures/bb12_path_audit.json
 """
+
 from __future__ import annotations
 
 import argparse
@@ -17,12 +18,22 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-_REPO = Path(__file__).resolve().parents[1]
+_REPO = Path(__file__).resolve().parents[2]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from labeling.als import build_manifest_index, display_from_path, match_manifest_for_path, slot_from_path
-from labeling.export_als_to_gt import DEFAULT_ALS, DEFAULT_SET_DIR, ClipRow, collect_kept_clip_rows
+from labeling.als import (
+    build_manifest_index,
+    display_from_path,
+    match_manifest_for_path,
+    slot_from_path,
+)
+from labeling.export_als_to_gt import (
+    DEFAULT_ALS,
+    DEFAULT_SET_DIR,
+    ClipRow,
+    collect_kept_clip_rows,
+)
 
 
 @dataclass(frozen=True)
@@ -83,16 +94,22 @@ def run_audit(
 ) -> tuple[str, list[AuditRow]]:
     manifest = build_manifest_index(set_dir / "manifest.json")
     set_id, rows, _review = collect_kept_clip_rows(
-        als_path, set_dir, include_all=include_all,
+        als_path,
+        set_dir,
+        include_all=include_all,
     )
     return set_id, [audit_row(r, manifest) for r in rows]
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--als", type=Path, default=DEFAULT_ALS)
     ap.add_argument("--set-dir", type=Path, default=DEFAULT_SET_DIR)
-    ap.add_argument("--out", type=Path, default=_REPO / "labeling/fixtures/bb12_path_audit.json")
+    ap.add_argument(
+        "--out", type=Path, default=_REPO / "labeling/fixtures/bb12_path_audit.json"
+    )
     ap.add_argument("--include-all-clips", action="store_true")
     args = ap.parse_args(argv)
 
@@ -105,7 +122,9 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         set_id, rows = run_audit(
-            args.als, args.set_dir, include_all=args.include_all_clips,
+            args.als,
+            args.set_dir,
+            include_all=args.include_all_clips,
         )
     except (OSError, ValueError) as e:
         print(f"audit failed: {e}", file=sys.stderr)

@@ -1,6 +1,6 @@
 """Write manual ground-truth YAML back to pi-storage canonical DB.
 
-Loads a ``*_ground_truth.yaml`` (see labeling/ground_truth/schema.py) and
+Loads a ``*_ground_truth.yaml`` (see labeling/schema.py) and
 transactionally replaces that set's rows in ``set_ground_truth``. This is
 Phase 5 of the identity plan — the seam between Ableton labeling and downstream
 alignment training. Replacing the set prevents labels removed or split by a
@@ -16,6 +16,7 @@ Dry-run (print rows, no write):
 
     venvs/audio/bin/python -m labeling.write_back_ground_truth --yaml ... --dry-run
 """
+
 from __future__ import annotations
 
 import argparse
@@ -27,7 +28,7 @@ _REPO = Path(__file__).resolve().parent.parent
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from labeling.ground_truth.schema import load as load_gt
+from labeling.schema import load as load_gt
 from core.db import connect
 from core.result import Err, Ok
 
@@ -57,29 +58,41 @@ def write_back(db_path: Path, yaml_path: Path, *, dry_run: bool = False) -> int:
     seen_labels: set[str] = set()
     for t in gt.tracks:
         stem = t.claimed_stem
-        seg_json = json.dumps([
-            {"ref_start_s": s.ref_start_s, "ref_end_s": s.ref_end_s, "mix_start_s": s.mix_start_s}
-            for s in t.ref_segments
-        ]) if t.ref_segments else None
+        seg_json = (
+            json.dumps(
+                [
+                    {
+                        "ref_start_s": s.ref_start_s,
+                        "ref_end_s": s.ref_end_s,
+                        "mix_start_s": s.mix_start_s,
+                    }
+                    for s in t.ref_segments
+                ]
+            )
+            if t.ref_segments
+            else None
+        )
         ml_json = json.dumps(t.media_links.as_dict()) if t.media_links.any() else None
         db_label = _db_label(t, seen_labels)
-        rows.append((
-            gt.set_id,
-            db_label,
-            t.track_id,
-            stem,
-            t.set_start_s,
-            t.set_end_s,
-            t.ref_start_s,
-            t.ref_end_s,
-            t.tempo_ratio,
-            t.pitch_shift_semi,
-            t.ref_source,
-            int(t.is_loop),
-            seg_json,
-            ml_json,
-            gt.source,
-        ))
+        rows.append(
+            (
+                gt.set_id,
+                db_label,
+                t.track_id,
+                stem,
+                t.set_start_s,
+                t.set_end_s,
+                t.ref_start_s,
+                t.ref_end_s,
+                t.tempo_ratio,
+                t.pitch_shift_semi,
+                t.ref_source,
+                int(t.is_loop),
+                seg_json,
+                ml_json,
+                gt.source,
+            )
+        )
     if dry_run:
         print(
             f"would replace set_ground_truth for set_id={gt.set_id} "
@@ -111,8 +124,9 @@ def write_back(db_path: Path, yaml_path: Path, *, dry_run: bool = False) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--db", type=Path, required=True)
     p.add_argument("--yaml", type=Path, required=True)
     p.add_argument("--dry-run", action="store_true")

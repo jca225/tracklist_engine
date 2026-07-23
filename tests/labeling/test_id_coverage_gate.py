@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from labeling.export_als_to_gt import id_coverage
-from labeling.ground_truth.schema import GroundTruthTrack
+from labeling.schema import GroundTruthTrack
 
 
 def _t(id_source: str, rid: str | None) -> GroundTruthTrack:

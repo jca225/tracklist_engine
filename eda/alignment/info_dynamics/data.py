@@ -22,7 +22,7 @@ from eda.alignment.artifacts import MixMertArtifact, load_mix_mert_artifact
 from eda.alignment.boundaries import gt_section_starts_s
 from eda.alignment.mert_vectors import l2_normalize
 from eda.alignment.tokenize import fit_vq_kmeans
-from labeling.ground_truth.schema import load as load_gt
+from labeling.schema import load as load_gt
 
 
 @dataclass(frozen=True)

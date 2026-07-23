@@ -53,7 +53,7 @@ from labeling.content_resolver import (
     ContentCatalog,
     resolve_clip_identity,
 )
-from labeling.ground_truth.schema import (
+from labeling.schema import (
     GroundTruthSet,
     GroundTruthTrack,
     RefSegment,

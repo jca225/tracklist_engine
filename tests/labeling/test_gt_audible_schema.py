@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from labeling.export_als_to_gt import _placeholder_note
-from labeling.ground_truth.schema import GroundTruthSet, GroundTruthTrack, dump, load
+from labeling.schema import GroundTruthSet, GroundTruthTrack, dump, load
 from core.result import Ok
 
 

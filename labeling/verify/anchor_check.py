@@ -4,11 +4,12 @@ Use this offline on the Mac — no pi-storage required. Prints a short checklist
 for manual Ableton playhead checks plus programmatic drift vs re-parsed `.als`.
 
 Usage:
-    venvs/audio/bin/python -m labeling.anchor_check \\
+    venvs/audio/bin/python -m labeling.verify.anchor_check \\
         --yaml labeling/fixtures/bb12_ground_truth.yaml
 
-    venvs/audio/bin/python -m labeling.anchor_check --anchors 002,003,120,154
+    venvs/audio/bin/python -m labeling.verify.anchor_check --anchors 002,003,120,154
 """
+
 from __future__ import annotations
 
 import argparse
@@ -16,18 +17,18 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-_REPO = Path(__file__).resolve().parent.parent
+_REPO = Path(__file__).resolve().parent.parent.parent
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
 from labeling.export_als_to_gt import DEFAULT_ALS, DEFAULT_SET_DIR, export_gt
-from labeling.ground_truth.schema import GroundTruthSet, GroundTruthTrack, load
+from labeling.schema import GroundTruthSet, GroundTruthTrack, load
 from core.result import Err, Ok
 
 DEFAULT_YAML = _REPO / "labeling/fixtures/bb12_ground_truth.yaml"
 DEFAULT_ANCHORS = ("002", "003:instrumental", "120", "154")
-BEAT_TOL = 1.0          # plan: ±~1 beat
-DEFAULT_BPM = 128.0     # display-only beat conversion for tolerance line
+BEAT_TOL = 1.0  # plan: ±~1 beat
+DEFAULT_BPM = 128.0  # display-only beat conversion for tolerance line
 
 
 @dataclass(frozen=True)
@@ -47,7 +48,10 @@ class AnchorResult:
         if self.delta_start_s is None:
             return False
         beat_s = 60.0 / DEFAULT_BPM
-        return abs(self.delta_start_s) <= BEAT_TOL * beat_s and abs(self.delta_end_s or 0) <= BEAT_TOL * beat_s
+        return (
+            abs(self.delta_start_s) <= BEAT_TOL * beat_s
+            and abs(self.delta_end_s or 0) <= BEAT_TOL * beat_s
+        )
 
 
 def _fmt_time(sec: float) -> str:
@@ -73,7 +77,9 @@ def _track_key(t: GroundTruthTrack) -> tuple[str, str, float, float]:
     return slot, stem, round(t.set_start_s, 3), round(t.set_end_s, 3)
 
 
-def _index_gt(gt: GroundTruthSet) -> dict[tuple[str, str, float, float], GroundTruthTrack]:
+def _index_gt(
+    gt: GroundTruthSet,
+) -> dict[tuple[str, str, float, float], GroundTruthTrack]:
     out: dict[tuple[str, str, float, float], GroundTruthTrack] = {}
     for t in gt.tracks:
         out[_track_key(t)] = t
@@ -89,10 +95,7 @@ def _find_fresh(
         return fresh_index[key]
     slot = _norm_slot(t.slot_label or t.label)
     stem = t.claimed_stem or "regular"
-    candidates = [
-        f for k, f in fresh_index.items()
-        if k[0] == slot and k[1] == stem
-    ]
+    candidates = [f for k, f in fresh_index.items() if k[0] == slot and k[1] == stem]
     if not candidates:
         return None
     return min(candidates, key=lambda f: abs(f.set_start_s - t.set_start_s))
@@ -118,36 +121,60 @@ def compare_anchors(
         ns = _norm_slot(slot)
         candidates = by_slot.get(ns, [])
         if stem_filter:
-            candidates = [t for t in candidates if (t.claimed_stem or "regular") == stem_filter]
+            candidates = [
+                t for t in candidates if (t.claimed_stem or "regular") == stem_filter
+            ]
         t = min(candidates, key=lambda x: x.set_start_s) if candidates else None
         if t is None:
-            results.append(AnchorResult(
-                slot=slot, stem="?", label="(missing from yaml)",
-                yaml_start=0, yaml_end=0,
-                fresh_start=None, fresh_end=None,
-                delta_start_s=None, delta_end_s=None,
-            ))
+            results.append(
+                AnchorResult(
+                    slot=slot,
+                    stem="?",
+                    label="(missing from yaml)",
+                    yaml_start=0,
+                    yaml_end=0,
+                    fresh_start=None,
+                    fresh_end=None,
+                    delta_start_s=None,
+                    delta_end_s=None,
+                )
+            )
             continue
         fresh = _find_fresh(t, fresh_index)
         if fresh is None:
-            results.append(AnchorResult(
-                slot=slot, stem=t.claimed_stem, label=t.label,
-                yaml_start=t.set_start_s, yaml_end=t.set_end_s,
-                fresh_start=None, fresh_end=None,
-                delta_start_s=None, delta_end_s=None,
-            ))
+            results.append(
+                AnchorResult(
+                    slot=slot,
+                    stem=t.claimed_stem,
+                    label=t.label,
+                    yaml_start=t.set_start_s,
+                    yaml_end=t.set_end_s,
+                    fresh_start=None,
+                    fresh_end=None,
+                    delta_start_s=None,
+                    delta_end_s=None,
+                )
+            )
             continue
-        results.append(AnchorResult(
-            slot=slot, stem=t.claimed_stem, label=t.label,
-            yaml_start=t.set_start_s, yaml_end=t.set_end_s,
-            fresh_start=fresh.set_start_s, fresh_end=fresh.set_end_s,
-            delta_start_s=fresh.set_start_s - t.set_start_s,
-            delta_end_s=fresh.set_end_s - t.set_end_s,
-        ))
+        results.append(
+            AnchorResult(
+                slot=slot,
+                stem=t.claimed_stem,
+                label=t.label,
+                yaml_start=t.set_start_s,
+                yaml_end=t.set_end_s,
+                fresh_start=fresh.set_start_s,
+                fresh_end=fresh.set_end_s,
+                delta_start_s=fresh.set_start_s - t.set_start_s,
+                delta_end_s=fresh.set_end_s - t.set_end_s,
+            )
+        )
     return results
 
 
-def summarize_drift(yaml_gt: GroundTruthSet, fresh_gt: GroundTruthSet) -> tuple[int, int, float, float]:
+def summarize_drift(
+    yaml_gt: GroundTruthSet, fresh_gt: GroundTruthSet
+) -> tuple[int, int, float, float]:
     fresh_index = _index_gt(fresh_gt)
     matched = 0
     max_start_delta = 0.0
@@ -185,8 +212,10 @@ def print_report(
 ) -> None:
     beat_s = 60.0 / DEFAULT_BPM
     tol_s = BEAT_TOL * beat_s
-    print(f"corpus drift: matched {matched}/{total} yaml rows; "
-          f"max |Δstart|={max_start_delta:.3f}s; max |Δref_start|={max_ref_delta:.3f}s")
+    print(
+        f"corpus drift: matched {matched}/{total} yaml rows; "
+        f"max |Δstart|={max_start_delta:.3f}s; max |Δref_start|={max_ref_delta:.3f}s"
+    )
     print(f"tolerance line: ±{BEAT_TOL} beat @ {DEFAULT_BPM:.0f}bpm ≈ ±{tol_s:.3f}s")
     print(f"audible metadata: muted={muted} partial={partial}")
     print()
@@ -200,14 +229,22 @@ def print_report(
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--yaml", type=Path, default=DEFAULT_YAML)
     p.add_argument("--als", type=Path, default=DEFAULT_ALS)
     p.add_argument("--set-dir", type=Path, default=DEFAULT_SET_DIR)
-    p.add_argument("--anchors", default=",".join(DEFAULT_ANCHORS),
-                   help="Comma-separated slot labels; optional slot:stem (e.g. 003:instrumental)")
-    p.add_argument("--strict-ref", action="store_true",
-                   help="exit non-zero when ref_start drift exceeds tolerance")
+    p.add_argument(
+        "--anchors",
+        default=",".join(DEFAULT_ANCHORS),
+        help="Comma-separated slot labels; optional slot:stem (e.g. 003:instrumental)",
+    )
+    p.add_argument(
+        "--strict-ref",
+        action="store_true",
+        help="exit non-zero when ref_start drift exceeds tolerance",
+    )
     args = p.parse_args(argv)
 
     match load(args.yaml):
@@ -241,10 +278,15 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     tol_s = BEAT_TOL * (60.0 / DEFAULT_BPM)
     if max_start_delta > tol_s:
-        print("\nnote: full-corpus drift is higher (loops/merges); anchor spots are OK.", file=sys.stderr)
+        print(
+            "\nnote: full-corpus drift is higher (loops/merges); anchor spots are OK.",
+            file=sys.stderr,
+        )
     if max_ref_delta > tol_s:
-        print(f"\nwarning: ref_start drift up to {max_ref_delta:.3f}s — re-export GT yaml recommended.",
-              file=sys.stderr)
+        print(
+            f"\nwarning: ref_start drift up to {max_ref_delta:.3f}s — re-export GT yaml recommended.",
+            file=sys.stderr,
+        )
         if args.strict_ref:
             return 1
     return 0

@@ -18,7 +18,7 @@ import numpy as np
 from sklearn.metrics import roc_auc_score
 
 from analysis.adapters import audio_io, mert_adapter
-from labeling.ground_truth.schema import GroundTruthTrack, load
+from labeling.schema import GroundTruthTrack, load
 from workspaces.mashup_compat.embed import (CACHE_DIR, GRID_S, LOCAL_STEMS, _decode,
                                             _pull_stem, _resolve_track_audio_ids)
 from workspaces.mashup_compat.pairs import BED_STEMS, MIN_OVERLAP_S, PAYLOAD_STEMS

@@ -35,7 +35,7 @@ from labeling.als import (
     match_manifest_for_path,
 )
 from labeling.export_als_to_gt import DEFAULT_ALS, DEFAULT_SET_DIR, ClipRow, collect_kept_clip_rows
-from labeling.ground_truth.schema import GroundTruthSet, GroundTruthTrack, load, save
+from labeling.schema import GroundTruthSet, GroundTruthTrack, load, save
 from core.result import Err, Ok
 
 PI_HOST = "pi-storage"
