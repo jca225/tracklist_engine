@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from labeling.audio_index import (
+from labeling.identity.audio_index import (
     build_audio_index,
     load_audio_index,
     lookup_ref,
@@ -114,9 +114,7 @@ def test_trajectory_ref_resolution_uses_audio_index(tmp_path: Path) -> None:
         tmp_path,
         {
             "version": 2,
-            "by_track_audio_id": {
-                "42": {"local_path": str(indexed), "stems": {}}
-            },
+            "by_track_audio_id": {"42": {"local_path": str(indexed), "stems": {}}},
         },
     )
     audio = resolve_span_audio(
@@ -144,7 +142,7 @@ def test_lookup_helpers_and_refresh_roundtrip(tmp_path: Path) -> None:
                         "local_path": str(local),
                         "stems": {},
                     }
-                ]
+                ],
             }
         )
     )

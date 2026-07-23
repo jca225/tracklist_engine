@@ -4,7 +4,7 @@ Reads the live `.als`, maps clips through 1-mix warp markers into mix seconds,
 reads identity from each clip's file path, optionally attaches ``track_id`` when
 the path exactly matches a row in `~/aligning/<set>/manifest.json` (pull
 inventory only — not used for labels or timing), applies clip hygiene, and
-writes a `*_ground_truth.yaml` consumable by `labeling.write_back_ground_truth`.
+writes a `*_ground_truth.yaml` consumable by `labeling.commit.write_back_ground_truth`.
 
 Usage (Mac, from repo root):
 

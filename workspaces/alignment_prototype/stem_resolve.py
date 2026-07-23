@@ -22,7 +22,7 @@ import re
 import warnings
 from pathlib import Path
 
-from labeling.audio_index import has_audio_index, load_audio_index, lookup_stem
+from labeling.identity.audio_index import has_audio_index, load_audio_index, lookup_stem
 
 # identity stem axis -> Demucs/Roformer stem file basename. 'regular' = the full
 # track (no stem file), so it is intentionally absent.

@@ -22,7 +22,7 @@ from pathlib import Path
 
 import numpy as np
 
-from labeling.audio_index import has_audio_index, load_audio_index, lookup_ref
+from labeling.identity.audio_index import has_audio_index, load_audio_index, lookup_ref
 from workspaces.alignment_prototype.continuity_refine import _FEAT_CACHE
 from workspaces.alignment_prototype.path_decode import _ensure_feat
 from workspaces.alignment_prototype.recon_probe import _melmag, find_mix_stems
@@ -62,9 +62,7 @@ def resolve_span_audio(
     if t is None:
         return f"track_id {tid or '<none>'} not in manifest"
     if has_audio_index(aligning_dir):
-        indexed = lookup_ref(
-            load_audio_index(aligning_dir), t.get("track_audio_id")
-        )
+        indexed = lookup_ref(load_audio_index(aligning_dir), t.get("track_audio_id"))
         if indexed is None:
             return (
                 "audio_index has no ref for "
@@ -78,9 +76,7 @@ def resolve_span_audio(
     cs = str(row.get("claimed_stem") or "regular")
     stem_key = _STEM_FILE.get(cs)
     if stem_key and stem_key in mix_stems:
-        sp = resolve_stem(
-            aligning_dir, row.get("slot_label"), t, stem_key
-        )
+        sp = resolve_stem(aligning_dir, row.get("slot_label"), t, stem_key)
         if sp is not None:
             return SpanAudio(
                 mix_path=mix_stems[stem_key],

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from labeling.write_back_ground_truth import write_back
+from labeling.commit.write_back_ground_truth import write_back
 
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -54,17 +54,26 @@ def test_write_back_replaces_stale_rows_for_only_the_yaml_set(tmp_path: Path):
     assert write_back(db, _BB11) == 0
 
     with sqlite3.connect(db) as conn:
-        assert conn.execute(
-            "SELECT COUNT(*) FROM set_ground_truth "
-            "WHERE set_id='2nvzlh2k' AND label='stale-label'"
-        ).fetchone()[0] == 0
-        assert conn.execute(
-            "SELECT COUNT(*) FROM set_ground_truth WHERE set_id='2nvzlh2k'"
-        ).fetchone()[0] > 100
-        assert conn.execute(
-            "SELECT COUNT(*) FROM set_ground_truth "
-            "WHERE set_id='other-set' AND label='keep-me'"
-        ).fetchone()[0] == 1
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM set_ground_truth "
+                "WHERE set_id='2nvzlh2k' AND label='stale-label'"
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM set_ground_truth WHERE set_id='2nvzlh2k'"
+            ).fetchone()[0]
+            > 100
+        )
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM set_ground_truth "
+                "WHERE set_id='other-set' AND label='keep-me'"
+            ).fetchone()[0]
+            == 1
+        )
 
 
 def test_write_back_rolls_back_delete_when_insert_fails(tmp_path: Path):

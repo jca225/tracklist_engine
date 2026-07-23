@@ -6,7 +6,7 @@ id appears on multiple pi rows).
 
 Usage::
 
-    venvs/audio/bin/python -m labeling.remap_gt_slot_labels \\
+    venvs/audio/bin/python -m labeling.extract.remap_gt_slot_labels \\
         --yaml labeling/fixtures/bb12_ground_truth.yaml \\
         --set-id 1fsnxchk --dry-run
 """
@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-_REPO = Path(__file__).resolve().parent.parent
+_REPO = Path(__file__).resolve().parent.parent.parent
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 

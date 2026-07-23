@@ -8,13 +8,13 @@ fresh Ableton export from surviving as stale database rows.
 
 Usage (on pi-storage or against a local DB copy):
 
-    venvs/audio/bin/python -m labeling.write_back_ground_truth \\
+    venvs/audio/bin/python -m labeling.commit.write_back_ground_truth \\
         --db /mnt/storage/data/db/music_database.db \\
         --yaml path/to/bb12_ground_truth.yaml
 
 Dry-run (print rows, no write):
 
-    venvs/audio/bin/python -m labeling.write_back_ground_truth --yaml ... --dry-run
+    venvs/audio/bin/python -m labeling.commit.write_back_ground_truth --yaml ... --dry-run
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ import json
 import sys
 from pathlib import Path
 
-_REPO = Path(__file__).resolve().parent.parent
+_REPO = Path(__file__).resolve().parent.parent.parent
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
