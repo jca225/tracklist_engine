@@ -16,6 +16,44 @@ def _ss(row: dict) -> float:
         return 0.0
 
 
+def identity_recall(gt_rows: list[dict], spans: list[dict], pad_s: float = 5.0) -> dict:
+    """Honest identity over an INCOMPLETE GT: appearance-recall on the
+    adjudicable (bound) appearances, with the abstained fraction reported.
+
+    A prediction-centric identity metric (per span, does it match a GT
+    ``track_id``) counts a correct prediction on an abstained appearance as a
+    miss, deflating the number by the abstain rate. Instead: a GT appearance
+    that carries a ``track_id`` (and is alignable) is a HIT iff some predicted
+    span shares its ``recording_id`` and overlaps it in time (±``pad_s``).
+    Abstained appearances (``track_id=None``) are UNADJUDICABLE — excluded from
+    the denominator, never scored as misses.
+
+    Returns ``{bound, abstain, hits, recall, adjudicable_frac}``.
+    """
+    bound = [r for r in gt_rows if r.get("track_id") and not r.get("unalignable")]
+    abstain = [r for r in gt_rows if not r.get("track_id") and not r.get("unalignable")]
+    hits = 0
+    for r in bound:
+        a0, a1 = _ss(r), float(r.get("set_end_s") or _ss(r))
+        tid = str(r["track_id"])
+        if any(
+            str(s.get("recording_id")) == tid
+            and _ss(s) - pad_s < a1
+            and float(s.get("set_end_s") or _ss(s)) + pad_s > a0
+            for s in spans
+        ):
+            hits += 1
+    n_bound = len(bound)
+    n_total = n_bound + len(abstain)
+    return {
+        "bound": n_bound,
+        "abstain": len(abstain),
+        "hits": hits,
+        "recall": (hits / n_bound) if n_bound else 0.0,
+        "adjudicable_frac": (n_bound / n_total) if n_total else 0.0,
+    }
+
+
 def assign_spans_to_forms(
     gt_rows: list[dict], spans: list[dict]
 ) -> tuple[dict[int, dict], list[dict]]:

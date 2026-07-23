@@ -25,15 +25,32 @@
 > alignment headline number.** Other docs cite it; they do not re-state numbers.
 > If a number here is stale, re-run §Regeneration — do not hand-edit.
 >
-> **⚠ Not comparable to the 2026-07-19 figures — two methodology changes moved
-> every headline:** (a) the GT is now **de-poisoned** (Crush #15), so identity is
-> no longer inflated by crediting the aligner for matching *wrong* bindings —
-> honest identity is **51%/61%**, not 82%/84%; (b) the scorecard is **form-centric
-> (RT1)** — a GT appearance no predicted span covers now counts as full recall
-> loss (`unrecovered_form`), and totals are audible-weighted (the old 11959 s was
-> envelope-inflated). The `_lt` timelines themselves are the pre-Crush July
-> predictions, scored honestly against corrected GT; a fresh `infer` on
-> de-poisoned candidates (potentially higher) is a separate on-cluster step.
+> **⚠ NO IDENTITY NUMBER IN THIS DOC IS TRUSTWORTHY YET — GT is incomplete at the
+> export layer.** Root cause (proven 2026-07-23 via `als_audit`): the hand-session
+> `.als` files are audio-SOUND — BB12 **281/290**, BB11 **264/271** clips
+> audio-verify against the mix, and **every** clip resolves identity from its file
+> reference. But `export_als_to_gt` **abstained on 34% of BB12 / 43% of BB11
+> appearances** (`track_id=None`) — **all 57/57 BB12 abstained rows sit on OK
+> audio-verified clips**, i.e. the identity was present and verifiable and the
+> export threw it away. So every identity number computed so far is an artifact of
+> a one-third-blank GT:
+> - **82%/84% (pre-2026-07-19, poisoned GT):** inflated — wrong `track_id`s that
+>   matched predictions scored as hits.
+> - **51%/61% (per-span, de-poisoned GT):** deflated — correct predictions on
+>   abstained appearances scored as misses (57/57 BB12 + 66 BB11 "misses" predict a
+>   real recording; 53/57 + 61/66 overlap an abstained row).
+> - **89%/82% (recall over adjudicable):** measured over only the ~66% that survived
+>   export — the abstained third is non-random, so this is not the honest whole.
+>
+> **The fix is GT completion**: re-bind the abstained appearances from the
+> audio-verified `.als` identity (local, sound — audio verification is a *stronger*
+> gate than payload-hash). Until then, treat all identity figures below as
+> provisional. Placement/trajectory are time-based and less abstention-sensitive
+> but still measured over bound appearances only.
+>
+> **RT1 methodology (independent of the above, valid):** the scorecard is now
+> form-centric — a GT appearance no span covers counts as full recall loss
+> (`unrecovered_form`), totals audible-weighted (old 11959 s was envelope-inflated).
 > Prior drift log: [alignment_status_corrections_20260711.md](alignment_status_corrections_20260711.md).
 
 **Set ids:** **BB11 = `2nvzlh2k`** (Two Friends – Big Bootie Mix *Episode 11*),
@@ -60,7 +77,7 @@ strict **and** fiber-aware; never a single scalar.
 
 | | BB11 (`2nvzlh2k`) | BB12 (`1fsnxchk`) |
 |---|---|---|
-| **Identity** (span recording correct) | 68/134 (**51%**) | 91/148 (**61%**) |
+| **Identity** ⚠ PROVISIONAL (GT incomplete — see header) | per-span 51% · recall-over-adjudicable 82% | per-span 61% · recall-over-adjudicable 89% |
 | **set_start** placement, median / <15 s | 6.8 s / 62% | 5.1 s / 67% |
 | ref-offset MAE, straight clips (median / p90) | 8.0 s / 107.5 s | 26.3 s / 123.4 s |
 | **Trajectory — multiseg+loop headline** (strict → fiber-aware) | **31% → 48%** | **26% → 46%** |
