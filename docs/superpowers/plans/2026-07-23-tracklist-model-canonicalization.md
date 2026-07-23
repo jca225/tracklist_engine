@@ -343,6 +343,60 @@ git commit -m "feat(tokenizer): canonical model.py — persisted row structs + p
 - Consumes: `model.SetTrackSlotRow`, `model.TrackSuggestionRow`, `model.columns`, `model.as_row`
 - Produces: `_flush_slots(conn, buf: list[SetTrackSlotRow])` and `_flush_suggestions(conn, buf: list[TrackSuggestionRow])` — buffers now hold dataclasses, not tuples.
 
+> **PLAN CORRECTION (execution finding, 2026-07-23):** The original plan claimed the
+> legacy `row[:17]` branch in `_flush_slots` was dead because `_MATERIALIZE_DDL` creates
+> the current schema. FALSE — `_MATERIALIZE_DDL`'s inline `set_track_slots` is STALE (17
+> columns; missing `layer_role` + `constituents_json` that `schema.sql:637-638` has). On a
+> fresh DB (including the hermetic test) the stale DDL builds a 17-col table, so the legacy
+> branch runs and the Task-1 golden was captured on that non-production path. Fix the stale
+> DDL FIRST (Steps 0a/0b), recapture the golden on the real 19-col path, THEN the legacy
+> branch is genuinely dead and safe to delete.
+
+- [ ] **Step 0a: Fix the stale `_MATERIALIZE_DDL` to match `schema.sql`**
+
+In `tokenizer/materialize.py`, the inline `set_track_slots` DDL is missing two columns.
+Replace this line (currently ~line 217):
+
+```python
+    full_name TEXT, title TEXT, artists_json TEXT, duration_seconds INTEGER,
+    parsed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+```
+
+with (adds `layer_role` + `constituents_json`, matching `schema.sql:637-638`):
+
+```python
+    full_name TEXT, title TEXT, artists_json TEXT, duration_seconds INTEGER,
+    layer_role TEXT, constituents_json TEXT,
+    parsed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+```
+
+Leave the `track_suggestions` inline DDL unchanged (its 14 columns already match the INSERT;
+`parsed_at` is not written and the snapshot excludes it).
+
+- [ ] **Step 0b: Recapture the golden on the real 19-col production path**
+
+The DDL fix changes the fresh-DB path from 17 → 19 columns, so the Task-1 golden (captured on
+the stale path) is now wrong and MUST be regenerated on this DDL-fixed but pre-conversion code.
+
+```bash
+rm tests/tokenizer/golden_materialize.pkl
+venvs/audio/bin/python -m pytest tests/tokenizer/test_materialize_characterization.py -v   # records fresh golden
+venvs/audio/bin/python -m pytest tests/tokenizer/test_materialize_characterization.py -v   # confirms it compares
+```
+
+Expected: PASS both times; the new golden's `set_track_slots` rows now carry 19 values
+(including `layer_role`/`constituents_json`) — the production path. Verify drift detection
+still bites (corrupt a value in the pkl → FAIL, restore → PASS). Commit this as its own step:
+
+```bash
+git add tokenizer/materialize.py tests/tokenizer/golden_materialize.pkl
+git commit -m "fix(tokenizer): un-stale _MATERIALIZE_DDL to match schema.sql; recapture golden on 19-col path"
+```
+
+This commit is behavior-preserving in PRODUCTION (table pre-exists at 19 cols, so the fixed
+inline DDL is a no-op there) and a bug FIX for fresh DBs (which previously silently dropped
+`layer_role`/`constituents_json`). Now the legacy branch is genuinely dead.
+
 - [ ] **Step 1: Add the import**
 
 At `tokenizer/materialize.py:44` (near the existing `from tokenizer.track_tokenizer import TrackRow`), add:
@@ -385,7 +439,7 @@ def _flush_slots(conn: sqlite3.Connection, buf: "list[model.SetTrackSlotRow]") -
     conn.commit()
 ```
 
-Note: the old legacy-schema branch (`layer_role` absent) is dropped intentionally — `_MATERIALIZE_DDL` (lines 210-220) always creates the current schema before the loop runs, so the branch was dead in practice. The characterization test guards this.
+Note: the old legacy-schema branch (`layer_role` absent) is dropped intentionally — after Step 0a un-staled `_MATERIALIZE_DDL`, a fresh DB now gets the 19-col table, so the modern branch is the only reachable path. The recaptured golden (Step 0b) guards this — it now pins the 19-col production path, so if this deletion changed anything the characterization test fails.
 
 - [ ] **Step 4: Replace the slot tuple append with a dataclass**
 
