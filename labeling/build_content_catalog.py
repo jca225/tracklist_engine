@@ -52,7 +52,7 @@ def build_catalog(
     mdat_sha256=_mdat_sha256,
     flac_pcm_md5=_flac_pcm_md5,
 ):
-    # Widened to the pull's own resolution (labeling/pull_set_for_alignment.py
+    # Widened to the pull's own resolution (labeling/acquire/pull_set_for_alignment.py
     # `wanted` CTE, set_track_slots arm): COALESCE(recording_id, track_id) so a
     # legacy/Rvmor-gap slot (NULL recording_id, track_id-only identity) is not
     # silently dropped from the catalog's scope (P10). Does NOT add the pull's
