@@ -563,16 +563,49 @@ def test_suggestion_row_is_subset_of_schema():
     assert not missing, f"struct fields not in track_suggestions schema: {missing}"
 ```
 
-- [ ] **Step 2: Run to verify it passes on current code**
+- [ ] **Step 2: Add the DDL-parity guard (regression net for the bug this branch fixed)**
+
+> **CONTROLLER ADDITION (execution finding):** Task 3 fixed a stale `_MATERIALIZE_DDL`
+> (its inline `set_track_slots` had drifted 2 columns behind `schema.sql`). Add a guard so
+> that drift cannot silently recur — the inline DDL's columns must equal `schema.sql`'s for
+> the two tables materialize writes. Append to the same test file:
+
+```python
+from tokenizer.materialize import _MATERIALIZE_DDL
+
+def _columns_from_ddl(ddl_text: str, table: str) -> set[str]:
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(ddl_text)
+    cols = {c[1] for c in conn.execute(f"PRAGMA table_info({table})")}
+    conn.close()
+    return cols
+
+def test_inline_materialize_ddl_matches_schema_for_written_tables():
+    # materialize.py carries its own inline DDL (_MATERIALIZE_DDL) that creates the
+    # output tables on a fresh DB. It MUST stay column-identical to the canonical
+    # schema.sql for the tables it writes, or a fresh-DB run silently drops columns
+    # (the exact bug fixed on this branch: layer_role/constituents_json).
+    for table in ("set_track_slots", "track_suggestions"):
+        inline = _columns_from_ddl(_MATERIALIZE_DDL, table)
+        canonical = _table_columns(table)
+        assert inline == canonical, (
+            f"{table}: _MATERIALIZE_DDL columns {inline} != schema.sql {canonical}"
+        )
+```
+
+- [ ] **Step 3: Run to verify all three pass on current code**
 
 Run: `venvs/audio/bin/python -m pytest tests/tokenizer/test_schema_alignment.py -v`
-Expected: PASS (both structs are subsets of the real schema today). If it FAILS, a struct field name is wrong — fix the field name in `model.py`, do not weaken the test.
+Expected: PASS (3 tests). The subset tests pass because both structs are subsets of the real
+schema; the DDL-parity test passes because Task 3 already un-staled `_MATERIALIZE_DDL`. If the
+DDL-parity test FAILS, `_MATERIALIZE_DDL` and `schema.sql` disagree — reconcile the inline DDL
+to schema.sql (do not weaken the test). Also run the full dir: `venvs/audio/bin/python -m pytest tests/tokenizer/ -v` (all green).
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add tests/tokenizer/test_schema_alignment.py
-git commit -m "test(tokenizer): guardrail — model structs must match schema columns"
+git commit -m "test(tokenizer): guardrail — structs ⊆ schema + inline DDL == schema.sql"
 ```
 
 ---
