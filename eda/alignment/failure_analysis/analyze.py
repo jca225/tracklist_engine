@@ -30,6 +30,10 @@ DISTINCT_HI = 0.4  # audit frac_distinct above which repeats are instance-ambigu
 def _cause(row) -> str:
     """Single BINDING cause per span, in dependency order: a wrong identity makes
     everything downstream moot, a missed window makes the decode moot, etc."""
+    # Most upstream: the appearance was never represented by any predicted span
+    # (RT1 form-centric recall loss) — nothing downstream exists to attribute.
+    if getattr(row, "coverage_miss", 0) == 1:
+        return "unrecovered_form"
     if row.identity_hit == 0:
         return "identity"
     if row.set_start_err_s > PLACEMENT_MISS_S:
@@ -51,7 +55,10 @@ def _cause(row) -> str:
 def main() -> int:
     csv_name = sys.argv[1] if len(sys.argv) > 1 else "span_table.csv"
     df = pd.read_csv(OUT_DIR / csv_name)
+    if "coverage_miss" not in df.columns:  # tolerate pre-RT1 span tables
+        df["coverage_miss"] = 0
     m = df[df.span_class.notna() & (df.span_class != "")].copy()
+    m["coverage_miss"] = m["coverage_miss"].fillna(0).astype(int)
     m["identity_hit"] = m["identity_hit"].fillna(1)  # no-GT-overlap: don't penalize
     m["success"] = m.traj_strict >= TRAJ_OK
     # Weight loss by PLAYED seconds, not the envelope (set_end-set_start spans the
