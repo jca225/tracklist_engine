@@ -47,8 +47,8 @@ from labeling.als import (
     track_display_name,
 )
 from labeling.als.validate import has_errors, validate_session
-from labeling.content_hash import file_sha256, mdat_sha256
-from labeling.content_resolver import (
+from labeling.identity.content_hash import file_sha256, mdat_sha256
+from labeling.identity.content_resolver import (
     CatalogEntry,
     ContentCatalog,
     resolve_clip_identity,

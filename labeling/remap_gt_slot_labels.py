@@ -27,8 +27,8 @@ if str(_REPO) not in sys.path:
 
 from core.identity import normalize_stem  # noqa: E402
 from core.result import Err, Ok  # noqa: E402
+from core.ssh_sqlite import ssh_sqlite  # noqa: E402
 from labeling.schema import load, replace, save  # noqa: E402
-from labeling.acquire.pull_set_for_alignment import ssh_sqlite  # noqa: E402
 
 
 def fetch_remap_slot_rows(set_id: str, ssh_sqlite) -> list[dict[str, Any]]:

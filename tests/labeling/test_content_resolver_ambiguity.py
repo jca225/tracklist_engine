@@ -19,7 +19,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from labeling.content_resolver import CatalogEntry, ContentCatalog
+from labeling.identity.content_resolver import CatalogEntry, ContentCatalog
 from labeling.export_als_to_gt import _load_content_catalog
 
 

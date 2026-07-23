@@ -157,7 +157,7 @@ def test_same_recording_id_two_rows_still_binds(tmp_path: Path) -> None:
 
 def test_binds_tagged_master_by_mdat(tmp_path: Path) -> None:
     import struct
-    from labeling.content_hash import mdat_sha256
+    from labeling.identity.content_hash import mdat_sha256
 
     def box(t, b):
         return struct.pack(">I", len(b) + 8) + t + b

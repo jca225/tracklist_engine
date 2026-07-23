@@ -15,6 +15,7 @@ Usage::
         --als "$HOME/Desktop/big bootie 12 labeling Project/big bootie 12 labeling_fast.als" \\
         --set-dir "$HOME/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12"
 """
+
 from __future__ import annotations
 
 import argparse
@@ -34,22 +35,29 @@ from labeling.als import (
     labels_overlap,
     match_manifest_for_path,
 )
-from labeling.export_als_to_gt import DEFAULT_ALS, DEFAULT_SET_DIR, ClipRow, collect_kept_clip_rows
+from labeling.export_als_to_gt import (
+    DEFAULT_ALS,
+    DEFAULT_SET_DIR,
+    ClipRow,
+    collect_kept_clip_rows,
+)
 from labeling.schema import GroundTruthSet, GroundTruthTrack, load, save
 from core.result import Err, Ok
+from core.ssh_sqlite import ssh_sqlite
 
 PI_HOST = "pi-storage"
 PI_DB = "/mnt/storage/data/db/music_database.db"
 DEFAULT_YAML = _REPO / "labeling/fixtures/bb12_ground_truth.yaml"
-OVERRIDES_DIR = _REPO / "labeling/identity_overrides"
+OVERRIDES_DIR = _REPO / "labeling/identity/overrides"
 SPAN_TOL_S = 0.05
 
 
 def load_identity_overrides(set_id: str) -> dict[str, str]:
     """label/slot -> track_id, for clips whose audio file carries no song name
     (generic imports the human dragged in, e.g. instrumental-2 = Mako). From
-    labeling/identity_overrides/<set_id>.yaml. Keyed by GT `label` or `slot_label`."""
+    labeling/identity/overrides/<set_id>.yaml. Keyed by GT `label` or `slot_label`."""
     import yaml
+
     path = OVERRIDES_DIR / f"{set_id}.yaml"
     if not path.is_file():
         return {}
@@ -79,16 +87,6 @@ class EnrichResult:
     source: str  # kept | manifest_path | db_label | unresolved
 
 
-def _ssh_sql(query: str, *, host: str = PI_HOST, db: str = PI_DB) -> list[dict[str, str]]:
-    cmd = ["ssh", "-o", "ConnectTimeout=15", host, f"sqlite3 -separator '|' -header {db} {query!r}"]
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    lines = [ln for ln in proc.stdout.splitlines() if ln.strip()]
-    if not lines:
-        return []
-    header = lines[0].split("|")
-    return [dict(zip(header, ln.split("|"), strict=False)) for ln in lines[1:]]
-
-
 def _slot_display(row: dict[str, str]) -> str:
     full = (row.get("full_name") or "").strip()
     if full:
@@ -105,8 +103,10 @@ def _slot_display(row: dict[str, str]) -> str:
     return title
 
 
-def fetch_set_slots(set_id: str, *, host: str = PI_HOST, db: str = PI_DB) -> tuple[SlotRow, ...]:
-    rows = _ssh_sql(
+def fetch_set_slots(
+    set_id: str, *, host: str = PI_HOST, db: str = PI_DB
+) -> tuple[SlotRow, ...]:
+    rows = ssh_sqlite(
         "SELECT track_id, claimed_stem, full_name, title, artists_json "
         f"FROM set_track_slots WHERE set_id='{set_id}' ORDER BY row_index",
         host=host,
@@ -161,7 +161,8 @@ def associate_clips(
             continue
         stem = (t.claimed_stem or "regular").lower()
         candidates = [
-            r for r in clip_rows
+            r
+            for r in clip_rows
             if (r.claimed_stem or "regular").lower() == stem
             and abs(r.set_start_s - t.set_start_s) <= SPAN_TOL_S
         ]
@@ -178,6 +179,7 @@ def associate_clips(
 def _overlap_score(left: str, right: str) -> int:
     def _tokens(label: str) -> set[str]:
         import re
+
         cleaned = re.sub(r"[^\w\s]", " ", label.lower())
         return {w for w in cleaned.split() if len(w) > 2}
 
@@ -237,7 +239,9 @@ def enrich_track(
     overrides = overrides or {}
     ov = overrides.get(track.label) or overrides.get(track.slot_label or "")
     if ov:
-        return EnrichResult(track=replace(track, track_id=ov), track_id=ov, source="override")
+        return EnrichResult(
+            track=replace(track, track_id=ov), track_id=ov, source="override"
+        )
 
     track_id: str | None = None
     source = "unresolved"
@@ -250,9 +254,13 @@ def enrich_track(
 
     if track_id is None:
         label = clip.display if clip is not None else track.label
-        path_label = display_from_path(clip.clip.path) if clip is not None else track.label
+        path_label = (
+            display_from_path(clip.clip.path) if clip is not None else track.label
+        )
         for candidate in (path_label, track.label, label):
-            track_id = lookup_db_label(candidate, track.claimed_stem, slots, require_stem=True)
+            track_id = lookup_db_label(
+                candidate, track.claimed_stem, slots, require_stem=True
+            )
             if track_id:
                 source = "db_label"
                 break
@@ -263,8 +271,12 @@ def enrich_track(
         if track_id is None:
             for candidate in (path_label, track.label, label):
                 track_id = lookup_db_label(
-                    candidate, track.claimed_stem, slots,
-                    require_stem=False, min_tokens=2, resolve_ties=True,
+                    candidate,
+                    track.claimed_stem,
+                    slots,
+                    require_stem=False,
+                    min_tokens=2,
+                    resolve_ties=True,
                 )
                 if track_id:
                     source = "db_label_relaxed"
@@ -290,14 +302,18 @@ def enrich_gt(
     tracks: list[GroundTruthTrack] = []
     for t in gt.tracks:
         clip = assoc.get(_track_key(t))
-        res = enrich_track(t, clip=clip, manifest=manifest, slots=slots, overrides=overrides)
+        res = enrich_track(
+            t, clip=clip, manifest=manifest, slots=slots, overrides=overrides
+        )
         results.append(res)
         tracks.append(res.track)
     return replace(gt, tracks=tuple(tracks)), results
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--yaml", type=Path, default=DEFAULT_YAML)
     ap.add_argument("--als", type=Path, default=DEFAULT_ALS)
     ap.add_argument("--set-dir", type=Path, default=DEFAULT_SET_DIR)
@@ -329,7 +345,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"enrich failed: {e}", file=sys.stderr)
         return 1
 
-    enriched, results = enrich_gt(gt, clip_rows=tuple(clip_rows), manifest=manifest, slots=slots)
+    enriched, results = enrich_gt(
+        gt, clip_rows=tuple(clip_rows), manifest=manifest, slots=slots
+    )
     counts: dict[str, int] = {}
     for r in results:
         counts[r.source] = counts.get(r.source, 0) + 1

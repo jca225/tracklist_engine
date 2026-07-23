@@ -76,6 +76,7 @@ from core.audio_resolve import (  # noqa: E402
     resolve_slot_audio,
     tier_name,
 )
+from core.ssh_sqlite import ssh_sqlite  # noqa: E402
 from labeling.acquire.inventory_check import (  # noqa: E402
     evaluate_set_inventory,
     run_inventory_check,
@@ -83,7 +84,6 @@ from labeling.acquire.inventory_check import (  # noqa: E402
 )
 
 PI_HOST = "pi-storage"
-PI_DB = "/mnt/storage/data/db/music_database.db"
 
 _BAD = re.compile(r'[\x00-\x1f/\\:*?"<>|]')
 
@@ -141,24 +141,6 @@ class MixRow:
     pi_path: str
     codec: str | None
     duration_s: float | None
-
-
-def ssh_sqlite(query: str) -> list[dict]:
-    """Run a sqlite3 query on pi-storage and return parsed JSON rows.
-    `.mode json` emits a JSON array; '' for no results."""
-    script = f".mode json\n{query.strip()}\n"
-    cmd = ["ssh", PI_HOST, f"sqlite3 {PI_DB}"]
-    out = subprocess.run(
-        cmd,
-        input=script,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    body = out.stdout.strip()
-    if not body:
-        return []
-    return json.loads(body)
 
 
 def fetch_mix(set_id: str) -> MixRow | None:
@@ -894,7 +876,7 @@ def main() -> int:
                 [
                     "ssh",
                     "pi-storage",
-                    "cd ~/tracklist_engine && python3 -m labeling.build_content_catalog "
+                    "cd ~/tracklist_engine && python3 -m labeling.identity.build_content_catalog "
                     + args.set_id,
                 ],
                 capture_output=True,
