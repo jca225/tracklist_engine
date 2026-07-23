@@ -16,7 +16,7 @@ name (stems), so each rename is the substring edit ``OLD<.ext|/>`` ->
 ``OLD [tag]<.ext|/>``. We derive OLD by stripping the tag off the on-disk name.
 
 Usage:
-    ./venvs/audio/bin/python labeling/relink_als_after_tag.py \\
+    ./venvs/audio/bin/python labeling/prep/relink_als_after_tag.py \\
         ~/aligning/2nvzlh2k__...BB11  [--dry-run]
 """
 
@@ -27,7 +27,7 @@ import gzip
 import sys
 from pathlib import Path
 
-_REPO = Path(__file__).resolve().parents[1]
+_REPO = Path(__file__).resolve().parents[2]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 

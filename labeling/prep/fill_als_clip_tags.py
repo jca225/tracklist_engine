@@ -13,7 +13,7 @@ of the deep-copy crash hazards apply. A timestamped backup is written and you
 should still open the session in Live to confirm.
 
 Usage:
-    ./venvs/audio/bin/python labeling/fill_als_clip_tags.py \\
+    ./venvs/audio/bin/python labeling/prep/fill_als_clip_tags.py \\
         ~/aligning/2nvzlh2k__...BB11  [--dry-run]
 """
 

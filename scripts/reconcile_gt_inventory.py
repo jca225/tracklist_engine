@@ -16,7 +16,7 @@ sys.path.insert(0, str(REPO))
 from core.result import Err, Ok
 from core.slot_inventory import InventoryAction, suggest_actions
 from labeling.ground_truth.schema import load as load_gt
-from labeling.inventory_check import evaluate_set_inventory
+from labeling.acquire.inventory_check import evaluate_set_inventory
 
 PI_HOST = "pi-storage"
 PI_DB = "/mnt/storage/data/db/music_database.db"
