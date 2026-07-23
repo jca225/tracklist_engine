@@ -223,7 +223,33 @@ CREATE TABLE IF NOT EXISTS track_suggestions (
     pos INTEGER, track_slug TEXT, track_display TEXT, artist_title TEXT,
     suggester_user_id INTEGER, suggester_name TEXT,
     suggestion_timestamp TEXT, is_remix INTEGER, has_youtube INTEGER,
-    has_soundcloud INTEGER, has_spotify INTEGER
+    has_soundcloud INTEGER, has_spotify INTEGER,
+    data_type INTEGER, cue_seconds INTEGER, play_cue_seconds INTEGER,
+    suggester_guest_id INTEGER, suggester_kind TEXT, track_page_path TEXT,
+    track_id_numeric INTEGER, is_id_remix INTEGER, has_apple INTEGER,
+    has_affiliate INTEGER, has_live_video INTEGER,
+    poll_correct INTEGER, poll_not_correct INTEGER, poll_unsure INTEGER,
+    labels_json TEXT, google_search_url TEXT
+);
+CREATE TABLE IF NOT EXISTS set_notices (
+    set_id TEXT NOT NULL, row_index INTEGER NOT NULL,
+    row_type TEXT, text TEXT, links_json TEXT, icons_json TEXT,
+    parsed_json TEXT, parsed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (set_id, row_index)
+);
+CREATE TABLE IF NOT EXISTS set_slot_id_meta (
+    set_id TEXT NOT NULL, row_index INTEGER NOT NULL, tlp_id INTEGER,
+    is_id INTEGER DEFAULT 0, protected INTEGER DEFAULT 0, rbcst INTEGER DEFAULT 0,
+    watchers INTEGER, presave_count INTEGER,
+    parsed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (set_id, row_index)
+);
+CREATE TABLE IF NOT EXISTS track_id_links (
+    set_id TEXT NOT NULL, tlp_id INTEGER NOT NULL,
+    linker_user_name TEXT, linker_user_href TEXT, linker_user_followers TEXT,
+    linked_tracklist_href TEXT, linked_tracklist_text TEXT,
+    parsed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (set_id, tlp_id, linker_user_name, linked_tracklist_href)
 );
 """
 
@@ -241,12 +267,13 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
     conn.commit()
 
     log.info("clearing destination tables for clean rebuild")
-    # Note: track_id_links is populated by a separate focused pass
-    # (`tokenizer.id_links` — to be written), so we leave its rows intact here.
     conn.executescript("""
         DELETE FROM track_metadata;
         DELETE FROM set_track_slots;
         DELETE FROM track_suggestions;
+        DELETE FROM set_notices;
+        DELETE FROM set_slot_id_meta;
+        DELETE FROM track_id_links;
     """)
     conn.commit()
 
