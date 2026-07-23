@@ -1,12 +1,21 @@
 # Alignment — canonical status (single source of truth)
 
-> **Numbers regenerated 2026-07-19 at commit `ce3b285`** (§1–§2 re-run after
-> canonical BB11/BB12 Ableton GT regeneration) via the command block in
-> §Regeneration below. §3–§4 are explicitly carried, not silently presented as
-> rerun. **This doc owns every current alignment headline number.**
-> Other docs cite it; they do not re-state numbers. If a number here is stale,
-> re-run §Regeneration — do not hand-edit. Drift found while building this doc is
-> logged in [alignment_status_corrections_20260711.md](alignment_status_corrections_20260711.md).
+> **Numbers regenerated 2026-07-23 (RT1) at commit `37e1d8a`** on the canonical
+> `_lt` timelines scored against the **de-poisoned (post-Crush) GT**, via
+> §Regeneration. §3–§4 carried, not rerun. **This doc owns every current
+> alignment headline number.** Other docs cite it; they do not re-state numbers.
+> If a number here is stale, re-run §Regeneration — do not hand-edit.
+>
+> **⚠ Not comparable to the 2026-07-19 figures — two methodology changes moved
+> every headline:** (a) the GT is now **de-poisoned** (Crush #15), so identity is
+> no longer inflated by crediting the aligner for matching *wrong* bindings —
+> honest identity is **51%/61%**, not 82%/84%; (b) the scorecard is **form-centric
+> (RT1)** — a GT appearance no predicted span covers now counts as full recall
+> loss (`unrecovered_form`), and totals are audible-weighted (the old 11959 s was
+> envelope-inflated). The `_lt` timelines themselves are the pre-Crush July
+> predictions, scored honestly against corrected GT; a fresh `infer` on
+> de-poisoned candidates (potentially higher) is a separate on-cluster step.
+> Prior drift log: [alignment_status_corrections_20260711.md](alignment_status_corrections_20260711.md).
 
 **Set ids:** **BB11 = `2nvzlh2k`** (Two Friends – Big Bootie Mix *Episode 11*),
 **BB12 = `1fsnxchk`** (*Volume 12*). Only two GT sets exist; generalization
@@ -28,39 +37,47 @@ strict **and** fiber-aware; never a single scalar.
 
 ---
 
-## 1. Headline (regenerated on `_lt`, 2026-07-19)
+## 1. Headline (regenerated on `_lt`, 2026-07-23 — de-poisoned GT + RT1)
 
 | | BB11 (`2nvzlh2k`) | BB12 (`1fsnxchk`) |
 |---|---|---|
-| **Identity** (span recording correct) | 123/150 (82%) | 127/152 (84%) |
-| **set_start** placement, median / <15 s | 7.1 s / 65% | 5.1 s / 71% |
-| ref-offset MAE, straight clips (median / p90) | 12.1 s / 142.0 s | 22.9 s / 123.4 s |
-| **Trajectory — multiseg+loop headline** (strict → fiber-aware) | **28% → 44%** | **30% → 50%** |
-| &nbsp;&nbsp;stem: acappella | 15% → 32% | 14% → 37% |
-| &nbsp;&nbsp;stem: regular | 30% → 53% | 43% → 65% |
-| &nbsp;&nbsp;stem: instrumental | 32% → 55% | 24% → 48% |
-| GT-seconds lost (corpus, both sets combined) | **74%** (8909 / 11959 s) | ← both sets |
+| **Identity** (span recording correct) | 68/134 (**51%**) | 91/148 (**61%**) |
+| **set_start** placement, median / <15 s | 6.8 s / 62% | 5.1 s / 67% |
+| ref-offset MAE, straight clips (median / p90) | 8.0 s / 107.5 s | 26.3 s / 123.4 s |
+| **Trajectory — multiseg+loop headline** (strict → fiber-aware) | **31% → 48%** | **26% → 46%** |
+| &nbsp;&nbsp;stem: acappella | 20% → 42% | 12% → 33% |
+| &nbsp;&nbsp;stem: regular | 27% → 51% | 49% → 66% |
+| &nbsp;&nbsp;stem: instrumental | 28% → 51% | 21% → 48% |
+| GT-seconds lost (corpus, both sets combined) | **76%** (5896 / 7764 s) | ← both sets |
+| GT-form coverage (unmatched appearances, RT1) | 5 forms / 187 s | 12 forms / 215 s |
 
-**Loss attribution** (binding cause, seconds-weighted, both sets, `_lt`):
+**Identity is the headline mover:** the prior 82%/84% was measured against poisoned
+GT and credited the aligner for matching *wrong* bindings. On de-poisoned GT the
+July `_lt` predictions land at **51%/61%** — the honest ceiling for those
+predictions. Placement and trajectory shifted only modestly (both directions).
+
+**Loss attribution** (binding cause, seconds-weighted, both sets, `_lt`, RT1 form-centric):
 
 | cause | % of loss | note |
 |---|---|---|
-| decode-residual | **39%** | "which chorus" repeat-instance wall |
+| decode-residual | **36%** | "which chorus" repeat-instance wall |
 | placement | **30%** | co-equal binding wall |
 | mis-route | 11% | stale `set_track_slots` stem axis (score from GT stem, not timeline) |
-| identity | 8% | |
-| tempo/octave | 5% | |
+| identity | 7% | |
+| **unrecovered_form** | **6%** | RT1: GT appearance no predicted span covers (form-centric recall loss) |
 | instance-ambiguity | 4% | |
 | loop-instance | 3% | |
+| tempo/octave | 2% | |
 
-Acappella is **42%** of corpus mix-seconds and the worst axis; acappella-multiseg
-is **18%** of all loss.
+Acappella is **44%** of corpus mix-seconds and the worst axis; acappella-multiseg
+is **19%** of all loss. The new `unrecovered_form` bucket (6%) is acappella-heavy —
+chopped/reprised vocal appearances the one-span-per-slot timeline never represented.
 
 ---
 
 ## 2. The strict → fiber-aware gap (named contribution, not a caveat)
 
-Fiber-aware − strict is **+16 pp (BB11) / +20 pp (BB12)** on the regenerated
+Fiber-aware − strict is **+17 pp (BB11) / +20 pp (BB12)** on the regenerated
 multiseg+loop headline. This gap *is* the
 "which-instance" residual: the decoder lands on the correct repeated content
 (right chorus) but not always the exact occurrence. It is externally
@@ -72,7 +89,7 @@ lift is a finding, not a footnote** — under-crediting fibers as a "scoring uti
 the original trigger for this overhaul (corrections C5).
 
 **Timeline caveat:** the carried base-classical race board reports **45 (BB12) /
-40 (BB11)**, while regenerated `_lt` reports **50 / 44**. Because the race board
+40 (BB11)**, while regenerated `_lt` reports **46 / 48**. Because the race board
 was not rerun on the corrected GT, treat this cross-timeline comparison as
 provisional; trust the within-run fiber lift above.
 
@@ -117,7 +134,7 @@ default target = agentic placement + gated-ml decode.
 |---|---|---|---|---|
 | landmark fingerprint | wired | placement (diagonal offset) | localizes diagonal 0.2 s / 76%; gate `--fp-placement-gate-s 90` | module CLAUDE.md |
 | HuBERT stem-placement | wired | acappella set_start | `--stem-placement`; BB12 <15 s 61→76% | [project_per_stem_hubert_setstart] |
-| MERT | wired | **identity only** (cannot localize) | 83–84% span identity | module CLAUDE.md |
+| MERT | wired | **identity only** (cannot localize) | 51–61% span identity (honest, de-poisoned GT; was 82–84% on poisoned GT) | module CLAUDE.md |
 | chroma matched-filter | wired | instrumental ref-offset | weak axis (set_start-under-crosstalk) | — |
 | lyrics-align | wired | acappella ref-decode | ~50% coverage; loses loops; fuse not replace | [project_lyrics_ref_decode] |
 | looptrace (`_lt`) | wired | acappella loop-collapse decode | source-of-truth timeline; **regresses BB12 fiber headline (C4)** | looptrace/NOTES.md |
