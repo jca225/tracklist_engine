@@ -42,7 +42,7 @@ _REPO = Path(__file__).resolve().parents[3]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from labeling.ground_truth import schema
+from labeling import schema
 from workspaces.alignment_prototype.lyrics_align import (
     _bigram_times,
     _norm,

@@ -103,6 +103,12 @@ class ParsedClip:
     warp: WarpMarkers
     vol_points: tuple[tuple[float, float], ...] = ()
     is_warped: bool = True
+    # Static track-fader gain (Mixer/Volume/Manual), linear (1.0 = unity/0 dB).
+    # The BASELINE level when the track has NO volume automation; when vol_points
+    # is non-empty the envelope overrides it (Live's rule) and this is ignored.
+    # Folded into the exported gain curve so a track parked below unity no longer
+    # reads as fully audible.
+    track_gain: float = 1.0
     # Why this clip produces no audio, if any: "track-deactivated" (Track
     # Activator off), "clip-disabled" (clip deactivated), "track-fader-zero"
     # (static fader at 0). Empty = audible. The reader stays total — silenced

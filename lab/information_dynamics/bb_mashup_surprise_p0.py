@@ -364,7 +364,7 @@ def _load_set_data(
     yaml_path: pathlib.Path,
     set_dir: pathlib.Path,
 ) -> SetData:
-    from labeling.ground_truth.schema import load as gt_load
+    from labeling.schema import load as gt_load
 
     r = gt_load(yaml_path)
     if not r.is_ok():

@@ -80,7 +80,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.eval_set == "2nvzlh2k":
             print(
                 "BB11 GT not exported yet. When the .als labeling is done, run:\n"
-                "  venvs/audio/bin/python -m labeling.export_als_to_gt "
+                "  venvs/audio/bin/python -m labeling.extract.export_als_to_gt "
                 "--als ~/aligning/2nvzlh2k__*/'BB11 align.als' --set-dir ~/aligning/2nvzlh2k__*/\n"
                 "then place/point --gt at labeling/fixtures/bb11_ground_truth.yaml",
                 file=sys.stderr,

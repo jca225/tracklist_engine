@@ -24,7 +24,7 @@ from __future__ import annotations
 import statistics
 from pathlib import Path
 
-from labeling.ground_truth.schema import load
+from labeling.schema import load
 
 REPO = Path(__file__).resolve().parents[3]
 FIX = REPO / "labeling" / "fixtures"

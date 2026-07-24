@@ -96,7 +96,7 @@ Pi must be at `507b08d+`: `ssh pi-storage 'cd ~/tracklist_engine && git pull'`.
 | Add stem | `scripts/acquire_variant.py URL --role acappella --track-id …` (+ `--no-promote-reference` default off promote) |
 | Replace stem | `scripts/replace_stem_audio.py --track-audio-id … --url … --reason …` |
 | Wrong version | `scripts/replace_track_audio.py` |
-| Pull | `labeling/pull_set_for_alignment.py <set_id>` |
+| Pull | `labeling/acquire/pull_set_for_alignment.py <set_id>` |
 
 ---
 

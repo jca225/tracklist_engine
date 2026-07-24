@@ -16,7 +16,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from labeling.build_content_catalog import build_catalog
+from labeling.identity.build_content_catalog import build_catalog
 
 
 def _db(tmp_path: Path) -> sqlite3.Connection:

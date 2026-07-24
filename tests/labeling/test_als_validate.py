@@ -5,7 +5,7 @@ from __future__ import annotations
 from lxml import etree
 
 from labeling.als.validate import has_errors, validate_session
-from tests.labeling.synth_session import session_root, session_xml
+from tests.labeling.synth_session import LayerSpec, session_root, session_xml
 
 
 def _codes(diags):
@@ -76,3 +76,20 @@ def test_validator_total_on_hostile_root():
     # not a session at all — must return diagnostics, never raise
     diags = validate_session(etree.fromstring(b"<NotAbleton><Junk/></NotAbleton>"))
     assert has_errors(diags)  # version-unknown error at minimum
+
+
+def test_clip_local_envelope_is_warning():
+    # The GT reader captures only the TRACK fader; a clip-LOCAL automation
+    # envelope (per-clip gain/pan drawn inside the clip) would silently escape.
+    # Real sessions never use one — the fence fires if that ever changes.
+    root = session_root(layer_specs=(LayerSpec("clip-env", clip_envelope=True),))
+    diags = validate_session(root)
+    assert "clip-envelope-ignored" in _codes(diags)
+    assert not has_errors(diags)  # a warning, not a hard error
+
+
+def test_empty_clip_envelope_does_not_warn():
+    # The empty <Envelopes><Envelopes/></Envelopes> block every real clip carries
+    # must NOT trip the fence.
+    root = session_root(layer_specs=(LayerSpec("plain"),))
+    assert "clip-envelope-ignored" not in _codes(validate_session(root))

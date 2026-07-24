@@ -10,7 +10,7 @@ import sqlite3
 
 from core.result import Err, Ok, Result
 from eda.alignment.boundaries import gt_section_starts_s, score_boundaries, seconds_to_bar_indices
-from labeling.ground_truth.schema import GroundTruthSet, load
+from labeling.schema import GroundTruthSet, load
 
 
 @dataclass(frozen=True)

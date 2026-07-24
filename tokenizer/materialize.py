@@ -41,10 +41,11 @@ from tokenizer.identity_axes import (
     scrape_claimed_version,
 )
 from tokenizer.track_tokenizer import parse_track_row as parse_track_main
-from tokenizer.track_tokenizer import TrackRow
 from tokenizer.suggestion_tokenizer import parse_suggestion_row
 from tokenizer.text_tokenizer import parse_bItmH_row
 from tokenizer.id_tokenizer import parse_track_row as parse_id_row
+from tokenizer.model import TrackRow  # canonical surface (re-export)
+from tokenizer import model
 
 log = logging.getLogger("tokenizer.materialize")
 
@@ -314,30 +315,15 @@ def _slot_label(tr: TrackRow) -> str | None:
     return None
 
 
-def _flush_slots(conn: sqlite3.Connection, buf: list[tuple]) -> None:
+def _flush_slots(conn: sqlite3.Connection, buf: "list[model.SetTrackSlotRow]") -> None:
     if not buf:
         return
-    cols = {r[1] for r in conn.execute("PRAGMA table_info(set_track_slots)")}
-    if "layer_role" in cols:
-        conn.executemany(
-            "INSERT OR REPLACE INTO set_track_slots ("
-            "set_id, row_index, tlp_id, recording_id, track_id, source, slot_label, "
-            "is_concurrent, cue_seconds, cue_time_seconds, claimed_version, "
-            "claimed_stem, claimed_variant, full_name, title, artists_json, "
-            "duration_seconds, layer_role, constituents_json"
-            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            buf,
-        )
-    else:
-        legacy = [row[:17] for row in buf]
-        conn.executemany(
-            "INSERT OR REPLACE INTO set_track_slots ("
-            "set_id, row_index, tlp_id, recording_id, track_id, source, slot_label, "
-            "is_concurrent, cue_seconds, cue_time_seconds, claimed_version, "
-            "claimed_stem, claimed_variant, full_name, title, artists_json, duration_seconds"
-            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            legacy,
-        )
+    cols = model.columns(model.SetTrackSlotRow)
+    conn.executemany(
+        f"INSERT OR REPLACE INTO set_track_slots ({','.join(cols)}) "
+        f"VALUES ({','.join('?' * len(cols))})",
+        [model.as_row(r) for r in buf],
+    )
     conn.commit()
 
 
@@ -362,6 +348,7 @@ CREATE TABLE IF NOT EXISTS set_track_slots (
     claimed_stem TEXT NOT NULL DEFAULT 'regular',
     claimed_variant TEXT NOT NULL DEFAULT 'regular',
     full_name TEXT, title TEXT, artists_json TEXT, duration_seconds INTEGER,
+    layer_role TEXT, constituents_json TEXT,
     parsed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (set_id, row_index)
 );
@@ -376,7 +363,8 @@ CREATE TABLE IF NOT EXISTS track_suggestions (
     track_id_numeric INTEGER, is_id_remix INTEGER, has_apple INTEGER,
     has_affiliate INTEGER, has_live_video INTEGER,
     poll_correct INTEGER, poll_not_correct INTEGER, poll_unsure INTEGER,
-    labels_json TEXT, google_search_url TEXT
+    labels_json TEXT, google_search_url TEXT,
+    parsed_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS set_notices (
     set_id TEXT NOT NULL, row_index INTEGER NOT NULL,
@@ -430,7 +418,7 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
     log.info("streaming %s rows from dj_set_rows", f"{total:,}")
 
     metadata = _MetadataAccumulator()
-    slot_buf: list[tuple] = []
+    slot_buf: list[model.SetTrackSlotRow] = []
     sug_buf: list[tuple] = []
     notice_buf: list[tuple] = []
     id_meta_buf: list[tuple] = []
@@ -505,28 +493,30 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
                             claimed_stem=claimed_stem,
                         )
                         slot_buf.append(
-                            (
-                                sid,
-                                int(row["row_index"]),
-                                tr.data_id,
-                                tr.track_key,
-                                tr.track_key,
-                                source,
-                                label,
-                                int(tr.is_concurrent),
-                                tr.cue_seconds,
-                                tr.cue_time_seconds,
-                                scrape_claimed_version(tr.version_tag),
-                                claimed_stem,
-                                derive_claimed_variant(tr.full_name),
-                                tr.full_name,
-                                tr.title,
-                                json.dumps(list(tr.artists), ensure_ascii=False)
-                                if tr.artists
-                                else None,
-                                tr.duration_seconds,
-                                layer_role,
-                                None,
+                            model.SetTrackSlotRow(
+                                set_id=sid,
+                                row_index=int(row["row_index"]),
+                                tlp_id=tr.data_id,
+                                recording_id=tr.track_key,
+                                track_id=tr.track_key,
+                                source=source,
+                                slot_label=label,
+                                is_concurrent=int(tr.is_concurrent),
+                                cue_seconds=tr.cue_seconds,
+                                cue_time_seconds=tr.cue_time_seconds,
+                                claimed_version=scrape_claimed_version(tr.version_tag),
+                                claimed_stem=claimed_stem,
+                                claimed_variant=derive_claimed_variant(tr.full_name),
+                                full_name=tr.full_name,
+                                title=tr.title,
+                                artists_json=(
+                                    json.dumps(list(tr.artists), ensure_ascii=False)
+                                    if tr.artists
+                                    else None
+                                ),
+                                duration_seconds=tr.duration_seconds,
+                                layer_role=layer_role,
+                                constituents_json=None,
                             )
                         )
                         counts["slot"] += 1

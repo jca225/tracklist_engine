@@ -25,7 +25,7 @@ if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
 from core.result import Err  # noqa: E402
-from labeling.ground_truth.schema import save  # noqa: E402
+from labeling.schema import save  # noqa: E402
 
 from .catalog import load_catalog  # noqa: E402
 from .labels import scenario_to_gt  # noqa: E402

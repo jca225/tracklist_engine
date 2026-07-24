@@ -36,7 +36,7 @@ Output: ``workspaces/alignment_prototype/out/<set_id>_probe_votes.json``
 Cache prerequisites (BB12 = 1fsnxchk)
 ---------------------------------------
 1. ``~/aligning/1fsnxchk__*/{mix.m4a,mix_vocals.flac,mix_instrumental.flac}``
-   — the set-level aligning audio pulled by ``labeling/pull_set_for_alignment.py``.
+   — the set-level aligning audio pulled by ``labeling/acquire/pull_set_for_alignment.py``.
 2. ``~/aligning/1fsnxchk__*/manifest.json``
    — per-track rows with ``local_path`` and ``stems`` (Demucs output paths).
 3. Per-probe fingerprint cache at

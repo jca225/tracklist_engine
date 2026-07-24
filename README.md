@@ -128,9 +128,9 @@ Canonical object storage, also on pi-storage: track audio at `/mnt/storage/objec
 
 How a set becomes training data:
 
-1. **Pull** — `labeling/pull_set_for_alignment.py` rsyncs the mix + reference tracks + stems into `~/aligning/<set>/` on the Mac.
+1. **Pull** — `labeling/acquire/pull_set_for_alignment.py` rsyncs the mix + reference tracks + stems into `~/aligning/<set>/` on the Mac.
 2. **Align in Ableton** — a human places each track's audio against the mix in a `.als` session, warping to match. `labeling/als/` is a bidirectional `.als` codec (parse ∘ print = identity), so sessions are both a labeling UI and a machine-readable format.
-3. **Write back** — `labeling/write_back_ground_truth.py` parses the session into `set_ground_truth`.
+3. **Write back** — `labeling/commit/write_back_ground_truth.py` parses the session into `set_ground_truth`.
 
 GT status: **BB11 and BB12 are done** and are the evaluation corpus. Rule of thumb from hand-aligning: acappella placements are precise, instrumentals looser — the label heuristics live in `docs/` and inform how the aligner should weight evidence per stem.
 

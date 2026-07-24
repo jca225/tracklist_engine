@@ -6,20 +6,20 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
-from labeling.reconcile_aligning_manifest import reconcile_manifest
+from labeling.acquire.reconcile_aligning_manifest import reconcile_manifest
 
 
 def _patch_pi(monkeypatch, slots: list[dict]) -> None:
     monkeypatch.setattr(
-        "labeling.reconcile_aligning_manifest.ssh_sqlite",
+        "labeling.acquire.reconcile_aligning_manifest.ssh_sqlite",
         lambda _sql: slots,
     )
     monkeypatch.setattr(
-        "labeling.reconcile_aligning_manifest.fetch_tracks",
+        "labeling.acquire.reconcile_aligning_manifest.fetch_tracks",
         lambda _sid: [],
     )
     monkeypatch.setattr(
-        "labeling.reconcile_aligning_manifest.evaluate_set_inventory",
+        "labeling.acquire.reconcile_aligning_manifest.evaluate_set_inventory",
         lambda _sid, _ssh: [],
     )
 
@@ -158,7 +158,7 @@ def test_lux_omega_proxy_uses_mix_instrumental(tmp_path: Path, monkeypatch):
             }
         ],
     )
-    from labeling.reconcile_aligning_manifest import (
+    from labeling.acquire.reconcile_aligning_manifest import (
         PROXY_SLOT_AUDIO,
         reconcile_manifest,
     )
@@ -244,7 +244,7 @@ def test_collision_report_flags_orphan_and_manifest(tmp_path: Path):
         )
     )
 
-    from labeling.reconcile_aligning_manifest import scan_slot_collisions
+    from labeling.acquire.reconcile_aligning_manifest import scan_slot_collisions
 
     report = scan_slot_collisions(set_dir)
     assert len(report.groups) == 1
@@ -281,7 +281,7 @@ def test_inventory_enrichment_warning_on_ssh_failure(tmp_path: Path, monkeypatch
         raise OSError("ssh down")
 
     monkeypatch.setattr(
-        "labeling.reconcile_aligning_manifest.evaluate_set_inventory",
+        "labeling.acquire.reconcile_aligning_manifest.evaluate_set_inventory",
         _ssh_down,
     )
 

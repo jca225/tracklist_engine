@@ -47,6 +47,7 @@ from labeling.als.semantics import (
     audible_span,
     clip_gain_breakpoints,
     envelope_value,
+    linear_to_db,
     parse_master_tempo,
     select_arrangement_mapper,
     split_clip_at_mix_span_edges,
@@ -55,7 +56,12 @@ from labeling.als.semantics import (
     tempo_ratio,
 )
 from labeling.als.tags import strip_user_tags
-from labeling.als.write import write_locators, write_tempo_envelope
+from labeling.als.write import (
+    write_clip_names,
+    write_clip_source_paths,
+    write_locators,
+    write_tempo_envelope,
+)
 
 __all__ = [
     # models
@@ -83,6 +89,7 @@ __all__ = [
     "audible_from_curve",
     "audible_span",
     "clip_gain_breakpoints",
+    "linear_to_db",
     "envelope_value",
     "parse_master_tempo",
     "select_arrangement_mapper",
@@ -102,6 +109,8 @@ __all__ = [
     # tags
     "strip_user_tags",
     # write
+    "write_clip_names",
+    "write_clip_source_paths",
     "write_locators",
     "write_tempo_envelope",
 ]

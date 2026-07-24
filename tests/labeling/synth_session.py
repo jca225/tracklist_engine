@@ -27,6 +27,10 @@ class LayerSpec:
     speaker_on: bool = True
     volume_manual: float = 1.0
     clip_disabled: bool = False
+    # Draw a clip-LOCAL automation envelope inside the AudioClip (the per-clip
+    # gain/pan the track-fader reader ignores) — used only by the validate fence
+    # test. Empty by default, matching every real labeling session.
+    clip_envelope: bool = False
 
 
 def _clip_xml(
@@ -37,6 +41,7 @@ def _clip_xml(
     loop_start: float = 0.0,
     warp_points: tuple[tuple[float, float], ...] = ((0.0, 0.0), (64.0, 32.0)),
     disabled: bool = False,
+    clip_envelope: bool = False,
 ) -> str:
     warps = "".join(
         f'<WarpMarker Id="{i}" SecTime="{s}" BeatTime="{b}"/>'
@@ -44,6 +49,17 @@ def _clip_xml(
     )
     loop_end = loop_start + (arr_end - arr_start)
     disabled_el = f'<Disabled Value="{"true" if disabled else "false"}"/>'
+    # Live nests clip-local automation under <Envelopes><Envelopes>…; the empty
+    # form (real sessions) is <Envelopes><Envelopes/></Envelopes>.
+    if clip_envelope:
+        envelopes = (
+            "<Envelopes><Envelopes><AutomationEnvelope><Automation><Events>"
+            '<FloatEvent Id="0" Time="0" Value="1"/>'
+            '<FloatEvent Id="1" Time="8" Value="0"/>'
+            "</Events></Automation></AutomationEnvelope></Envelopes></Envelopes>"
+        )
+    else:
+        envelopes = "<Envelopes><Envelopes/></Envelopes>"
     return f"""
       <AudioClip Id="{idx}" Time="{arr_start}">
         <CurrentStart Value="{arr_start}"/>
@@ -56,6 +72,7 @@ def _clip_xml(
         <Name Value="clip{idx}"/>
         <PitchCoarse Value="0"/>
         <PitchFine Value="0"/>
+        {envelopes}
         <SourceContext>
           <SourceContext Id="0">
             <OriginalFileRef>
@@ -157,6 +174,7 @@ def session_xml(
                     16.0 + 8 * i,
                     48.0 + 8 * i,
                     disabled=spec.clip_disabled,
+                    clip_envelope=spec.clip_envelope,
                 ),
                 VOL_TARGET_ID_BASE + i,
                 speaker_on=spec.speaker_on,

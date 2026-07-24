@@ -1,18 +1,18 @@
 ---
 name: alignment-pull
-description: Pull or refresh a DJ set's mix + reference tracks + stems into ~/aligning/ on the Mac, ready for ground-truth alignment in Ableton. Wraps labeling/pull_set_for_alignment.py with knowledge of the consistency model (rsync delta refresh, --prune for orphans), the annotator rename convention ([NNNbpm KK] tags are user territory, never pruned), and downstream tagging (tag_aligning_folder.py to inject BPM+key into M4A tags). Use when the user wants to set up alignment for a set, refresh an existing aligning folder, prune orphan files, list candidate sets, or tag a pulled folder's audio with Essentia features. Triggers on phrases like "pull set X for alignment", "set up aligning for X", "refresh aligning folder", "prune the aligning folder", "tag the aligning audio".
+description: Pull or refresh a DJ set's mix + reference tracks + stems into ~/aligning/ on the Mac, ready for ground-truth alignment in Ableton. Wraps labeling/acquire/pull_set_for_alignment.py with knowledge of the consistency model (rsync delta refresh, --prune for orphans), the annotator rename convention ([NNNbpm KK] tags are user territory, never pruned), and downstream tagging (labeling/prep/tag_aligning_folder.py to inject BPM+key into M4A tags). Use when the user wants to set up alignment for a set, refresh an existing aligning folder, prune orphan files, list candidate sets, or tag a pulled folder's audio with Essentia features. Triggers on phrases like "pull set X for alignment", "set up aligning for X", "refresh aligning folder", "prune the aligning folder", "tag the aligning audio".
 ---
 
 # Alignment Pull Workflow
 
-The `~/aligning/<set>/` folder is a **read-replica of pi-storage**: only `pull_set_for_alignment.py` writes to it, pi-storage's DB is the source of truth, and the folder is ephemeral (delete it once alignment data has been written back).
+The `~/aligning/<set>/` folder is a **read-replica of pi-storage**: only `labeling/acquire/pull_set_for_alignment.py` writes to it, pi-storage's DB is the source of truth, and the folder is ephemeral (delete it once alignment data has been written back).
 
 ## The four operations
 
 ### 1. List recent candidate sets
 
 ```bash
-python labeling/pull_set_for_alignment.py --list-recent
+python labeling/acquire/pull_set_for_alignment.py --list-recent
 ```
 
 Use this when the user hasn't given a specific `set_id` and wants to browse what's ready to align.
@@ -20,7 +20,7 @@ Use this when the user hasn't given a specific `set_id` and wants to browse what
 ### 2. Initial pull (or first-time delta refresh)
 
 ```bash
-python labeling/pull_set_for_alignment.py <set_id>
+python labeling/acquire/pull_set_for_alignment.py <set_id>
 ```
 
 This creates `~/aligning/<set_id>__<sanitized-title>/` with:
@@ -36,12 +36,12 @@ Re-running the same command is a **delta refresh** (rsync archive mode), only tr
 Use when pi-storage has diverged by *removal* — re-resolved track_audio_id, replaced audio with different codec, regenerated stems with a different subdir name. Without `--prune`, stale local files accumulate silently.
 
 ```bash
-python labeling/pull_set_for_alignment.py <set_id> --prune
+python labeling/acquire/pull_set_for_alignment.py <set_id> --prune
 ```
 
 **Always preview first:**
 ```bash
-python labeling/pull_set_for_alignment.py <set_id> --prune --dry-run
+python labeling/acquire/pull_set_for_alignment.py <set_id> --prune --dry-run
 ```
 
 The prune is scoped — it only deletes audio-extension files inside `tracks/` and inside stem subdirs the current plan owns. It will NOT touch:
@@ -57,7 +57,7 @@ This is gated behind `--prune` so a fat-finger can't wipe in-flight alignment wo
 After pulling, run the tagger so Ableton's clip browser shows tempo and Camelot key:
 
 ```bash
-python labeling/tag_aligning_folder.py ~/aligning/<set_id>__<sanitized-title>
+python labeling/prep/tag_aligning_folder.py ~/aligning/<set_id>__<sanitized-title>
 ```
 
 The tagger queries pi-storage's `track_audio_features` for BPM + Camelot key + feature comment, then writes them to each M4A's iTunes tags. Files without Essentia rows are skipped (and flagged with `[no-features]` rename later if the annotator does the rename pass).
@@ -77,11 +77,11 @@ These renames are **one-sided, Mac-only mutations** — they never propagate bac
 ## Workflow stages a typical alignment goes through
 
 1. `--list-recent` → pick a set
-2. `pull_set_for_alignment.py <set_id>` → initial pull
-3. `tag_aligning_folder.py ~/aligning/<set>` → inject BPM + key into M4A tags
+2. `labeling/acquire/pull_set_for_alignment.py <set_id>` → initial pull
+3. `labeling/prep/tag_aligning_folder.py ~/aligning/<set>` → inject BPM + key into M4A tags
 4. Drag into Ableton, do the alignment work
-5. (sometime later) `pull_set_for_alignment.py <set_id> --prune --dry-run` then `--prune` → refresh if pi-storage state has changed
-6. Write back GT via `python -m labeling.write_back_ground_truth --db ... --yaml ...`, then delete the folder
+5. (sometime later) `labeling/acquire/pull_set_for_alignment.py <set_id> --prune --dry-run` then `--prune` → refresh if pi-storage state has changed
+6. Write back GT via `python -m labeling.commit.write_back_ground_truth --db ... --yaml ...`, then delete the folder
 
 ## Phase-cancel instrumental extraction
 
@@ -99,4 +99,4 @@ cancel.py adaptive --smooth 0.5 --fft 4096 --cap 4
 - ❌ Manually renaming files back to canonical names ("cleaning up" the annotator's tags). The tags are intentional — Ableton shows them in the browser, dramatically speeding alignment.
 - ❌ Treating the `~/aligning/<set>/` folder as a permanent archive. It's ephemeral; delete after write-back.
 - ❌ Editing `manifest.json` by hand. It's regenerated on every pull.
-- ❌ Writing alignment results back to local `data/db/music_database.db` — that's the stale dev copy. Write-back goes to pi-storage via `labeling.write_back_ground_truth`.
+- ❌ Writing alignment results back to local `data/db/music_database.db` — that's the stale dev copy. Write-back goes to pi-storage via `labeling.commit.write_back_ground_truth`.

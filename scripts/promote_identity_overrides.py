@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Promote labeling/identity_overrides YAML into set_track_slots + ledger."""
+"""Promote labeling/identity/overrides YAML into set_track_slots + ledger."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 
 REPO = Path(__file__).resolve().parent.parent
-OVERRIDES = REPO / "labeling" / "identity_overrides"
+OVERRIDES = REPO / "labeling" / "identity" / "overrides"
 
 
 def main() -> int:
