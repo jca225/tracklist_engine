@@ -84,10 +84,42 @@ So: ~2/4 are reference-quality (ingest); ~2/4 are combiner losses (co-train).
 3. Fusion ceiling with these LFs = **96%**; past it = learned combiner
    (co-train) + reference quality + longer-context sensor — **not** a new probe.
 
+## Cross-set LOSO (BB11 ↔ BB12) — measured 2026-07-24
+
+Ran BB12's 101 acappella spans (94-ref pool) through the same 5-LF pipeline and
+trained a per-candidate label-model (logistic regression, class-balanced, ~18
+set-agnostic features: per-LF within-span z-score / normalized-rank / is-top1 +
+cross-LF agreement) on one set, tested on the other.
+
+| train→test | learned combiner | borda(mert,fp_pit) | best single LF | oracle-of-5 ceiling |
+|---|---|---|---|---|
+| BB11→BB12 | **85%** | 83% | 77% (fp_pit) | **88%** |
+| BB12→BB11 | **95%** | 96% | 92% (MERT-L3) | **99%** |
+
+Three findings:
+
+1. **The combiner transfers.** Trained on the *other* set it beats every single
+   LF on both held-out sets and does not collapse cross-set → identity-fusion is
+   set-agnostic (confirms the co-train hypothesis).
+2. **But it ≈ borda, not ≫ borda** (85 vs 83; 95 vs 96). Naive rank-fusion of the
+   two strong LFs is already near-optimal, so *learning* the combiner buys
+   robustness, not a big accuracy jump. This **revises the earlier "co-training
+   closes 92→96"**: with L3-MERT, borda already hits the ceiling on BB11.
+3. **The ceiling is the sensors/references, not the combiner.** BB12's oracle-of-5
+   ceiling is only **88%** — 12% of spans *no LF* reaches → LF/reference quality is
+   the bottleneck on harder sets. (L3 also raised BB11's ceiling 96%→**99%**.)
+
+**Surprise — MERT generalizes worse than BB11 implied:** MERT-L3 drops **92% (BB11)
+→ 68% (BB12)**, and on BB12 the pitch-fingerprint (76%) *beats* MERT. LF dominance
+**flips across sets**; the combiner absorbs the flip by reweighting. So "MERT is
+*the* identity sensor" (decision #20) is set-dependent — the combiner's robustness
+is what matters. Why BB12 is harder (contamination / separation quality / ref pool)
+is the open question.
+
 ## Caveats
 
-- n = 91, single set; hand-tuned combiners overfit — cross-set (co-train/LOSO)
-  is the honest next step.
+- Two sets only; the label-model is small-n but the *cross-set* eval is the honest
+  transfer test (train and test sets are disjoint).
 - fp pitch-normalization uses the labeled semitone (oracle); deployable fp needs
   blind pitch/key.
 - Sensor phase is closed (see [CLAUDE.md](CLAUDE.md)); this is an **eval** of the

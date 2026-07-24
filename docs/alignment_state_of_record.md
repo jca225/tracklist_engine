@@ -1,8 +1,10 @@
 # Alignment — State of Record (current best + settled decisions)
 
-> **As of 2026-07-24 @ `ded300f`** (see decision #20 — open-set acappella identity
-> works against a real candidate pool: MERT **L3** is the identity sensor, the
-> combiner is the lever; exercises #19's fix-path-1. Also #18/#19 — the "identity
+> **As of 2026-07-24 @ `70aea22`** (see decisions #20/#21 — open-set acappella
+> identity works against a real candidate pool and the combiner **transfers**
+> cross-set (BB11↔BB12 LOSO) but ≈ borda; the limit is now sensor/reference
+> quality, and MERT-L3 is set-dependent, not universal. Exercises #19's fix-path-1.
+> Also #18/#19 — the "identity
 > axis" measures the tokenizer claim, not the aligner; GT verified drift-free on
 > canonical; de-friction pass added timeline provenance + `make align-state`).
 > **Operation Crush has EXITED** (decision #15, soundness) and its **completeness
@@ -110,6 +112,25 @@ and co-training seam). Harness: `harness/`. Agentic loop: `agentic/`.
 ## 2. Settled decisions (append-only; status = SETTLED | SUPERSEDED-BY-#N)
 
 > Append new entries at the top. Never rewrite history — supersede it.
+
+**#21 — The open-set identity combiner TRANSFERS cross-set (BB11↔BB12 LOSO), but
+≈ borda, not ≫ it; the ceiling is the sensors/references, not the combiner —
+and MERT-L3 does NOT generalize as #20 implied.** `2026-07-24` · SETTLED
+(finding). Ran BB12's 101 acappella spans through the same 5-LF pipeline and
+trained a per-candidate label-model (class-balanced LR, set-agnostic features) on
+one set, tested on the other. **The combiner transfers** — trained on the *other*
+set it beats every single LF on both held-out sets (BB11→BB12 85% vs best-LF 77%;
+BB12→BB11 95% vs 92%) and does not collapse. **But it only ties/edges borda** (85
+vs 83; 95 vs 96), so *learning* the combiner buys robustness, not a big jump — this
+**refines #20's "co-training closes 92→96"**: with L3-MERT, borda already sits at
+the ceiling. **The real limit is the LF/reference ceiling:** BB12's oracle-of-5 is
+only ~88% (12% of spans no LF reaches) — sensor/reference quality caps harder sets.
+**Caveat on #20:** MERT-L3 identity is **set-dependent, not universal** — it drops
+sharply BB11→BB12 and on BB12 the pitch-fingerprint *beats* it; LF dominance flips
+across sets and the combiner's reweighting is what absorbs it. Open question: why
+BB12 is harder (contamination / separation quality / ref-pool). Numbers + method:
+[`open_set_acappella_identity_findings.md`](../workspaces/alignment_prototype/open_set_acappella_identity_findings.md)
+(§ Cross-set LOSO). Refines #20.
 
 **#20 — Open-set acappella identity works against a real candidate pool: MERT
 layer L3 (not L6) is the identity sensor, and the combiner — not new probes — is
@@ -362,15 +383,17 @@ from scorers. Dead ends live in the EXPERIMENTS ledger.
   Open: calibrate per-probe confidence on BB GT before accepting pseudo-labels.
 - **PWS phase-1b continuous lane** remains unmerged and is a fusion fallback,
   not the primary placement/structure lever.
-- **Open-set acappella identity → learn the combiner cross-set (decision #20).**
-  The single-set demonstration reached the LF ceiling with MERT-L3 + pitch-fp, but
-  hand-tuned fusion overfits at n=91. Next: run BB12's acappella spans through the
-  same LF pipeline and train the label-model on BB11+BB12 leave-one-set-out to
-  measure whether the combiner transfers (identity signals should, per LOSO). Two
-  parallel levers surfaced: (1) a *deployable* pitch estimate (key/BPM detection)
-  to replace the labeled-semitone oracle the fingerprint LF currently uses; (2)
-  **reference quality** — the derived `vocals.flac` refs are confusable attractors,
-  an ingest lever, not an aligner one. Code in scratchpad, promotable to `evals/`.
+- **Open-set acappella identity — LOSO measured (decision #21); now
+  sensor/reference-bound, not combiner-bound.** The combiner transfers cross-set
+  (BB11↔BB12) but only ties borda, and BB12's LF ceiling is ~88% — so the live
+  levers are no longer the combiner. Priorities: (1) **why MERT-L3 drops 92→68
+  cross-set** (contamination / RoFormer separation quality / ref-pool diversity) —
+  the biggest generalization gap; (2) **reference quality** — derived `vocals.flac`
+  refs are confusable attractors (ingest, not aligner); (3) a *deployable* pitch
+  estimate (key/BPM detection) to replace the labeled-semitone oracle in the fp LF;
+  (4) longer-context / robust-aggregation MERT for the long-span contamination
+  cases. Code in the `bb11_acap_id` / `bb12_acap_id` scratchpads, promotable to
+  `evals/`.
 - **Crush completeness Phase B — the immediate next build (decision #17 → #16).**
   Content-history hash ledger keyed `(recording_id, stem, variant, kind)` + never-drop-hash
   acquisition hooks + certificate-gated bind-across + FLAC-PCM/mdat payload keys + relink/
