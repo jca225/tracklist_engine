@@ -22,7 +22,7 @@ from eda.alignment.chroma_tokens import chroma_token_labels
 from eda.alignment.plot_trace import save_trace_plot
 from eda.alignment.stream_probe import probe_token_stream
 from eda.alignment.tokenize import fit_vq_kmeans
-from labeling.ground_truth.schema import GroundTruthSet, load
+from labeling.schema import GroundTruthSet, load
 
 
 def _sanitize_mert(mert: np.ndarray) -> np.ndarray:

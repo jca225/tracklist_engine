@@ -52,7 +52,7 @@ _REPO = Path(__file__).resolve().parents[3]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from labeling.export_als_to_gt import collect_kept_clip_rows  # noqa: E402
+from labeling.extract._shared import collect_kept_clip_rows  # noqa: E402
 from workspaces.alignment_prototype.path_decode import _gt_pieces  # noqa: E402
 
 # Decode tolerance: trajectory_acc credits a sample within 2.0 s of GT.

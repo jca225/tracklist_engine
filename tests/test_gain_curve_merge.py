@@ -14,7 +14,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from labeling.als.models import ParsedClip, WarpMarkers
-from labeling.export_als_to_gt import ClipRow, _merge_curves, _merge_slivers
+from labeling.extract._shared import ClipRow, _merge_curves, _merge_slivers
 
 # x on a 0.01 grid (gaps >> the 1e-4 dedup threshold) so only *exact* duplicate
 # set-times collide — keeps the float boundary out of the generic properties.

@@ -1,6 +1,6 @@
 """Robust stem-path resolution: manifest, audio_index, then unique disk fallback.
 
-`labeling/pull_set_for_alignment.py` writes each track's ``stems`` field ONCE at
+`labeling/acquire/pull_set_for_alignment.py` writes each track's ``stems`` field ONCE at
 pull time; stems separated AFTER the pull (re-stem, phase-cancel, the annotator's
 ``[NNNbpm KK]`` tagging) never get written back, so ``manifest.stems.{vocals,
 instrumental}`` drifts stale — measured: it records ~117 of 328 instrumental
@@ -22,7 +22,7 @@ import re
 import warnings
 from pathlib import Path
 
-from labeling.audio_index import has_audio_index, load_audio_index, lookup_stem
+from labeling.acquire.audio_index import has_audio_index, load_audio_index, lookup_stem
 
 # identity stem axis -> Demucs/Roformer stem file basename. 'regular' = the full
 # track (no stem file), so it is intentionally absent.

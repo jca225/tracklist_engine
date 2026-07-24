@@ -1,6 +1,6 @@
 # Hand-annotated ground-truth for 2nvzlh2k__Two Friends - Big Bootie Mix Episode 11
 #
-# Schema: see labeling/ground_truth/ (DSL).
+# Schema: see labeling/schema.py (DSL).
 set_id: 2nvzlh2k
 source: ableton_session
 annotated_by: user

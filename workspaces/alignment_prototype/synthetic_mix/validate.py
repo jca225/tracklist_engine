@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from core.result import Err, Ok
-from labeling.ground_truth.schema import GroundTruthSet, GroundTruthTrack, load
+from labeling.schema import GroundTruthSet, GroundTruthTrack, load
 
 _REPO = Path(__file__).resolve().parents[3]
 BB12_REFERENCE = _REPO / "labeling/fixtures/bb12_ground_truth.yaml"

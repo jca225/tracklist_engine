@@ -13,9 +13,9 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from labeling.reconcile_aligning_manifest import (  # noqa: E402
+from labeling.acquire.reconcile_aligning_manifest import (  # noqa: E402
     _ORPHAN_QUARANTINE_DIR,
     _find_set_dir,
     scan_slot_collisions,

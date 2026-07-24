@@ -11,7 +11,7 @@ Symlink (not copy): the FLAC stems are large and already on disk; Ableton on
 macOS follows symlinks. Re-runnable (skips links already present).
 
 Usage:
-    ./venvs/audio/bin/python labeling/add_separated_to_candidates.py \\
+    ./venvs/audio/bin/python labeling/acquire/add_separated_to_candidates.py \\
         ~/aligning/2nvzlh2k__...BB11  [--copy] [--dry-run]
 """
 

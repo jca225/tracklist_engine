@@ -8,7 +8,7 @@ for m4a / decoded-PCM MD5 for FLAC), plus demucs vocals/instrumental stems
 payload key so a re-encoded/re-containered stem still binds — spec v2.3/P11).
 
 stdlib only; run under pi's bare python3:
-    python3 -m labeling.build_content_catalog <set_id>   # prints JSON to stdout
+    python3 -m labeling.identity.build_content_catalog <set_id>   # prints JSON to stdout
 """
 
 from __future__ import annotations
@@ -18,9 +18,9 @@ import sqlite3
 import sys
 from pathlib import Path
 
-from labeling.content_hash import file_sha256 as _file_sha256
-from labeling.content_hash import flac_pcm_md5 as _flac_pcm_md5
-from labeling.content_hash import mdat_sha256 as _mdat_sha256
+from labeling.identity.content_hash import file_sha256 as _file_sha256
+from labeling.identity.content_hash import flac_pcm_md5 as _flac_pcm_md5
+from labeling.identity.content_hash import mdat_sha256 as _mdat_sha256
 
 _DB = "/mnt/storage/data/db/music_database.db"
 _M4A_EXT = (".m4a", ".mp4", ".m4b")
@@ -52,7 +52,7 @@ def build_catalog(
     mdat_sha256=_mdat_sha256,
     flac_pcm_md5=_flac_pcm_md5,
 ):
-    # Widened to the pull's own resolution (labeling/pull_set_for_alignment.py
+    # Widened to the pull's own resolution (labeling/acquire/pull_set_for_alignment.py
     # `wanted` CTE, set_track_slots arm): COALESCE(recording_id, track_id) so a
     # legacy/Rvmor-gap slot (NULL recording_id, track_id-only identity) is not
     # silently dropped from the catalog's scope (P10). Does NOT add the pull's

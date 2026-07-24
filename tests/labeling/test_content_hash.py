@@ -6,7 +6,7 @@ import hashlib
 import struct
 from pathlib import Path
 
-from labeling.content_hash import file_sha256, mdat_sha256
+from labeling.identity.content_hash import file_sha256, mdat_sha256
 
 
 def _write_min_mp4(path: Path, mdat_payload: bytes, tag_blob: bytes) -> None:

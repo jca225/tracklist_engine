@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Generate a pre-seeded Ableton .als from a predicted timeline.
 
-Inverts labeling/export_als_to_gt.py: instead of a human placing clips that we
-parse into GT, we place every predicted span as a clip the human then verifies
-and corrects. The corrected project round-trips back through export_als_to_gt
-to become the target set's ground truth.
+Inverts labeling/extract/export_als_to_gt.py: instead of a human placing clips
+that we parse into GT, we place every predicted span as a clip the human then
+verifies and corrects. The corrected project round-trips back through
+export_als_to_gt to become the target set's ground truth.
 
 Construction (chosen so labeling/als_io.py parses the result exactly):
 

@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from labeling.remap_gt_slot_labels import RemapEvent, fetch_remap_slot_rows, remap_slots
+from labeling.extract.remap_gt_slot_labels import (
+    RemapEvent,
+    fetch_remap_slot_rows,
+    remap_slots,
+)
 
 
 def test_fetch_remap_slot_rows_selects_cue_columns():

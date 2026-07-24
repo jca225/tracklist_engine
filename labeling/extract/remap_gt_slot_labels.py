@@ -6,7 +6,7 @@ id appears on multiple pi rows).
 
 Usage::
 
-    venvs/audio/bin/python -m labeling.remap_gt_slot_labels \\
+    venvs/audio/bin/python -m labeling.extract.remap_gt_slot_labels \\
         --yaml labeling/fixtures/bb12_ground_truth.yaml \\
         --set-id 1fsnxchk --dry-run
 """
@@ -21,14 +21,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-_REPO = Path(__file__).resolve().parent.parent
+_REPO = Path(__file__).resolve().parent.parent.parent
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
 from core.identity import normalize_stem  # noqa: E402
 from core.result import Err, Ok  # noqa: E402
-from labeling.ground_truth.schema import load, replace, save  # noqa: E402
-from labeling.pull_set_for_alignment import ssh_sqlite  # noqa: E402
+from core.ssh_sqlite import ssh_sqlite  # noqa: E402
+from labeling.schema import load, replace, save  # noqa: E402
 
 
 def fetch_remap_slot_rows(set_id: str, ssh_sqlite) -> list[dict[str, Any]]:

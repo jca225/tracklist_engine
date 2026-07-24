@@ -97,7 +97,7 @@ def preflight_set(set_id: str) -> Path:
     if not hits:
         raise FileNotFoundError(
             f"preflight[{set_id}]: no aligning dir under {root} — pull it first: "
-            f"venvs/audio/bin/python labeling/pull_set_for_alignment.py {set_id}"
+            f"venvs/audio/bin/python labeling/acquire/pull_set_for_alignment.py {set_id}"
         )
     set_dir = hits[0]
     # local: keep msgspec off cold paths (same rule as finalize)
@@ -112,7 +112,7 @@ def preflight_set(set_id: str) -> Path:
         raise FileNotFoundError(
             f"preflight[{set_id}]: {set_dir.name} is missing {missing} — "
             f"refresh the pull: venvs/audio/bin/python "
-            f"labeling/pull_set_for_alignment.py {set_id}"
+            f"labeling/acquire/pull_set_for_alignment.py {set_id}"
         )
     # validate, not just stat: schema drift or a wrong-set manifest fails at
     # boot with field detail instead of three stages later

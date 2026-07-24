@@ -157,7 +157,7 @@ def aligning_dir(set_ref: str) -> Path | None:
 
 
 def load_gt(set_ref: str):
-    from labeling.ground_truth.schema import load
+    from labeling.schema import load
 
     set_id = resolve_set_id(set_ref)
     path = _REPO / "labeling" / "fixtures" / _GT_FIXTURE[set_id]

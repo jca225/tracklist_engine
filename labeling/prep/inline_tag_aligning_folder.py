@@ -15,7 +15,7 @@ With ``--stems`` the matching ``stems/<same-name>/`` subdir gets the same tag
 (stem subdirs hold no metadata of their own — the tag is copied from the track).
 
 Usage:
-    ./venvs/audio/bin/python labeling/inline_tag_aligning_folder.py \\
+    ./venvs/audio/bin/python labeling/prep/inline_tag_aligning_folder.py \\
         ~/aligning/1rfb0yl9__Disco\\ Lines... --stems --dry-run
 """
 

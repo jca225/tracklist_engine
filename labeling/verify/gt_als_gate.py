@@ -66,9 +66,9 @@ from pathlib import Path
 from core.result import Err, Ok
 from labeling.als import load_als_xml, parse_layer_clips
 from labeling.als.identity import slot_from_path
-from labeling.ground_truth.schema import load
+from labeling.schema import load
 
-_REPO = Path(__file__).resolve().parent.parent
+_REPO = Path(__file__).resolve().parent.parent.parent
 
 # Registry of (set_id -> committed .als) for gated sets. The gate runs over every
 # entry here (guardrails + pre-commit). Only sets whose canonical `.als` is

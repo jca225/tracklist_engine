@@ -226,7 +226,7 @@ fp is already strong in-domain, loose gate overrides good placements with noisy 
 gate **0.08** = do-no-harm (median 6.3→6.1s, moves ~4/96). So in-domain recon can't help
 (nothing to fix); the payoff test is **held-out BB11**, where the pipeline is weaker.
 
-**TURNKEY — when BB11 GT is exported** (`labeling.export_als_to_gt` → `labeling/fixtures/bb11_ground_truth.yaml`):
+**TURNKEY — when BB11 GT is exported** (`labeling.extract.export_als_to_gt` → `labeling/fixtures/bb11_ground_truth.yaml`):
 ```
 venvs/audio/bin/python -m workspaces.alignment_prototype.run_recon_experiment \
   --train-set 1fsnxchk --eval-set 2nvzlh2k --infer

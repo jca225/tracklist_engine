@@ -22,11 +22,11 @@ disk and edits to one (re-tagging, warp markers) propagate to the
 others. Ableton sees each linked filename as a distinct clip.
 
 Usage:
-    python labeling/pull_set_for_alignment.py <set_id> [--dest ~/aligning]
-    python labeling/pull_set_for_alignment.py <set_id> --dry-run
-    python labeling/pull_set_for_alignment.py <set_id> --prune           # refresh + delete orphans
-    python labeling/pull_set_for_alignment.py <set_id> --prune --dry-run # check mode
-    python labeling/pull_set_for_alignment.py --list-recent              # browse candidates
+    python labeling/acquire/pull_set_for_alignment.py <set_id> [--dest ~/aligning]
+    python labeling/acquire/pull_set_for_alignment.py <set_id> --dry-run
+    python labeling/acquire/pull_set_for_alignment.py <set_id> --prune           # refresh + delete orphans
+    python labeling/acquire/pull_set_for_alignment.py <set_id> --prune --dry-run # check mode
+    python labeling/acquire/pull_set_for_alignment.py --list-recent              # browse candidates
 
 Output layout:
     ~/aligning/<set_id>__<sanitized-title>/
@@ -70,20 +70,20 @@ import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from core.audio_resolve import (  # noqa: E402
     TIER_VARIANT_FALLBACK,
     resolve_slot_audio,
     tier_name,
 )
-from labeling.inventory_check import (  # noqa: E402
+from core.ssh_sqlite import ssh_sqlite  # noqa: E402
+from labeling.acquire.inventory_check import (  # noqa: E402
     evaluate_set_inventory,
     run_inventory_check,
     satisfaction_to_manifest_fields,
 )
 
 PI_HOST = "pi-storage"
-PI_DB = "/mnt/storage/data/db/music_database.db"
 
 _BAD = re.compile(r'[\x00-\x1f/\\:*?"<>|]')
 
@@ -141,24 +141,6 @@ class MixRow:
     pi_path: str
     codec: str | None
     duration_s: float | None
-
-
-def ssh_sqlite(query: str) -> list[dict]:
-    """Run a sqlite3 query on pi-storage and return parsed JSON rows.
-    `.mode json` emits a JSON array; '' for no results."""
-    script = f".mode json\n{query.strip()}\n"
-    cmd = ["ssh", PI_HOST, f"sqlite3 {PI_DB}"]
-    out = subprocess.run(
-        cmd,
-        input=script,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    body = out.stdout.strip()
-    if not body:
-        return []
-    return json.loads(body)
 
 
 def fetch_mix(set_id: str) -> MixRow | None:
@@ -660,7 +642,7 @@ def _run_fetch_candidates(dest_root: Path, satisfaction_by_label: dict) -> None:
     if not needs:
         return
     print(f"\nFetching candidates for {len(needs)} payload slot(s)...")
-    repo_root = Path(__file__).resolve().parent.parent
+    repo_root = Path(__file__).resolve().parent.parent.parent
     script = repo_root / "scripts" / "fetch_candidate_stems.py"
     if not script.is_file():
         print("  skip: fetch_candidate_stems.py not found", file=sys.stderr)
@@ -894,7 +876,7 @@ def main() -> int:
                 [
                     "ssh",
                     "pi-storage",
-                    "cd ~/tracklist_engine && python3 -m labeling.build_content_catalog "
+                    "cd ~/tracklist_engine && python3 -m labeling.identity.build_content_catalog "
                     + args.set_id,
                 ],
                 capture_output=True,
@@ -912,7 +894,7 @@ def main() -> int:
                 f"WARNING: content_catalog.json not written: {detail}", file=sys.stderr
             )
 
-        from labeling.audio_index import build_audio_index, write_audio_index
+        from labeling.acquire.audio_index import build_audio_index, write_audio_index
 
         write_audio_index(dest_root, build_audio_index(dest_root, manifest["tracks"]))
 

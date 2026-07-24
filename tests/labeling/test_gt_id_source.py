@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from labeling.ground_truth.schema import (
+from labeling.schema import (
     GroundTruthSet,
     GroundTruthTrack,
     dump,

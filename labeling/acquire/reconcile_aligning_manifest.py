@@ -21,16 +21,16 @@ from typing import Any
 
 import msgspec
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from core.contracts import MANIFEST_FILENAME, load_manifest  # noqa: E402
 
-from labeling.inventory_check import (  # noqa: E402
+from labeling.acquire.inventory_check import (  # noqa: E402
     evaluate_set_inventory,
     fetch_slot_rows,
     satisfaction_to_manifest_fields,
 )
-from labeling.pull_set_for_alignment import (  # noqa: E402
+from labeling.acquire.pull_set_for_alignment import (  # noqa: E402
     _user_tagged,
     fetch_tracks,
     ssh_sqlite,

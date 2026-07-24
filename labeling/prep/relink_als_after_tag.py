@@ -2,44 +2,43 @@
 
 Renaming ``tracks/Foo.m4a`` -> ``tracks/Foo [126bpm 8B].m4a`` (and the matching
 ``stems/Foo/`` -> ``stems/Foo [126bpm 8B]/``) leaves the live session pointing at
-the old names, so every clip shows **offline**. This rewrites the session's file
-references (``Path`` / ``RelativePath`` / ``Name``) from the old name to the new
-tagged name so Live finds the audio again.
+the old names, so every clip shows **offline**. This rewrites each clip's live
+sample reference (``SampleRef/FileRef``'s ``Path`` / ``RelativePath``) from the
+old name to the new tagged name so Live finds the audio again.
 
-It edits the .als as text (gunzip -> string-replace -> gzip), so it does NOT
-touch device/automation state — none of the deep-copy crash hazards apply. Still:
-**open the session in Live afterwards to confirm**, and a timestamped backup of
-the original .als is written next to it.
+Routed through the ``labeling.als`` codec (``cst`` for the gzip<->XML boundary,
+``write.write_clip_source_paths`` for the mutation) instead of a raw
+gunzip -> string-replace -> gzip pass — see that function's docstring for why
+the mutation is scoped to exactly ``SampleRef/FileRef`` and never
+``SourceContext/OriginalFileRef``. It does NOT touch device/automation state —
+none of the deep-copy crash hazards apply. Still: **open the session in Live
+afterwards to confirm**, and a timestamped backup of the original .als is
+written next to it.
 
 The tag is inserted just before the extension (files) or at the end of the dir
 name (stems), so each rename is the substring edit ``OLD<.ext|/>`` ->
 ``OLD [tag]<.ext|/>``. We derive OLD by stripping the tag off the on-disk name.
 
 Usage:
-    ./venvs/audio/bin/python labeling/relink_als_after_tag.py \\
+    ./venvs/audio/bin/python labeling/prep/relink_als_after_tag.py \\
         ~/aligning/2nvzlh2k__...BB11  [--dry-run]
 """
 
 from __future__ import annotations
 
 import argparse
-import gzip
 import sys
 from pathlib import Path
 
-_REPO = Path(__file__).resolve().parents[1]
+_REPO = Path(__file__).resolve().parents[2]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
 from labeling.als import strip_user_tags
+from labeling.als.cst import load_als_xml, save_als_xml
+from labeling.als.write import write_clip_source_paths
 
 AUDIO_EXTS = {".m4a", ".mp3", ".wav"}
-
-
-def xml_escape(s: str) -> str:
-    """Match Ableton's attribute-value escaping (& < > only; quotes are double,
-    apostrophes stay literal)."""
-    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def build_renames(folder: Path) -> list[tuple[str, str]]:
@@ -72,21 +71,13 @@ def build_renames(folder: Path) -> list[tuple[str, str]]:
 
 
 def relink(als_path: Path, edits: list[tuple[str, str]], *, dry_run: bool) -> int:
-    xml = gzip.decompress(als_path.read_bytes()).decode("utf-8")
-    total = 0
-    for old, new in edits:
-        for o, n in ((old, new), (xml_escape(old), xml_escape(new))):
-            if o == n:
-                continue
-            hits = xml.count(o)
-            if hits:
-                xml = xml.replace(o, n)
-                total += hits
+    root = load_als_xml(als_path)
+    total = write_clip_source_paths(root, edits)
     if total and not dry_run:
         backup = als_path.with_suffix(als_path.suffix + ".prerelink.bak")
         if not backup.exists():
             backup.write_bytes(als_path.read_bytes())
-        als_path.write_bytes(gzip.compress(xml.encode("utf-8")))
+        save_als_xml(root, als_path)
     return total
 
 

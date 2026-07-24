@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from labeling.export_als_to_gt import ID_COVERAGE_MIN, id_coverage, main
+from labeling.extract.export_als_to_gt import ID_COVERAGE_MIN, id_coverage, main
 from tests.labeling.synth_session import LayerSpec, session_als_file
 
 

@@ -17,11 +17,12 @@ Audio plays through a local server rooted at the set folder, so the page is
 written THERE and served from there.
 
 Usage:
-    venvs/audio/bin/python -m labeling.gt_review_ui            # BB12 defaults
-    venvs/audio/bin/python -m labeling.gt_review_ui --serve    # also launch server
-    venvs/audio/bin/python -m labeling.gt_review_ui \\
+    venvs/audio/bin/python -m labeling.verify.gt_review_ui            # BB12 defaults
+    venvs/audio/bin/python -m labeling.verify.gt_review_ui --serve    # also launch server
+    venvs/audio/bin/python -m labeling.verify.gt_review_ui \\
         --als "<...>.als" --set-dir "~/aligning/<set>" [--serve --port 8777]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -30,18 +31,18 @@ import os
 import sys
 from pathlib import Path
 
-_REPO = Path(__file__).resolve().parent.parent
+_REPO = Path(__file__).resolve().parent.parent.parent
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from labeling.export_als_to_gt import (
+from labeling.extract._shared import (
     DEFAULT_ALS,
     DEFAULT_SET_DIR,
     _placeholder_note,
     collect_kept_clip_rows,
 )
 
-_TEMPLATE = Path(__file__).resolve().parent / "gt_review" / "template.html"
+_TEMPLATE = Path(__file__).resolve().parent.parent / "gt_review" / "template.html"
 
 
 def _rel_under(path: str, root: Path) -> tuple[str, bool]:
@@ -61,11 +62,15 @@ def _track_id_enricher(set_dir: Path):
     the already-enriched fixture (slot, mix_start) when present."""
     manifest = json.loads((set_dir / "manifest.json").read_text())
     set_id = str(manifest.get("set_id") or "").strip()
-    by_slot = {str(t.get("label") or "").strip(): t.get("track_id")
-               for t in manifest["tracks"] if t.get("label")}
+    by_slot = {
+        str(t.get("label") or "").strip(): t.get("track_id")
+        for t in manifest["tracks"]
+        if t.get("label")
+    }
     # find the enriched GT fixture by matching set_id (filenames aren't set-id-based)
     by_slotstart: dict[tuple, str] = {}
     import yaml
+
     for fix in sorted((_REPO / "labeling/fixtures").glob("*.y*ml")):
         try:
             doc = yaml.safe_load(fix.read_text()) or {}
@@ -76,8 +81,12 @@ def _track_id_enricher(set_dir: Path):
         for r in doc.get("tracks", []):
             tid = r.get("track_id")
             if tid:
-                by_slotstart[(str(r.get("slot_label")),
-                              round(float(r.get("set_start_s") or -1), 1))] = tid
+                by_slotstart[
+                    (
+                        str(r.get("slot_label")),
+                        round(float(r.get("set_start_s") or -1), 1),
+                    )
+                ] = tid
         break
 
     def enrich(row):
@@ -99,8 +108,11 @@ def build_payload(als: Path, set_dir: Path) -> dict:
 
     manifest = json.loads((set_dir / "manifest.json").read_text())
     mix_dur = float(manifest.get("mix_duration_s") or 0.0)
-    mix_file = "mix.m4a" if (set_dir / "mix.m4a").is_file() else (
-        "mix.flac" if (set_dir / "mix.flac").is_file() else "mix.m4a")
+    mix_file = (
+        "mix.m4a"
+        if (set_dir / "mix.m4a").is_file()
+        else ("mix.flac" if (set_dir / "mix.flac").is_file() else "mix.m4a")
+    )
 
     clips = []
     for i, r in enumerate(rows):
@@ -109,39 +121,45 @@ def build_payload(als: Path, set_dir: Path) -> dict:
         note = _placeholder_note(r.clip.path, r.clip.group_name)
         flags = ["unalignable"] if note else []
         track_id, tid_src = enrich_tid(r)
-        clips.append({
-            "idx": i,
-            "display": r.display,
-            "file": rel,
-            "audio_ok": ok and (set_dir / rel).is_file(),
-            "group": r.clip.group_name,
-            "lane": r.clip.track_name,
-            "slot": r.slot_label or "",
-            "stem": r.claimed_stem,
-            "ref_source": r.ref_source,
-            "track_id": track_id,
-            "track_id_src": tid_src,
-            "mix_start_s": round(r.set_start_s, 3),
-            "mix_end_s": round(r.set_end_s, 3),
-            "ref_start_s": round(r.ref_start_s, 3),
-            "ref_end_s": round(r.ref_end_s, 3),
-            "tempo_ratio": (round(r.tempo_ratio, 5) if r.tempo_ratio is not None else None),
-            "pitch_shift_semi": r.pitch_shift_semi,
-            "is_loop": r.is_loop,
-            "ref_segments": [
-                {"mix_start_s": round(s.mix_start_s, 3),
-                 "ref_start_s": round(s.ref_start_s, 3),
-                 "ref_end_s": round(s.ref_end_s, 3)}
-                for s in (r.ref_segments or ())
-            ],
-            "audible_frac": r.audible_frac,
-            "audible_start_s": r.audible_start_s,
-            "audible_end_s": r.audible_end_s,
-            "skip_training": r.skip_training,
-            "unalignable": note is not None,
-            "source_note": note,
-            "flags": flags,
-        })
+        clips.append(
+            {
+                "idx": i,
+                "display": r.display,
+                "file": rel,
+                "audio_ok": ok and (set_dir / rel).is_file(),
+                "group": r.clip.group_name,
+                "lane": r.clip.track_name,
+                "slot": r.slot_label or "",
+                "stem": r.claimed_stem,
+                "ref_source": r.ref_source,
+                "track_id": track_id,
+                "track_id_src": tid_src,
+                "mix_start_s": round(r.set_start_s, 3),
+                "mix_end_s": round(r.set_end_s, 3),
+                "ref_start_s": round(r.ref_start_s, 3),
+                "ref_end_s": round(r.ref_end_s, 3),
+                "tempo_ratio": (
+                    round(r.tempo_ratio, 5) if r.tempo_ratio is not None else None
+                ),
+                "pitch_shift_semi": r.pitch_shift_semi,
+                "is_loop": r.is_loop,
+                "ref_segments": [
+                    {
+                        "mix_start_s": round(s.mix_start_s, 3),
+                        "ref_start_s": round(s.ref_start_s, 3),
+                        "ref_end_s": round(s.ref_end_s, 3),
+                    }
+                    for s in (r.ref_segments or ())
+                ],
+                "audible_frac": r.audible_frac,
+                "audible_start_s": r.audible_start_s,
+                "audible_end_s": r.audible_end_s,
+                "skip_training": r.skip_training,
+                "unalignable": note is not None,
+                "source_note": note,
+                "flags": flags,
+            }
+        )
 
     return {
         "set_id": set_id,
@@ -153,27 +171,37 @@ def build_payload(als: Path, set_dir: Path) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--als", type=Path, default=DEFAULT_ALS)
     p.add_argument("--set-dir", type=Path, default=DEFAULT_SET_DIR)
-    p.add_argument("--out", type=Path, default=None,
-                   help="output html (default: <set-dir>/gt_review.html)")
-    p.add_argument("--serve", action="store_true", help="launch a local server + open browser")
+    p.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="output html (default: <set-dir>/gt_review.html)",
+    )
+    p.add_argument(
+        "--serve", action="store_true", help="launch a local server + open browser"
+    )
     p.add_argument("--port", type=int, default=8777)
     args = p.parse_args(argv)
 
     als = args.als.expanduser()
     set_dir = args.set_dir.expanduser()
     if not als.is_file():
-        print(f"not found: {als}", file=sys.stderr); return 2
+        print(f"not found: {als}", file=sys.stderr)
+        return 2
     if not set_dir.is_dir():
-        print(f"not found: {set_dir}", file=sys.stderr); return 2
+        print(f"not found: {set_dir}", file=sys.stderr)
+        return 2
 
     payload = build_payload(als, set_dir)
     html = _TEMPLATE.read_text()
     html = html.replace("__TITLE__", payload["title"]).replace(
-        "__GT_DATA__", json.dumps(payload))
+        "__GT_DATA__", json.dumps(payload)
+    )
     out = args.out or (set_dir / "gt_review.html")
     out.write_text(html)
     n = len(payload["clips"])
@@ -187,8 +215,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     import http.server, socketserver, threading, webbrowser, functools
+
     os.chdir(set_dir)
-    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(set_dir))
+    handler = functools.partial(
+        http.server.SimpleHTTPRequestHandler, directory=str(set_dir)
+    )
     httpd = socketserver.TCPServer(("127.0.0.1", args.port), handler)
     url = f"http://localhost:{args.port}/{out.name}"
     print(f"serving {set_dir} at {url}  (Ctrl-C to stop)")

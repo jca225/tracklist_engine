@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from labeling.ground_truth.schema import GroundTruthSet, GroundTruthTrack, load
+from labeling.schema import GroundTruthSet, GroundTruthTrack, load
 from core.result import Err, Ok, Result
 
 from .records import SlotCandidate, SpanTarget
