@@ -259,6 +259,41 @@ def _parse_track(
     )
 
 
+def _check_track_id_uniqueness(
+    tracks: list[GroundTruthTrack], path: Path
+) -> GroundTruthError | None:
+    """A `track_id` (the 1001tracklists recording id) must denote ONE recording
+    within a set. Two slots sharing a track_id while naming DIFFERENT recordings
+    is the identity-by-string collision (issue #63): under the old acquisition
+    scheme the two merged into a single case and minted a corrupt cross-track
+    preference pair (e.g. BB12 `2p25k23p` = Garrix "In The Name Of Love" AND
+    Beatles "Can't Buy Me Love"). Fail loudly here instead of binding silently.
+
+    Reusing a track_id across slots for the SAME recording — a track played
+    twice, a base+stem pair — is legal; only distinct labels collide.
+    """
+    labels_by_tid: dict[str, set[str]] = {}
+    slots_by_tid: dict[str, list[str]] = {}
+    for t in tracks:
+        if not t.track_id:
+            continue
+        labels_by_tid.setdefault(t.track_id, set()).add(t.label.strip())
+        slots_by_tid.setdefault(t.track_id, []).append(t.slot_label or "?")
+    for tid, labels in labels_by_tid.items():
+        if len(labels) > 1:
+            names = " | ".join(sorted(labels))
+            slots = ", ".join(slots_by_tid[tid])
+            return GroundTruthError(
+                kind="identity_collision",
+                detail=(
+                    f"track_id {tid} names {len(labels)} distinct recordings "
+                    f"across slots [{slots}]: {names}"
+                ),
+                path=path,
+            )
+    return None
+
+
 def load(yaml_path: Path | str) -> Result[GroundTruthSet, GroundTruthError]:
     """Parse one ground-truth yaml into a typed `GroundTruthSet`."""
     path = Path(yaml_path)
@@ -305,6 +340,10 @@ def load(yaml_path: Path | str) -> Result[GroundTruthSet, GroundTruthError]:
         if not r.is_ok():
             return Err(r.error)
         tracks.append(r.value)
+
+    collision = _check_track_id_uniqueness(tracks, path)
+    if collision is not None:
+        return Err(collision)
 
     return Ok(
         GroundTruthSet(
