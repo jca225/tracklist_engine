@@ -255,10 +255,15 @@ def _preflight(args: argparse.Namespace) -> None:
 
 
 def _scp_to_pi(local: Path) -> str:
+    from scripts.loop_hardening import SSH_OPTS, SSH_PUSH_TIMEOUT
+
     remote = f"/tmp/ingest_stem_{local.name}"
+    # B1: hardened ssh opts + wall-clock bound so a hung transfer can't stall
+    # the interactive tool indefinitely.
     subprocess.run(
-        ["scp", str(local), f"{PI_HOST}:{remote}"],
+        ["scp", *SSH_OPTS, str(local), f"{PI_HOST}:{remote}"],
         check=True,
+        timeout=SSH_PUSH_TIMEOUT,
     )
     return remote
 
@@ -599,9 +604,13 @@ def main(argv: list[str] | None = None) -> int:
             print(f"scp {args.file} -> {PI_HOST}:/tmp/...")
             remote_file = _scp_to_pi(args.file.resolve())
 
+    # B1: harden the remote yt-dlp call — a bot-detection stall on pi otherwise
+    # hangs the Mac terminal silently with no timeout.
+    from scripts.loop_hardening import SSH_OPTS, SSH_PUSH_TIMEOUT
+
     remote_argv = build_remote_command(args, remote_file=remote_file)
     shell = _remote_shell(remote_argv)
-    ssh_cmd = ["ssh", PI_HOST, shell]
+    ssh_cmd = ["ssh", *SSH_OPTS, PI_HOST, shell]
 
     if args.dry_run:
         print("dry-run remote command:")
@@ -610,7 +619,12 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"remote: {shell}")
     r = subprocess.run(
-        ssh_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace"
+        ssh_cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=SSH_PUSH_TIMEOUT,
     )
     if r.stdout:
         print(r.stdout, end="" if r.stdout.endswith("\n") else "\n")
