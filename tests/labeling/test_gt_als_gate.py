@@ -1,4 +1,4 @@
-"""The GT-yaml ⟵ .als drift gate (labeling/gt_als_gate.py).
+"""The GT-yaml ⟵ .als drift gate (labeling/verify/gt_als_gate.py).
 
 Hermetic: uses the committed BB11 ``.als`` (labeling/fixtures/als/2nvzlh2k.als) and
 the committed GT yaml — no ``~/aligning/`` and no manifest. Regression for main's
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from labeling.gt_als_gate import (
+from labeling.verify.gt_als_gate import (
     GATED_GT_YAMLS,
     GATED_SETS,
     check_yaml_matches_als,

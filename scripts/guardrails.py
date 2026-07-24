@@ -562,16 +562,16 @@ def _check_gt_als_drift() -> list[Violation]:
     Catches hand-edits that drift a ground-truth fixture away from the Ableton
     source of truth (e.g. BB11 slot 013 relabeled 013w1 -> 013w3). Manifest-free:
     slot labels come straight from the committed .als, so this runs in CI with no
-    ~/aligning/ present. See labeling/gt_als_gate.py.
+    ~/aligning/ present. See labeling/verify/gt_als_gate.py.
     """
     if str(REPO_ROOT) not in sys.path:  # `python scripts/guardrails.py` puts
         sys.path.insert(0, str(REPO_ROOT))  # scripts/ (not repo root) on path
     try:
-        from labeling.gt_als_gate import check_yaml_matches_als, iter_gated
+        from labeling.verify.gt_als_gate import check_yaml_matches_als, iter_gated
     except ImportError as exc:  # lxml/yaml missing -> can't verify; fail loud
         return [
             Violation(
-                REPO_ROOT / "labeling" / "gt_als_gate.py",
+                REPO_ROOT / "labeling" / "verify" / "gt_als_gate.py",
                 0,
                 "gt_als_drift",
                 f"cannot import gate: {exc}",

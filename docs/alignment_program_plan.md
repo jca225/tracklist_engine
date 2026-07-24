@@ -85,8 +85,8 @@ minimum info to reproduce the set within perceptual $\epsilon$.
 **Critical path;** depends on nothing else.
 
 ```
-.als → labeling/export_als_to_gt.py → bb12_ground_truth.yaml
-     → labeling/write_back_ground_truth.py → set_ground_truth
+.als → labeling/extract/export_als_to_gt.py → bb12_ground_truth.yaml
+     → labeling/commit/write_back_ground_truth.py → set_ground_truth
 ```
 
 ### Session structure (verified)
@@ -151,10 +151,10 @@ Optional `--include-all-clips` for debugging.
 - `pitch_shift_semi INTEGER`
 - `ref_source TEXT` — `reference|official|phase_cancel|online_candidate|demucs|roformer|mix_extract`
 
-**`labeling/ground_truth/schema.py` adds:** `slot_label` (PK key `154`, `154w1`, distinct from
+**`labeling/schema.py` adds:** `slot_label` (PK key `154`, `154w1`, distinct from
 display `track` title), plus fields above. Update `load` / `dump` / `save`.
 
-**`write_back_ground_truth.py`:** use `slot_label` as DB `label` (fixes 4× "Honest" title collision);
+**`labeling/commit/write_back_ground_truth.py`:** use `slot_label` as DB `label` (fixes 4× "Honest" title collision);
 write `recording_id`; persist new columns.
 
 Migration (pi-storage, once):
@@ -302,8 +302,8 @@ Later: distill to `measure_alignment`; proxy $E_a$ (pyrubberband + stem mix); li
 
 | Action | Path |
 |--------|------|
-| **New** | `labeling/export_als_to_gt.py`; `ingest/metadata_stems.py`, `stem_resolver.py`, `phase_cancel.py`, `stem_quality.py`; RoFormer wrapper |
-| **Edit** | `labeling/ground_truth/schema.py`, `labeling/write_back_ground_truth.py`, `web_crawler/database/schema.sql`, `alignment_objective.md`, playbooks |
+| **New** | `labeling/extract/export_als_to_gt.py`; `ingest/metadata_stems.py`, `stem_resolver.py`, `phase_cancel.py`, `stem_quality.py`; RoFormer wrapper |
+| **Edit** | `labeling/schema.py`, `labeling/commit/write_back_ground_truth.py`, `web_crawler/database/schema.sql`, `alignment_objective.md`, playbooks |
 | **Reuse** | `~/aligning/phase-cancel/cancel.py`, `scripts/fetch_candidate_stems.py`, `scripts/ingest_stem_url.py`, `core/identity.py`, `scripts/mert_backfill_loop.py` |
 | **Tests** | Fixture `.als` — beat→sec, path→recording_id, tempo_ratio/semi |
 

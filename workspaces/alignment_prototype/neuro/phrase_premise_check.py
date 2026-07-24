@@ -26,7 +26,7 @@ if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
 from core.result import Err, Ok
-from labeling.ground_truth import schema
+from labeling import schema
 from workspaces.alignment_prototype.mert_store import load_bb12_mert
 
 GT_YAML = _REPO / "labeling" / "fixtures" / "bb12_ground_truth.yaml"

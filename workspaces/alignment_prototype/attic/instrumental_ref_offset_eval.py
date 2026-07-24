@@ -32,7 +32,7 @@ _REPO = Path(__file__).resolve().parents[3]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from labeling.export_als_to_gt import collect_kept_clip_rows
+from labeling.extract._shared import collect_kept_clip_rows
 from workspaces.alignment_prototype.landmark_fp import fp_offset
 from workspaces.alignment_prototype.refine_ref_offsets import (
     SR,

@@ -23,7 +23,12 @@ from lxml import etree
 from labeling.als.cst import dump_als_bytes, load_als_xml
 from labeling.als.read import parse_layer_clips
 from labeling.als.semantics import parse_master_tempo, tempo_beat_to_sec
-from labeling.als.write import write_locators, write_tempo_envelope
+from labeling.als.write import (
+    write_clip_names,
+    write_clip_source_paths,
+    write_locators,
+    write_tempo_envelope,
+)
 
 # Subtrees the two write ops are allowed to touch.
 _TEMPO_TOUCH = (
@@ -31,6 +36,11 @@ _TEMPO_TOUCH = (
     ".//MasterTrack//Tempo/Manual",
 )
 _LOCATOR_TOUCH = (".//Locators",)
+_CLIP_SOURCE_TOUCH = (
+    ".//AudioClip//SampleRef/FileRef/Path",
+    ".//AudioClip//SampleRef/FileRef/RelativePath",
+)
+_CLIP_NAME_TOUCH = (".//AudioClip/Name",)
 
 
 def masked_bytes(root: etree._Element, mask: tuple[str, ...]) -> bytes:
@@ -117,6 +127,78 @@ def check_locator_write(
                 failures.append(
                     f"locator mismatch: wrote ({wb}, {wn!r}), reparsed ({gb}, {gn!r})"
                 )
+    return failures
+
+
+def read_clip_source_paths(root: etree._Element) -> list[tuple[str, str]]:
+    """(Path, RelativePath) per clip-level ``SampleRef/FileRef``, document order."""
+    out: list[tuple[str, str]] = []
+    for fref in root.iter("FileRef"):
+        parent = fref.getparent()
+        if parent is None or parent.tag != "SampleRef":
+            continue
+        p = fref.find("Path")
+        rp = fref.find("RelativePath")
+        out.append(
+            (
+                (p.get("Value") or "") if p is not None else "",
+                (rp.get("Value") or "") if rp is not None else "",
+            )
+        )
+    return out
+
+
+def check_clip_source_write(
+    root: etree._Element, edits: list[tuple[str, str]]
+) -> list[str]:
+    """Rename clip sample-refs onto (a copy of) the session; assert locality
+    and that the substitution actually landed on every occurrence."""
+    failures: list[str] = []
+    work = deepcopy(root)
+    before = masked_bytes(work, _CLIP_SOURCE_TOUCH)
+    before_paths = read_clip_source_paths(work)
+    write_clip_source_paths(work, edits)
+    if masked_bytes(work, _CLIP_SOURCE_TOUCH) != before:
+        failures.append(
+            "clip-source write touched XML outside SampleRef/FileRef Path/RelativePath"
+        )
+
+    after_paths = read_clip_source_paths(work)
+    if len(before_paths) != len(after_paths):
+        failures.append(
+            f"clip-source count changed: {len(before_paths)} -> {len(after_paths)}"
+        )
+    for (bp, brp), (ap, arp) in zip(before_paths, after_paths):
+        for old, new in edits:
+            if not old or old == new:
+                continue
+            if old in bp and old in ap:
+                failures.append(f"Path still contains {old!r} after write: {ap!r}")
+            if old in brp and old in arp:
+                failures.append(
+                    f"RelativePath still contains {old!r} after write: {arp!r}"
+                )
+    return failures
+
+
+def check_clip_name_write(root: etree._Element, renames: dict[str, str]) -> list[str]:
+    """Rename clip Names onto (a copy of) the session; assert locality and
+    exact parse-back equality."""
+    failures: list[str] = []
+    work = deepcopy(root)
+    before = masked_bytes(work, _CLIP_NAME_TOUCH)
+    write_clip_names(work, renames)
+    if masked_bytes(work, _CLIP_NAME_TOUCH) != before:
+        failures.append("clip-name write touched XML outside AudioClip/Name")
+
+    names = [
+        (name_el.get("Value") or "")
+        for clip in work.iter("AudioClip")
+        if (name_el := clip.find("Name")) is not None
+    ]
+    for old, new in renames.items():
+        if old in names:
+            failures.append(f"old name {old!r} still present after write")
     return failures
 
 

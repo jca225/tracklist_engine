@@ -18,6 +18,7 @@ import argparse
 import json
 import re
 import sys
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -44,6 +45,7 @@ from workspaces.alignment_prototype.identity_bridge import (
     canonicalize_gt_rows,
     load_identity_map,
 )
+from workspaces.alignment_prototype.never_matched import unmatched_gt_forms
 from workspaces.alignment_prototype.refine_ref_offsets import (
     _STEM_FILE,
     find_aligning_dir,
@@ -567,6 +569,21 @@ def main(argv: list[str] | None = None) -> int:
         f"identity: {id_ok}/{nid} ({100 * id_ok / max(nid, 1):.0f}%)  "
         f"[{no_gt} spans had no same-slot GT row]"
     )
+    # Form-level coverage: GT rows no predicted span selects (nearest-set_start)
+    # are unscored by every per-span metric below. A slot played across a stem
+    # transition (instrumental->full, acappella over instrumental) has >1 GT row
+    # per recording; the per-span scorer picks one, silently dropping the rest.
+    gt_forms_tot = sum(1 for r in gt_rows if r.get("track_id"))
+    unmatched_forms = unmatched_gt_forms(gt_rows, spans)
+    if unmatched_forms:
+        lost_s = sum(f["set_end_s"] - f["set_start_s"] for f in unmatched_forms)
+        by_stem = Counter(f["claimed_stem"] or "regular" for f in unmatched_forms)
+        breakdown = ", ".join(f"{k}×{v}" for k, v in sorted(by_stem.items()))
+        print(
+            f"GT form coverage: {gt_forms_tot - len(unmatched_forms)}/{gt_forms_tot} "
+            f"forms scored; {len(unmatched_forms)} UNSCORED "
+            f"({lost_s:.0f}s GT invisible to per-span metrics): {breakdown}"
+        )
     pe = np.array([r[0] for r in place_errs])
     print(
         f"set placement |pred-gt|: median={np.median(pe):.1f}s  "

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from labeling.content_hash import flac_pcm_md5
+from labeling.identity.content_hash import flac_pcm_md5
 
 _FIXTURE = (
     Path(__file__).resolve().parent

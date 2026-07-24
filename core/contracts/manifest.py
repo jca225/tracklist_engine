@@ -1,6 +1,6 @@
 """Manifest — the typed record for `~/aligning/<set>/manifest.json`.
 
-Writer: `labeling/pull_set_for_alignment.py` (the ONLY sanctioned writer — the
+Writer: `labeling/acquire/pull_set_for_alignment.py` (the ONLY sanctioned writer — the
 folder is a read-replica of pi-storage). Readers: infer's stem/lyrics ref
 resolution, joint_ref_decode, the scorer's fiber ref-audio lookup, the als
 identity layer, enrich_gt_track_ids.

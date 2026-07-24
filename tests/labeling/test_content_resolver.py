@@ -8,7 +8,7 @@ never guesses by filename/slot. This is the mechanism that kills the poison clas
 from __future__ import annotations
 
 from labeling.als.models import ParsedClip, WarpMarkers
-from labeling.content_resolver import (
+from labeling.identity.content_resolver import (
     CatalogEntry,
     ContentCatalog,
     resolve_clip_identity,

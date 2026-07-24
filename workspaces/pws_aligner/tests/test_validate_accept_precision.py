@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from labeling.ground_truth.schema import GroundTruthSet, GroundTruthTrack
+from labeling.schema import GroundTruthSet, GroundTruthTrack
 from workspaces.pws_aligner.cotrain_seam import (
     AgreementReport,
     Band,

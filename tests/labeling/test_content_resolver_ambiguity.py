@@ -19,8 +19,8 @@ import hashlib
 import json
 from pathlib import Path
 
-from labeling.content_resolver import CatalogEntry, ContentCatalog
-from labeling.export_als_to_gt import _load_content_catalog
+from labeling.identity.content_resolver import CatalogEntry, ContentCatalog
+from labeling.extract._shared import _load_content_catalog
 
 
 def _catalog_json(set_dir: Path, entries: list[dict]) -> None:
@@ -120,7 +120,7 @@ def test_from_entries_keeps_key_when_axis_tuple_agrees():
     assert cat.by_head_hash["hh"].stem == "regular"
 
 
-# --- Site 1: labeling/export_als_to_gt._load_content_catalog ---
+# --- Site 1: labeling/extract/_shared._load_content_catalog ---
 
 
 def test_load_content_catalog_abstains_on_same_recording_different_stem(

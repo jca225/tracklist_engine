@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from labeling.ground_truth.schema import GroundTruthSet, GroundTruthTrack
+from labeling.schema import GroundTruthSet, GroundTruthTrack
 
 from .scenario import MashupScenario
 

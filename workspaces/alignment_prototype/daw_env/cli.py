@@ -131,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.mode == "b":
             print(
                 "Mode B: open the DAW REACT.als in Live, correct AGENT PROPOSE "
-                "locators/clips, then: python -m labeling.export_als_to_gt "
+                "locators/clips, then: python -m labeling.extract.export_als_to_gt "
                 f"--als {als_path} --set-dir <aligning-folder>"
             )
     return 0

@@ -687,11 +687,57 @@ CREATE TABLE IF NOT EXISTS track_suggestions (
     has_youtube           INTEGER,
     has_soundcloud        INTEGER,
     has_spotify           INTEGER,
+    data_type             INTEGER,          -- suggestion kind (5=wasn't played, 14=cue, 1=wrong, 17=rework-of, ...)
+    cue_seconds           INTEGER,          -- corrected cue (type 2/3/4/14)
+    play_cue_seconds      INTEGER,          -- cue from playPosition onclick
+    suggester_guest_id    INTEGER,
+    suggester_kind        TEXT,             -- "user" | "guest"
+    track_page_path       TEXT,
+    track_id_numeric      INTEGER,
+    is_id_remix           INTEGER,
+    has_apple             INTEGER,
+    has_affiliate         INTEGER,
+    has_live_video        INTEGER,
+    poll_correct          INTEGER,          -- community confidence votes
+    poll_not_correct      INTEGER,
+    poll_unsure           INTEGER,
+    labels_json           TEXT,             -- [[label_name, label_path], ...]
+    google_search_url     TEXT,
     parsed_at             DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_track_sug_set  ON track_suggestions(set_id);
 CREATE INDEX IF NOT EXISTS idx_track_sug_tlp  ON track_suggestions(tlp_id);
 CREATE INDEX IF NOT EXISTS idx_track_sug_slug ON track_suggestions(track_slug);
+
+-- Notice / section rows (div.bItmH) from text_tokenizer.parse_bItmH_row.
+-- Availability notices, identical-tracklist links, artist-played, section headers.
+CREATE TABLE IF NOT EXISTS set_notices (
+    set_id        TEXT NOT NULL,
+    row_index     INTEGER NOT NULL,
+    row_type      TEXT,                     -- text_tokenizer RowType
+    text          TEXT,
+    links_json    TEXT,
+    icons_json    TEXT,
+    parsed_json   TEXT,
+    parsed_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (set_id, row_index)
+);
+CREATE INDEX IF NOT EXISTS idx_set_notices_set ON set_notices(set_id);
+
+-- Per-slot ID-track metadata from id_tokenizer.IDTrack (ID / unknown rows).
+CREATE TABLE IF NOT EXISTS set_slot_id_meta (
+    set_id        TEXT NOT NULL,
+    row_index     INTEGER NOT NULL,
+    tlp_id        INTEGER,
+    is_id         INTEGER DEFAULT 0,        -- data-isided / data-isid
+    protected     INTEGER DEFAULT 0,        -- data-protected
+    rbcst         INTEGER DEFAULT 0,        -- data-rbcst
+    watchers      INTEGER,                  -- users watching this ID
+    presave_count INTEGER,
+    parsed_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (set_id, row_index)
+);
+CREATE INDEX IF NOT EXISTS idx_set_slot_id_meta_set ON set_slot_id_meta(set_id);
 
 
 -- Cross-tracklist linkage hints from id_tokenizer.IDTrack.linked_items.

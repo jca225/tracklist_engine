@@ -30,7 +30,7 @@ stamps `AGENT PROPOSE <slot>` locators on escalated spans.
 **Human handoff:** open the `DAW REACT.als` in Live → correct clips →
 
 ```bash
-venvs/audio/bin/python -m labeling.export_als_to_gt \
+venvs/audio/bin/python -m labeling.extract.export_als_to_gt \
   --als <path-to-DAW-REACT.als> --set-dir <aligning-folder>
 ```
 

@@ -37,7 +37,7 @@ Status tracked inline below.
 ## Phase 5 — GT write-back ✅ (v1)
 
 - Table: `set_ground_truth`
-- `labeling/write_back_ground_truth.py` — YAML → DB
+- `labeling/commit/write_back_ground_truth.py` — YAML → DB
 - Algorithmic aligner still deferred (`workspaces/`)
 
 ## Phase 6 — Analysis / embedding readiness ⏳

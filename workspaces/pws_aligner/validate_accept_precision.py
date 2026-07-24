@@ -28,7 +28,7 @@ import sys
 from pathlib import Path
 from typing import Callable
 
-from labeling.ground_truth.schema import GroundTruthSet, GroundTruthTrack, load
+from labeling.schema import GroundTruthSet, GroundTruthTrack, load
 from workspaces.pws_aligner.cotrain_seam import (
     DEFAULT_THRESHOLDS,
     Band,

@@ -73,7 +73,7 @@ check-corpus:
 
 check-inventory:
 	@test -n "$(SET)" || (echo "Usage: make check-inventory SET=<set_id>" && exit 1)
-	venvs/audio/bin/python labeling/pull_set_for_alignment.py $(SET) --check
+	venvs/audio/bin/python labeling/acquire/pull_set_for_alignment.py $(SET) --check
 
 # Audio-verify a labeling .als against the actual mix (identity / placement /
 # ref-offset / pitch per clip). Run after (re-)labeling a set and before

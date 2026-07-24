@@ -20,8 +20,7 @@ from workspaces.alignment_prototype.mix_fp_hits import load_mix_mono
 from core.result import Err, Ok
 
 from .routes import lane
-from .stem_overrides import norm_slot as _norm_slot
-from .stem_overrides import timeline_stem_overrides
+from .stem_overrides import lane_stem, timeline_stem_overrides
 
 
 def prepare_lane(
@@ -57,11 +56,8 @@ def prepare_lane(
     by_tid = _manifest_by_tid(set_dir, set_id)
     counts = {"ready": 0, "built": 0, "missing_audio": 0, "failed": 0}
     for span in timeline["spans"]:
-        slot = str(span["slot_label"])
-        stem = overrides.get(
-            _norm_slot(slot), str(span.get("claimed_stem") or "regular")
-        )
-        if stem not in route.claimed_stems:
+        stem = lane_stem(overrides, span, route.claimed_stems)
+        if stem is None:
             continue
         recording_id = str(span["recording_id"])
         key = FpKey(recording_id, route.reference_stem)
