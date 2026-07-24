@@ -116,6 +116,44 @@ Three findings:
 is what matters. Why BB12 is harder (contamination / separation quality / ref pool)
 is the open question.
 
+## Instrumental chain (contrast) — measured 2026-07-24
+
+Ran the identical pipeline for the **non-acappella** spans (regular full drops +
+`claimed_stem:instrumental` overlays; BB11 56 spans/51 refs, BB12 63/58), query =
+mix **instrumental** stem. NB "regular" ≠ "vocal song" — BB's full drops are
+instrumental EDM; true vocal-regular spans are <5%.
+
+| | acappella | instrumental |
+|---|---|---|
+| best MERT layer | **L3** (low/acoustic) | **L22** (high/abstract) |
+| chroma top-1 | 15–21% | **79–88%** |
+| dtw | 43–46% | **75–89%** |
+| fp_pit | 78% | 84–86% |
+| MERT | 86–92% BB11 / **68% BB12** | **89% / 89%** |
+| # strong LFs | 1 (MERT only) | ~5 (all) |
+| oracle-of-5 ceiling | 99% / **88%** | **95% / 94%** |
+| MERT cross-set | 92→68 (unstable) | 89→89 (stable) |
+| LOSO combiner | transfers ≈ borda | transfers ≈ borda (89% both dirs) |
+
+Findings:
+
+1. **LF dominance flips by stem — the "instrumental → chroma+fingerprint" axis rule
+   holds hard.** Chroma is useless on acappellas (15%) but top-tier on instrumentals
+   (88%); dtw 46→89%. Instrumentals are harmonic/percussive → no single blind spot;
+   fp/chroma/dtw/MERT are *all* strong (unlike acappella's lone MERT).
+2. **Best MERT layer flips by stem: L3 (vocal) vs L22 (instrumental).** Vocal identity
+   = low-layer acoustic-timbre; instrumental/musical identity = high-layer
+   abstract-harmonic. Per-stem layer selection — validates keeping all 25 layers.
+3. **Instrumental identity is more robust:** oracle ceiling 94–95% on *both* sets (vs
+   acappella's BB12 collapse to 88%) — redundant complementary LFs cover each other.
+4. **MERT's generalization gap is vocal-specific:** 92→68 cross-set on acappellas but
+   **89→89 on instrumentals** → the earlier "MERT doesn't transfer" (§ Cross-set
+   LOSO) traces to vocal contamination/separation, not MERT itself.
+
+Caveat: instrumental pools are smaller (~55-way vs ~90), so some of the higher
+accuracy is easier classification — but the LF-dominance flip and the layer flip are
+pool-size-independent.
+
 ## Caveats
 
 - Two sets only; the label-model is small-n but the *cross-set* eval is the honest

@@ -1,10 +1,11 @@
 # Alignment — State of Record (current best + settled decisions)
 
-> **As of 2026-07-24 @ `70aea22`** (see decisions #20/#21 — open-set acappella
-> identity works against a real candidate pool and the combiner **transfers**
-> cross-set (BB11↔BB12 LOSO) but ≈ borda; the limit is now sensor/reference
-> quality, and MERT-L3 is set-dependent, not universal. Exercises #19's fix-path-1.
-> Also #18/#19 — the "identity
+> **As of 2026-07-24 @ `b889eca`** (see decisions #20/#21/#22 — open-set identity
+> works against a real candidate pool, the combiner **transfers** cross-set
+> (BB11↔BB12 LOSO) but ≈ borda, and **identity is stem-split**: the working LF and
+> the best MERT layer both flip between vocal (chroma useless / MERT-L3) and
+> instrumental (chroma top-tier / MERT-L22), and MERT's cross-set instability is
+> vocal-specific. Exercises #19's fix-path-1. Also #18/#19 — the "identity
 > axis" measures the tokenizer claim, not the aligner; GT verified drift-free on
 > canonical; de-friction pass added timeline provenance + `make align-state`).
 > **Operation Crush has EXITED** (decision #15, soundness) and its **completeness
@@ -79,7 +80,12 @@ wrong-variant label cannot slip (decision #17, Phase A).
   is a hard wall for frequency-absolute fingerprints (undo the **labeled semitone**,
   which is decoupled from `tempo_ratio` — do not correct tempo as if it were pitch),
   and long spans need a top-k chamfer (layered-vocal contamination). Weak LFs
-  (chroma/DTW) *hurt* equal-weight fusion. Full method + numbers:
+  (chroma/DTW) *hurt* equal-weight fusion **on acappellas**. **Route by stem
+  (decision #22):** the *instrumental* chain flips this — chroma/fp/dtw are all
+  strong (chroma 15%→88%), the best MERT layer moves L3→**L22**, and MERT
+  generalizes cross-set (89→89 vs the vocal 92→68). So instrumental spans lean
+  chroma/fp + high-layer MERT; vocal spans lean low-layer MERT. Full method +
+  numbers:
   [`open_set_acappella_identity_findings.md`](../workspaces/alignment_prototype/open_set_acappella_identity_findings.md).
 - **Placement** — the wall (roughly tied with structure as the weakest axis).
   Grid-lock (beat-grid snapping) is *the* placement lever; boundary novelty
@@ -112,6 +118,27 @@ and co-training seam). Harness: `harness/`. Agentic loop: `agentic/`.
 ## 2. Settled decisions (append-only; status = SETTLED | SUPERSEDED-BY-#N)
 
 > Append new entries at the top. Never rewrite history — supersede it.
+
+**#22 — Identity is stem-split: the LF that works AND the best MERT layer both flip
+between vocal and instrumental; MERT's cross-set instability is vocal-specific.**
+`2026-07-24` · SETTLED (finding). Ran the open-set identity pipeline on the
+**non-acappella** chain (mix instrumental stem vs the full drops + instrumental
+overlays; BB11 56 spans, BB12 63). Confirms the CLAUDE.md axis rule empirically:
+**chroma is useless on acappellas (15%) but top-tier on instrumentals (88%)**, and
+dtw 46→89% — instrumentals are harmonic/percussive so fp/chroma/dtw/MERT are *all*
+strong (no single blind spot, unlike acappella's lone MERT). Two consequences: (a)
+**the best MERT layer flips by stem — L3 for vocal identity, L22 for instrumental**
+(low acoustic-timbre vs high abstract-harmonic) — so per-stem layer selection is
+required; validates the adapter keeping all 25 layers. (b) **MERT is stem-dependent
+but not universally unstable**: it was 92→68 cross-set on acappellas (#21) yet
+**89→89 on instrumentals** → the generalization gap is *vocal contamination /
+separation quality*, not MERT. Instrumental identity is also more robust: oracle-of-5
+ceiling 94–95% on *both* sets (vs acappella BB12's 88%). Combiner still transfers ≈
+borda (89% both directions). Implication for the aligner's real candidate pool
+(#19/#20): route by stem — instrumental spans lean chroma/fp + high-layer MERT, vocal
+spans lean low-layer MERT. Numbers + method:
+[`open_set_acappella_identity_findings.md`](../workspaces/alignment_prototype/open_set_acappella_identity_findings.md)
+(§ Instrumental chain). Refines #20/#21.
 
 **#21 — The open-set identity combiner TRANSFERS cross-set (BB11↔BB12 LOSO), but
 ≈ borda, not ≫ it; the ceiling is the sensors/references, not the combiner —
