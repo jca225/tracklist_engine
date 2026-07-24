@@ -139,6 +139,21 @@ def _rows_for_set(set_id: str, label: str, gt_path: Path, suffix: str) -> list[d
     tl_path = _ALN / "out" / f"{set_id}_predicted_timeline{suffix}.json"
     join_guard(load_timeline(tl_path).sid, set_id, context="timeline vs set_id")
     timeline = json.loads(tl_path.read_text())
+
+    # Freshness: shout if this timeline was produced against different code / GT /
+    # id_map than the current state (the "is this file stale?" fog). Local-only
+    # here — the spine (set_track_slots) needs pi, so it is not recomputed in the
+    # scorecard; run `make align-state` for the full check.
+    from workspaces.alignment_prototype import provenance
+
+    fresh, drift = provenance.check(timeline, set_id, gt_paths=[gt_path])
+    if not fresh:
+        print(
+            f"  ⚠️  [{label}] timeline {tl_path.name} is STALE — drifted vs current: "
+            f"{', '.join(drift)}. Scores may not reflect current code/GT/id_map. "
+            f"Re-run infer."
+        )
+
     gt_rows, gt_by_tid = _load_gt(gt_path, set_id)
     audit = _load_audit(set_id)
 

@@ -217,6 +217,53 @@ def slot_pools_from_rows(
     return {k: tuple(v) for k, v in pools.items()}
 
 
+def override_identity_from_gt(
+    rows: tuple[dict, ...], gt_yaml: Path, set_id: str
+) -> tuple[dict, ...]:
+    """Oracle identity: replace each slot's claimed recording_id with the GT
+    content recording for that slot (matched by normalized slot_label, bridged
+    to canonical via the set's id_map). Slots the GT abstains on keep the claim.
+
+    Isolates placement/structure from identity poison — the aligner is handed
+    correct identity (from human labeling) and must only place + decode. Measures
+    the aligner's real placement/structure capability, since the shipped
+    recording_id is otherwise the (frequently-wrong) tokenizer claim verbatim
+    (state-of-record decision #19).
+    """
+    import yaml as _yaml
+
+    from workspaces.alignment_prototype.score_timeline_vs_gt import norm_slot
+
+    idmap_path = _REPO / "labeling" / "fixtures" / "id_maps" / f"{set_id}.json"
+    idmap = json.loads(idmap_path.read_text()) if idmap_path.exists() else {}
+    doc = _yaml.safe_load(gt_yaml.read_text())
+    gt_by_slot: dict[str, str] = {}
+    for r in doc["tracks"]:
+        sl = r.get("slot_label")
+        tid = r.get("track_id")
+        if sl is None or str(sl) == "mix" or not tid:
+            continue
+        gt_by_slot.setdefault(norm_slot(str(sl)), idmap.get(str(tid), str(tid)))
+
+    out: list[dict] = []
+    n_over = n_keep = 0
+    for r in rows:
+        gt_rec = gt_by_slot.get(norm_slot(str(r["slot_label"])))
+        if gt_rec:
+            claim_canon = idmap.get(str(r["recording_id"]), str(r["recording_id"]))
+            if gt_rec != claim_canon:
+                n_over += 1
+            r = {**r, "recording_id": gt_rec}
+        else:
+            n_keep += 1
+        out.append(r)
+    print(
+        f"oracle identity: overrode {n_over} slot recording_ids from GT "
+        f"({n_keep} kept — GT-abstain or no content)"
+    )
+    return tuple(out)
+
+
 def _torch_device() -> str:
     import torch
 
@@ -232,6 +279,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--set-id", required=True, help="target (unlabeled) set_id")
     p.add_argument("--train-yaml", type=Path, default=DEFAULT_TRAIN_YAML)
     p.add_argument("--refresh-mert", action="store_true")
+    p.add_argument(
+        "--identity-gt-yaml",
+        type=Path,
+        default=None,
+        help="ORACLE IDENTITY: override each slot's recording_id with the GT "
+        "content recording (from human labeling) before decode — measures "
+        "placement/structure given correct identity, bypassing the tokenizer "
+        "claim the aligner otherwise emits verbatim (state-of-record #19).",
+    )
     p.add_argument(
         "--band-s",
         type=float,
@@ -382,6 +438,8 @@ def main(argv: list[str] | None = None) -> int:
             )
 
     rows = fetch_slot_rows(args.set_id)
+    if args.identity_gt_yaml is not None:
+        rows = override_identity_from_gt(rows, args.identity_gt_yaml, args.set_id)
     mix_end = float(mix.end_s[-1])
     targets, anchors, slot_medians = build_stub_targets(rows, mix_end)
     pools = slot_pools_from_rows(rows)
@@ -845,6 +903,30 @@ def main(argv: list[str] | None = None) -> int:
         ],
         "skipped": [{"slot_label": t.slot_label, "name": t.label} for t in skipped],
     }
+    from datetime import datetime
+
+    from workspaces.alignment_prototype import provenance
+
+    gt_paths = [args.train_yaml]
+    if args.identity_gt_yaml is not None:
+        gt_paths.append(args.identity_gt_yaml)
+    payload["provenance"] = provenance.stamp(
+        args.set_id,
+        rows,
+        gt_paths=gt_paths,
+        flags={
+            "band_s": args.band_s,
+            "fp_placement": args.fp_placement,
+            "lyrics_placement": args.lyrics_placement,
+            "stem_placement": args.stem_placement,
+            "instr_stem_placement": args.instr_stem_placement,
+            "identity_gt": args.identity_gt_yaml.name
+            if args.identity_gt_yaml
+            else None,
+            "fp_placement_gate_s": args.fp_placement_gate_s,
+        },
+        written_at=datetime.now().isoformat(timespec="seconds"),
+    )
     out_path.write_text(json.dumps(payload, indent=2))
     print(f"wrote {out_path}")
 
