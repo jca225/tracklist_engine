@@ -1,6 +1,6 @@
 # Alignment — State of Record (current best + settled decisions)
 
-> **As of 2026-07-24 @ `b889eca`** (see decisions #20/#21/#22 — open-set identity
+> **As of 2026-07-24 @ `20e0a21`** (see decisions #20/#21/#22 — open-set identity
 > works against a real candidate pool, the combiner **transfers** cross-set
 > (BB11↔BB12 LOSO) but ≈ borda, and **identity is stem-split**: the working LF and
 > the best MERT layer both flip between vocal (chroma useless / MERT-L3) and
@@ -83,9 +83,13 @@ wrong-variant label cannot slip (decision #17, Phase A).
   (chroma/DTW) *hurt* equal-weight fusion **on acappellas**. **Route by stem
   (decision #22):** the *instrumental* chain flips this — chroma/fp/dtw are all
   strong (chroma 15%→88%), the best MERT layer moves L3→**L22**, and MERT
-  generalizes cross-set (89→89 vs the vocal 92→68). So instrumental spans lean
-  chroma/fp + high-layer MERT; vocal spans lean low-layer MERT. Full method +
-  numbers:
+  generalizes cross-set (89→89 vs the vocal 92→68). **Two-way stem routing (final,
+  no third regime):** acappella spans → the mix *vocal* stem + low-layer MERT (L3);
+  *everything else — regular full-song beds AND instrumental overlays* → the mix
+  *instrumental* stem + chroma/fp + high-layer MERT (L22). Full-vocal-song beds
+  identify by their instrumental backbone, not their vocal, because in a mashup the
+  mix vocal stem carries the *overlaid* acappellas, not the bed's own vocal (65/70
+  via instr handle, 0 vocal-only). Full method + numbers:
   [`open_set_acappella_identity_findings.md`](../workspaces/alignment_prototype/open_set_acappella_identity_findings.md).
 - **Placement** — the wall (roughly tied with structure as the weakest axis).
   Grid-lock (beat-grid snapping) is *the* placement lever; boundary novelty

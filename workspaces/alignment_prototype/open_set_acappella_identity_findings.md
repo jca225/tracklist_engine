@@ -154,6 +154,28 @@ Caveat: instrumental pools are smaller (~55-way vs ~90), so some of the higher
 accuracy is easier classification — but the LF-dominance flip and the layer flip are
 pool-size-independent.
 
+### Regular full-song probe — no separate "vocal-song" regime
+
+Tested the 70 `regular` full-track spans (incl. ~15–20 genuine vocal songs) with
+**both** queries: vocal-stem→MERT-L3 (the "acappella handle") and
+instrumental-stem→chroma/MERT-L22 (the "instrumental handle").
+
+| handle | identifies |
+|---|---|
+| instrumental (chroma / MERT-L22) | **65/70** |
+| vocal (MERT-L3) | **4/70** |
+| both 4 · **vocal-only 0** · instr-only 61 · neither 5 | |
+
+**Full vocal songs behave like instrumentals, not acappellas.** Even Chainsmokers –
+Roses, Tove Lo – Cool Girl, Passion Pit – Sleepyhead, SHM – Save The World are caught
+by the *instrumental* handle; **zero** spans are vocal-only, and the vocal handle is
+fully redundant. Mechanism (a real mashup-domain fact): during a full-song bed the
+mix **vocal stem is dominated by the OVERLAID acappellas** (different songs, tracked
+as their own spans), not the bed's own vocal — so `mix_vocals ≈ the overlays`,
+`mix_instrumental ≈ the bed`. **Routing rule (final):** acappella spans → vocal stem
+(MERT-L3); everything else (regular beds *and* instrumental overlays) → instrumental
+stem (chroma / MERT-L22). There is no third vocal-song identity regime.
+
 ## Caveats
 
 - Two sets only; the label-model is small-n but the *cross-set* eval is the honest
