@@ -47,6 +47,7 @@ from scripts.loop_hardening import (
     SSH_PUSH_TIMEOUT,
     SSH_QUERY_TIMEOUT,
     exit_status,
+    sha256_file,
 )
 
 PI_HOST = "pi-storage"
@@ -92,13 +93,14 @@ def _set_filter_clause(set_ids: tuple[str, ...] | None) -> str:
 def next_task(
     skip_tids: frozenset[int],
     set_ids: tuple[str, ...] | None,
-) -> tuple[int, str] | None:
+) -> tuple[int, str, str] | None:
     skip_clause = ""
     if skip_tids:
         skip_csv = ",".join(str(t) for t in skip_tids)
         skip_clause = f"AND ta.track_audio_id NOT IN ({skip_csv}) "
     sql = (
-        "SELECT ta.track_audio_id, ta.path FROM track_audio ta "
+        "SELECT ta.track_audio_id, COALESCE(ta.sha256, ''), ta.path "
+        "FROM track_audio ta "
         "JOIN track_analysis tan ON tan.track_audio_id = ta.track_audio_id "
         "LEFT JOIN ("
         "  SELECT DISTINCT track_audio_id FROM track_mert_measures "
@@ -113,8 +115,8 @@ def next_task(
     out = ssh_pi(sql)
     if not out:
         return None
-    parts = out.split("|", 1)
-    return int(parts[0]), parts[1]
+    parts = out.split("|", 2)
+    return int(parts[0]), parts[1], parts[2]
 
 
 def fetch_measure_times(track_audio_id: int) -> tuple[float, ...]:
@@ -287,12 +289,34 @@ def main() -> int:
             code, level, msg = exit_status(n_done, n_failed)
             log.log(level, "%s", msg)
             return code
-        tid, remote_path = nxt
+        tid, expected_sha, remote_path = nxt
         local_audio = LOCAL_AUDIO / f"{tid}.m4a"
 
         try:
             log.info("[%d] pulling %s", tid, remote_path)
             rsync_in(remote_path, local_audio)
+
+            # B2: a truncated rsync that exits 0 hands back a short file that
+            # decodes to garbage MERT embeddings — which then land in canonical
+            # and satisfy the queue predicate (dim=1024), silently poisoning the
+            # track. Verify the pull against canonical sha256 before embedding.
+            # A mismatch is skipped for this run (re-pulled by a later process,
+            # matching how the loop handles other pull failures).
+            if expected_sha:
+                try:
+                    local_sha = sha256_file(local_audio)
+                except OSError as exc:
+                    local_sha = f"<unreadable: {exc}>"
+                if local_sha != expected_sha:
+                    log.warning(
+                        "[%d] sha256 mismatch (got %s…, want %s…) — skipping",
+                        tid,
+                        local_sha[:12],
+                        expected_sha[:12],
+                    )
+                    n_failed += 1
+                    failed_tids.add(tid)
+                    continue
 
             measure_times = fetch_measure_times(tid)
             log.info("[%d] %d measure boundaries", tid, len(measure_times))
