@@ -41,8 +41,9 @@ from tokenizer.identity_axes import (
     scrape_claimed_version,
 )
 from tokenizer.track_tokenizer import parse_track_row as parse_track_main
-from tokenizer.track_tokenizer import TrackRow
 from tokenizer.suggestion_tokenizer import parse_suggestion_row
+from tokenizer.model import TrackRow  # canonical surface (re-export)
+from tokenizer import model
 
 log = logging.getLogger("tokenizer.materialize")
 
@@ -133,16 +134,16 @@ class _MetadataAccumulator:
 # -----------------------------------------------------------------------------
 
 
-def _flush_suggestions(conn: sqlite3.Connection, buf: list[tuple]) -> None:
+def _flush_suggestions(
+    conn: sqlite3.Connection, buf: "list[model.TrackSuggestionRow]"
+) -> None:
     if not buf:
         return
+    cols = model.columns(model.TrackSuggestionRow)
     conn.executemany(
-        "INSERT OR REPLACE INTO track_suggestions ("
-        "sug_id, set_id, tlp_id, pos, track_slug, track_display, artist_title, "
-        "suggester_user_id, suggester_name, suggestion_timestamp, "
-        "is_remix, has_youtube, has_soundcloud, has_spotify"
-        ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        buf,
+        f"INSERT OR REPLACE INTO track_suggestions ({','.join(cols)}) "
+        f"VALUES ({','.join('?' * len(cols))})",
+        [model.as_row(r) for r in buf],
     )
     conn.commit()
 
@@ -167,30 +168,15 @@ def _slot_label(tr: TrackRow) -> str | None:
     return None
 
 
-def _flush_slots(conn: sqlite3.Connection, buf: list[tuple]) -> None:
+def _flush_slots(conn: sqlite3.Connection, buf: "list[model.SetTrackSlotRow]") -> None:
     if not buf:
         return
-    cols = {r[1] for r in conn.execute("PRAGMA table_info(set_track_slots)")}
-    if "layer_role" in cols:
-        conn.executemany(
-            "INSERT OR REPLACE INTO set_track_slots ("
-            "set_id, row_index, tlp_id, recording_id, track_id, source, slot_label, "
-            "is_concurrent, cue_seconds, cue_time_seconds, claimed_version, "
-            "claimed_stem, claimed_variant, full_name, title, artists_json, "
-            "duration_seconds, layer_role, constituents_json"
-            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            buf,
-        )
-    else:
-        legacy = [row[:17] for row in buf]
-        conn.executemany(
-            "INSERT OR REPLACE INTO set_track_slots ("
-            "set_id, row_index, tlp_id, recording_id, track_id, source, slot_label, "
-            "is_concurrent, cue_seconds, cue_time_seconds, claimed_version, "
-            "claimed_stem, claimed_variant, full_name, title, artists_json, duration_seconds"
-            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            legacy,
-        )
+    cols = model.columns(model.SetTrackSlotRow)
+    conn.executemany(
+        f"INSERT OR REPLACE INTO set_track_slots ({','.join(cols)}) "
+        f"VALUES ({','.join('?' * len(cols))})",
+        [model.as_row(r) for r in buf],
+    )
     conn.commit()
 
 
@@ -215,6 +201,7 @@ CREATE TABLE IF NOT EXISTS set_track_slots (
     claimed_stem TEXT NOT NULL DEFAULT 'regular',
     claimed_variant TEXT NOT NULL DEFAULT 'regular',
     full_name TEXT, title TEXT, artists_json TEXT, duration_seconds INTEGER,
+    layer_role TEXT, constituents_json TEXT,
     parsed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (set_id, row_index)
 );
@@ -223,7 +210,8 @@ CREATE TABLE IF NOT EXISTS track_suggestions (
     pos INTEGER, track_slug TEXT, track_display TEXT, artist_title TEXT,
     suggester_user_id INTEGER, suggester_name TEXT,
     suggestion_timestamp TEXT, is_remix INTEGER, has_youtube INTEGER,
-    has_soundcloud INTEGER, has_spotify INTEGER
+    has_soundcloud INTEGER, has_spotify INTEGER,
+    parsed_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 """
 
@@ -256,8 +244,8 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
     log.info("streaming %s rows from dj_set_rows", f"{total:,}")
 
     metadata = _MetadataAccumulator()
-    slot_buf: list[tuple] = []
-    sug_buf: list[tuple] = []
+    slot_buf: list[model.SetTrackSlotRow] = []
+    sug_buf: list[model.TrackSuggestionRow] = []
     counts = {"track": 0, "slot": 0, "suggestion": 0, "text": 0, "errors": 0}
     # Per-set w/ layering: primary label + w/ counter (matches pull_set_for_alignment).
     slot_state: dict[str, tuple[str | None, int]] = {}
@@ -328,28 +316,30 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
                             claimed_stem=claimed_stem,
                         )
                         slot_buf.append(
-                            (
-                                sid,
-                                int(row["row_index"]),
-                                tr.data_id,
-                                tr.track_key,
-                                tr.track_key,
-                                source,
-                                label,
-                                int(tr.is_concurrent),
-                                tr.cue_seconds,
-                                tr.cue_time_seconds,
-                                scrape_claimed_version(tr.version_tag),
-                                claimed_stem,
-                                derive_claimed_variant(tr.full_name),
-                                tr.full_name,
-                                tr.title,
-                                json.dumps(list(tr.artists), ensure_ascii=False)
-                                if tr.artists
-                                else None,
-                                tr.duration_seconds,
-                                layer_role,
-                                None,
+                            model.SetTrackSlotRow(
+                                set_id=sid,
+                                row_index=int(row["row_index"]),
+                                tlp_id=tr.data_id,
+                                recording_id=tr.track_key,
+                                track_id=tr.track_key,
+                                source=source,
+                                slot_label=label,
+                                is_concurrent=int(tr.is_concurrent),
+                                cue_seconds=tr.cue_seconds,
+                                cue_time_seconds=tr.cue_time_seconds,
+                                claimed_version=scrape_claimed_version(tr.version_tag),
+                                claimed_stem=claimed_stem,
+                                claimed_variant=derive_claimed_variant(tr.full_name),
+                                full_name=tr.full_name,
+                                title=tr.title,
+                                artists_json=(
+                                    json.dumps(list(tr.artists), ensure_ascii=False)
+                                    if tr.artists
+                                    else None
+                                ),
+                                duration_seconds=tr.duration_seconds,
+                                layer_role=layer_role,
+                                constituents_json=None,
                             )
                         )
                         counts["slot"] += 1
@@ -361,23 +351,25 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
                 elif "sugTog" in outer_classes:
                     sug = parse_suggestion_row(outer)
                     sug_buf.append(
-                        (
-                            sug.sug_id,
-                            row["set_id"],
-                            sug.tlp_id,
-                            sug.pos,
-                            sug.track_slug,
-                            sug.track_display,
-                            sug.artist_title,
-                            sug.suggester_user_id,
-                            sug.suggester_name,
-                            sug.suggestion_timestamp,
-                            int(bool(sug.is_remix))
-                            if sug.is_remix is not None
-                            else None,
-                            int(bool(sug.has_youtube)),
-                            int(bool(sug.has_soundcloud)),
-                            int(bool(sug.has_spotify)),
+                        model.TrackSuggestionRow(
+                            sug_id=sug.sug_id,
+                            set_id=row["set_id"],
+                            tlp_id=sug.tlp_id,
+                            pos=sug.pos,
+                            track_slug=sug.track_slug,
+                            track_display=sug.track_display,
+                            artist_title=sug.artist_title,
+                            suggester_user_id=sug.suggester_user_id,
+                            suggester_name=sug.suggester_name,
+                            suggestion_timestamp=sug.suggestion_timestamp,
+                            is_remix=(
+                                int(bool(sug.is_remix))
+                                if sug.is_remix is not None
+                                else None
+                            ),
+                            has_youtube=int(bool(sug.has_youtube)),
+                            has_soundcloud=int(bool(sug.has_soundcloud)),
+                            has_spotify=int(bool(sug.has_spotify)),
                         )
                     )
                     counts["suggestion"] += 1
