@@ -17,7 +17,7 @@ import json
 
 from labeling.als import load_als_xml, parse_layer_clips
 from labeling.als.semantics import MUTE_THR, clip_gain_breakpoints, linear_to_db
-from labeling.export_als_to_gt import collect_kept_clip_rows
+from labeling.extract._shared import collect_kept_clip_rows
 from tests.labeling.synth_session import LayerSpec, session_als_file
 
 
