@@ -14,7 +14,7 @@ REPO         := ~/tracklist_engine
 PIP          := $(REPO)/venvs/web_crawler/bin/pip
 DB           := /mnt/storage/data/db/music_database.db
 
-.PHONY: help check check-corpus check-inventory docs-gc docs-gc-apply audit-gt scorecard race align-ablate deploy deploy-storage deploy-worker \
+.PHONY: help check check-corpus check-inventory docs-gc docs-gc-apply audit-gt scorecard race align-state align-ablate deploy deploy-storage deploy-worker \
         restart-jobqueue start-scraper stop-scraper restart-retry \
         install-taste-scrape restart-taste-scrape logs-taste-scrape \
         install-corpus-integrity logs-corpus-integrity \
@@ -98,6 +98,13 @@ DRIVERS ?= classical,agentic,ml
 race:
 	venvs/audio/bin/python -m workspaces.alignment_prototype.drivers.race \
 		--sets $(SETS) --drivers $(DRIVERS) $(EXTRA)
+
+# Where is the aligner for a set, and can I trust its timeline? Prints each
+# timeline's provenance + FRESH/STALE vs current code/GT/id_map/pi-spine.
+# NOPI=1 skips the pi spine check (offline).
+align-state:
+	@test -n "$(SET)" || { echo "usage: make align-state SET=<set_id> [NOPI=1]"; exit 1; }
+	venvs/audio/bin/python scripts/align_state.py --set-id $(SET) $(if $(NOPI),--no-pi,)
 
 # Staged pipeline + ablation framework (docs/pipeline_ablation_framework.md).
 # Compose grain reproduces `make race` with auto baseline-injection + a

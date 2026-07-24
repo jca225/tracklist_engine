@@ -1,5 +1,24 @@
 # Alignment — canonical status (single source of truth)
 
+> 🚨 **THE "IDENTITY AXIS" DOES NOT MEASURE THE ALIGNER (2026-07-23) — see
+> state-of-record decision #19.** Proven this session: the aligner's emitted
+> `recording_id` **equals the `set_track_slots` claim on 100% of spans** (157/157
+> fresh, 152/152 July-6) — **by construction**. The production candidate pool is
+> "naive: one recording per slot = the tokenizer's claim"
+> ([dataset.py:43](../workspaces/alignment_prototype/dataset.py#L43)), so
+> `predict_sequence` has no identity decision to make; it only decodes placement.
+> Therefore every "identity" number below measures the **tokenizer's tracklist
+> claim vs GT**, NOT an aligner capability. Against clean GT the claim is right on
+> ~62% of content slots (BB12); the old **82–84% was the same claim vs the
+> *poisoned* GT** (spurious agreement — both derived from the claim spine, which
+> Crush never de-poisoned). **The §5 "MERT identity 83–84%" line is an eval-only
+> capability** (measured with a real multi-candidate pool) and is **NOT wired into
+> the shipped pipeline.** Do not cite any identity number as an aligner result.
+> Placement/structure numbers are less affected but were scored on
+> claim-inherited identity. Honest identity requires a real candidate pool +
+> wiring MERT/FP to override the claim (experiment in progress), or fixing the
+> spine in ingest.
+
 > **Numbers regenerated 2026-07-19 at commit `ce3b285`** (§1–§2 re-run after
 > canonical BB11/BB12 Ableton GT regeneration) via the command block in
 > §Regeneration below. §3–§4 are explicitly carried, not silently presented as
