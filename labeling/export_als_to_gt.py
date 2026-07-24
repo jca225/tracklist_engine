@@ -298,10 +298,12 @@ def _clip_row(
     ref_span = ref_end - ref_start
     # The real fader ride over this clip, in SET seconds: every volume
     # breakpoint mapped through the warp. audible_frac/start/end are then
-    # derived from this one curve (no independent computation to drift).
+    # derived from this one curve (no independent computation to drift). With no
+    # automation the curve sits at the static fader (track_gain), so a track
+    # parked below unity is no longer mistaken for fully audible.
     curve: list[tuple[float, float]] = []
     for arr_b, gain in clip_gain_breakpoints(
-        clip.vol_points, clip.arr_start, clip.arr_end
+        clip.vol_points, clip.arr_start, clip.arr_end, base_gain=clip.track_gain
     ):
         sec = mapper.arr_to_set_sec(arr_b)
         if sec is not None:
