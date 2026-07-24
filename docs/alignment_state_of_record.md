@@ -1,6 +1,8 @@
 # Alignment — State of Record (current best + settled decisions)
 
-> **As of 2026-07-22 @ `7737c09`** (branch `main`).
+> **As of 2026-07-23 @ `253980b`** (see decisions #18/#19 — the "identity axis"
+> measures the tokenizer claim, not the aligner; GT verified drift-free on
+> canonical; de-friction pass added timeline provenance + `make align-state`).
 > **Operation Crush has EXITED** (decision #15, soundness) and its **completeness
 > closure is now SHIPPING** — Phase A (sound correctness + axis plumbing) is done
 > on PR #75 (decision #17); Phases B–E remain. The GT is de-poisoned +
@@ -97,6 +99,53 @@ and co-training seam). Harness: `harness/`. Agentic loop: `agentic/`.
 ## 2. Settled decisions (append-only; status = SETTLED | SUPERSEDED-BY-#N)
 
 > Append new entries at the top. Never rewrite history — supersede it.
+
+**#19 — The aligner does NOT predict identity — it inherits the tokenizer's claim
+100% by construction; the "identity axis" measures the SPINE, not the aligner.**
+`2026-07-23` · SETTLED (finding) / OPEN (fix). Proven this session: the emitted
+`recording_id` equals `set_track_slots.recording_id` on **every** span — 157/157 on a
+fresh clean re-inference, 152/152 on the July-6 full pipeline. Root cause:
+`slot_candidates_from_targets` builds a **"naive candidate pool: one recording per
+slot = the tokenizer's claim"** ([dataset.py:43]), so `predict_sequence` (mert_model.py)
+has a pool of size 1 per slot — it can only "select" the claim; it decides placement,
+never identity. `infer.py:124` reads `recording_id` straight from `set_track_slots`.
+**Consequence:** the "identity" headline (84% vs poisoned GT, ~62% vs clean GT) is the
+tokenizer's *tracklist-claim accuracy*, not an aligner capability. Crush de-poisoned
+`set_ground_truth` (GT) but **never touched `set_track_slots` (the claim spine)**, so the
+poison relocated to the prediction side — invisible until pred-vs-spine was checked. The
+status.md §5 "MERT identity 83–84%" is an **eval-only** capability (real multi-candidate
+pool) that is **NOT wired into the shipped pipeline**. **Fix paths:** (1) build a real
+per-slot candidate pool (claim + siblings/alternatives, or corpus-wide) and wire
+MERT/fingerprint/stem-FP to override the claim when audio disagrees — perception exists
+(§5), the pool wiring does not; or (2) fix the spine upstream in ingest (version/variant
+QA), per CLAUDE.md's "identity QA is ingest, not the aligner". Nothing currently corrects
+it. Supersedes the hopeful read in #18 (the identity deflation is NOT an artifact — it is
+the tokenizer claim measured honestly). Related: [[project_stem_cand_wrong_recording_gap]],
+[[project_wrong_version_preview_clip]], [[project_identity_by_string_bug_class]]. Experiment
+in progress: real-candidate-pool MERT re-pick on BB12.
+
+**#18 — The alignment_status.md numbers are measured on STALE APPARATUS, not
+clean GT — do NOT trust them as post-Crush honest numbers.** `2026-07-23` ·
+SETTLED (finding) / OPEN (honest re-measure). Attempted the post-Crush honest
+re-measure (RT1 starting gun) and found the scoreboard is incoherent with the
+de-poisoned GT — the *apparatus*, not the GT, is the problem. Verified on
+canonical pi: `set_ground_truth` is genuinely de-poisoned and **drift-free vs the
+git fixtures** — abstains stored as NULL `recording_id` (BB12 57/110, BB11 64/84),
+counts exact (315 rows), per-label binding diff = **0 drift**; pi code current
+with `origin/main` (the "~92 behind" note is stale — autopull caught up). BUT the
+predicted timelines (`workspaces/alignment_prototype/out/*_predicted_timeline_lt.json`)
+are **from July 6**, generated when the aligner drew candidate identity from the
+**unverified claim spine** (`set_track_slots`) — which Crush never touched — and the
+**bridge id_maps** (`labeling/fixtures/id_maps/<set>.json`, scrape-id→canonical
+recording_id) are **broken: BB12's missing, BB11's from July 2**; their generator
+was deleted, so the map silently rotted. Re-scoring stale predictions through a
+broken translation table against fresh GT makes the **identity axis look like it
+collapsed 82–84%→51–61%** — this is a MEASUREMENT ARTIFACT, not a regression
+(placement/structure moved only ±3pp because de-poison never touched them). **The
+honest re-measure requires re-inference on clean canonical + a rebuilt bridge
+id_map, NOT re-scoring the July-6 files.** Deeper design flag (defer): identity
+candidates are bounded by the claim spine, so the aligner cannot identify a
+recording the spine never claims. Numbers → alignment_status.md after re-inference.
 
 **#17 — Crush completeness Phase A SHIPPED: sound correctness + axis plumbing.**
 `2026-07-22` · SETTLED (Phase A) / OPEN (Phases B–E). First execution of the #16 rule set,
@@ -295,14 +344,18 @@ from scorers. Dead ends live in the EXPERIMENTS ledger.
   **~8.6%** (18,805/218,467 distinct tracks) have audio and `is_reference` is essentially
   unpopulated (443 rows) — the ingest frontier, not gating alignment. Do NOT read the 8.6% as
   an aligner problem; it's acquisition.
-- **Post-Crush re-measure — Rolling Thunder RT1 kickoff, now sequenced AFTER Phase B.**
-  Canonical write-back is DONE (decision #15) so the soundness blocker is cleared, but the
-  *honest* numbers should be measured on the **completeness-recovered** GT (post-Phase-B
-  re-export), not the 66%-bound interim. Run the scorers on the de-poisoned GT (`make
-  scorecard` / `make race` over BB11+BB12 on the `_lt` timeline, + the TRM
-  `path_decode.trajectory_acc` re-run) and regenerate [alignment_status.md](alignment_status.md)
-  — the **first honest post-Crush numbers**. Every prior headline was measured on poisoned GT
-  and is provisional. RT1 starting gun; see
+- **Post-Crush re-measure — RT1 BLOCKED on apparatus, not GT (decision #18).**
+  Canonical GT write-back is DONE + verified drift-free (decision #15), but the honest
+  re-measure **cannot** be done by re-scoring the existing timelines: they are July-6
+  predictions built on the unverified claim spine, and the bridge id_maps
+  (`labeling/fixtures/id_maps/<set>.json`) are missing (BB12) / stale (BB11) with a deleted
+  generator. **Sequenced fix (in progress 2026-07-23):** (1) write a reproducible bridge-id_map
+  generator + regenerate BB11/BB12 from clean canonical `set_track_slots` (validated 100% vs
+  the surviving BB11 map on shared keys; cheap, no GPU); (2) re-infer both sets on a Vast GPU
+  box against clean canonical (BB12 first — BB11 stalls Whisper), validating the id_map via the
+  ref-resolution count (0/N = still broken); (3) `make scorecard` / `make race` + TRM
+  `path_decode.trajectory_acc` → regenerate [alignment_status.md](alignment_status.md). Only
+  then are the numbers honest. Every prior headline is provisional. See
   [operation_rolling_thunder_proposed.md](operation_rolling_thunder_proposed.md).
 - **`labeling/` package reorganization — PARKED by owner (2026-07-22, "do later").** Raised
   after Phase A; assessment: the recurring bug class is SSOT drift (A4 = catalog vs pull
