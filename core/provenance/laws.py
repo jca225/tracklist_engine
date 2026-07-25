@@ -12,9 +12,10 @@ Scope honesty (do not overclaim):
   persisted — NOT the shipped aligner pipeline. The hand-audited verdicts in
   docs/engine/law_audit.md grade the shipped pipeline and still stand; a green
   law here means "this substrate DB obeys the law", nothing more.
-- Laws about entities the substrate does not hold yet (human labels §7, model
-  provenance §8, rounds/pseudo-labels §12, evaluation/promotion §11) report
-  ``NOT_APPLICABLE`` with the reason. They are never faked green.
+- Laws about entities the substrate does not hold yet (model provenance §8,
+  rounds/pseudo-labels §12, evaluation/promotion §11) report
+  ``NOT_APPLICABLE`` with the reason. They are never faked green. Human labels
+  (§7, laws 8/9) ARE held since Brick 6 — checkable once assertions exist.
 - A data-dependent law with zero applicable rows is ``NOT_APPLICABLE``, not
   PASS — an empty database proves nothing.
 - Laws 4 and 5 are namespace/shape heuristics (documented on the functions),
@@ -356,6 +357,123 @@ def _law_07(conn: sqlite3.Connection, store: Optional[ArtifactStore]) -> LawResu
     )
 
 
+# --- 8 · human_history_is_append_only ----------------------------------------
+def _law_08(conn: sqlite3.Connection, store: Optional[ArtifactStore]) -> LawResult:
+    """Human-label history is append-only: every ``supersedes_assertion_id``
+    resolves to a row that STILL EXISTS (a dangling pointer means the old row
+    was deleted/overwritten — the exact §7 violation), supersession forms no
+    cycle, and every assertion's bundle + producing run exist. The append-only
+    property is structural — it can only be broken by mutating rows, which
+    these referential checks surface."""
+    checked = _count(conn, "SELECT COUNT(*) FROM human_label_assertion")
+    offenders: list[str] = []
+
+    for r in conn.execute(
+        "SELECT assertion_id, supersedes_assertion_id FROM human_label_assertion a "
+        "WHERE a.supersedes_assertion_id IS NOT NULL AND NOT EXISTS "
+        "(SELECT 1 FROM human_label_assertion o "
+        " WHERE o.assertion_id=a.supersedes_assertion_id)"
+    ).fetchall():
+        offenders.append(
+            f"assertion {r['assertion_id'][:8]} supersedes "
+            f"{str(r['supersedes_assertion_id'])[:8]} which no longer exists "
+            "(history was rewritten)"
+        )
+
+    # Supersession must be acyclic (an assertion can never — transitively —
+    # supersede itself).
+    supersedes: dict[str, str] = {
+        r["assertion_id"]: r["supersedes_assertion_id"]
+        for r in conn.execute(
+            "SELECT assertion_id, supersedes_assertion_id FROM human_label_assertion "
+            "WHERE supersedes_assertion_id IS NOT NULL"
+        )
+    }
+    resolved: set[str] = set()
+    for start in supersedes:
+        if start in resolved:
+            continue
+        path: list[str] = []
+        on_path: set[str] = set()
+        node: Optional[str] = start
+        while node is not None and node in supersedes and node not in resolved:
+            if node in on_path:
+                offenders.append(f"supersession cycle through {node[:8]}")
+                break
+            on_path.add(node)
+            path.append(node)
+            node = supersedes[node]
+        resolved.update(path)
+
+    for r in conn.execute(
+        "SELECT assertion_id FROM human_label_assertion a WHERE NOT EXISTS "
+        "(SELECT 1 FROM human_label_bundle b WHERE b.bundle_id=a.bundle_id)"
+    ).fetchall():
+        offenders.append(f"assertion {r['assertion_id'][:8]} cites a missing bundle")
+    for r in conn.execute(
+        "SELECT assertion_id FROM human_label_assertion a WHERE NOT EXISTS "
+        "(SELECT 1 FROM run r WHERE r.run_id=a.produced_run_id)"
+    ).fetchall():
+        offenders.append(f"assertion {r['assertion_id'][:8]} cites a missing run")
+
+    return _finish(
+        8,
+        "human_history_is_append_only",
+        checked,
+        offenders,
+        "every supersession resolves to a live row; no cycle; bundles/runs intact",
+        na_reason="no human-label assertions recorded (§7 adapter not run)",
+    )
+
+
+# --- 9 · human_uncertainty_is_field_specific ---------------------------------
+def _law_09(conn: sqlite3.Connection, store: Optional[ArtifactStore]) -> LawResult:
+    """Every human assertion carries a non-empty uncertainty model (a dict with
+    a ``kind``), and no bundle applies ONE identical model uniformly across
+    multiple distinct fields — that is the global-scalar-confidence smell the
+    law forbids."""
+    offenders: list[str] = []
+    checked = 0
+    # (bundle_id -> field set / distinct-model set) for the uniformity check.
+    bundle_fields: dict[str, set[str]] = {}
+    bundle_models: dict[str, set[str]] = {}
+    for r in conn.execute(
+        "SELECT assertion_id, bundle_id, field, uncertainty_model_json "
+        "FROM human_label_assertion"
+    ).fetchall():
+        checked += 1
+        raw = r["uncertainty_model_json"]
+        model: object = None
+        try:
+            model = json.loads(raw) if raw else None
+        except (TypeError, ValueError):
+            model = None
+        if not isinstance(model, dict) or not str(model.get("kind", "")):
+            offenders.append(
+                f"assertion {r['assertion_id'][:8]} <{r['field']}> has no "
+                "usable uncertainty_model (missing/empty/kind-less)"
+            )
+            continue
+        bundle_fields.setdefault(r["bundle_id"], set()).add(r["field"])
+        bundle_models.setdefault(r["bundle_id"], set()).add(
+            json.dumps(model, sort_keys=True)
+        )
+    for bundle_id, fields in bundle_fields.items():
+        if len(fields) >= 2 and len(bundle_models.get(bundle_id, set())) == 1:
+            offenders.append(
+                f"bundle {bundle_id[:8]} applies ONE uncertainty model uniformly "
+                f"across {len(fields)} distinct fields (global scalar smell)"
+            )
+    return _finish(
+        9,
+        "human_uncertainty_is_field_specific",
+        checked,
+        offenders,
+        "every assertion carries its own field-specific uncertainty model",
+        na_reason="no human-label assertions recorded (§7 adapter not run)",
+    )
+
+
 # --- 10 · identity_placement_structure_are_separate --------------------------
 def _law_10(conn: sqlite3.Connection, store: Optional[ArtifactStore]) -> LawResult:
     """Axis values are valid and never cross: every evidence row carries the
@@ -512,14 +630,6 @@ def _law_21(conn: sqlite3.Connection, store: Optional[ArtifactStore]) -> LawResu
 
 # --- laws over entities the substrate does not hold yet ----------------------
 _UNBUILT: dict[int, tuple[str, str]] = {
-    8: (
-        "human_history_is_append_only",
-        "no human-label assertions in the substrate schema yet (§7 unbuilt, P1)",
-    ),
-    9: (
-        "human_uncertainty_is_field_specific",
-        "no human-label assertions in the substrate schema yet (§7 unbuilt, P1)",
-    ),
     13: (
         "every_model_has_training_snapshot",
         "no model/training-snapshot entities in the substrate (§8 unbuilt, P3)",
@@ -567,6 +677,8 @@ _CHECKERS: dict[
     5: _law_05,
     6: _law_06,
     7: _law_07,
+    8: _law_08,
+    9: _law_09,
     10: _law_10,
     11: _law_11,
     12: _law_12,

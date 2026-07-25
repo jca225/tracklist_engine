@@ -109,6 +109,31 @@ CREATE TABLE IF NOT EXISTS belief (
     contributing_evidence_ids_json TEXT NOT NULL DEFAULT '[]',
     supersedes_belief_id          TEXT
 );
+-- §7 human labeling: BOTH tables are append-only. Rows are only ever
+-- INSERTed; a revised assertion is a NEW row whose supersedes_assertion_id
+-- points at the old one (Law 8). uncertainty_model_json is NOT NULL — an
+-- assertion without an uncertainty model is the Law-9 violation.
+CREATE TABLE IF NOT EXISTS human_label_bundle (
+    bundle_id              TEXT PRIMARY KEY,
+    set_id                 TEXT NOT NULL,
+    source_artifact_sha256 TEXT NOT NULL REFERENCES artifact(content_sha256),
+    annotator_id           TEXT NOT NULL,
+    import_run_id          TEXT NOT NULL REFERENCES run(run_id),
+    created_at             TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS human_label_assertion (
+    assertion_id            TEXT PRIMARY KEY,
+    bundle_id               TEXT NOT NULL REFERENCES human_label_bundle(bundle_id),
+    subject_type            TEXT NOT NULL,
+    subject_id              TEXT NOT NULL,
+    field                   TEXT NOT NULL,
+    value_json              TEXT,
+    uncertainty_model_json  TEXT NOT NULL,
+    source_confidence       REAL,
+    supersedes_assertion_id TEXT,
+    produced_run_id         TEXT NOT NULL REFERENCES run(run_id),
+    created_at              TEXT NOT NULL
+);
 """
 
 

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -54,14 +54,26 @@ class ObservationView:
 
 
 @dataclass(frozen=True)
+class HumanAssertionView:
+    """One §7 human-label assertion on the subject (latest-first per field)."""
+
+    field: str
+    observed_value: Any
+    uncertainty_model: dict[str, Any]
+    annotator_id: str
+    superseded: bool  # a newer assertion supersedes this one
+
+
+@dataclass(frozen=True)
 class SubjectExplanation:
     subject_id: str
     axes: list[AxisView]
     observations: list[ObservationView]
+    human_assertions: list[HumanAssertionView] = field(default_factory=list)
 
     @property
     def is_empty(self) -> bool:
-        return not self.axes and not self.observations
+        return not self.axes and not self.observations and not self.human_assertions
 
 
 @dataclass(frozen=True)
@@ -146,7 +158,27 @@ def explain_subject(conn: sqlite3.Connection, subject_id: str) -> SubjectExplana
                 producer_process=o["process"],
             )
         )
-    return SubjectExplanation(subject_id, axes, observations)
+
+    human: list[HumanAssertionView] = []
+    for h in conn.execute(
+        "SELECT a.assertion_id, a.field, a.value_json, a.uncertainty_model_json, "
+        "b.annotator_id, EXISTS (SELECT 1 FROM human_label_assertion n "
+        "WHERE n.supersedes_assertion_id=a.assertion_id) AS superseded "
+        "FROM human_label_assertion a "
+        "JOIN human_label_bundle b ON b.bundle_id=a.bundle_id "
+        "WHERE a.subject_id=? ORDER BY a.created_at DESC",
+        (subject_id,),
+    ).fetchall():
+        human.append(
+            HumanAssertionView(
+                field=h["field"],
+                observed_value=_loads(h["value_json"]),
+                uncertainty_model=_loads(h["uncertainty_model_json"]) or {},
+                annotator_id=h["annotator_id"],
+                superseded=bool(h["superseded"]),
+            )
+        )
+    return SubjectExplanation(subject_id, axes, observations, human)
 
 
 def lineage(conn: sqlite3.Connection, content_sha256: str) -> list[LineageNode]:
@@ -211,6 +243,13 @@ def format_subject(exp: SubjectExplanation) -> str:
         )
         lines.append(
             f"  <obs {o.predicate}> {o.status}{conf}{diag}  via {o.producer_process}"
+        )
+    for h in exp.human_assertions:
+        old = "  (superseded)" if h.superseded else ""
+        kind = h.uncertainty_model.get("kind", "?")
+        lines.append(
+            f"  <human {h.field}> = {h.observed_value!r} ±{kind} "
+            f"by {h.annotator_id}{old}"
         )
     return "\n".join(lines)
 

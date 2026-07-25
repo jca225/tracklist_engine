@@ -14,9 +14,14 @@
 > ([core/provenance/laws.py](../../core/provenance/laws.py)). **Scope: it grades
 > a provenance *substrate DB* (what the Brick 1–4 writers persisted), NOT the
 > shipped pipeline — the verdicts below grade the shipped pipeline and still
-> stand.** Checkable now: 1, 2, 3, 4, 5, 6, 7, 10, 11, 21 (both grounded DBs
-> under `workspaces/alignment_prototype/out/provenance/` pass all ten); laws
-> 8/9/12–20 report NOT_APPLICABLE until their entities exist in the substrate.
+> stand.** Checkable now: 1, 2, 3, 4, 5, 6, 7, **8, 9** (since Brick 6: §7
+> human-label assertions imported from the GT fixtures via
+> `python -m workspaces.alignment_prototype.provenance_gt`), 10, 11, 21 (both
+> grounded DBs under `workspaces/alignment_prototype/out/provenance/` pass all
+> twelve); laws 12–20 report NOT_APPLICABLE until their entities exist in the
+> substrate. The 8/9 VIOLATED rows below still grade the *shipped* GT writer
+> (`write_back_ground_truth.py`), which remains delete-and-replace with bare
+> point values.
 
 ## Tally
 

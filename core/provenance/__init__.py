@@ -9,6 +9,7 @@ engine can be provenanced until these exist.
 from .decisions import decide, entropy
 from .explain import (
     AxisView,
+    HumanAssertionView,
     LineageNode,
     ObservationView,
     SubjectExplanation,
@@ -31,6 +32,8 @@ from .types import (
     Derivation,
     Evidence,
     EvidenceDirection,
+    HumanLabelAssertion,
+    HumanLabelBundle,
     Interval,
     Observation,
     ObservationStatus,
@@ -56,8 +59,11 @@ __all__ = [
     "format_lineage",
     "SubjectExplanation",
     "AxisView",
+    "HumanAssertionView",
     "ObservationView",
     "LineageNode",
+    "HumanLabelAssertion",
+    "HumanLabelBundle",
     "Artifact",
     "ArtifactKind",
     "Axis",

@@ -25,6 +25,8 @@ from .types import (
     DecisionRule,
     Evidence,
     EvidenceDirection,
+    HumanLabelAssertion,
+    HumanLabelBundle,
     Json,
     Observation,
     ObservationStatus,
@@ -317,6 +319,143 @@ class ProvenanceRepository:
         )
         self._conn.commit()
         return belief
+
+    # --- §7 human labeling (append-only; Laws 8/9) --------------------------
+    def record_human_bundle(
+        self,
+        *,
+        set_id: str,
+        source: Artifact,
+        annotator_id: str,
+        run: Run,
+    ) -> HumanLabelBundle:
+        """One labeling artifact's provenance row. INSERT only — a re-import of
+        the same set is a NEW bundle, never an overwrite (Law 8)."""
+        bundle = HumanLabelBundle(
+            bundle_id=str(uuid.uuid4()),
+            set_id=set_id,
+            source_artifact_sha256=source.content_sha256,
+            annotator_id=annotator_id,
+            import_run_id=run.run_id,
+            created_at=_now(),
+        )
+        self._conn.execute(
+            "INSERT INTO human_label_bundle(bundle_id, set_id, "
+            "source_artifact_sha256, annotator_id, import_run_id, created_at) "
+            "VALUES (?,?,?,?,?,?)",
+            (
+                bundle.bundle_id,
+                set_id,
+                source.content_sha256,
+                annotator_id,
+                run.run_id,
+                bundle.created_at.isoformat(),
+            ),
+        )
+        self._conn.commit()
+        return bundle
+
+    def record_human_assertion(
+        self,
+        *,
+        bundle: HumanLabelBundle,
+        subject: SubjectRef,
+        field: str,
+        observed_value: object,
+        uncertainty_model: Json,
+        run: Run,
+        source_confidence: float | None = None,
+        supersedes_assertion_id: Optional[str] = None,
+    ) -> HumanLabelAssertion:
+        """One field-level human assertion. INSERT only, never UPDATE/DELETE.
+
+        Fails closed on an empty ``uncertainty_model`` — a bare point value is
+        exactly the Law-9 violation (the checker still catches rows injected
+        past this writer).
+        """
+        if not uncertainty_model or not str(uncertainty_model.get("kind", "")):
+            raise ValueError(
+                f"assertion on <{field}> needs a field-specific uncertainty_model "
+                "with a 'kind' (Law 9)"
+            )
+        assertion = HumanLabelAssertion(
+            assertion_id=str(uuid.uuid4()),
+            bundle_id=bundle.bundle_id,
+            subject=subject,
+            field=field,
+            observed_value=observed_value,
+            uncertainty_model=uncertainty_model,
+            produced_run_id=run.run_id,
+            created_at=_now(),
+            source_confidence=source_confidence,
+            supersedes_assertion_id=supersedes_assertion_id,
+        )
+        self._conn.execute(
+            "INSERT INTO human_label_assertion(assertion_id, bundle_id, "
+            "subject_type, subject_id, field, value_json, "
+            "uncertainty_model_json, source_confidence, "
+            "supersedes_assertion_id, produced_run_id, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                assertion.assertion_id,
+                bundle.bundle_id,
+                subject.subject_type,
+                subject.subject_id,
+                field,
+                json.dumps(observed_value),
+                json.dumps(uncertainty_model),
+                source_confidence,
+                supersedes_assertion_id,
+                run.run_id,
+                assertion.created_at.isoformat(),
+            ),
+        )
+        self._conn.commit()
+        return assertion
+
+    def revise_human_assertion(
+        self,
+        *,
+        old: HumanLabelAssertion,
+        observed_value: object,
+        run: Run,
+        uncertainty_model: Json | None = None,
+        source_confidence: float | None = None,
+        bundle: HumanLabelBundle | None = None,
+    ) -> HumanLabelAssertion:
+        """§7 ``revise_assertion``: a NEW assertion superseding ``old``. The old
+        row is never mutated or deleted — history stays append-only (Law 8)."""
+        target_bundle = bundle
+        if target_bundle is None:
+            row = self._conn.execute(
+                "SELECT bundle_id, set_id, source_artifact_sha256, annotator_id, "
+                "import_run_id, created_at FROM human_label_bundle WHERE bundle_id=?",
+                (old.bundle_id,),
+            ).fetchone()
+            if row is None:
+                raise ValueError(f"assertion {old.assertion_id} cites missing bundle")
+            target_bundle = HumanLabelBundle(
+                bundle_id=row["bundle_id"],
+                set_id=row["set_id"],
+                source_artifact_sha256=row["source_artifact_sha256"],
+                annotator_id=row["annotator_id"],
+                import_run_id=row["import_run_id"],
+                created_at=datetime.fromisoformat(row["created_at"]),
+            )
+        return self.record_human_assertion(
+            bundle=target_bundle,
+            subject=old.subject,
+            field=old.field,
+            observed_value=observed_value,
+            uncertainty_model=(
+                uncertainty_model
+                if uncertainty_model is not None
+                else old.uncertainty_model
+            ),
+            run=run,
+            source_confidence=source_confidence,
+            supersedes_assertion_id=old.assertion_id,
+        )
 
     # --- graph queries -----------------------------------------------------
     def _ancestors(self, sha: str) -> set[str]:

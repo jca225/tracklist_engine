@@ -215,6 +215,54 @@ class AxisBelief:
     supersedes_belief_id: Optional[str] = None
 
 
+# --- §7 immutable human labeling ------------------------------------------
+# Human GT enters the substrate as append-only, field-level assertions hanging
+# off a content-addressed labeling artifact. Two laws live here: history is
+# append-only (Law 8 — a revision is a NEW assertion whose
+# ``supersedes_assertion_id`` points at the old one; the old row is never
+# mutated) and uncertainty is field-specific (Law 9 — every assertion carries
+# its own ``uncertainty_model``; a bare point value is the violation).
+
+
+@dataclass(frozen=True)
+class HumanLabelBundle:
+    """One labeling artifact's provenance: WHO asserted, from WHAT bytes.
+
+    ``source_artifact_sha256`` addresses the labeling export (GT manifest /
+    ``.als``) by content — the assertions are derived from that exact
+    byte-sequence, not from a mutable path.
+    """
+
+    bundle_id: str
+    set_id: str
+    source_artifact_sha256: str
+    annotator_id: str
+    import_run_id: str
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class HumanLabelAssertion:
+    """One human-asserted field value on one subject — append-only.
+
+    ``uncertainty_model`` is a field-specific error model (``categorical_prior``
+    for identity-like fields, ``student_t`` for time coordinates, ``curve_error``
+    for curves — §7), NEVER a global scalar and never absent (Law 9).
+    ``supersedes_assertion_id`` is the only revision mechanism (Law 8).
+    """
+
+    assertion_id: str
+    bundle_id: str
+    subject: SubjectRef
+    field: str
+    observed_value: Any
+    uncertainty_model: Json
+    produced_run_id: str
+    created_at: datetime
+    source_confidence: Optional[float] = None
+    supersedes_assertion_id: Optional[str] = None
+
+
 @dataclass(frozen=True)
 class DecisionRule:
     """Margin/entropy gate turning a posterior into a decision. Tuned on ONE set,
