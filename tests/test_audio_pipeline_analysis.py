@@ -323,3 +323,51 @@ def test_merge_essentia_folds_features_and_version() -> None:
     # original versions preserved, original object untouched
     assert merged.analyzer_versions["beat_this"] == "final0"
     assert r.essentia is None
+
+
+# ---------- forward-routing dual-write (real persist_analysis path) ----------
+def test_persist_analysis_dual_writes_mert_to_provenance_when_enabled(
+    db_with_audio: tuple[Path, int], tmp_path: Path, monkeypatch
+) -> None:
+    """End-to-end: the REAL persist_analysis, flag on, lands a canonical
+    mert_features artifact in the provenance store AFTER the legacy write —
+    laws-clean and reconcile-clean. Proves the forward-routing dual-write on the
+    production code path (not the unit helper)."""
+    path, tid = db_with_audio
+    store_root = tmp_path / "prov"
+    monkeypatch.setenv("PROVENANCE_DUAL_WRITE", "1")
+    monkeypatch.setenv("PROVENANCE_STORE_ROOT", str(store_root))
+
+    assert isinstance(persistence.persist_analysis(path, _fake_result(tid)), Ok)
+
+    # legacy write happened (dual-write runs strictly after it)
+    conn = sqlite3.connect(path)
+    assert conn.execute(
+        "SELECT COUNT(*) FROM track_mert_measures WHERE track_audio_id=?", (tid,)
+    ).fetchone()[0] == 2
+    conn.close()
+
+    # canonical feature landed, versioned + laws-clean + no crash residue
+    from core.provenance import LawVerdict, check_laws
+    from core.provenance import connect as prov_connect
+    from core.provenance import reconcile_store
+
+    pconn = prov_connect(store_root)
+    assert pconn.execute(
+        "SELECT COUNT(*) FROM artifact WHERE kind='mert_features'"
+    ).fetchone()[0] == 1
+    verdicts = {r.number: r.verdict for r in check_laws(pconn)}
+    assert verdicts[1] != LawVerdict.VIOLATED and verdicts[14] != LawVerdict.VIOLATED
+    assert reconcile_store(pconn).clean
+
+
+def test_persist_analysis_flag_off_writes_no_provenance(
+    db_with_audio: tuple[Path, int], tmp_path: Path, monkeypatch
+) -> None:
+    """Flag off (default): the real persist_analysis writes nothing to any
+    provenance store — deploying the dual-write is a literal no-op."""
+    path, tid = db_with_audio
+    monkeypatch.delenv("PROVENANCE_DUAL_WRITE", raising=False)
+    monkeypatch.setenv("PROVENANCE_STORE_ROOT", str(tmp_path / "prov"))
+    assert isinstance(persistence.persist_analysis(path, _fake_result(tid)), Ok)
+    assert not (tmp_path / "prov").exists()
