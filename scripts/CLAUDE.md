@@ -76,15 +76,16 @@ the taxonomy lives in this index. Two subdirectories hold the rest:
 - `typecheck.sh` — mypy subset (`make check`, pre-commit, CI).
 - `loop_hardening.py` — shared driver-loop hardening lib (imported, not run; sibling of `rescue_common.py`). SSH/rsync timeout+encoding constants and the failure-accounting primitives (`exit_status` escalation, `Counts` honest tally, `register_transient` backoff, `sha256_file`) used by `mac_analyze_loop` / `set_mert_backfill_loop` (and the `gpubox` GPU loops) so the same hang/mojibake/silent-failure classes can't be fixed in one loop and left latent in the others.
 
-**Vast / GPU boxes — use `gpubox`, not the old `vast_*` scripts.**
-The Mac-side Vast lifecycle (rent / race / attach / provision / logs / pull /
-destroy) now lives in the canonical **`~/workspace/gpubox`** package
+**GPU boxes — use `gpubox`, only.**
+The Mac-side GPU-box lifecycle (rent / race / attach / provision / logs / pull /
+destroy) lives in the canonical **`~/workspace/gpubox`** package
 (`gpubox.api.Box.launch` / `.attach` / `.destroy`, with a Registry + watchdog for
-ownership and billing safety). The old `scripts/vast_box.py` + `vast_*.sh`
-wrappers and the `vast-box` skill were retired 2026-07-23 (moved to the local,
-git-ignored `archive/`). Enforcement: [.cursor/rules/vast-gpubox.mdc](../.cursor/rules/vast-gpubox.mdc).
-Alignment driver example: `scripts/gpubox_agentic_both.py`. Coordination rules
-(list-before-create, destroy-only-your-own): [../docs/vast_coordination.md](../docs/vast_coordination.md).
+ownership and billing safety; it rents from Vast.ai under the hood). The old
+`scripts/vast_box.py` + `vast_*.sh` wrappers and the `vast-box` skill are retired.
+Enforcement: [.cursor/rules/gpubox.mdc](../.cursor/rules/gpubox.mdc). Alignment
+driver example: `scripts/gpubox_agentic_both.py`. Ownership + billing safety is
+gpubox's built-in **guarded teardown** (it proves ownership before destroying) —
+there is no manual list-before-create ledger anymore.
 
 ## migrations/ — one-shot pi-storage DB migration SQL
 
