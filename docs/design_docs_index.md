@@ -12,6 +12,12 @@ Add a doc here when it's a durable design/plan worth keeping; remove + `git mv`
 to `archive/` when it's fully executed, superseded, or refuted (log refutations
 in `workspaces/alignment_prototype/attic/EXPERIMENTS.md`).
 
+## Engine architecture — provenance-first rewrite
+
+- [engine/dj_engine_pseudocode.md](engine/dj_engine_pseudocode.md) — **canonical architectural contract** for the Provenance-First DJ Alignment Engine (§0 fundamental rules, §16 executable system laws, §11 promotion gates). A behavioral contract the repo is checked *against*; not directly executable.
+- [engine/dj_engine_design_notes.md](engine/dj_engine_design_notes.md) — the design's own framing notes (three DAGs, the honest fork at analyze, the anti-degeneration motive + typing/validation stack).
+- [provenance_engine_convergence_plan.md](provenance_engine_convergence_plan.md) — Point A→B migration toward the contract: strangler-fig, not big-bang; Phase 1 identity/provenance slice = RT1; Crush B–E subsumed, nothing stranded.
+
 ## Alignment — placement & structure (the walls)
 
 - [dj_set_alignment_math.md](dj_set_alignment_math.md) — the constituent-alignment math model: a set as two independently aligned lanes (mix↔constituent instrumental, mix↔constituent vocals); foundational formalism for placement/identity.
