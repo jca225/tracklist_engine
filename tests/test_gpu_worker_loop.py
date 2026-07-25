@@ -1,12 +1,12 @@
-"""Poison-pill quarantine for `vast_worker.py --loop`.
+"""Poison-pill quarantine for `gpu_worker.py --loop`.
 
 Regression guard for the infinite-spin class: a track with a track_audio row
 but no track_analysis row is re-selected by `_next_unanalyzed` on every
 iteration. When it always errors, the loop must be able to exclude it so the
 queue drains instead of spinning on the same poison track forever (the bug
-that burned 496 consecutive failures in vast_loop.py before it grew a skip set).
+that burned 496 consecutive failures in the loop driver before it grew a skip set).
 
-`analysis.vast_worker` imports `.pipeline` (torch/librosa) at module load, so
+`analysis.gpu_worker` imports `.pipeline` (torch/librosa) at module load, so
 this is skipped in the lightweight CI env — same pattern as the other
 heavy-dep tests (test_fibers, test_trajectory_decode).
 """
@@ -17,9 +17,9 @@ import sqlite3
 
 import pytest
 
-pytest.importorskip("torch")  # vast_worker -> pipeline -> torch
+pytest.importorskip("torch")  # gpu_worker -> pipeline -> torch
 
-from analysis.vast_worker import _next_unanalyzed  # noqa: E402
+from analysis.gpu_worker import _next_unanalyzed  # noqa: E402
 
 
 def _make_db(path, *, analyzed=(), tracks=(101, 102, 103)):

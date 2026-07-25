@@ -41,7 +41,7 @@ is the *how we work* layer; the *what the code is* layer lives in
   loops are **live and shared**. Don't mutate the canonical DB, restart a running
   driver, or re-run a non-idempotent migration/`--apply` without coordinating.
   Code edits are safe; deploy + restart is the operator's call.
-- Vast boxes: **list before you create, destroy only your own** (ownership ledger).
+- GPU boxes: rent + tear down **only via `gpubox`** (`~/workspace/gpubox`) — its guarded teardown proves ownership before destroying, so it won't kill another agent's box. Never raw-`curl` the Vast API or ad-hoc rent.
 
 ## 6. Keep the record current, not piled up
 - End an alignment session with `/align-checkpoint` (updates the living

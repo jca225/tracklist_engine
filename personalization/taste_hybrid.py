@@ -7,7 +7,7 @@ nearest-neighbor, MERT centroid, popularity — and an MLP maps them to P(engage
 
 Key trick: during training we randomly ZERO the CF feature (cold-dropout), so the net
 learns to fall back on the MERT scores when co-occurrence is absent (the cold-start /
-Spotify-library case). Frozen embeddings, CPU, no Vast.
+Spotify-library case). Frozen embeddings, CPU, no GPU box.
 
   venvs/audio/bin/python -m personalization.taste_hybrid
 """

@@ -7,7 +7,8 @@ section embeddings. Writes the *audio-pipeline tables* (`track_analysis`,
 `set_measures`, `canonical_track_cue_points`, …).
 
 `pipeline.py` / `set_analysis.py` orchestrate; `adapters/` wrap each model;
-`vast_worker.py` is the GPU-side batch worker; `persistence.py` writes results.
+`gpu_worker.py` is the GPU-side batch worker (runs on a `gpubox`-rented box);
+`persistence.py` writes results.
 
 ## Stem-separation backends (roformer | demucs | uvr)
 
@@ -29,7 +30,7 @@ so nothing downstream (schema, alignment, library) changes when you switch.
 - `pipeline.run_separation()` dispatches on `Analyzers.separator`; select via
   `load_analyzers(device, separator="roformer")` or the `--separator
   {roformer,demucs,uvr}` flag on every loop (`mac_analyze_loop.py`,
-  `mac_analyze_sets.py`, `vast_loop.py`, `vast_worker.py`). The code default is
+  `mac_analyze_sets.py`, `gpu_worker.py`). The code default is
   still `demucs` (legacy) — pass `roformer` explicitly.
 - The chain is **data-driven** by [uvr_chain.yaml](uvr_chain.yaml) (parsed in
   [separation_config.py](separation_config.py)) — reorder/disable/retune stages,
@@ -75,16 +76,19 @@ which suspends the process for hours. (Validated on BB12 `set_audio_id=5`,
 | beat_this (beats/downbeats) | pi-storage CPU **or** Mac MPS | PyTorch has aarch64 + MPS wheels; small model |
 | cue-detr (EDM cues) | pi-storage CPU **or** Mac MPS | DETR transformer; small model |
 | librosa, pyloudnorm | pi-storage **or** Mac | pure Python |
-| **Essentia** (key/BPM/valence/mood/etc.) | **Vast.ai** *or* **Mac** | no aarch64 wheels — ships only x86_64 manylinux + macOS arm64, so the Mac has a `venvs/essentia/` Py3.13 sandbox and runs Essentia as a subprocess |
-| **Stem separation** (roformer *(current)* / demucs *(stale)*) | **Vast.ai** *or* **Mac MPS** | GPU-bound; demucs ~30s/track Pi CPU vs ~1s/track 4090 vs ~3–5s/track MPS |
-| **MERT** embeddings | **Vast.ai** *or* **Mac MPS** | GPU-bound; [adapters/mert_adapter.py](adapters/mert_adapter.py) auto-selects `cuda → mps → cpu` |
+| **Essentia** (key/BPM/valence/mood/etc.) | **gpubox GPU** *or* **Mac** | no aarch64 wheels — ships only x86_64 manylinux + macOS arm64, so the Mac has a `venvs/essentia/` Py3.13 sandbox and runs Essentia as a subprocess |
+| **Stem separation** (roformer *(current)* / demucs *(stale)*) | **gpubox GPU** *or* **Mac MPS** | GPU-bound; demucs ~30s/track Pi CPU vs ~1s/track 4090 vs ~3–5s/track MPS |
+| **MERT** embeddings | **gpubox GPU** *or* **Mac MPS** | GPU-bound; [adapters/mert_adapter.py](adapters/mert_adapter.py) auto-selects `cuda → mps → cpu` |
+
+("gpubox GPU" = a GPU box rented + managed by `gpubox`, the only sanctioned way
+to rent GPUs here; it rents from Vast.ai under the hood.)
 
 The Mac mirrors the pi-storage CPU stack (`venvs/audio/`) plus the
 `venvs/essentia/` sandbox, so the **entire production analysis pipeline** is
 exercisable locally — not just dev, but an actual production worker for batches
-that don't justify spinning up Vast. GPU batch entry points:
-[vast_worker.py](vast_worker.py) (driven by [scripts/vast_loop.py](../scripts/vast_loop.py))
-and [scripts/mac_analyze_loop.py](../scripts/mac_analyze_loop.py) (~200–250 s/track
+that don't justify renting a `gpubox` GPU. GPU batch entry point:
+[gpu_worker.py](gpu_worker.py) (run on a `gpubox`-rented box) and, locally,
+[scripts/mac_analyze_loop.py](../scripts/mac_analyze_loop.py) (~200–250 s/track
 on MPS vs ~85 s on a 4090).
 
 ## MERT embedding choice
@@ -119,8 +123,8 @@ from whichever band is most informative, instead of forcing one mid-layer
 compromise across beat/key/timbre/structure at once.
 
 Tradeoffs to plan for before flipping the constant:
-- ~3.5× parameter count → ~3× inference time on MPS/CUDA. Vast cost is still
-  bounded; Pi CPU becomes impractical (re-route 330M jobs to Mac MPS or Vast only).
+- ~3.5× parameter count → ~3× inference time on MPS/CUDA. gpubox GPU cost is still
+  bounded; Pi CPU becomes impractical (re-route 330M jobs to Mac MPS or a gpubox GPU).
 - Cache key changes (layer-pick → weights identifier). The alignment cache must
   be flushed or namespaced when migrating.
 - Frame rate (~75 Hz at 24 kHz) is unchanged; downstream measure-pooling code
@@ -155,6 +159,7 @@ analysis-domain DB writes in `persistence.py`, not `core/db.py`.
 
 ## Deploy caveat
 
-A pi-storage systemd unit running `python -m audio_pipeline.vast_worker` (or
-similar) must be updated to `python -m analysis.vast_worker` after the
-`audio_pipeline/` split, or it won't restart.
+The GPU worker entry is `python -m analysis.gpu_worker` (renamed from the old
+`vast_worker` / `audio_pipeline.vast_worker`). It runs on a `gpubox`-rented box,
+not pi-storage — no pi systemd unit references it (verified 2026-07-25). If a
+launcher or unit still names the old module, repoint it to `analysis.gpu_worker`.

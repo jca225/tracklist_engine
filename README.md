@@ -42,7 +42,7 @@ tracklist_engine/
 │   ├── pipeline.py              ← analyze_track: the core composition
 │   ├── adapters/                ← Roformer, MERT, beat_this, cue-detr, Essentia
 │   ├── persistence.py           ← analysis-side DB writes (vs core/db.py)
-│   ├── vast_worker.py           ← GPU loop on rented Vast.ai boxes
+│   ├── gpu_worker.py            ← GPU loop on a gpubox-rented box
 │   └── canonical_cues.py        ← cue-detr on stem='regular' refs only
 ├── labeling/                    ← manual Ableton ground-truth production
 │   ├── pull_set_for_alignment.py← mix+refs+stems → ~/aligning/<set>/
@@ -79,7 +79,6 @@ tracklist_engine/
 │   ├── guardrails.py            ← mechanical checks (make check)
 │   ├── corpus_integrity.py      ← data invariants (make check-corpus)
 │   ├── mac_analyze_loop.py      ← Mac MPS analysis worker
-│   ├── vast_loop.py             ← Vast.ai rent-run-terminate driver
 │   └── migrations/              ← schema migration SQL
 ├── deploy/                      ← systemd service units
 ├── tests/                       ← pytest suite (run from repo root)
@@ -184,7 +183,7 @@ Four machines over Tailscale (ops via `Makefile`: `make status`, `make ssh-stora
 
 - **pi-storage** — canonical state (DB + audio + stems), scraper services, CPU-side analysis (downloads, beat_this, cue-detr, librosa, loudness). Long-running services live here.
 - **pi-worker** — AJAX retry drain + spare CPU for batch analysis.
-- **Vast.ai spot GPU** (rented, ephemeral) — GPU-bound analysis (stem separation, MERT) and Essentia (x86_64-only wheels). Pulls audio from pi-storage, writes results back, terminates.
+- **gpubox-rented GPU** (ephemeral; `gpubox` rents from Vast.ai under the hood, with guarded teardown) — GPU-bound analysis (stem separation, MERT) and Essentia (x86_64-only wheels). Pulls audio from pi-storage, writes results back, terminates.
 - **Mac** — dev driver, a second analysis worker on the MPS backend (`scripts/mac_analyze_loop.py`), and the Ableton labeling workflow.
 
 ## Guardrails

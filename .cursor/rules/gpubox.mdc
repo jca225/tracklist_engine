@@ -1,0 +1,18 @@
+---
+description: Renting GPUs — always via gpubox, never raw Vast.ai
+globs:
+  - scripts/gpubox*.py
+  - analysis/gpu_worker.py
+---
+
+# GPU renting = gpubox only
+
+- **Always use gpubox** (`~/workspace/gpubox`) to rent, race, attach, log, pull,
+  and destroy GPU boxes: `Box.launch` / `Box.attach` / `Box.destroy`. gpubox
+  rents from Vast.ai under the hood — that is the *only* sanctioned path.
+- **Never** raw `curl` to `console.vast.ai`, and never ad-hoc rent for normal jobs.
+- Teardown is **guarded**: `Box.destroy` proves ownership from the registry before
+  destroying, so it won't kill another agent's box. There is no manual
+  list-before-create ledger anymore — the guarded teardown replaces it.
+- The GPU-side analysis payload is `analysis/gpu_worker.py` (run it on a
+  gpubox-rented box). Alignment example launcher: `scripts/gpubox_agentic_both.py`.

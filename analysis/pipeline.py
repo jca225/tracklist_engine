@@ -340,7 +340,7 @@ def analyze_track(
     # Essentia features are a bonus layer.
     # Essentia enrichment (best-effort). Deferred by the driver into a bg
     # thread that overlaps the next track's GPU work — see compute_essentia /
-    # merge_essentia and scripts/vast_loop.py (WS1.5).
+    # merge_essentia and the analysis loop driver (WS1.5).
     essentia_features: EssentiaFeatures | None = None
     if not defer_essentia:
         _t = time.monotonic()

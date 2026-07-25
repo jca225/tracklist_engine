@@ -22,7 +22,7 @@ from pathlib import Path
 import numpy as np
 
 from analysis.adapters import audio_io, mert_adapter
-from personalization.gpu_policy import enforce_vast_for_gpu
+from personalization.gpu_policy import enforce_gpu_host
 from personalization.prior_mert import download_track, sc_track_url
 
 DB = Path("data/taste/taste_warehouse.db")
@@ -91,10 +91,10 @@ def main(argv=None) -> int:
     ap.add_argument(
         "--allow-local-gpu",
         action="store_true",
-        help="Mac-only smoke test with --limit <= 5; otherwise use Vast",
+        help="Mac-only smoke test with --limit <= 5; otherwise rent a gpubox GPU",
     )
     args = ap.parse_args(argv)
-    enforce_vast_for_gpu(args.device, allow_local_gpu=args.allow_local_gpu, limit=args.limit)
+    enforce_gpu_host(args.device, allow_local_gpu=args.allow_local_gpu, limit=args.limit)
 
     conn = sqlite3.connect(DB)
     targets = tail_targets(conn, args.min_likers)

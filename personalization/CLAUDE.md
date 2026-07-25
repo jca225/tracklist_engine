@@ -13,15 +13,18 @@ Data: `data/taste/` (gitignored).
 
 ## GPU policy
 
-**Batch deep-learning / GPU inference runs on Vast only** — not Mac MPS.
+**Batch deep-learning / GPU inference runs on a `gpubox`-rented GPU box only** —
+not Mac MPS. (`gpubox` is the only sanctioned way to rent GPUs here; it rents
+from Vast.ai under the hood, with a box registry + guarded teardown built in.)
 
 | Work | Where |
 |------|--------|
-| Tail MERT embed (`embed_tail`) | `scripts/vast_taste_embed.sh` → Vast 4090 |
+| Tail MERT embed (`embed_tail`) | a `gpubox`-rented GPU box (4090) |
 | SoundCloud scrape, SQLite, ID-CF taste model | Mac / pi-worker (CPU) |
 | MERT smoke test (≤5 tracks) | Mac with `--limit 3 --allow-local-gpu` |
 
-See [docs/vast_coordination.md](../docs/vast_coordination.md) for multi-agent box registry + auto-teardown.
+Rent + manage boxes with `gpubox` (`~/workspace/gpubox`) — its guarded teardown
+replaces the old manual multi-agent box registry.
 
 ## Commands
 
@@ -44,7 +47,7 @@ venvs/audio/bin/python -m personalization.main loop --all-mixes --once
 venvs/audio/bin/python -m personalization.main score-bots --mix 2nvzlh2k
 venvs/audio/bin/python -m personalization.main cluster --mix 2nvzlh2k
 venvs/audio/bin/python -m personalization.main prior-mert \
-  --mix 2nvzlh2k --max-tracks 150 --max-users 100 --device cuda   # Vast only for GPU batch
+  --mix 2nvzlh2k --max-tracks 150 --max-users 100 --device cuda   # gpubox GPU only for GPU batch
 venvs/audio/bin/python -m personalization.main comment-heatmap \
   --mix 1fsnxchk --gt labeling/fixtures/bb12_ground_truth.yaml --set-id 1fsnxchk \
   --out data/analysis/bb12_comment_heatmap.json
