@@ -1,10 +1,11 @@
 """Tests for anchor check and aligner dataset."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
-from labeling.anchor_check import _fmt_time, compare_anchors
-from labeling.ground_truth.schema import GroundTruthSet, GroundTruthTrack, load
+from labeling.verify.anchor_check import _fmt_time, compare_anchors
+from labeling.schema import GroundTruthSet, GroundTruthTrack, load
 from core.result import Ok
 from workspaces.alignment_prototype.dataset import load_set, track_to_target
 from workspaces.alignment_prototype.losses import batch_loss
@@ -18,8 +19,13 @@ def test_fmt_time():
 
 def test_compare_anchors_identical():
     t = GroundTruthTrack(
-        label="Test", track_id="abc", claimed_stem="regular",
-        set_start_s=10.0, set_end_s=20.0, ref_start_s=0.0, ref_end_s=5.0,
+        label="Test",
+        track_id="abc",
+        claimed_stem="regular",
+        set_start_s=10.0,
+        set_end_s=20.0,
+        ref_start_s=0.0,
+        ref_end_s=5.0,
         slot_label="002",
     )
     gt = GroundTruthSet(set_id="x", tracks=(t,))

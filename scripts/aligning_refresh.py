@@ -41,13 +41,13 @@ def main() -> int:
     tag_args = [str(set_dir)]
     if not args.no_stems:
         tag_args.append("--stems")
-    rc = _run("labeling/inline_tag_aligning_folder.py", *tag_args)
+    rc = _run("labeling/prep/inline_tag_aligning_folder.py", *tag_args)
     if rc:
         return rc
-    rc = _run("labeling/relink_als_after_tag.py", str(set_dir), "--als", str(als))
+    rc = _run("labeling/prep/relink_als_after_tag.py", str(set_dir), "--als", str(als))
     if rc:
         return rc
-    return _run("labeling/fill_als_clip_tags.py", str(set_dir), "--als", str(als))
+    return _run("labeling/prep/fill_als_clip_tags.py", str(set_dir), "--als", str(als))
 
 
 if __name__ == "__main__":

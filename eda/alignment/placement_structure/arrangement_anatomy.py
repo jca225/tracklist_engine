@@ -17,7 +17,7 @@ import statistics
 from collections import Counter
 from pathlib import Path
 
-from labeling.ground_truth.schema import GroundTruthTrack, load
+from labeling.schema import GroundTruthTrack, load
 
 from eda.alignment.placement_structure import repo_root
 

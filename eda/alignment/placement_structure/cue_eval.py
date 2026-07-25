@@ -31,7 +31,7 @@ import sqlite3
 import statistics
 from pathlib import Path
 
-from labeling.ground_truth.schema import load
+from labeling.schema import load
 
 from eda.alignment.placement_structure import repo_root
 

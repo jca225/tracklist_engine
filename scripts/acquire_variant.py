@@ -80,7 +80,9 @@ def download(url: str, dest: Path, stem: str) -> Path:
         str(dest / f"{stem}.%(ext)s"),
         url,
     ]
-    subprocess.run(cmd, check=True)
+    # B1: bound a bot-detection / broken-pipe stall — yt-dlp otherwise hangs
+    # indefinitely with no output.
+    subprocess.run(cmd, check=True, timeout=600)
     out = dest / f"{stem}.wav"
     if not out.exists():
         sys.exit(f"expected {out} after download, not found")

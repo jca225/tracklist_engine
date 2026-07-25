@@ -16,7 +16,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from labeling.ground_truth.schema import GroundTruthTrack, load
+from labeling.schema import GroundTruthTrack, load
 
 PI = "pi-storage"
 PI_DB = "/mnt/storage/data/db/music_database.db"

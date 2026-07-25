@@ -1,7 +1,8 @@
 """Tests for stem-aware replace_track_audio helpers and pull suffixes."""
+
 from __future__ import annotations
 
-from labeling.pull_set_for_alignment import _qualifier_suffix
+from labeling.acquire.pull_set_for_alignment import _qualifier_suffix
 from scripts.replace_track_audio import (
     _resolve_axis_for_ledger,
     _resolve_stem_for_replace,
@@ -39,7 +40,10 @@ def test_qualifier_suffix_compound_remix_and_acappella():
 
 
 def test_qualifier_suffix_stem_only():
-    assert _qualifier_suffix("Artist - Title", "original", stem="instrumental") == " (Instrumental)"
+    assert (
+        _qualifier_suffix("Artist - Title", "original", stem="instrumental")
+        == " (Instrumental)"
+    )
 
 
 def test_qualifier_suffix_extended_with_remix():

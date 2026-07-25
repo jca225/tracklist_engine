@@ -47,6 +47,7 @@ in `workspaces/alignment_prototype/attic/EXPERIMENTS.md`).
 
 ## Infra / operations
 
+- [operation_crush_tldr.md](operation_crush_tldr.md) — human digest of Operation Crush (the data-integrity program gating the Aug 1 aligner): the four problems, three deliverables, and phase map. Points to the operative [operation_crush_assault_plan.md](operation_crush_assault_plan.md).
 - [durable_compute_buffer_spec.md](durable_compute_buffer_spec.md) — S3 manifest buffer + integrity-gated reconciler decoupling GPU compute from pi uptime. DEFERRED (Phase 1 post-Aug 1).
 
 ## Audit / open fronts

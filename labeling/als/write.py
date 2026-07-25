@@ -67,6 +67,76 @@ def write_tempo_envelope(
     return len(pts)
 
 
+def write_clip_source_paths(root: etree._Element, edits: list[tuple[str, str]]) -> int:
+    """Apply literal substring renames to every clip's live sample reference
+    (``AudioClip/.../SampleRef/FileRef``'s ``Path`` and ``RelativePath``).
+
+    Used by ``prep/relink_als_after_tag.py`` to repoint clips after
+    ``inline_tag_aligning_folder.py`` renames files on disk. Scoped to
+    exactly the ``FileRef`` nested under ``SampleRef`` (the reference Live
+    actually loads from) — never a device-preset ``FileRef`` (nested under
+    ``FilePresetRef``/``AbletonDefaultPresetRef``) and never
+    ``SourceContext/OriginalFileRef`` (the historical/browser-hint copy).
+    The seeder deliberately strips ``OriginalFileRef`` from every clip when a
+    session is built (see
+    ``workspaces/alignment_prototype/review/seed_als_from_timeline.py``,
+    "so clip_original_path falls through to SampleRef/FileRef/Path instead of
+    a stale template path") — a freshly-seeded session, which is what this
+    runs against, never carries one, so there is nothing else to touch.
+
+    ``Path`` and ``RelativePath`` are edited independently (not copied from
+    one to the other): a session that has been through Live's own file
+    re-linking can give them different prefixes (``RelativePathType`` 1/3/5),
+    though the seeder always writes them identical (type 0). Each ``(old,
+    new)`` pair is a literal substring replacement, mirroring the prior
+    text-splice tool's semantics. Returns the number of substring
+    replacements applied (one count per occurrence, not per element).
+    """
+    total = 0
+    for fref in root.iter("FileRef"):
+        parent = fref.getparent()
+        if parent is None or parent.tag != "SampleRef":
+            continue
+        for tag in ("Path", "RelativePath"):
+            el = fref.find(tag)
+            if el is None:
+                continue
+            val = el.get("Value") or ""
+            new_val = val
+            for old, new in edits:
+                if not old or old == new:
+                    continue
+                hits = new_val.count(old)
+                if hits:
+                    new_val = new_val.replace(old, new)
+                    total += hits
+            if new_val != val:
+                el.set("Value", new_val)
+    return total
+
+
+def write_clip_names(root: etree._Element, renames: dict[str, str]) -> int:
+    """Set each ``AudioClip/Name`` Value found in ``renames`` (old -> new).
+
+    Exact match on the current Value, unlike ``write_clip_source_paths``'s
+    substring replace — clip names are matched and rewritten whole (see
+    ``prep/fill_als_clip_tags.py``, which replaces a `[?]` placeholder with a
+    real ``[NNNbpm KK]`` tag read off the clip's own referenced file). Returns
+    the number of clips changed.
+    """
+    total = 0
+    for clip in root.iter("AudioClip"):
+        name_el = clip.find("Name")
+        if name_el is None:
+            continue
+        val = name_el.get("Value") or ""
+        new_val = renames.get(val)
+        if new_val is not None and new_val != val:
+            name_el.set("Value", new_val)
+            total += 1
+    return total
+
+
 def write_locators(root: etree._Element, markers: list[tuple[float, float]]) -> int:
     """Replace the arrangement Locators (markers) with `(beat_time, name)` pairs.
 

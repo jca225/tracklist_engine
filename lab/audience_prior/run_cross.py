@@ -17,7 +17,7 @@ from __future__ import annotations
 from collections import defaultdict
 from pathlib import Path
 
-from labeling.ground_truth.schema import load as load_gt
+from labeling.schema import load as load_gt
 
 from .match import Vocab, split_artist_title
 

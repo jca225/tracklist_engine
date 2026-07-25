@@ -122,7 +122,7 @@ lowercase DB columns. Acappella/instrumental are **`claimed_stem`**, not
 `version_tag` — see [tokenizer/CLAUDE.md](tokenizer/CLAUDE.md).
 
 **Ground truth YAML:** prefer `claimed_stem:`; legacy `version_tag:` still parses.
-Write-back: [labeling/write_back_ground_truth.py](labeling/write_back_ground_truth.py)
+Write-back: [labeling/commit/write_back_ground_truth.py](labeling/commit/write_back_ground_truth.py)
 → `set_ground_truth`.
 
 **Pi-storage rollout** (code may be ahead of canonical DB — deploy + migrate together):

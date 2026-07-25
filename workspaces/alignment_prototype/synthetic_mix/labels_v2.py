@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from labeling.ground_truth.schema import GroundTruthSet, GroundTruthTrack, RefSegment
+from labeling.schema import GroundTruthSet, GroundTruthTrack, RefSegment
 
 from .timeline import (
     AcappellaSpan,

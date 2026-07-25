@@ -81,9 +81,25 @@ def volume_automation_id(track_el: etree._Element) -> str | None:
     return at.get("Id") if at is not None else None
 
 
+def track_static_gain(track_el: etree._Element) -> float:
+    """The static ``Mixer/Volume/Manual`` fader value, linear (1.0 = unity).
+
+    Defaults to unity when absent or malformed — a missing fader element means
+    Live left it at default, not that the track is silent.
+    """
+    man = track_el.find(".//DeviceChain/Mixer/Volume/Manual")
+    if man is None:
+        return 1.0
+    try:
+        return float(man.get("Value"))
+    except (TypeError, ValueError):
+        return 1.0
+
+
 # Static fader gains at/below this are treated as silence. Kept tiny (a true
 # "0" fader, not merely quiet) so audible-but-low GT clips are never dropped;
-# automated fades to zero are handled separately via the gain curve.
+# a merely-low static fader flows into the gain curve instead, where the
+# MUTE_THR floor decides audibility just like an automated fade.
 _FADER_SILENCE = 1e-4
 
 
@@ -91,13 +107,15 @@ def _silence_reason(
     track_el: etree._Element,
     clip_el: etree._Element,
     vol_pts: tuple[tuple[float, float], ...],
+    static_gain: float,
 ) -> str:
     """Why this clip is inaudible, or "" if it plays.
 
     Three hard-off switches Live records independently of clip extent: the
     Track Activator (``Mixer/Speaker/Manual=false``), per-clip deactivation
     (``AudioClip/Disabled=true``), and a static fader at 0. A clip under any of
-    them is silent and must not become a ground-truth span.
+    them is silent and must not become a ground-truth span. A merely-low (not
+    zero) static fader is NOT dropped here — it rides into the gain curve.
     """
     spk = track_el.find(".//DeviceChain/Mixer/Speaker/Manual")
     if spk is not None and spk.get("Value") == "false":
@@ -106,14 +124,8 @@ def _silence_reason(
     if dis is not None and dis.get("Value") == "true":
         return "clip-disabled"
     # A static fader at 0 silences only when no automation overrides it.
-    if not vol_pts:
-        man = track_el.find(".//DeviceChain/Mixer/Volume/Manual")
-        if man is not None:
-            try:
-                if float(man.get("Value")) <= _FADER_SILENCE:
-                    return "track-fader-zero"
-            except (TypeError, ValueError):
-                pass
+    if not vol_pts and static_gain <= _FADER_SILENCE:
+        return "track-fader-zero"
     return ""
 
 
@@ -146,6 +158,7 @@ def parse_layer_clips(root: etree._Element) -> list[ParsedClip]:
             iw_el = clip_el.find("IsWarped")
             vol_id = volume_automation_id(track_el)
             vol_pts = tuple(vol_envs.get(vol_id, ())) if vol_id else ()
+            static_gain = track_static_gain(track_el)
             file_size, crc = clip_content_identity(clip_el)
             try:
                 clip = ParsedClip(
@@ -169,7 +182,10 @@ def parse_layer_clips(root: etree._Element) -> list[ParsedClip]:
                     # missing element defaults to warped (pre-Live-8 sets
                     # don't occur here; warped is the 295/301 common case)
                     is_warped=iw_el is None or iw_el.get("Value") == "true",
-                    silence_reason=_silence_reason(track_el, clip_el, vol_pts),
+                    track_gain=static_gain,
+                    silence_reason=_silence_reason(
+                        track_el, clip_el, vol_pts, static_gain
+                    ),
                     file_size=file_size,
                     crc=crc,
                 )

@@ -10,7 +10,24 @@ set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
-PYTHON="${ROOT}/venvs/audio/bin/python"
-[[ -x "$PYTHON" ]] || PYTHON=python3
+# Resolve a python with mypy. Prefer this checkout's venv; in a linked worktree
+# $ROOT has no venvs/, so fall back to the MAIN worktree's venv (via the shared
+# git common dir); then bare python3 (the CI path, where mypy is pip-installed).
+# Honor an inherited $PYTHON (e.g. from the pre-commit hook) if it is executable.
+if [[ -z "${PYTHON:-}" || ! -x "${PYTHON:-}" ]]; then
+  COMMON_DIR="$(git rev-parse --git-common-dir)"
+  case "$COMMON_DIR" in
+    /*) ;;
+    *) COMMON_DIR="$ROOT/$COMMON_DIR" ;;
+  esac
+  MAIN_ROOT="$(cd "$(dirname "$COMMON_DIR")" && pwd)"
+  PYTHON=python3
+  for cand in "${ROOT}/venvs/audio/bin/python" "${MAIN_ROOT}/venvs/audio/bin/python"; do
+    if [[ -x "$cand" ]]; then
+      PYTHON="$cand"
+      break
+    fi
+  done
+fi
 
 exec "$PYTHON" -m mypy --strict core/

@@ -422,15 +422,23 @@ def clip_gain_breakpoints(
     pts: tuple[tuple[float, float], ...] | list[tuple[float, float]],
     arr_lo: float,
     arr_hi: float,
+    base_gain: float = 1.0,
 ) -> list[tuple[float, float]]:
     """Volume breakpoints (arr-beat, linear-gain) ACROSS one clip's span.
 
     The exact piecewise-linear fader curve the DJ rode over [arr_lo, arr_hi]:
     every automation breakpoint strictly inside the span, bracketed by
     interpolated values at the two endpoints so the curve is closed and
-    self-contained. With no automation the track plays at unity, so we return
-    a flat [(lo, 1.0), (hi, 1.0)]. Gain is Ableton's linear Mixer/Volume value
-    (1.0 = unity / 0 dB; the mute floor is `MUTE_THR`)."""
+    self-contained. With no automation the track plays at its static fader
+    level, so we return a flat [(lo, base_gain), (hi, base_gain)] — `base_gain`
+    is the track's ``Mixer/Volume/Manual`` value (unity when unset). When `pts`
+    is non-empty the envelope OVERRIDES the manual (Live's rule) and base_gain
+    is ignored. Gain is Ableton's linear Mixer/Volume value (1.0 = unity / 0 dB;
+    the mute floor is `MUTE_THR`)."""
+    if not pts:
+        if arr_hi <= arr_lo:
+            return [(arr_lo, base_gain)]
+        return [(arr_lo, base_gain), (arr_hi, base_gain)]
     if arr_hi <= arr_lo:
         return [(arr_lo, envelope_value(pts, arr_lo))]
     inner = [(b, v) for (b, v) in pts if arr_lo < b < arr_hi]
@@ -438,6 +446,13 @@ def clip_gain_breakpoints(
     curve.extend(inner)
     curve.append((arr_hi, envelope_value(pts, arr_hi)))
     return curve
+
+
+def linear_to_db(gain: float) -> float:
+    """Ableton's linear Mixer/Volume gain -> dBFS (20*log10). Unity=0 dB; a true
+    mute (gain<=0) is -inf, not an error — the gain_curve stores linear so this
+    stays a lossless view, never the canonical form."""
+    return 20.0 * math.log10(gain) if gain > 0.0 else float("-inf")
 
 
 def audible_from_curve(

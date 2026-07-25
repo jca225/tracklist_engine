@@ -60,7 +60,7 @@ def _resolve_ref(track: dict, set_dir: Path) -> Path | None:
     only when it identifies exactly one file; ambiguous copies abstain rather
     than silently selecting the first one.
     """
-    from labeling.audio_index import load_audio_index, lookup_ref
+    from labeling.acquire.audio_index import load_audio_index, lookup_ref
 
     p = track.get("local_path")
     if p and Path(p).is_file():

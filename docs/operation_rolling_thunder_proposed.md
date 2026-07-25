@@ -69,7 +69,7 @@ flowchart LR
 
 Existing assets:
 - [eda/alignment/spectrogram_review/](../eda/alignment/spectrogram_review/) — render/serve, truth boxes, ableton labels.
-- [labeling/gt_review_ui.py](../labeling/gt_review_ui.py) — GT vs export diff.
+- [labeling/verify/gt_review_ui.py](../labeling/verify/gt_review_ui.py) — GT vs export diff.
 - `make audit-gt`, gt-gate, L4 feature-resolvability (from Crush plan).
 
 RT2 deliverables:

@@ -41,8 +41,11 @@ from tokenizer.identity_axes import (
     scrape_claimed_version,
 )
 from tokenizer.track_tokenizer import parse_track_row as parse_track_main
-from tokenizer.track_tokenizer import TrackRow
 from tokenizer.suggestion_tokenizer import parse_suggestion_row
+from tokenizer.text_tokenizer import parse_bItmH_row
+from tokenizer.id_tokenizer import parse_track_row as parse_id_row
+from tokenizer.model import TrackRow  # canonical surface (re-export)
+from tokenizer import model
 
 log = logging.getLogger("tokenizer.materialize")
 
@@ -133,15 +136,160 @@ class _MetadataAccumulator:
 # -----------------------------------------------------------------------------
 
 
+def _suggestion_tuple(sug, set_id: str) -> tuple:
+    """Full track_suggestions row from a SuggestionRow (payload that materialize
+    previously dropped: data_type / cue / poll / labels / media)."""
+
+    def b(x):
+        return int(bool(x)) if x is not None else None
+
+    labels_json = (
+        json.dumps([[n, p] for n, p in sug.labels], ensure_ascii=False)
+        if sug.labels
+        else None
+    )
+    return (
+        sug.sug_id,
+        set_id,
+        sug.tlp_id,
+        sug.pos,
+        sug.track_slug,
+        sug.track_display,
+        sug.artist_title,
+        sug.suggester_user_id,
+        sug.suggester_name,
+        sug.suggestion_timestamp,
+        b(sug.is_remix),
+        b(sug.has_youtube),
+        b(sug.has_soundcloud),
+        b(sug.has_spotify),
+        sug.data_type,
+        sug.cue_seconds,
+        sug.play_cue_seconds,
+        sug.suggester_guest_id,
+        sug.suggester_kind,
+        sug.track_page_path,
+        sug.track_id_numeric,
+        b(sug.is_id_remix),
+        b(sug.has_apple),
+        b(sug.has_affiliate),
+        b(sug.has_live_video),
+        sug.poll_correct,
+        sug.poll_not_correct,
+        sug.poll_unsure,
+        labels_json,
+        sug.google_search_url,
+    )
+
+
 def _flush_suggestions(conn: sqlite3.Connection, buf: list[tuple]) -> None:
     if not buf:
         return
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(track_suggestions)")}
+    if "data_type" in cols:
+        conn.executemany(
+            "INSERT OR REPLACE INTO track_suggestions ("
+            "sug_id, set_id, tlp_id, pos, track_slug, track_display, artist_title, "
+            "suggester_user_id, suggester_name, suggestion_timestamp, "
+            "is_remix, has_youtube, has_soundcloud, has_spotify, "
+            "data_type, cue_seconds, play_cue_seconds, suggester_guest_id, "
+            "suggester_kind, track_page_path, track_id_numeric, is_id_remix, "
+            "has_apple, has_affiliate, has_live_video, poll_correct, "
+            "poll_not_correct, poll_unsure, labels_json, google_search_url"
+            ") VALUES (" + ",".join("?" * 30) + ")",
+            buf,
+        )
+    else:
+        conn.executemany(
+            "INSERT OR REPLACE INTO track_suggestions ("
+            "sug_id, set_id, tlp_id, pos, track_slug, track_display, artist_title, "
+            "suggester_user_id, suggester_name, suggestion_timestamp, "
+            "is_remix, has_youtube, has_soundcloud, has_spotify"
+            ") VALUES (" + ",".join("?" * 14) + ")",
+            [row[:14] for row in buf],
+        )
+    conn.commit()
+
+
+def _notice_tuple(tok, set_id: str, row_index: int) -> tuple:
+    """set_notices row from a text_tokenizer TextRowToken (bItmH notice/section)."""
+    return (
+        set_id,
+        row_index,
+        tok.row_type,
+        tok.text,
+        json.dumps(tok.links, ensure_ascii=False) if tok.links else None,
+        json.dumps(tok.icons, ensure_ascii=False) if tok.icons else None,
+        json.dumps(tok.parsed, ensure_ascii=False) if tok.parsed else None,
+    )
+
+
+def _flush_notices(conn: sqlite3.Connection, buf: list[tuple]) -> None:
+    if not buf:
+        return
     conn.executemany(
-        "INSERT OR REPLACE INTO track_suggestions ("
-        "sug_id, set_id, tlp_id, pos, track_slug, track_display, artist_title, "
-        "suggester_user_id, suggester_name, suggestion_timestamp, "
-        "is_remix, has_youtube, has_soundcloud, has_spotify"
-        ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT OR REPLACE INTO set_notices ("
+        "set_id, row_index, row_type, text, links_json, icons_json, parsed_json"
+        ") VALUES (?,?,?,?,?,?,?)",
+        buf,
+    )
+    conn.commit()
+
+
+def _id_meta_tuple(idt, set_id: str, row_index: int, tlp_id, is_id: bool) -> tuple:
+    """set_slot_id_meta row from an id_tokenizer IDTrack (ID / unknown row)."""
+
+    def b(x):
+        return int(bool(x))
+
+    return (
+        set_id,
+        row_index,
+        tlp_id,
+        b(is_id),
+        b(idt.protected),
+        b(idt.rbcst),
+        idt.watchers,
+        idt.spotify_presave_count,
+    )
+
+
+def _flush_id_meta(conn: sqlite3.Connection, buf: list[tuple]) -> None:
+    if not buf:
+        return
+    conn.executemany(
+        "INSERT OR REPLACE INTO set_slot_id_meta ("
+        "set_id, row_index, tlp_id, is_id, protected, rbcst, watchers, presave_count"
+        ") VALUES (?,?,?,?,?,?,?,?)",
+        buf,
+    )
+    conn.commit()
+
+
+def _id_link_tuples(idt, set_id: str, tlp_id) -> list[tuple]:
+    """track_id_links rows from an IDTrack's cross-tracklist linked_items."""
+    return [
+        (
+            set_id,
+            tlp_id,
+            li.user_name,
+            li.user_href,
+            li.user_followers_text,
+            li.linked_tracklist_href,
+            li.linked_tracklist_text,
+        )
+        for li in idt.linked_items
+    ]
+
+
+def _flush_id_links(conn: sqlite3.Connection, buf: list[tuple]) -> None:
+    if not buf:
+        return
+    conn.executemany(
+        "INSERT OR REPLACE INTO track_id_links ("
+        "set_id, tlp_id, linker_user_name, linker_user_href, "
+        "linker_user_followers, linked_tracklist_href, linked_tracklist_text"
+        ") VALUES (?,?,?,?,?,?,?)",
         buf,
     )
     conn.commit()
@@ -167,30 +315,15 @@ def _slot_label(tr: TrackRow) -> str | None:
     return None
 
 
-def _flush_slots(conn: sqlite3.Connection, buf: list[tuple]) -> None:
+def _flush_slots(conn: sqlite3.Connection, buf: "list[model.SetTrackSlotRow]") -> None:
     if not buf:
         return
-    cols = {r[1] for r in conn.execute("PRAGMA table_info(set_track_slots)")}
-    if "layer_role" in cols:
-        conn.executemany(
-            "INSERT OR REPLACE INTO set_track_slots ("
-            "set_id, row_index, tlp_id, recording_id, track_id, source, slot_label, "
-            "is_concurrent, cue_seconds, cue_time_seconds, claimed_version, "
-            "claimed_stem, claimed_variant, full_name, title, artists_json, "
-            "duration_seconds, layer_role, constituents_json"
-            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            buf,
-        )
-    else:
-        legacy = [row[:17] for row in buf]
-        conn.executemany(
-            "INSERT OR REPLACE INTO set_track_slots ("
-            "set_id, row_index, tlp_id, recording_id, track_id, source, slot_label, "
-            "is_concurrent, cue_seconds, cue_time_seconds, claimed_version, "
-            "claimed_stem, claimed_variant, full_name, title, artists_json, duration_seconds"
-            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            legacy,
-        )
+    cols = model.columns(model.SetTrackSlotRow)
+    conn.executemany(
+        f"INSERT OR REPLACE INTO set_track_slots ({','.join(cols)}) "
+        f"VALUES ({','.join('?' * len(cols))})",
+        [model.as_row(r) for r in buf],
+    )
     conn.commit()
 
 
@@ -215,6 +348,7 @@ CREATE TABLE IF NOT EXISTS set_track_slots (
     claimed_stem TEXT NOT NULL DEFAULT 'regular',
     claimed_variant TEXT NOT NULL DEFAULT 'regular',
     full_name TEXT, title TEXT, artists_json TEXT, duration_seconds INTEGER,
+    layer_role TEXT, constituents_json TEXT,
     parsed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (set_id, row_index)
 );
@@ -223,7 +357,34 @@ CREATE TABLE IF NOT EXISTS track_suggestions (
     pos INTEGER, track_slug TEXT, track_display TEXT, artist_title TEXT,
     suggester_user_id INTEGER, suggester_name TEXT,
     suggestion_timestamp TEXT, is_remix INTEGER, has_youtube INTEGER,
-    has_soundcloud INTEGER, has_spotify INTEGER
+    has_soundcloud INTEGER, has_spotify INTEGER,
+    data_type INTEGER, cue_seconds INTEGER, play_cue_seconds INTEGER,
+    suggester_guest_id INTEGER, suggester_kind TEXT, track_page_path TEXT,
+    track_id_numeric INTEGER, is_id_remix INTEGER, has_apple INTEGER,
+    has_affiliate INTEGER, has_live_video INTEGER,
+    poll_correct INTEGER, poll_not_correct INTEGER, poll_unsure INTEGER,
+    labels_json TEXT, google_search_url TEXT,
+    parsed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS set_notices (
+    set_id TEXT NOT NULL, row_index INTEGER NOT NULL,
+    row_type TEXT, text TEXT, links_json TEXT, icons_json TEXT,
+    parsed_json TEXT, parsed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (set_id, row_index)
+);
+CREATE TABLE IF NOT EXISTS set_slot_id_meta (
+    set_id TEXT NOT NULL, row_index INTEGER NOT NULL, tlp_id INTEGER,
+    is_id INTEGER DEFAULT 0, protected INTEGER DEFAULT 0, rbcst INTEGER DEFAULT 0,
+    watchers INTEGER, presave_count INTEGER,
+    parsed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (set_id, row_index)
+);
+CREATE TABLE IF NOT EXISTS track_id_links (
+    set_id TEXT NOT NULL, tlp_id INTEGER NOT NULL,
+    linker_user_name TEXT, linker_user_href TEXT, linker_user_followers TEXT,
+    linked_tracklist_href TEXT, linked_tracklist_text TEXT,
+    parsed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (set_id, tlp_id, linker_user_name, linked_tracklist_href)
 );
 """
 
@@ -241,12 +402,13 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
     conn.commit()
 
     log.info("clearing destination tables for clean rebuild")
-    # Note: track_id_links is populated by a separate focused pass
-    # (`tokenizer.id_links` — to be written), so we leave its rows intact here.
     conn.executescript("""
         DELETE FROM track_metadata;
         DELETE FROM set_track_slots;
         DELETE FROM track_suggestions;
+        DELETE FROM set_notices;
+        DELETE FROM set_slot_id_meta;
+        DELETE FROM track_id_links;
     """)
     conn.commit()
 
@@ -256,8 +418,11 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
     log.info("streaming %s rows from dj_set_rows", f"{total:,}")
 
     metadata = _MetadataAccumulator()
-    slot_buf: list[tuple] = []
+    slot_buf: list[model.SetTrackSlotRow] = []
     sug_buf: list[tuple] = []
+    notice_buf: list[tuple] = []
+    id_meta_buf: list[tuple] = []
+    id_link_buf: list[tuple] = []
     counts = {"track": 0, "slot": 0, "suggestion": 0, "text": 0, "errors": 0}
     # Per-set w/ layering: primary label + w/ counter (matches pull_set_for_alignment).
     slot_state: dict[str, tuple[str | None, int]] = {}
@@ -328,66 +493,83 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
                             claimed_stem=claimed_stem,
                         )
                         slot_buf.append(
-                            (
-                                sid,
-                                int(row["row_index"]),
-                                tr.data_id,
-                                tr.track_key,
-                                tr.track_key,
-                                source,
-                                label,
-                                int(tr.is_concurrent),
-                                tr.cue_seconds,
-                                tr.cue_time_seconds,
-                                scrape_claimed_version(tr.version_tag),
-                                claimed_stem,
-                                derive_claimed_variant(tr.full_name),
-                                tr.full_name,
-                                tr.title,
-                                json.dumps(list(tr.artists), ensure_ascii=False)
-                                if tr.artists
-                                else None,
-                                tr.duration_seconds,
-                                layer_role,
-                                None,
+                            model.SetTrackSlotRow(
+                                set_id=sid,
+                                row_index=int(row["row_index"]),
+                                tlp_id=tr.data_id,
+                                recording_id=tr.track_key,
+                                track_id=tr.track_key,
+                                source=source,
+                                slot_label=label,
+                                is_concurrent=int(tr.is_concurrent),
+                                cue_seconds=tr.cue_seconds,
+                                cue_time_seconds=tr.cue_time_seconds,
+                                claimed_version=scrape_claimed_version(tr.version_tag),
+                                claimed_stem=claimed_stem,
+                                claimed_variant=derive_claimed_variant(tr.full_name),
+                                full_name=tr.full_name,
+                                title=tr.title,
+                                artists_json=(
+                                    json.dumps(list(tr.artists), ensure_ascii=False)
+                                    if tr.artists
+                                    else None
+                                ),
+                                duration_seconds=tr.duration_seconds,
+                                layer_role=layer_role,
+                                constituents_json=None,
                             )
                         )
                         counts["slot"] += 1
 
+                        # ID / unknown rows: capture 1001tracklists' ID-resolution
+                        # workflow (protected/rbcst/watchers + cross-tracklist
+                        # linked-ID hints). Reuse the already-parsed `outer` Tag.
+                        is_id_row = tr.is_ided or (outer.get("data-isid") == "true")
+                        if is_id_row:
+                            idt = parse_id_row(outer)
+                            id_meta_buf.append(
+                                _id_meta_tuple(
+                                    idt,
+                                    sid,
+                                    int(row["row_index"]),
+                                    tr.data_id,
+                                    is_id_row,
+                                )
+                            )
+                            if idt.linked_items and tr.data_id is not None:
+                                id_link_buf.extend(
+                                    _id_link_tuples(idt, sid, tr.data_id)
+                                )
+
                         if len(slot_buf) >= _BATCH_INSERT:
                             _flush_slots(conn, slot_buf)
                             slot_buf.clear()
+                        if len(id_meta_buf) >= _BATCH_INSERT:
+                            _flush_id_meta(conn, id_meta_buf)
+                            id_meta_buf.clear()
+                        if len(id_link_buf) >= _BATCH_INSERT:
+                            _flush_id_links(conn, id_link_buf)
+                            id_link_buf.clear()
 
                 elif "sugTog" in outer_classes:
                     sug = parse_suggestion_row(outer)
-                    sug_buf.append(
-                        (
-                            sug.sug_id,
-                            row["set_id"],
-                            sug.tlp_id,
-                            sug.pos,
-                            sug.track_slug,
-                            sug.track_display,
-                            sug.artist_title,
-                            sug.suggester_user_id,
-                            sug.suggester_name,
-                            sug.suggestion_timestamp,
-                            int(bool(sug.is_remix))
-                            if sug.is_remix is not None
-                            else None,
-                            int(bool(sug.has_youtube)),
-                            int(bool(sug.has_soundcloud)),
-                            int(bool(sug.has_spotify)),
-                        )
-                    )
+                    sug_buf.append(_suggestion_tuple(sug, row["set_id"]))
                     counts["suggestion"] += 1
 
                 elif "bItmH" in outer_classes:
+                    tok = parse_bItmH_row(raw)
+                    notice_buf.append(
+                        _notice_tuple(tok, row["set_id"], int(row["row_index"]))
+                    )
                     counts["text"] += 1
 
             except Exception as e:
                 counts["errors"] += 1
                 log.debug("row_id=%s error: %s", row["row_id"], e)
+
+            if len(notice_buf) >= _BATCH_INSERT:
+                _flush_notices(conn, notice_buf)
+                notice_buf.clear()
 
             if len(sug_buf) >= _BATCH_INSERT:
                 _flush_suggestions(conn, sug_buf)
@@ -411,6 +593,9 @@ def materialize(db_path: Path, batch_size: int = 10_000) -> dict[str, int]:
     # Final tail flushes
     _flush_slots(conn, slot_buf)
     _flush_suggestions(conn, sug_buf)
+    _flush_notices(conn, notice_buf)
+    _flush_id_meta(conn, id_meta_buf)
+    _flush_id_links(conn, id_link_buf)
 
     # Upsert track_metadata (single big batch — ~50k rows expected)
     md_rows = metadata.finalize_rows()

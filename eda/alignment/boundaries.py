@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from labeling.ground_truth.schema import GroundTruthSet
+from labeling.schema import GroundTruthSet
 
 
 @dataclass(frozen=True)

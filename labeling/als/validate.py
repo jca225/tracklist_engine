@@ -11,6 +11,7 @@ actually hit (see docs/als_interpreter_plan.md §3):
 - ``pointee-dup`` — duplicate AutomationTarget ids (the Live-crash class)
 - ``clip-*`` — clips the extractor would silently skip or mis-handle
 - ``gain-out-of-range`` — volume envelope values outside Live's fader range
+- ``clip-envelope-ignored`` — clip-local automation the track-fader reader skips
 - ``version-unknown`` — session from an untested Live version
 
 CLI edge (fail-fast): ``python -m labeling.als.validate <session.als>`` exits
@@ -270,12 +271,40 @@ def _check_volume_envelopes(root: etree._Element, out: list[Diagnostic]) -> None
                 )
 
 
+def _check_clip_envelopes(root: etree._Element, out: list[Diagnostic]) -> None:
+    """Flag clip-LOCAL automation the track-fader reader ignores.
+
+    GT audibility is read from the TRACK fader (``Mixer/Volume``). A per-clip
+    automation envelope — gain/pan/transpose drawn INSIDE the clip, stored in
+    the clip's own ``<Envelopes><Envelopes>`` block — is invisible to that
+    reader, so a clip faded via a clip envelope would export as fully audible.
+    No real labeling session uses one (annotators ride the track fader); this
+    fence fires only if that assumption ever breaks, so the gap can't pass
+    silently. Empty ``<Envelopes><Envelopes/></Envelopes>`` scaffolding (on
+    every real clip) carries no FloatEvent and does not trip it.
+    """
+    for clip_el in root.iter("AudioClip"):
+        inner = clip_el.find("Envelopes/Envelopes")
+        if inner is not None and inner.xpath(".//FloatEvent"):
+            out.append(
+                Diagnostic(
+                    "clip-envelope-ignored",
+                    "warning",
+                    "clip carries a clip-local automation envelope the "
+                    "track-fader reader ignores — per-clip gain/pan is not "
+                    "captured in ground truth",
+                    _clip_location(clip_el),
+                )
+            )
+
+
 _CHECKS = (
     _check_version,
     _check_pointee_ids,
     _check_tempo,
     _check_clips,
     _check_volume_envelopes,
+    _check_clip_envelopes,
 )
 
 

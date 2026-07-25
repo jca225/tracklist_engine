@@ -50,8 +50,7 @@ from .local_decode import decode_constituent
 from .retrieve import retrieve_matches
 from .routes import lane
 from .schema import LandmarkMatch
-from .stem_overrides import norm_slot as _norm_slot
-from .stem_overrides import timeline_stem_overrides
+from .stem_overrides import SlotForm, lane_stem, timeline_stem_overrides
 
 _REPO = Path(__file__).resolve().parent.parent.parent.parent
 _OBSERVATIONS = frozenset({"landmark", "hubert", "chroma"})
@@ -67,7 +66,9 @@ def _producer_sha() -> str:
     ).strip()
 
 
-def _stem_overrides(path: Path | None, spans: list[dict[str, Any]]) -> dict[str, str]:
+def _stem_overrides(
+    path: Path | None, spans: list[dict[str, Any]]
+) -> dict[str, list[SlotForm]]:
     """Evaluation-only stem routing via GT track_id → timeline recording_id."""
     if path is None:
         return {}
@@ -156,7 +157,7 @@ def _decode_landmark_lane(
     *,
     route,
     timeline: dict[str, Any],
-    overrides: dict[str, str],
+    overrides: dict[str, list[SlotForm]],
     mix_hashes: dict,
     ref_fp_cache: Path,
     pair_cap: int,
@@ -166,10 +167,8 @@ def _decode_landmark_lane(
     rows: list[dict[str, Any]] = []
     for span in timeline["spans"]:
         slot = str(span["slot_label"])
-        stem = overrides.get(
-            _norm_slot(slot), str(span.get("claimed_stem") or "regular")
-        )
-        if stem not in route.claimed_stems:
+        stem = lane_stem(overrides, span, route.claimed_stems)
+        if stem is None:
             continue
         recording_id = str(span["recording_id"])
         ref_fp = _reference_fp(
@@ -216,7 +215,7 @@ def _decode_chroma_instrumental_lane(
     set_id: str,
     route,
     timeline: dict[str, Any],
-    overrides: dict[str, str],
+    overrides: dict[str, list[SlotForm]],
     slopes: tuple[float, ...],
     mix_duration_s: float,
 ) -> list[dict[str, Any]]:
@@ -233,10 +232,8 @@ def _decode_chroma_instrumental_lane(
     rows: list[dict[str, Any]] = []
     for span in timeline["spans"]:
         slot = str(span["slot_label"])
-        stem = overrides.get(
-            _norm_slot(slot), str(span.get("claimed_stem") or "regular")
-        )
-        if stem not in route.claimed_stems:
+        stem = lane_stem(overrides, span, route.claimed_stems)
+        if stem is None:
             continue
         recording_id = str(span["recording_id"])
         audio = _resolve_ref_instrumental(set_dir, by_tid, recording_id, slot)
@@ -282,7 +279,7 @@ def _decode_hubert_vocal_lane(
     set_id: str,
     route,
     timeline: dict[str, Any],
-    overrides: dict[str, str],
+    overrides: dict[str, list[SlotForm]],
     slopes: tuple[float, ...],
     mix_duration_s: float,
 ) -> list[dict[str, Any]]:
@@ -299,10 +296,8 @@ def _decode_hubert_vocal_lane(
     rows: list[dict[str, Any]] = []
     for span in timeline["spans"]:
         slot = str(span["slot_label"])
-        stem = overrides.get(
-            _norm_slot(slot), str(span.get("claimed_stem") or "regular")
-        )
-        if stem not in route.claimed_stems:
+        stem = lane_stem(overrides, span, route.claimed_stems)
+        if stem is None:
             continue
         recording_id = str(span["recording_id"])
         audio = _vocal_ref_path(by_tid.get(recording_id))

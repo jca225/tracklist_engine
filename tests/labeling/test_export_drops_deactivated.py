@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 
 from labeling.als import parse_layer_clips, load_als_xml
-from labeling.export_als_to_gt import collect_kept_clip_rows
+from labeling.extract._shared import collect_kept_clip_rows
 from tests.labeling.synth_session import LayerSpec, session_als_file
 
 SPECS = (

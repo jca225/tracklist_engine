@@ -6,15 +6,37 @@ set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
-PYTHON="${ROOT}/venvs/audio/bin/python"
-if [[ ! -x "$PYTHON" ]]; then
-  PYTHON=python3
-fi
+# The commit that triggered this hook exports GIT_INDEX_FILE / GIT_DIR into our
+# environment. pytest (tests/scripts/test_pi_autopull.py) shells out `git commit`
+# on throwaway repos; those children INHERIT GIT_INDEX_FILE and write THIS repo's
+# real index instead — producing ~1500 phantom staged deletions of the whole
+# tree. Scrub the commit env so every child rediscovers its repo from cwd; our
+# own guardrail/pytest steps read working-tree files, not the staged index.
+unset GIT_INDEX_FILE GIT_DIR GIT_WORK_TREE GIT_PREFIX
+
+# Resolve the analysis venv. In a linked worktree $ROOT has no venvs/ — fall back
+# to the MAIN worktree's venv (found via the shared git common dir) before the
+# bare-python3 last resort, which lacks lxml and fails gt_als_gate / pytest at
+# import time.
+COMMON_DIR="$(git rev-parse --git-common-dir)"
+case "$COMMON_DIR" in
+  /*) ;;
+  *) COMMON_DIR="$ROOT/$COMMON_DIR" ;;
+esac
+MAIN_ROOT="$(cd "$(dirname "$COMMON_DIR")" && pwd)"
+
+PYTHON=python3
+for cand in "${ROOT}/venvs/audio/bin/python" "${MAIN_ROOT}/venvs/audio/bin/python"; do
+  if [[ -x "$cand" ]]; then
+    PYTHON="$cand"
+    break
+  fi
+done
 
 "$PYTHON" scripts/guardrails.py
 # GT-yaml must still derive from its committed .als (manifest-free slot-label
 # gate). Redundant with guardrails but surfaces a drift's slot diff directly;
 # self-guards to a no-op for any gated set whose committed .als is absent.
-"$PYTHON" -m labeling.gt_als_gate
-bash scripts/typecheck.sh
+"$PYTHON" -m labeling.verify.gt_als_gate
+PYTHON="$PYTHON" bash scripts/typecheck.sh
 "$PYTHON" -m pytest tests/ -q
