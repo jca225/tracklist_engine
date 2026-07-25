@@ -1,0 +1,24 @@
+#!/bin/bash
+# Post-merge parse check. Runs after `git merge` and `git pull` (NOT after
+# rebase -- git has no post-rebase hook; run `make land-verify` manually there).
+#
+# Why this exists: a structured merge driver (mergiraf/weave, if configured)
+# silently resolves conflicts git would have asked a human about. They are
+# usually right and occasionally not -- weave 0.3.6 was measured producing
+# clean merges whose output does not parse in ~2% of cases on Python. This is
+# the cheapest possible check on those automatic decisions.
+#
+# Advisory only: it prints and never blocks. `make check` is the real gate.
+set -uo pipefail
+
+if ! command -v braid >/dev/null 2>&1; then
+  exit 0  # braid not installed; nothing to do
+fi
+
+# HEAD@{1} is the pre-merge position, so this diffs exactly what the merge did.
+if ! braid verify --since 'HEAD@{1}'; then
+  echo ""
+  echo "  ^ merge produced code that does not parse. Do not push; inspect the"
+  echo "    files above before running make check."
+fi
+exit 0
