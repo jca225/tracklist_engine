@@ -92,13 +92,15 @@ uses WAL + a 30 s busy timeout.
 
 **MUST be resolved before anyone sets `PROVENANCE_DUAL_WRITE=1` in production:**
 
-1. **Crash-window run poisoning.** `register_computed_feature` commits several
-   times (param set / env / spec / run-begin / artifact / output / succeed). A kill
-   mid-sequence (Vast **spot preemption is routine**) leaves a run stuck
-   `status='running'` or an artifact with no output edge — permanent Law-1
-   offenders in an append-only store with no repair tool. Fix before enabling:
-   wrap the run lifecycle in one transaction, **or** add a startup sweep that marks
-   stale `running` runs `failed`.
+1. ~~**Crash-window run poisoning.**~~ **RESOLVED** (PR #100, `core/provenance/reconcile.py`).
+   `register_computed_feature` commits several times (param set / env / spec /
+   run-begin / artifact / output / succeed); a kill mid-sequence (Vast **spot
+   preemption is routine**) left a run stuck `status='running'` or an artifact with
+   no output edge — permanent Law-1 offenders. `reconcile_store(conn, prune_orphans=…)`
+   is the repair tool: it marks stale `running` runs `failed` (always safe, on by
+   default) and reports/prunes orphan artifacts (`--prune`, opt-in — safe only
+   because they were never a completed output). Run it at worker startup:
+   `python -m core.provenance.reconcile --db <store-root> [--prune]`. Idempotent.
 2. **Store-root location + worker ship-back.** The dual-write fires at the workers'
    **scratch-DB** persist (`analysis/vast_worker.py`, `scripts/mac_analyze_loop.py`),
    not the canonical commit. Enable **pi-local analysis first** (store root on local
@@ -109,6 +111,32 @@ uses WAL + a 30 s busy timeout.
 **Follow-ups (not enable-blockers):** the dual-write passes `audio=None`, so a
 feature links to its recording only by `track_audio_id` in metadata, not a
 derivation edge (add audio linkage for full lineage); coverage is `persist_analysis`
-only (not `persist_mert_measures` or the set-side writers); and there is no
-integration test pinning the after-commit / Ok-path-only ordering (the property is
-inspection-verified — add a `persist_analysis`-level test).
+only (not `persist_mert_measures` or the set-side writers). ~~no ordering test~~
+**DONE** — `tests/test_audio_pipeline_analysis.py` now drives a real MERT feature
+through the actual `persist_analysis` and asserts the `mert_features` artifact lands
+(flag-on) / does not (flag-off), laws-clean + reconcile-clean.
+
+## Turnkey enablement (the "make it real" flip)
+
+With blocker #1 resolved, enabling the dual-write on the **Mac analysis worker**
+(where MERT is computed — pi CPU runs no MERT, so the Vast/Mac GPU workers are the
+only hosts that produce `mert_features`) is:
+
+```sh
+# 1. one-time: reconcile any crash residue in the target store (safe, idempotent)
+venvs/audio/bin/python -m core.provenance.reconcile --db "$PROVENANCE_STORE_ROOT"
+# 2. enable + run the loop (store root MUST be local disk, not NFS/sshfs)
+export PROVENANCE_DUAL_WRITE=1
+export PROVENANCE_STORE_ROOT="$HOME/Desktop/tracklist_engine/_mac_scratch/provenance_live"
+caffeinate -i venvs/audio/bin/python scripts/mac_analyze_loop.py \
+    --separator roformer --max-tracks <N>          # bound the batch
+# 3. ship the additive store to pi (rsync into /mnt/storage/provenance/**, never
+#    into music_database.db or /mnt/storage/objects) — REQUIRES pi online.
+```
+
+Worker-half validated live (2026-07-25, pi-offline): one real local BB13 track
+(`Clean Bandit – Symphony (Ryos Remix)`) run through the shipped
+`analyze_track → persist_analysis` with the flag on produced a real 152-measure
+MERT stack that content-addressed into a durable store (`mert_features`
+`ad58877a…`, 7.4 MB object), laws-clean + reconcile-clean. Permanent regression
+guard: the `persist_analysis` E2E tests in `tests/test_audio_pipeline_analysis.py`.

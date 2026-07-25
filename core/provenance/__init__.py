@@ -8,6 +8,7 @@ engine can be provenanced until these exist.
 
 from .decisions import decide, entropy
 from .ingest import register_computed_feature
+from .reconcile import ReconcileReport, reconcile_store
 from .explain import (
     AxisView,
     HumanAssertionView,
@@ -91,6 +92,8 @@ __all__ = [
     "make_fitted_model",
     "decide",
     "register_computed_feature",
+    "reconcile_store",
+    "ReconcileReport",
     "entropy",
     "check_laws",
     "format_law_results",
