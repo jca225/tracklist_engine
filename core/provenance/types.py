@@ -1,10 +1,12 @@
-"""Provenance-first core types (§1/§2/§4 of the engine contract).
+"""Provenance-first core types (§1/§2/§4/§8 of the engine contract).
 
 Faithful but grounded subset of docs/engine/dj_engine_pseudocode.md — the types
-the whole migration hangs off. Deliberately minimal: model/environment provenance
-(§8 ProcessSpec/EnvironmentSpec) is deferred to Phase 3; a Run here carries the
-producing code + params inline (partial Law 14) until that lands. Claims/Evidence/
-AxisBelief (§5/§9) arrive with the identity slice (Brick 2).
+the whole migration hangs off. Claims/Evidence/AxisBelief (§5/§9) arrived with
+the identity slice (Brick 2); the §2/§8 versioning backbone (ParameterSet /
+EnvironmentSpec / ProcessSpec / TrainingSnapshot / FittedModel) arrived with the
+feature-producer foundation (Brick 7). A ``Run`` still carries process/version/
+code inline for writers that predate ProcessSpec; ``begin_run_from_spec`` stamps
+those fields *from* a spec so registry-produced runs are fully versioned.
 
 The load-bearing invariants these encode:
 - An ``Artifact`` is addressed by ``content_sha256`` — bytes are identity, paths
@@ -81,10 +83,14 @@ class SubjectRef:
 
 @dataclass(frozen=True)
 class Artifact:
-    """Immutable, content-addressed bytes. ``content_sha256`` is the identity."""
+    """Immutable, content-addressed bytes. ``content_sha256`` is the identity.
+
+    ``kind`` is one of the built-in :class:`ArtifactKind` values OR an arbitrary
+    registered kind string (Brick 7 ``@artifact_type`` — new feature kinds do
+    not require enum surgery)."""
 
     content_sha256: str
-    kind: ArtifactKind
+    kind: ArtifactKind | str
     media_type: str
     byte_size: int
     object_uri: str
@@ -96,7 +102,12 @@ class Artifact:
 
 @dataclass(frozen=True)
 class Run:
-    """An immutable record of one execution of a versioned process."""
+    """An immutable record of one execution of a versioned process.
+
+    ``process_spec_id`` is set when the run was begun from a persisted
+    :class:`ProcessSpec` (``begin_run_from_spec``) — the fully-versioned path.
+    Legacy ``begin_run`` leaves it ``None`` (process/version/code inline only).
+    """
 
     run_id: str
     process: str
@@ -108,6 +119,7 @@ class Run:
     finished_at: Optional[datetime] = None
     random_seed: Optional[int] = None
     error: Optional[Json] = None
+    process_spec_id: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -261,6 +273,83 @@ class HumanLabelAssertion:
     created_at: datetime
     source_confidence: Optional[float] = None
     supersedes_assertion_id: Optional[str] = None
+
+
+# --- §2/§8 versioning backbone (Brick 7) -----------------------------------
+# Everything a computation IS — code, parameters, environment, upstream models
+# — versioned and content-hashed, so "identical process" has one id and a
+# feature/model can name exactly what produced it (Laws 13/14).
+
+
+@dataclass(frozen=True)
+class ParameterSet:
+    """One immutable bag of parameters. ``canonical_hash`` = sha256 of the
+    sorted-JSON serialization of ``values`` — the same values always hash the
+    same, key order be damned."""
+
+    parameter_set_id: str
+    namespace: str
+    values: Json
+    canonical_hash: str
+
+
+@dataclass(frozen=True)
+class EnvironmentSpec:
+    """A cheap-but-honest capture of where code ran: OS, architecture, runtime,
+    and a hash of the dependency lock (a requirements file, or the installed
+    distribution list when none is given)."""
+
+    environment_spec_id: str
+    os: str
+    architecture: str
+    runtime: str
+    dependency_lock_hash: str
+
+
+@dataclass(frozen=True)
+class ProcessSpec:
+    """A versioned process: WHAT ran (name/version/stage/code), with WHICH
+    parameters, in WHAT environment, on top of WHICH models.
+
+    ``process_spec_id`` is DETERMINISTIC — sha256 over (name, version,
+    code_commit, parameter canonical_hash, environment dependency_lock_hash,
+    model_refs) — so recording the identical process is idempotent (one row,
+    one id), never a duplicate."""
+
+    process_spec_id: str
+    name: str
+    version: str
+    stage: str
+    code_commit: str
+    parameter_set_id: str
+    environment_spec_id: str
+    model_refs: tuple[str, ...]
+    implementation_hash: str
+
+
+@dataclass(frozen=True)
+class TrainingSnapshot:
+    """A light frozen snapshot of WHAT a model trained on: the content shas of
+    the member artifacts. ``snapshot_hash`` = sha256 over the sorted members —
+    the same training set always snapshots to the same hash (Law 13)."""
+
+    training_snapshot_id: str
+    member_artifact_shas: tuple[str, ...]
+    snapshot_hash: str
+
+
+@dataclass(frozen=True)
+class FittedModel:
+    """One trained model, pinned to its axis, producing process, serialized
+    state (content-addressed), and frozen training snapshot (Laws 13/14)."""
+
+    fitted_model_id: str
+    axis: Axis
+    process_spec_id: str
+    serialized_state_sha256: str
+    training_snapshot_id: str
+    model_state_hash: str
+    status: str = "candidate"  # | promoted | retired (§8/§11)
 
 
 @dataclass(frozen=True)

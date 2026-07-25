@@ -19,8 +19,16 @@ from .explain import (
     lineage,
 )
 from .laws import LawResult, LawVerdict, check_laws, format_law_results
+from .registry import (
+    REGISTRY,
+    ArtifactTypeSpec,
+    Registry,
+    TransformationSpec,
+    artifact_type,
+    transformation,
+)
 from .repository import ProvenanceCycle, ProvenanceRepository
-from .store import ArtifactStore, connect
+from .store import ArtifactStore, connect, kind_str
 from .types import (
     Artifact,
     ArtifactKind,
@@ -30,23 +38,56 @@ from .types import (
     Decision,
     DecisionRule,
     Derivation,
+    EnvironmentSpec,
     Evidence,
     EvidenceDirection,
+    FittedModel,
     HumanLabelAssertion,
     HumanLabelBundle,
     Interval,
     Observation,
     ObservationStatus,
+    ParameterSet,
+    ProcessSpec,
     Run,
     RunStatus,
     SubjectRef,
+    TrainingSnapshot,
+)
+from .versioning import (
+    canonical_values_hash,
+    capture_environment,
+    implementation_hash_of,
+    make_fitted_model,
+    make_parameter_set,
+    make_process_spec,
+    make_training_snapshot,
 )
 
 __all__ = [
     "ArtifactStore",
     "connect",
+    "kind_str",
     "ProvenanceRepository",
     "ProvenanceCycle",
+    "REGISTRY",
+    "Registry",
+    "ArtifactTypeSpec",
+    "TransformationSpec",
+    "artifact_type",
+    "transformation",
+    "ParameterSet",
+    "EnvironmentSpec",
+    "ProcessSpec",
+    "TrainingSnapshot",
+    "FittedModel",
+    "canonical_values_hash",
+    "capture_environment",
+    "implementation_hash_of",
+    "make_parameter_set",
+    "make_process_spec",
+    "make_training_snapshot",
+    "make_fitted_model",
     "decide",
     "entropy",
     "check_laws",

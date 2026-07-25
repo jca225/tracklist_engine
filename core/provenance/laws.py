@@ -12,10 +12,11 @@ Scope honesty (do not overclaim):
   persisted — NOT the shipped aligner pipeline. The hand-audited verdicts in
   docs/engine/law_audit.md grade the shipped pipeline and still stand; a green
   law here means "this substrate DB obeys the law", nothing more.
-- Laws about entities the substrate does not hold yet (model provenance §8,
-  rounds/pseudo-labels §12, evaluation/promotion §11) report
-  ``NOT_APPLICABLE`` with the reason. They are never faked green. Human labels
-  (§7, laws 8/9) ARE held since Brick 6 — checkable once assertions exist.
+- Laws about entities the substrate does not hold yet (rounds/pseudo-labels
+  §12, evaluation/promotion §11) report ``NOT_APPLICABLE`` with the reason.
+  They are never faked green. Human labels (§7, laws 8/9) ARE held since
+  Brick 6; model/process provenance (§8, laws 13/14) since Brick 7 —
+  checkable once assertions / fitted models exist.
 - A data-dependent law with zero applicable rows is ``NOT_APPLICABLE``, not
   PASS — an empty database proves nothing.
 - Laws 4 and 5 are namespace/shape heuristics (documented on the functions),
@@ -31,7 +32,7 @@ from enum import StrEnum
 from typing import Callable, Optional
 
 from .store import ArtifactStore
-from .types import Axis, Decision, ObservationStatus
+from .types import ArtifactKind, Axis, Decision, ObservationStatus
 
 _MAX_OFFENDERS = 5
 
@@ -577,6 +578,132 @@ def _law_12(conn: sqlite3.Connection, store: Optional[ArtifactStore]) -> LawResu
     )
 
 
+# --- 13 · every_model_has_training_snapshot ----------------------------------
+def _law_13(conn: sqlite3.Connection, store: Optional[ArtifactStore]) -> LawResult:
+    """Every fitted model references a training snapshot that EXISTS. A null or
+    dangling ``training_snapshot_id`` is a model whose training set cannot be
+    reproduced — the exact §8 violation."""
+    offenders: list[str] = []
+    checked = 0
+    for r in conn.execute(
+        "SELECT fitted_model_id, training_snapshot_id FROM fitted_model"
+    ).fetchall():
+        checked += 1
+        snap_id = r["training_snapshot_id"]
+        if not snap_id:
+            offenders.append(
+                f"fitted_model {r['fitted_model_id'][:12]} has no training snapshot"
+            )
+            continue
+        if (
+            conn.execute(
+                "SELECT 1 FROM training_snapshot WHERE training_snapshot_id=?",
+                (snap_id,),
+            ).fetchone()
+            is None
+        ):
+            offenders.append(
+                f"fitted_model {r['fitted_model_id'][:12]} cites missing "
+                f"snapshot {str(snap_id)[:12]}"
+            )
+    return _finish(
+        13,
+        "every_model_has_training_snapshot",
+        checked,
+        offenders,
+        "every fitted model references a live frozen training snapshot",
+        na_reason="no fitted_model rows recorded (§8 writers not run)",
+    )
+
+
+_BUILTIN_KINDS: tuple[str, ...] = tuple(k.value for k in ArtifactKind)
+
+
+# --- 14 · every_model_has_code_and_environment -------------------------------
+def _law_14(conn: sqlite3.Connection, store: Optional[ArtifactStore]) -> LawResult:
+    """Two halves. (a) Every fitted model's process spec exists, carries a
+    non-empty code commit, and references a parameter set + environment spec
+    that exist. (b) Every artifact of a REGISTERED feature kind (a kind outside
+    the built-in ArtifactKind enum, i.e. created via ``@artifact_type``) is the
+    output of a run whose process has a ProcessSpec — a registered feature with
+    no versioned producer is the shipped-pipeline bug this law exists for."""
+    offenders: list[str] = []
+    checked = 0
+
+    def _spec_offense(spec_id: str, what: str) -> str:
+        return f"process_spec {spec_id[:12]} {what}"
+
+    for r in conn.execute(
+        "SELECT fitted_model_id, process_spec_id FROM fitted_model"
+    ).fetchall():
+        checked += 1
+        spec = conn.execute(
+            "SELECT process_spec_id, code_commit, parameter_set_id, "
+            "environment_spec_id FROM process_spec WHERE process_spec_id=?",
+            (r["process_spec_id"],),
+        ).fetchone()
+        if spec is None:
+            offenders.append(
+                f"fitted_model {r['fitted_model_id'][:12]} cites missing "
+                f"process_spec {str(r['process_spec_id'])[:12]}"
+            )
+            continue
+        if not str(spec["code_commit"] or "").strip():
+            offenders.append(
+                _spec_offense(spec["process_spec_id"], "has no code_commit")
+            )
+        if (
+            conn.execute(
+                "SELECT 1 FROM parameter_set WHERE parameter_set_id=?",
+                (spec["parameter_set_id"],),
+            ).fetchone()
+            is None
+        ):
+            offenders.append(
+                _spec_offense(spec["process_spec_id"], "cites missing parameter_set")
+            )
+        if (
+            conn.execute(
+                "SELECT 1 FROM environment_spec WHERE environment_spec_id=?",
+                (spec["environment_spec_id"],),
+            ).fetchone()
+            is None
+        ):
+            offenders.append(
+                _spec_offense(spec["process_spec_id"], "cites missing environment_spec")
+            )
+
+    placeholders = ",".join("?" for _ in _BUILTIN_KINDS)
+    for r in conn.execute(
+        f"SELECT content_sha256, kind FROM artifact "  # noqa: S608
+        f"WHERE kind NOT IN ({placeholders})",
+        _BUILTIN_KINDS,
+    ).fetchall():
+        checked += 1
+        produced = conn.execute(
+            "SELECT 1 FROM run_output ro JOIN run r ON r.run_id=ro.run_id "
+            "WHERE ro.content_sha256=? AND r.process_spec_id IS NOT NULL "
+            "AND EXISTS (SELECT 1 FROM process_spec ps "
+            "            WHERE ps.process_spec_id=r.process_spec_id)",
+            (r["content_sha256"],),
+        ).fetchone()
+        if produced is None:
+            offenders.append(
+                f"feature artifact {r['content_sha256'][:12]} "
+                f"[{r['kind']}] has no ProcessSpec-versioned producing run"
+            )
+    return _finish(
+        14,
+        "every_model_has_code_and_environment",
+        checked,
+        offenders,
+        "models + registered feature artifacts all trace to versioned "
+        "code/params/environment",
+        na_reason="no fitted models or registered-kind feature artifacts "
+        "recorded (§8 writers not run)",
+    )
+
+
 # --- 21 · every_published_value_is_explainable -------------------------------
 def _law_21(conn: sqlite3.Connection, store: Optional[ArtifactStore]) -> LawResult:
     """Every belief resolves its run + cited evidence (and each evidence its
@@ -630,14 +757,6 @@ def _law_21(conn: sqlite3.Connection, store: Optional[ArtifactStore]) -> LawResu
 
 # --- laws over entities the substrate does not hold yet ----------------------
 _UNBUILT: dict[int, tuple[str, str]] = {
-    13: (
-        "every_model_has_training_snapshot",
-        "no model/training-snapshot entities in the substrate (§8 unbuilt, P3)",
-    ),
-    14: (
-        "every_model_has_code_and_environment",
-        "no FittedModel entities; Run carries code_commit inline only (§8, P3)",
-    ),
     15: (
         "no_round_consumes_its_own_outputs",
         "no co-training round entities in the substrate (§12 unbuilt, P3)",
@@ -682,6 +801,8 @@ _CHECKERS: dict[
     10: _law_10,
     11: _law_11,
     12: _law_12,
+    13: _law_13,
+    14: _law_14,
     21: _law_21,
 }
 

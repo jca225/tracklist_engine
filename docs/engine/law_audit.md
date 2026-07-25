@@ -16,12 +16,18 @@
 > shipped pipeline — the verdicts below grade the shipped pipeline and still
 > stand.** Checkable now: 1, 2, 3, 4, 5, 6, 7, **8, 9** (since Brick 6: §7
 > human-label assertions imported from the GT fixtures via
-> `python -m workspaces.alignment_prototype.provenance_gt`), 10, 11, 21 (both
-> grounded DBs under `workspaces/alignment_prototype/out/provenance/` pass all
-> twelve); laws 12–20 report NOT_APPLICABLE until their entities exist in the
-> substrate. The 8/9 VIOLATED rows below still grade the *shipped* GT writer
-> (`write_back_ground_truth.py`), which remains delete-and-replace with bare
-> point values.
+> `python -m workspaces.alignment_prototype.provenance_gt`), 10, 11, **13, 14**
+> (since Brick 7: §2/§8 versioning backbone + producer registry —
+> [feature_store_and_registry.md](feature_store_and_registry.md); the grounded
+> producers DB under `workspaces/alignment_prototype/out/provenance/producers/`
+> passes both with real rows), 21; laws 12 and 15–20 report NOT_APPLICABLE
+> until their entities exist in the substrate. The 8/9 VIOLATED rows below
+> still grade the *shipped* GT writer (`write_back_ground_truth.py`), which
+> remains delete-and-replace with bare point values; likewise the 13/14
+> VIOLATED rows still grade the shipped training paths
+> (`trajectory/train.py:601`, `scripts/train_identity_verifier.py`), which
+> remain unversioned — Brick 7 builds the canonical path, it does not cut the
+> live pipeline over.
 
 ## Tally
 

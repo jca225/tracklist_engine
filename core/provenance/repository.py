@@ -23,16 +23,21 @@ from .types import (
     Claim,
     Decision,
     DecisionRule,
+    EnvironmentSpec,
     Evidence,
     EvidenceDirection,
+    FittedModel,
     HumanLabelAssertion,
     HumanLabelBundle,
     Json,
     Observation,
     ObservationStatus,
+    ParameterSet,
+    ProcessSpec,
     Run,
     RunStatus,
     SubjectRef,
+    TrainingSnapshot,
 )
 from .types import Axis as _Axis
 
@@ -81,6 +86,51 @@ class ProvenanceRepository:
                 run.status.value,
                 run.started_at.isoformat(),
                 random_seed,
+            ),
+        )
+        self._conn.commit()
+        return run
+
+    def begin_run_from_spec(
+        self, process_spec: ProcessSpec, *, seed: int | None = None
+    ) -> Run:
+        """§2 ``begin_run(spec)``: a run whose process/version/code/params are
+        stamped FROM a persisted ProcessSpec — the fully-versioned path (Law 14).
+        ``params_hash`` is the spec's parameter-set canonical hash."""
+        row = self._conn.execute(
+            "SELECT canonical_hash FROM parameter_set WHERE parameter_set_id=?",
+            (process_spec.parameter_set_id,),
+        ).fetchone()
+        if row is None:
+            raise ValueError(
+                f"process_spec {process_spec.process_spec_id[:12]} references "
+                "an unrecorded parameter_set — record_parameter_set first"
+            )
+        run = Run(
+            run_id=str(uuid.uuid4()),
+            process=process_spec.name,
+            process_version=process_spec.version,
+            code_commit=process_spec.code_commit,
+            params_hash=row["canonical_hash"],
+            status=RunStatus.RUNNING,
+            started_at=_now(),
+            random_seed=seed,
+            process_spec_id=process_spec.process_spec_id,
+        )
+        self._conn.execute(
+            "INSERT INTO run(run_id, process, process_version, code_commit, "
+            "params_hash, status, started_at, random_seed, process_spec_id) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (
+                run.run_id,
+                run.process,
+                run.process_version,
+                run.code_commit,
+                run.params_hash,
+                run.status.value,
+                run.started_at.isoformat(),
+                seed,
+                process_spec.process_spec_id,
             ),
         )
         self._conn.commit()
@@ -456,6 +506,92 @@ class ProvenanceRepository:
             source_confidence=source_confidence,
             supersedes_assertion_id=old.assertion_id,
         )
+
+    # --- §2/§8 versioning backbone (Brick 7) --------------------------------
+    # Every id is a deterministic content hash (versioning.py), so all of
+    # these are INSERT OR IGNORE: recording the identical entity twice is
+    # idempotent — one row, one id, never a duplicate or an overwrite.
+    def record_parameter_set(self, parameter_set: ParameterSet) -> ParameterSet:
+        self._conn.execute(
+            "INSERT OR IGNORE INTO parameter_set(parameter_set_id, namespace, "
+            "values_json, canonical_hash) VALUES (?,?,?,?)",
+            (
+                parameter_set.parameter_set_id,
+                parameter_set.namespace,
+                json.dumps(parameter_set.values, sort_keys=True, default=str),
+                parameter_set.canonical_hash,
+            ),
+        )
+        self._conn.commit()
+        return parameter_set
+
+    def record_environment_spec(self, environment: EnvironmentSpec) -> EnvironmentSpec:
+        self._conn.execute(
+            "INSERT OR IGNORE INTO environment_spec(environment_spec_id, os, "
+            "architecture, runtime, dependency_lock_hash) VALUES (?,?,?,?,?)",
+            (
+                environment.environment_spec_id,
+                environment.os,
+                environment.architecture,
+                environment.runtime,
+                environment.dependency_lock_hash,
+            ),
+        )
+        self._conn.commit()
+        return environment
+
+    def record_process_spec(self, spec: ProcessSpec) -> ProcessSpec:
+        """Idempotent on the deterministic ``process_spec_id`` — identical
+        process ⇒ identical id ⇒ one row (INSERT OR IGNORE)."""
+        self._conn.execute(
+            "INSERT OR IGNORE INTO process_spec(process_spec_id, name, version, "
+            "stage, code_commit, parameter_set_id, environment_spec_id, "
+            "model_refs_json, implementation_hash) VALUES (?,?,?,?,?,?,?,?,?)",
+            (
+                spec.process_spec_id,
+                spec.name,
+                spec.version,
+                spec.stage,
+                spec.code_commit,
+                spec.parameter_set_id,
+                spec.environment_spec_id,
+                json.dumps(list(spec.model_refs)),
+                spec.implementation_hash,
+            ),
+        )
+        self._conn.commit()
+        return spec
+
+    def record_training_snapshot(self, snapshot: TrainingSnapshot) -> TrainingSnapshot:
+        self._conn.execute(
+            "INSERT OR IGNORE INTO training_snapshot(training_snapshot_id, "
+            "member_artifact_shas_json, snapshot_hash) VALUES (?,?,?)",
+            (
+                snapshot.training_snapshot_id,
+                json.dumps(list(snapshot.member_artifact_shas)),
+                snapshot.snapshot_hash,
+            ),
+        )
+        self._conn.commit()
+        return snapshot
+
+    def record_fitted_model(self, model: FittedModel) -> FittedModel:
+        self._conn.execute(
+            "INSERT OR IGNORE INTO fitted_model(fitted_model_id, axis, "
+            "process_spec_id, serialized_state_sha256, training_snapshot_id, "
+            "model_state_hash, status) VALUES (?,?,?,?,?,?,?)",
+            (
+                model.fitted_model_id,
+                model.axis.value,
+                model.process_spec_id,
+                model.serialized_state_sha256,
+                model.training_snapshot_id,
+                model.model_state_hash,
+                model.status,
+            ),
+        )
+        self._conn.commit()
+        return model
 
     # --- graph queries -----------------------------------------------------
     def _ancestors(self, sha: str) -> set[str]:

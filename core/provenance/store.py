@@ -39,7 +39,50 @@ CREATE TABLE IF NOT EXISTS run (
     started_at      TEXT NOT NULL,
     finished_at     TEXT,
     random_seed     INTEGER,
-    error_json      TEXT
+    error_json      TEXT,
+    process_spec_id TEXT REFERENCES process_spec(process_spec_id)
+);
+-- §2/§8 versioning backbone (Brick 7). All ids are deterministic content
+-- hashes (see versioning.py), so writers INSERT OR IGNORE: recording the
+-- identical parameter set / environment / process / snapshot / model twice
+-- is idempotent, never a duplicate.
+CREATE TABLE IF NOT EXISTS parameter_set (
+    parameter_set_id TEXT PRIMARY KEY,
+    namespace        TEXT NOT NULL,
+    values_json      TEXT NOT NULL,
+    canonical_hash   TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS environment_spec (
+    environment_spec_id  TEXT PRIMARY KEY,
+    os                   TEXT NOT NULL,
+    architecture         TEXT NOT NULL,
+    runtime              TEXT NOT NULL,
+    dependency_lock_hash TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS process_spec (
+    process_spec_id     TEXT PRIMARY KEY,
+    name                TEXT NOT NULL,
+    version             TEXT NOT NULL,
+    stage               TEXT NOT NULL,
+    code_commit         TEXT NOT NULL,
+    parameter_set_id    TEXT NOT NULL REFERENCES parameter_set(parameter_set_id),
+    environment_spec_id TEXT NOT NULL REFERENCES environment_spec(environment_spec_id),
+    model_refs_json     TEXT NOT NULL DEFAULT '[]',
+    implementation_hash TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS training_snapshot (
+    training_snapshot_id      TEXT PRIMARY KEY,
+    member_artifact_shas_json TEXT NOT NULL,
+    snapshot_hash             TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS fitted_model (
+    fitted_model_id         TEXT PRIMARY KEY,
+    axis                    TEXT NOT NULL,
+    process_spec_id         TEXT NOT NULL REFERENCES process_spec(process_spec_id),
+    serialized_state_sha256 TEXT NOT NULL REFERENCES artifact(content_sha256),
+    training_snapshot_id    TEXT NOT NULL REFERENCES training_snapshot(training_snapshot_id),
+    model_state_hash        TEXT NOT NULL,
+    status                  TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS run_input (
     run_id         TEXT NOT NULL REFERENCES run(run_id),
@@ -144,11 +187,23 @@ def connect(root: Path) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(_SCHEMA)
+    # Pre-Brick-7 DBs lack run.process_spec_id (CREATE IF NOT EXISTS leaves an
+    # existing table untouched). Additive column, append-only discipline intact.
+    run_cols = {r[1] for r in conn.execute("PRAGMA table_info(run)")}
+    if "process_spec_id" not in run_cols:
+        conn.execute("ALTER TABLE run ADD COLUMN process_spec_id TEXT")
+        conn.commit()
     return conn
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def kind_str(kind: ArtifactKind | str) -> str:
+    """The stored ``kind`` column value. Built-in enum kinds and registered
+    (``@artifact_type``) kind strings share one namespace of plain strings."""
+    return kind.value if isinstance(kind, ArtifactKind) else str(kind)
 
 
 class ArtifactStore:
@@ -166,7 +221,7 @@ class ArtifactStore:
         self,
         content: bytes,
         *,
-        kind: ArtifactKind,
+        kind: ArtifactKind | str,
         media_type: str,
         metadata: Json | None = None,
         source_uri: str | None = None,
@@ -197,7 +252,7 @@ class ArtifactStore:
             "metadata_json) VALUES (?,?,?,?,?,?,?,?,?)",
             (
                 sha,
-                kind.value,
+                kind_str(kind),
                 media_type,
                 art.byte_size,
                 art.object_uri,
@@ -214,7 +269,7 @@ class ArtifactStore:
         self,
         file_path: Path,
         *,
-        kind: ArtifactKind,
+        kind: ArtifactKind | str,
         media_type: str,
         metadata: Json | None = None,
         source_uri: str | None = None,

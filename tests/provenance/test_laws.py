@@ -127,6 +127,8 @@ def test_unbuilt_entity_laws_are_not_applicable_never_faked(world):
     conn, store, repo = world
     _seed(store, repo)
     by = _by_number(check_laws(conn, store))
+    # 8/9 (§7) and 13/14 (§8) are checkable but have no rows in this seed;
+    # 12/15–20 have no substrate entities at all. Either way: N/A, never green.
     for n in (8, 9, 12, 13, 14, 15, 16, 17, 18, 19, 20):
         assert by[n].verdict is LawVerdict.NOT_APPLICABLE, n
 
@@ -289,6 +291,133 @@ def test_dangling_evidence_reference_violates_law_21(world):
     by = _by_number(check_laws(conn, store))
     assert by[21].verdict is LawVerdict.VIOLATED
     assert any("missing evidence" in o for o in by[21].offenders)
+
+
+# --- §8 model provenance (laws 13/14, Brick 7) -------------------------------
+def _seed_model(store, repo, tmp_path):
+    """A fully-versioned fitted model: spec'd training run, frozen snapshot,
+    content-addressed state — the world laws 13/14 must PASS on."""
+    from core.provenance import (
+        Axis,
+        capture_environment,
+        make_fitted_model,
+        make_parameter_set,
+        make_process_spec,
+        make_training_snapshot,
+    )
+
+    req = tmp_path / "req.txt"
+    req.write_text("torch==0\n")
+    gt = store.put_bytes(
+        b"gt-yaml",
+        kind=ArtifactKind.LABEL_MANIFEST,
+        media_type="text/yaml",
+        source_system="test",
+    )
+    state = store.put_bytes(
+        b"weights",
+        kind=ArtifactKind.MODEL_CHECKPOINT,
+        media_type="application/octet-stream",
+        source_system="test",
+    )
+    ps = repo.record_parameter_set(make_parameter_set("train.head", {"epochs": 1}))
+    env = repo.record_environment_spec(capture_environment(req))
+    spec = repo.record_process_spec(
+        make_process_spec(
+            name="train.head",
+            version="1",
+            stage="training",
+            code_commit="abc1234",
+            parameter_set=ps,
+            environment=env,
+        )
+    )
+    run = repo.begin_run_from_spec(spec)
+    repo.add_input(run, gt, role="training_member")
+    repo.add_output(run, state, role="model_state")
+    repo.derive(state, gt, run, "trained_on")
+    repo.succeed(run)
+    snap = repo.record_training_snapshot(make_training_snapshot([gt.content_sha256]))
+    model = repo.record_fitted_model(
+        make_fitted_model(
+            axis=Axis.IDENTITY,
+            process_spec=spec,
+            serialized_state_sha256=state.content_sha256,
+            training_snapshot=snap,
+        )
+    )
+    return model, spec, snap
+
+
+def test_versioned_model_passes_laws_13_and_14(world, tmp_path):
+    conn, store, repo = world
+    _seed(store, repo)
+    _seed_model(store, repo, tmp_path)
+    by = _by_number(check_laws(conn, store))
+    assert by[13].verdict is LawVerdict.PASS, by[13].reason
+    assert by[14].verdict is LawVerdict.PASS, by[14].reason
+    assert by[13].checked > 0 and by[14].checked > 0
+    # And the versioned world stays clean on every other law.
+    assert not any(r.verdict is LawVerdict.VIOLATED for r in by.values())
+
+
+def test_dangling_training_snapshot_violates_law_13(world, tmp_path):
+    conn, store, repo = world
+    _seed(store, repo)
+    _seed_model(store, repo, tmp_path)
+    # History rewritten out from under the model — the exact §8 violation.
+    conn.execute("PRAGMA foreign_keys = OFF")
+    conn.execute("DELETE FROM training_snapshot")
+    by = _by_number(check_laws(conn, store))
+    assert by[13].verdict is LawVerdict.VIOLATED
+    assert "missing" in by[13].offenders[0]
+
+
+def test_null_training_snapshot_violates_law_13(world, tmp_path):
+    conn, store, repo = world
+    _seed(store, repo)
+    _seed_model(store, repo, tmp_path)
+    conn.execute("PRAGMA foreign_keys = OFF")
+    conn.execute("UPDATE fitted_model SET training_snapshot_id=''")
+    by = _by_number(check_laws(conn, store))
+    assert by[13].verdict is LawVerdict.VIOLATED
+    assert "no training snapshot" in by[13].offenders[0]
+
+
+def test_process_spec_missing_environment_violates_law_14(world, tmp_path):
+    conn, store, repo = world
+    _seed(store, repo)
+    _seed_model(store, repo, tmp_path)
+    conn.execute("PRAGMA foreign_keys = OFF")
+    conn.execute("DELETE FROM environment_spec")
+    by = _by_number(check_laws(conn, store))
+    assert by[14].verdict is LawVerdict.VIOLATED
+    assert any("missing environment_spec" in o for o in by[14].offenders)
+
+
+def test_model_with_empty_code_commit_violates_law_14(world, tmp_path):
+    conn, store, repo = world
+    _seed(store, repo)
+    _seed_model(store, repo, tmp_path)
+    conn.execute("UPDATE process_spec SET code_commit=''")
+    by = _by_number(check_laws(conn, store))
+    assert by[14].verdict is LawVerdict.VIOLATED
+    assert any("no code_commit" in o for o in by[14].offenders)
+
+
+def test_registered_kind_artifact_without_spec_run_violates_law_14(world):
+    conn, store, repo = world
+    run, src, _ = _seed(store, repo)
+    # A registered (non-enum) feature kind written through the LEGACY inline
+    # run path — provenanced but not ProcessSpec-versioned. Law 14 must flag it.
+    feat = store.put_bytes(
+        b"feature-bytes", kind="rogue_registered_kind", media_type="application/json"
+    )
+    repo.add_output(run, feat, role="features")
+    repo.derive(feat, src, run, "analyzed_from")
+    by = _by_number(check_laws(conn, store))
+    assert by[14].verdict is LawVerdict.VIOLATED
+    assert any("rogue_registered_kind" in o for o in by[14].offenders)
 
 
 # --- rendering ---------------------------------------------------------------
