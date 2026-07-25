@@ -10,6 +10,7 @@ edges reference real artifact rows.
 from __future__ import annotations
 
 import hashlib
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -186,6 +187,13 @@ def connect(root: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(root / "provenance.db")
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    # Concurrency hardening: WAL lets a reader and a writer coexist, and a 30 s
+    # busy timeout turns transient lock contention (several analysis workers
+    # sharing one local store) into a wait rather than a silently-swallowed
+    # failure. (Local disk only — a network-mounted store root is unsupported;
+    # see docs/engine/feature_store_cutover.md enable-blockers.)
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 30000")
     conn.executescript(_SCHEMA)
     # Pre-Brick-7 DBs lack run.process_spec_id (CREATE IF NOT EXISTS leaves an
     # existing table untouched). Additive column, append-only discipline intact.
@@ -233,7 +241,13 @@ class ArtifactStore:
         path = self._object_path(sha)
         if not path.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(content)
+            # Atomic write: a crash mid-write must never leave a truncated object
+            # AT the content address — the address is never re-derived, so a
+            # partial file would fail verify() forever. Write to a unique temp
+            # sibling, then os.replace (atomic on the same filesystem).
+            tmp = path.parent / f".{sha}.tmp-{os.getpid()}"
+            tmp.write_bytes(content)
+            os.replace(tmp, path)
         art = Artifact(
             content_sha256=sha,
             kind=kind,

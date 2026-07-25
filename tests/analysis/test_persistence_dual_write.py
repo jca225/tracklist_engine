@@ -87,6 +87,34 @@ def test_empty_measures_writes_nothing(tmp_path, monkeypatch):
     assert not (tmp_path / "store").exists()
 
 
+def test_import_and_flag_off_call_do_not_load_core_provenance():
+    # Deploying flag-off must be a literal no-op: importing analysis.persistence
+    # and calling the hook with the flag unset must NOT pull in the provenance
+    # stack. Proven in a clean subprocess (in-process, other tests already
+    # imported core.provenance).
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[2]
+    code = (
+        "import os, sys\n"
+        "os.environ.pop('PROVENANCE_DUAL_WRITE', None)\n"
+        "import analysis.persistence as p\n"
+        "class R:\n"
+        "    measures = [object()]\n"
+        "    analyzer_versions = {}\n"
+        "    track_audio_id = 1\n"
+        "p._maybe_dual_write_provenance(R())\n"
+        "leaked = sorted(m for m in sys.modules if 'core.provenance' in m)\n"
+        "assert not leaked, leaked\n"
+    )
+    r = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, cwd=repo_root
+    )
+    assert r.returncode == 0, r.stderr
+
+
 def test_provenance_failure_is_swallowed(tmp_path, monkeypatch):
     monkeypatch.setenv("PROVENANCE_DUAL_WRITE", "1")
     monkeypatch.setenv("PROVENANCE_STORE_ROOT", str(tmp_path / "store"))

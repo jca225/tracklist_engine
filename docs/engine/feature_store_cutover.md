@@ -74,3 +74,41 @@ law_audit verdicts stand.
 - **No** writes to `music_database.db`, `/mnt/storage/objects`, or `/mnt/storage/stems`.
 - **No** systemd/service changes, restarts, or `make deploy`.
 - Every pi write is auditable and reversible by removing `/mnt/storage/provenance`.
+
+## Forward-routing dual-write — status + enable-blockers (audit of 79271d2)
+
+The dual-write (`analysis/persistence.py::_maybe_dual_write_provenance`, calling
+`core.provenance.register_computed_feature`) is **landed flag-off** and adversarially
+audited. Confirmed safe as landed: additive (one appended statement, Ok-path only,
+after the legacy commit), flag-off is a literal no-op (does not even import
+`core.provenance`), and every failure is swallowed.
+
+**Fixed after the audit** (commit hardening): git-commit lookup is cached +
+`timeout=5` + cwd-pinned (no hang); the provenance connection is closed (no fd
+leak); `model_refs` is taken dynamically from `analyzer_versions` (no hardcoded
+model/layer → no false provenance); object writes are atomic (temp + `os.replace`,
+so a crash can't leave a truncated object at a content address); `store.connect`
+uses WAL + a 30 s busy timeout.
+
+**MUST be resolved before anyone sets `PROVENANCE_DUAL_WRITE=1` in production:**
+
+1. **Crash-window run poisoning.** `register_computed_feature` commits several
+   times (param set / env / spec / run-begin / artifact / output / succeed). A kill
+   mid-sequence (Vast **spot preemption is routine**) leaves a run stuck
+   `status='running'` or an artifact with no output edge — permanent Law-1
+   offenders in an append-only store with no repair tool. Fix before enabling:
+   wrap the run lifecycle in one transaction, **or** add a startup sweep that marks
+   stale `running` runs `failed`.
+2. **Store-root location + worker ship-back.** The dual-write fires at the workers'
+   **scratch-DB** persist (`analysis/vast_worker.py`, `scripts/mac_analyze_loop.py`),
+   not the canonical commit. Enable **pi-local analysis first** (store root on local
+   disk — WAL/sqlite over NFS/sshfs is unsupported and can hang). Decide the
+   ship-back-to-central story before enabling on mac/Vast workers, or accept
+   per-host local stores that never reach `/mnt/storage/provenance`.
+
+**Follow-ups (not enable-blockers):** the dual-write passes `audio=None`, so a
+feature links to its recording only by `track_audio_id` in metadata, not a
+derivation edge (add audio linkage for full lineage); coverage is `persist_analysis`
+only (not `persist_mert_measures` or the set-side writers); and there is no
+integration test pinning the after-commit / Ok-path-only ordering (the property is
+inspection-verified — add a `persist_analysis`-level test).

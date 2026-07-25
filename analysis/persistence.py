@@ -47,11 +47,46 @@ log = logging.getLogger(__name__)
 
 _DUAL_WRITE_FLAG = "PROVENANCE_DUAL_WRITE"
 _STORE_ROOT_ENV = "PROVENANCE_STORE_ROOT"
-_MERT_MODEL_REFS = ("m-a-p/MERT-v1-95M", "layer=6")
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _dual_write_enabled() -> bool:
     return os.environ.get(_DUAL_WRITE_FLAG, "").strip().lower() in {"1", "true", "yes"}
+
+
+def _model_refs(analyzer_versions: "dict[str, str]") -> tuple[str, ...]:
+    """The MERT model provenance, taken DYNAMICALLY from the analyzer version the
+    pipeline recorded (analysis/pipeline.py puts the model name in
+    analyzer_versions['mert']) — never a hardcoded constant that would silently
+    record wrong provenance when the model/layer flips (330M backlog)."""
+    mert = analyzer_versions.get("mert")
+    return (str(mert),) if mert else ()
+
+
+_COMMIT_CACHE: str | None = None
+
+
+def _repo_commit() -> str:
+    """Short HEAD sha of the repo the analyzer runs from — cached, timed out, and
+    cwd-pinned so a wedged/foreign-cwd git can never hang or mislabel an analysis
+    run (the dual-write must never block)."""
+    global _COMMIT_CACHE
+    if _COMMIT_CACHE is None:
+        try:
+            _COMMIT_CACHE = (
+                subprocess.check_output(
+                    ["git", "rev-parse", "--short", "HEAD"],
+                    cwd=_REPO_ROOT,
+                    stderr=subprocess.DEVNULL,
+                    timeout=5,
+                )
+                .decode()
+                .strip()
+                or "unknown"
+            )
+        except Exception:
+            _COMMIT_CACHE = "unknown"
+    return _COMMIT_CACHE
 
 
 def _serialize_measures(measures: "list[MeasureEmbedding]") -> bytes:
@@ -106,32 +141,25 @@ def _maybe_dual_write_provenance(result: TrackAnalysisResult) -> None:
         )
 
         db_root = Path(root)
-        db_root.mkdir(parents=True, exist_ok=True)
         conn = prov_connect(db_root)
-        store = ArtifactStore(db_root, conn)
-        repo = ProvenanceRepository(conn)
         try:
-            commit = (
-                subprocess.check_output(["git", "rev-parse", "--short", "HEAD"])
-                .decode()
-                .strip()
+            store = ArtifactStore(db_root, conn)
+            repo = ProvenanceRepository(conn)
+            art = register_computed_feature(
+                "mert_features",
+                _serialize_measures(list(result.measures)),
+                media_type="application/octet-stream",
+                analyzer_name="analysis.mert",
+                analyzer_version=str(result.analyzer_versions.get("mert", "1")),
+                store=store,
+                repo=repo,
+                model_refs=_model_refs(result.analyzer_versions),
+                params={"source": "analysis.persist_analysis"},
+                code_commit=_repo_commit(),
+                metadata={"track_audio_id": result.track_audio_id},
             )
-        except Exception:
-            commit = "unknown"
-
-        art = register_computed_feature(
-            "mert_features",
-            _serialize_measures(list(result.measures)),
-            media_type="application/octet-stream",
-            analyzer_name="analysis.mert",
-            analyzer_version=str(result.analyzer_versions.get("mert", "1")),
-            store=store,
-            repo=repo,
-            model_refs=_MERT_MODEL_REFS,
-            params={"source": "analysis.persist_analysis"},
-            code_commit=commit,
-            metadata={"track_audio_id": result.track_audio_id},
-        )
+        finally:
+            conn.close()  # no per-track fd leak in long analysis loops
         log.info(
             "provenance dual-write: track_audio_id=%s mert_features=%s",
             result.track_audio_id,

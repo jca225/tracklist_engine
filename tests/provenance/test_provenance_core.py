@@ -132,3 +132,20 @@ def test_observation_records_value_and_abstention(stack):
     assert len(rows) == 2
     abstained = [r for r in rows if r["status"] == ObservationStatus.ABSTAINED.value]
     assert abstained and abstained[0]["diagnostic_code"] == "no_trackid"
+
+
+def test_put_bytes_writes_atomically(stack):
+    # Atomic object write: after put_bytes the object verifies and NO temp
+    # (.tmp) files linger (a crash mid-write must never leave a truncated object
+    # at the content address — it would fail verify() forever).
+    store, _repo = stack
+    art = store.put_bytes(
+        b"atomic-content", kind=ArtifactKind.DIAGNOSTICS, media_type="application/json"
+    )
+    assert store.verify(art.content_sha256)
+    strays = [p.name for p in (store._root / "objects").rglob("*.tmp-*")]
+    assert strays == []
+    # a truncated object pre-placed at the address is NOT silently accepted
+    obj = store._object_path(art.content_sha256)
+    obj.write_bytes(b"truncated")
+    assert store.verify(art.content_sha256) is False
