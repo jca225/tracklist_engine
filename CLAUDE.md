@@ -248,6 +248,7 @@ Mechanical checks catch rename drift, stale module names, and wrong adapter path
 - **Git hooks** — one-time per clone: `git config core.hooksPath .githooks`
 - **Cursor rules** — [.cursor/rules/](.cursor/rules/) (`identity-axes`, `repo-paths`) load when editing matching files
 - **Refactor checklist** — [.claude/skills/refactor-safety/SKILL.md](.claude/skills/refactor-safety/SKILL.md) for module renames and directory splits
+- **Branch hygiene** — [.claude/skills/branch-hygiene/SKILL.md](.claude/skills/branch-hygiene/SKILL.md); `make collide` / `make land-budget` before landing, `make land-verify` after a rebase. Merge cost tracks commits-since-divergence, not age
 - **CI** — [.github/workflows/guardrails.yml](.github/workflows/guardrails.yml) on push/PR
 
 ## Environment

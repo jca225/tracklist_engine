@@ -23,6 +23,9 @@ DB           := /mnt/storage/data/db/music_database.db
 help:
 	@echo "Common targets:"
 	@echo "  make check            — guardrails script + full pytest suite"
+	@echo "  make collide          — which branches will conflict, hotspots, landing order"
+	@echo "  make land-budget      — branches grown past the point where landing gets ugly"
+	@echo "  make land-verify      — after a rebase: did the merge produce parseable code"
 	@echo "  make docs-gc          — classify stale docs (dry run; docs-gc-apply archives)"
 	@echo "  make check-inventory SET=<set_id> — slot satisfaction gate (pi-storage)"
 	@echo "  make audit-gt SET=<set_id> — audio-verify a labeling .als vs the mix"
@@ -56,6 +59,24 @@ check:
 
 typecheck:
 	bash scripts/typecheck.sh
+
+# ---------- branch hygiene --------------------------------------------------
+# Merge cost here tracks commits-since-divergence, not calendar age: branches
+# here reach +60 commits in a week. These are read-only (git merge-tree merges
+# in memory) and safe to run with worktrees mid-flight. See
+# .claude/skills/branch-hygiene/SKILL.md. Requires `braid`
+# (uv tool install --editable ~/workspace/braid).
+
+collide:
+	@braid status || echo "braid not installed — uv tool install --editable ~/workspace/braid"
+
+land-budget:
+	@braid budget || echo "braid not installed — uv tool install --editable ~/workspace/braid"
+
+# Run after a rebase: git has no post-rebase hook, and this repo rebases far
+# more than it merges. (Merges are covered by .githooks/post-merge.)
+land-verify:
+	@braid verify --since 'HEAD@{1}'
 
 # Docs garbage collection — classify docs/ by reachability; archive dead dated
 # snapshots. Dry-run by default; `make docs-gc-apply` sweeps COLLECTABLE.
