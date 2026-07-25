@@ -1,7 +1,12 @@
 # Alignment — State of Record (current best + settled decisions)
 
-> **As of 2026-07-23 @ `253980b`** (see decisions #18/#19 — the "identity axis"
-> measures the tokenizer claim, not the aligner; GT verified drift-free on
+> **As of 2026-07-24 @ `20e0a21`** (see decisions #20/#21/#22 — open-set identity
+> works against a real candidate pool, the combiner **transfers** cross-set
+> (BB11↔BB12 LOSO) but ≈ borda, and **identity is stem-split**: the working LF and
+> the best MERT layer both flip between vocal (chroma useless / MERT-L3) and
+> instrumental (chroma top-tier / MERT-L22), and MERT's cross-set instability is
+> vocal-specific. Exercises #19's fix-path-1. Also #18/#19 — the "identity
+> axis" measures the tokenizer claim, not the aligner; GT verified drift-free on
 > canonical; de-friction pass added timeline provenance + `make align-state`).
 > **Operation Crush has EXITED** (decision #15, soundness) and its **completeness
 > closure is now SHIPPING** — Phase A (sound correctness + axis plumbing) is done
@@ -67,7 +72,25 @@ wrong-variant label cannot slip (decision #17, Phase A).
   for vocal identity and is key/tempo-invariant (matters because acappellas are
   often re-pitched to the bed key). Fingerprint localizer is
   landmark-constellation + offset-histogram, vote-gated as an override rather
-  than blindly trusted.
+  than blindly trusted. **Open-set demonstration (BB11 acappellas, no tracklist
+  claim — the real-candidate-pool perception #19/#20 flagged as unwired):** against
+  the set's full acappella pool, **MERT-chamfer at layer L3 (NOT the L6 default)**
+  is the strongest identity LF; fused (borda) with a *pitch-normalized* fingerprint
+  it reaches the labeling-function ceiling. Two load-bearing details: the transpose
+  is a hard wall for frequency-absolute fingerprints (undo the **labeled semitone**,
+  which is decoupled from `tempo_ratio` — do not correct tempo as if it were pitch),
+  and long spans need a top-k chamfer (layered-vocal contamination). Weak LFs
+  (chroma/DTW) *hurt* equal-weight fusion **on acappellas**. **Route by stem
+  (decision #22):** the *instrumental* chain flips this — chroma/fp/dtw are all
+  strong (chroma 15%→88%), the best MERT layer moves L3→**L22**, and MERT
+  generalizes cross-set (89→89 vs the vocal 92→68). **Two-way stem routing (final,
+  no third regime):** acappella spans → the mix *vocal* stem + low-layer MERT (L3);
+  *everything else — regular full-song beds AND instrumental overlays* → the mix
+  *instrumental* stem + chroma/fp + high-layer MERT (L22). Full-vocal-song beds
+  identify by their instrumental backbone, not their vocal, because in a mashup the
+  mix vocal stem carries the *overlaid* acappellas, not the bed's own vocal (65/70
+  via instr handle, 0 vocal-only). Full method + numbers:
+  [`open_set_acappella_identity_findings.md`](../workspaces/alignment_prototype/open_set_acappella_identity_findings.md).
 - **Placement** — the wall (roughly tied with structure as the weakest axis).
   Grid-lock (beat-grid snapping) is *the* placement lever; boundary novelty
   (Foote) supplies a `set_start` prior; per-stem HuBERT `set_start` votes a
@@ -99,6 +122,70 @@ and co-training seam). Harness: `harness/`. Agentic loop: `agentic/`.
 ## 2. Settled decisions (append-only; status = SETTLED | SUPERSEDED-BY-#N)
 
 > Append new entries at the top. Never rewrite history — supersede it.
+
+**#22 — Identity is stem-split: the LF that works AND the best MERT layer both flip
+between vocal and instrumental; MERT's cross-set instability is vocal-specific.**
+`2026-07-24` · SETTLED (finding). Ran the open-set identity pipeline on the
+**non-acappella** chain (mix instrumental stem vs the full drops + instrumental
+overlays; BB11 56 spans, BB12 63). Confirms the CLAUDE.md axis rule empirically:
+**chroma is useless on acappellas (15%) but top-tier on instrumentals (88%)**, and
+dtw 46→89% — instrumentals are harmonic/percussive so fp/chroma/dtw/MERT are *all*
+strong (no single blind spot, unlike acappella's lone MERT). Two consequences: (a)
+**the best MERT layer flips by stem — L3 for vocal identity, L22 for instrumental**
+(low acoustic-timbre vs high abstract-harmonic) — so per-stem layer selection is
+required; validates the adapter keeping all 25 layers. (b) **MERT is stem-dependent
+but not universally unstable**: it was 92→68 cross-set on acappellas (#21) yet
+**89→89 on instrumentals** → the generalization gap is *vocal contamination /
+separation quality*, not MERT. Instrumental identity is also more robust: oracle-of-5
+ceiling 94–95% on *both* sets (vs acappella BB12's 88%). Combiner still transfers ≈
+borda (89% both directions). Implication for the aligner's real candidate pool
+(#19/#20): route by stem — instrumental spans lean chroma/fp + high-layer MERT, vocal
+spans lean low-layer MERT. Numbers + method:
+[`open_set_acappella_identity_findings.md`](../workspaces/alignment_prototype/open_set_acappella_identity_findings.md)
+(§ Instrumental chain). Refines #20/#21.
+
+**#21 — The open-set identity combiner TRANSFERS cross-set (BB11↔BB12 LOSO), but
+≈ borda, not ≫ it; the ceiling is the sensors/references, not the combiner —
+and MERT-L3 does NOT generalize as #20 implied.** `2026-07-24` · SETTLED
+(finding). Ran BB12's 101 acappella spans through the same 5-LF pipeline and
+trained a per-candidate label-model (class-balanced LR, set-agnostic features) on
+one set, tested on the other. **The combiner transfers** — trained on the *other*
+set it beats every single LF on both held-out sets (BB11→BB12 85% vs best-LF 77%;
+BB12→BB11 95% vs 92%) and does not collapse. **But it only ties/edges borda** (85
+vs 83; 95 vs 96), so *learning* the combiner buys robustness, not a big jump — this
+**refines #20's "co-training closes 92→96"**: with L3-MERT, borda already sits at
+the ceiling. **The real limit is the LF/reference ceiling:** BB12's oracle-of-5 is
+only ~88% (12% of spans no LF reaches) — sensor/reference quality caps harder sets.
+**Caveat on #20:** MERT-L3 identity is **set-dependent, not universal** — it drops
+sharply BB11→BB12 and on BB12 the pitch-fingerprint *beats* it; LF dominance flips
+across sets and the combiner's reweighting is what absorbs it. Open question: why
+BB12 is harder (contamination / separation quality / ref-pool). Numbers + method:
+[`open_set_acappella_identity_findings.md`](../workspaces/alignment_prototype/open_set_acappella_identity_findings.md)
+(§ Cross-set LOSO). Refines #20.
+
+**#20 — Open-set acappella identity works against a real candidate pool: MERT
+layer L3 (not L6) is the identity sensor, and the combiner — not new probes — is
+the lever past the LF ceiling.** `2026-07-24` · SETTLED (finding). Directly
+exercises #19's fix-path-1 (real multi-candidate pool + audio perception overriding
+the tokenizer claim): on BB11's 91 acappella spans vs the set's ~89-ref pool with
+**no tracklist order/cue**, stem-to-stem MERT-chamfer identifies the played
+acappella well, and fused with a pitch-normalized fingerprint reaches the
+oracle-of-LFs ceiling. So **perception exists and is strong** — the gap is pool
+*wiring*, not sensing. Sub-findings, all settled: (a) **MERT L3 ≫ L6 for vocal
+identity** (25-layer sweep, monotonic falloff after ~L8) — validates the adapter
+keeping all layers; L6 stays the default only where it hasn't been re-probed. (b)
+**Pitch ⟂ tempo** — Ableton warp is pitch-preserved time-stretch + a *separate*
+±1-semitone transpose; correct the labeled semitone (not `tempo_ratio`) to unbrick
+frequency-absolute fingerprints. (c) **top-k chamfer** beats mean on long spans
+(layered-vocal contamination), mean elsewhere. (d) **Weak LFs hurt** equal-weight
+fusion; prune to the strong two. (e) The residual failures are combiner losses (a
+strong LF already has rank-0) or reference-quality (derived `vocals.flac` /
+annotator-flagged bad refs) — **not** sensor limits; hand-tuned gating overfits at
+n=91, so the honest lever is a **learned cross-set combiner (co-train)**, which the
+LOSO precedent (#6-adjacent) says transfers for identity. Numbers + method:
+[`open_set_acappella_identity_findings.md`](../workspaces/alignment_prototype/open_set_acappella_identity_findings.md).
+Related: [[project_trm_alignment_core]], [[project_identity_by_string_bug_class]],
+[[project_stem_cand_wrong_recording_gap]].
 
 **#19 — The aligner does NOT predict identity — it inherits the tokenizer's claim
 100% by construction; the "identity axis" measures the SPINE, not the aligner.**
@@ -327,6 +414,17 @@ from scorers. Dead ends live in the EXPERIMENTS ledger.
   Open: calibrate per-probe confidence on BB GT before accepting pseudo-labels.
 - **PWS phase-1b continuous lane** remains unmerged and is a fusion fallback,
   not the primary placement/structure lever.
+- **Open-set acappella identity — LOSO measured (decision #21); now
+  sensor/reference-bound, not combiner-bound.** The combiner transfers cross-set
+  (BB11↔BB12) but only ties borda, and BB12's LF ceiling is ~88% — so the live
+  levers are no longer the combiner. Priorities: (1) **why MERT-L3 drops 92→68
+  cross-set** (contamination / RoFormer separation quality / ref-pool diversity) —
+  the biggest generalization gap; (2) **reference quality** — derived `vocals.flac`
+  refs are confusable attractors (ingest, not aligner); (3) a *deployable* pitch
+  estimate (key/BPM detection) to replace the labeled-semitone oracle in the fp LF;
+  (4) longer-context / robust-aggregation MERT for the long-span contamination
+  cases. Code in the `bb11_acap_id` / `bb12_acap_id` scratchpads, promotable to
+  `evals/`.
 - **Crush completeness Phase B — the immediate next build (decision #17 → #16).**
   Content-history hash ledger keyed `(recording_id, stem, variant, kind)` + never-drop-hash
   acquisition hooks + certificate-gated bind-across + FLAC-PCM/mdat payload keys + relink/

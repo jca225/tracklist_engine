@@ -41,7 +41,7 @@ the taxonomy lives in this index. Two subdirectories hold the rest:
 - `candidate_vocal_gate.py` — HuBERT-L9 gate picking the best acappella candidate per slot (0.6 floor; can flip `claimed_stem`).
 - `ingest_candidate_winners.py` — `stems/*/candidates/WINNER.txt` → canonical ingest (re-run-safe; `--force` re-ingests).
 - `apply_stem_matches.py` — Discord `proposed_matches.csv` → `ingest_stem_url`; `--auto` applies metadata∧audio double-confirms unreviewed, `--review-out` = the human queue (re-run-safe; `--force` re-ingests). Adjudicate the queue by ear in Ableton via `workspaces/alignment_prototype/review/seed_stem_review_als.py` (seed CAND/CAT pairs, rename `ACC`/`REJ`, `--harvest` writes decisions back).
-- `match_stem_library.py` — map staged stem-library files (Discord corpus) → recordings; `--verify` = HuBERT/chromaprint audio verify (GPU: `vast_stem_verify.sh`); decision bands `auto_accept`/`accept`/`review`/`abstain` (audio folds into the band).
+- `match_stem_library.py` — map staged stem-library files (Discord corpus) → recordings; `--verify` = HuBERT/chromaprint audio verify (GPU via `gpubox`); decision bands `auto_accept`/`accept`/`review`/`abstain` (audio folds into the band).
 - `discord_scrape.py` / `discord_grab.sh` — Discord stem-corpus retrieval (staging on pi; ToS-risk acknowledged in-file).
 - `promote_identity_overrides.py` — `labeling/identity_overrides/<set>.yaml` → `set_track_slots.recording_id`.
 - `repair_mojibake_paths.py` — repair double-encoded (mojibake) `track_audio.path` rows (issue #74 step 2). Dry-run by default; **refuses `--apply` unless the FS encoding is UTF-8** (the pi locale fix must land first) and skips any row whose repaired path isn't on disk. Runbook: [../docs/mojibake_locale_fix_runbook.md](../docs/mojibake_locale_fix_runbook.md).
@@ -55,7 +55,7 @@ the taxonomy lives in this index. Two subdirectories hold the rest:
 **Analysis** (MIR workers — see [../analysis/CLAUDE.md](../analysis/CLAUDE.md)):
 - `mert_backfill_loop.py` — MERT-only 330M re-embed (no Demucs/beats); corpus-wide by default, optional `--set-ids`.
 - `set_mert_backfill_loop.py` — set-side MERT measures backfill (requires `migrations/migrate_set_mert_measures.sql` on the target DB).
-- `mac_analyze_loop.py` — Mac-MPS analysis loop (sibling of `vast_loop.py`). `--separator {demucs,uvr}`.
+- `mac_analyze_loop.py` — Mac-MPS analysis loop (GPU counterpart runs on a `gpubox` box). `--separator {demucs,uvr}`.
 - `mac_analyze_sets.py` — one-shot beat_this + stem backend on full DJ-set mixes via Mac MPS. `--separator {demucs,uvr}`.
 - `pi_analyze_set_beats.py` — CPU beat_this on set mixes (pi-storage side).
 - `separate.py` — standalone single-file separation for QA / A-B (`uvr` | `demucs` | `both`), via the project adapters' Python API. Supersedes the old `sota_stems.py`. See [../analysis/CLAUDE.md](../analysis/CLAUDE.md) "Stem-separation backends".
@@ -74,26 +74,17 @@ the taxonomy lives in this index. Two subdirectories hold the rest:
 - `guardrails.py` + `guardrails_ratchet.json` — stale-name/path/dead-flag checks + entropy ratchet baselines (`make check`, pre-commit, CI). Also invokes `entropy_audit.check()`.
 - `entropy_audit.py` + `entropy_ratchet.json` — AST-based bug-class fences (net-subprocess-without-`timeout`/`encoding`, bare `except`) that the line-based guardrails ratchet can't see (they're about a missing kwarg on a multi-line call). Modes: `--snapshot` / `--check` / `--bump`. Rides `make check` via guardrails. Baseline freezes current counts and prevents regression of the 2026-07-16 ingest/pull hardening.
 - `typecheck.sh` — mypy subset (`make check`, pre-commit, CI).
-- `loop_hardening.py` — shared driver-loop hardening lib (imported, not run; sibling of `rescue_common.py`). SSH/rsync timeout+encoding constants and the failure-accounting primitives (`exit_status` escalation, `Counts` honest tally, `register_transient` backoff, `sha256_file`) used by `vast_loop` / `mac_analyze_loop` / `set_mert_backfill_loop` so the same hang/mojibake/silent-failure classes can't be fixed in one loop and left latent in the others.
+- `loop_hardening.py` — shared driver-loop hardening lib (imported, not run; sibling of `rescue_common.py`). SSH/rsync timeout+encoding constants and the failure-accounting primitives (`exit_status` escalation, `Counts` honest tally, `register_transient` backoff, `sha256_file`) used by `mac_analyze_loop` / `set_mert_backfill_loop` (and the `gpubox` GPU loops) so the same hang/mojibake/silent-failure classes can't be fixed in one loop and left latent in the others.
 
-**Vast provisioning / GPU workers — ⚠️ DO NOT MOVE OR RENAME:**
-- `vast_box.py` — Mac-side box-lifecycle CLI (search / rent / wait-ssh with
-  dud-host auto-re-rent / provision via GitHub clone / link-pi / destroy with
-  ownership ledger). Backs the `vast-box` skill. Not raw-URL-pinned; keep flat
-  like its siblings.
-- `vast_bootstrap.sh` — provisions an ephemeral Vast box.
-- `vast_run.sh` — launches a Vast run (`vast_worker` + pi-storage sshfs).
-- `vast_taste_embed.sh` — tail MERT embed (no pi-storage; label `taste-embed`).
-- `vast_info_dynamics.sh` — info-dynamics sets: beats CPU + RoFormer/MERT CUDA (label `info-dynamics`; rent 4090 PyTorch template in UI first).
-- `vast_stem_verify.sh` — GPU stem-library verify pass (`match_stem_library.py --verify`; label `stem-verify`).
-- `vast_loop.py` — Vast-side analysis loop (drives `analysis.vast_worker`).
-
-These are coupled to **external absolute paths** that a rename silently
-breaks: `vast_run.sh` and the bootstrap are fetched by **GitHub raw URL**
-(`https://raw.githubusercontent.com/jca225/tracklist_engine/main/scripts/...`),
-and `vast_loop.py` self-references `/workspace/tracklist_engine/scripts/vast_loop.py`
-on the deployed box. If you must relocate them, update the raw URLs and the
-`/workspace` path in lockstep and re-test a fresh Vast bootstrap.
+**Vast / GPU boxes — use `gpubox`, not the old `vast_*` scripts.**
+The Mac-side Vast lifecycle (rent / race / attach / provision / logs / pull /
+destroy) now lives in the canonical **`~/workspace/gpubox`** package
+(`gpubox.api.Box.launch` / `.attach` / `.destroy`, with a Registry + watchdog for
+ownership and billing safety). The old `scripts/vast_box.py` + `vast_*.sh`
+wrappers and the `vast-box` skill were retired 2026-07-23 (moved to the local,
+git-ignored `archive/`). Enforcement: [.cursor/rules/vast-gpubox.mdc](../.cursor/rules/vast-gpubox.mdc).
+Alignment driver example: `scripts/gpubox_agentic_both.py`. Coordination rules
+(list-before-create, destroy-only-your-own): [../docs/vast_coordination.md](../docs/vast_coordination.md).
 
 ## migrations/ — one-shot pi-storage DB migration SQL
 

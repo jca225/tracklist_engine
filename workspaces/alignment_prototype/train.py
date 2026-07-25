@@ -53,8 +53,13 @@ def _run_mert_eval(
     *,
     refresh_mert: bool,
     pretrain_checkpoint: Path | None = None,
+    save_checkpoint: Path | None = None,
 ) -> int:
-    from workspaces.alignment_prototype.external.checkpoint import load_head
+    from workspaces.alignment_prototype.external.checkpoint import (
+        PretrainMeta,
+        load_head,
+        save_head,
+    )
     from workspaces.alignment_prototype.mert_model import TrainConfig, build_aligner
     from workspaces.alignment_prototype.mert_store import load_bb12_mert
 
@@ -89,6 +94,21 @@ def _run_mert_eval(
         device=device,
         init=init_head,
     )
+    if save_checkpoint is not None:
+        save_head(
+            aligner.head,
+            save_checkpoint,
+            meta=PretrainMeta(
+                feature_kind="mert",
+                dim=mix.dim,
+                n_heads=cfg.n_heads,
+                n_examples=len(train),
+                n_mixes=1,
+                source=f"bb_gt:{gt_set_id}",
+            ),
+            cfg=cfg,
+        )
+        print(f"  saved head checkpoint -> {save_checkpoint}")
     preds = aligner.predict(eval_)
     report = evaluate(preds, eval_)
     print("\nMertLearnedAligner (eval):")
@@ -223,6 +243,15 @@ def main(argv: list[str] | None = None) -> int:
         help="Warm-start MertAlignHead from UnmixDB pretrain (see pretrain.py)",
     )
     p.add_argument(
+        "--save-head-checkpoint",
+        type=Path,
+        default=None,
+        help=(
+            "Opt-in: after --train-mert fits the head, save it to this path "
+            "(external/checkpoint.py payload). Default: no save (unchanged)."
+        ),
+    )
+    p.add_argument(
         "--loso",
         action="store_true",
         help="Leave-one-set-out co-train eval over --sets",
@@ -299,6 +328,7 @@ def main(argv: list[str] | None = None) -> int:
                 slots,
                 refresh_mert=args.refresh_mert,
                 pretrain_checkpoint=args.pretrain_checkpoint,
+                save_checkpoint=args.save_head_checkpoint,
             )
             if rc != 0:
                 return rc

@@ -60,3 +60,6 @@ workspaces/streaming_mir/ws2_snippets/
 eda/alignment/generalization/out/
 
 soundcloud/data/
+
+# Local archive junk-drawer (deprecated/retired code kept off git)
+archive/

@@ -1,0 +1,126 @@
+"""Provenance-first substrate (§2/§4 of the engine contract).
+
+Brick 1 of the migration in docs/provenance_engine_convergence_plan.md: the
+content-addressed artifact store + run/derivation/observation repository that
+Claims, Evidence, and AxisBeliefs (Brick 2) reference. Nothing else in the new
+engine can be provenanced until these exist.
+"""
+
+from .decisions import decide, entropy
+from .ingest import register_computed_feature
+from .explain import (
+    AxisView,
+    HumanAssertionView,
+    LineageNode,
+    ObservationView,
+    SubjectExplanation,
+    explain_subject,
+    format_lineage,
+    format_subject,
+    lineage,
+)
+from .laws import LawResult, LawVerdict, check_laws, format_law_results
+from .registry import (
+    REGISTRY,
+    ArtifactTypeSpec,
+    Registry,
+    TransformationSpec,
+    artifact_type,
+    transformation,
+)
+from .repository import ProvenanceCycle, ProvenanceRepository
+from .store import ArtifactStore, connect, kind_str
+from .types import (
+    Artifact,
+    ArtifactKind,
+    Axis,
+    AxisBelief,
+    Claim,
+    Decision,
+    DecisionRule,
+    Derivation,
+    EnvironmentSpec,
+    Evidence,
+    EvidenceDirection,
+    FittedModel,
+    HumanLabelAssertion,
+    HumanLabelBundle,
+    Interval,
+    Observation,
+    ObservationStatus,
+    ParameterSet,
+    ProcessSpec,
+    Run,
+    RunStatus,
+    SubjectRef,
+    TrainingSnapshot,
+)
+from .versioning import (
+    canonical_values_hash,
+    capture_environment,
+    implementation_hash_of,
+    make_fitted_model,
+    make_parameter_set,
+    make_process_spec,
+    make_training_snapshot,
+)
+
+__all__ = [
+    "ArtifactStore",
+    "connect",
+    "kind_str",
+    "ProvenanceRepository",
+    "ProvenanceCycle",
+    "REGISTRY",
+    "Registry",
+    "ArtifactTypeSpec",
+    "TransformationSpec",
+    "artifact_type",
+    "transformation",
+    "ParameterSet",
+    "EnvironmentSpec",
+    "ProcessSpec",
+    "TrainingSnapshot",
+    "FittedModel",
+    "canonical_values_hash",
+    "capture_environment",
+    "implementation_hash_of",
+    "make_parameter_set",
+    "make_process_spec",
+    "make_training_snapshot",
+    "make_fitted_model",
+    "decide",
+    "register_computed_feature",
+    "entropy",
+    "check_laws",
+    "format_law_results",
+    "LawResult",
+    "LawVerdict",
+    "explain_subject",
+    "lineage",
+    "format_subject",
+    "format_lineage",
+    "SubjectExplanation",
+    "AxisView",
+    "HumanAssertionView",
+    "ObservationView",
+    "LineageNode",
+    "HumanLabelAssertion",
+    "HumanLabelBundle",
+    "Artifact",
+    "ArtifactKind",
+    "Axis",
+    "AxisBelief",
+    "Claim",
+    "Decision",
+    "DecisionRule",
+    "Derivation",
+    "Evidence",
+    "EvidenceDirection",
+    "Interval",
+    "Observation",
+    "ObservationStatus",
+    "Run",
+    "RunStatus",
+    "SubjectRef",
+]
