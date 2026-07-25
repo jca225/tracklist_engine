@@ -7,6 +7,16 @@ engine can be provenanced until these exist.
 """
 
 from .decisions import decide, entropy
+from .explain import (
+    AxisView,
+    LineageNode,
+    ObservationView,
+    SubjectExplanation,
+    explain_subject,
+    format_lineage,
+    format_subject,
+    lineage,
+)
 from .repository import ProvenanceCycle, ProvenanceRepository
 from .store import ArtifactStore, connect
 from .types import (
@@ -35,6 +45,14 @@ __all__ = [
     "ProvenanceCycle",
     "decide",
     "entropy",
+    "explain_subject",
+    "lineage",
+    "format_subject",
+    "format_lineage",
+    "SubjectExplanation",
+    "AxisView",
+    "ObservationView",
+    "LineageNode",
     "Artifact",
     "ArtifactKind",
     "Axis",
