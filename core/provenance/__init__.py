@@ -17,6 +17,7 @@ from .explain import (
     format_subject,
     lineage,
 )
+from .laws import LawResult, LawVerdict, check_laws, format_law_results
 from .repository import ProvenanceCycle, ProvenanceRepository
 from .store import ArtifactStore, connect
 from .types import (
@@ -45,6 +46,10 @@ __all__ = [
     "ProvenanceCycle",
     "decide",
     "entropy",
+    "check_laws",
+    "format_law_results",
+    "LawResult",
+    "LawVerdict",
     "explain_subject",
     "lineage",
     "format_subject",

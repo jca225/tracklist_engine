@@ -9,6 +9,15 @@
 > [convergence plan](../provenance_engine_convergence_plan.md) — the ranked,
 > evidence-backed poison worklist.
 
+> **Executable checker note (2026-07-25):** the checkable subset of these laws
+> now runs as real predicates via `python -m core.provenance.laws --db <root>`
+> ([core/provenance/laws.py](../../core/provenance/laws.py)). **Scope: it grades
+> a provenance *substrate DB* (what the Brick 1–4 writers persisted), NOT the
+> shipped pipeline — the verdicts below grade the shipped pipeline and still
+> stand.** Checkable now: 1, 2, 3, 4, 5, 6, 7, 10, 11, 21 (both grounded DBs
+> under `workspaces/alignment_prototype/out/provenance/` pass all ten); laws
+> 8/9/12–20 report NOT_APPLICABLE until their entities exist in the substrate.
+
 ## Tally
 
 | Verdict | Count | Laws |
