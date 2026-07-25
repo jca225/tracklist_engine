@@ -2,7 +2,7 @@
 
 PrefetchSlot is pure orchestration over three injected callables (pick /
 pull / hydrate), so it is tested here with plain lambdas — no torch, no
-network, no vast_loop import (importing vast_loop would set
+network, no loop-driver import (importing the GPU loop driver would set
 TRACKLIST_DISABLE_FK and drag the GPU stack in).
 """
 

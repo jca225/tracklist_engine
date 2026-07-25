@@ -39,7 +39,7 @@ def _yt_dlp() -> str:
     root = Path(__file__).resolve().parents[1]
     for candidate in (
         root / "venvs" / "audio" / "bin" / "yt-dlp",
-        Path("/venv/main/bin/yt-dlp"),          # Vast PyTorch image
+        Path("/venv/main/bin/yt-dlp"),          # gpubox GPU PyTorch image
     ):
         if candidate.is_file():
             return str(candidate)

@@ -13,7 +13,7 @@ other summed sample-accurately). DJs split on this axis and there's no
 use case in the rest of the pipeline for keeping the individual
 non-vocal stems.
 
-Stems are written as 16-bit FLAC (was WAV until 2026-05-06). On Vast →
+Stems are written as 16-bit FLAC (was WAV until 2026-05-06). On a gpubox GPU →
 pi-storage rsync this saves ~50% bandwidth (~25 s/track wall) without
 quality loss — Demucs internally outputs float32, but downstream
 consumers (MERT resampled to 24 kHz mono, audio playback) don't
@@ -99,7 +99,7 @@ def separate(
             # lossless. Demucs outputs float32 internally; torchaudio.save
             # without `bits_per_sample` defaults to 16 for FLAC, which
             # downstream (MERT @ 24 kHz mono, browser playback) doesn't
-            # exceed. Encoding adds ~3-5s CPU per stem on Vast — still
+            # exceed. Encoding adds ~3-5s CPU per stem on a gpubox GPU — still
             # net-faster wall-clock than shipping uncompressed WAV.
             torchaudio.save(str(path), mix, h._model.samplerate, format="flac")
             assets.append(StemAsset(

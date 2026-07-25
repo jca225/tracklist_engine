@@ -1,6 +1,8 @@
-"""Vast.ai worker — analyze_track on one audio file at a time.
+"""GPU worker — analyze_track on one audio file at a time.
 
-Designed for the corpus-scale analysis loop:
+Runs on a GPU box rented + managed by `gpubox` (the only sanctioned way to
+rent GPUs here; gpubox rents from Vast.ai under the hood). Designed for the
+corpus-scale analysis loop:
   1. Caller provides one audio file + the track_audio_id it corresponds to
   2. We load (cached) analyzers, run the full pipeline (Demucs + beat_this
      + cue-detr + per-measure MERT + Essentia), and persist results to the
@@ -16,14 +18,14 @@ caller is responsible for keeping the stems-dir reachable to consumers
 (mount pi-storage there, or rsync after each track).
 
 CLI:
-    python -m analysis.vast_worker \\
+    python -m analysis.gpu_worker \\
         --audio /mnt/audio/X.m4a \\
         --track-audio-id 999 \\
         --db /mnt/pi-storage/data/db/music_database.db \\
         --stems-dir /mnt/pi-storage/stems
 
 For batch / loop mode (poll DB for next unanalyzed track until empty):
-    python -m analysis.vast_worker \\
+    python -m analysis.gpu_worker \\
         --db /mnt/pi-storage/data/db/music_database.db \\
         --audio-root /mnt/pi-storage \\
         --stems-dir /mnt/pi-storage/stems \\
@@ -46,7 +48,7 @@ from . import persistence
 from core.models import AudioAsset
 from core.result import Err, Ok, Result
 
-_log = logging.getLogger("analysis.vast_worker")
+_log = logging.getLogger("analysis.gpu_worker")
 
 _BIG_BOOTIE_10_15: tuple[str, ...] = (
     "w1mgcjt",
@@ -140,7 +142,7 @@ def _next_unanalyzed(
     dj_set_track_media_links). ``exclude`` quarantines track_audio_ids that
     already failed this run so a poison track can't be re-selected forever
     (it has no track_analysis row, so the IS NULL predicate keeps returning
-    it otherwise — the infinite-spin class fixed in vast_loop.py). Returns
+    it otherwise — the infinite-spin class fixed in the loop driver). Returns
     None when the queue is drained.
     """
     exclude = exclude or frozenset()
@@ -313,7 +315,7 @@ def _run(args: argparse.Namespace) -> int:
     # failed_tids quarantines tracks that error this run. Without it, a track
     # that never lands a track_analysis row (bad audio, poison file) is re-
     # selected by _next_unanalyzed every iteration — an infinite spin, the
-    # exact class that burned 496 consecutive failures in vast_loop.py before
+    # exact class that burned 496 consecutive failures in the loop driver before
     # it grew the same skip set.
     n_done = 0
     failed_tids: set[int] = set()

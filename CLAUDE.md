@@ -199,8 +199,8 @@ The project runs across four machines (see [Makefile](Makefile) for cluster ops)
 
 - **pi-storage** (Linux aarch64) — canonical state (DB + audio + stems) + scraper services + **CPU-side analysis** (yt-dlp downloads, beat_this, cue-detr, librosa, pyloudnorm). Long-running services live here. Reachable via Tailscale MagicDNS.
 - **pi-worker** (Linux aarch64) — AJAX retry drain (`tracklist-ajax-retry.service`). Spare CPU available for batch CPU analysis when idle.
-- **Vast.ai spot GPU** (rented, ephemeral) — **GPU-bound analysis** (stem separation, MERT) and **Essentia** (no aarch64 wheels — must run on x86_64). Job pulls audio from pi-storage over Tailscale, runs inference, writes results back, terminates. Cost target ≤$5–10 for the whole 16k-track corpus on a 3090/4090 spot. *(Separator: **Roformer** is current; **Demucs** is stale/legacy — see [analysis/CLAUDE.md](analysis/CLAUDE.md) "Stem-separation backends".)*
-- **Mac** (Apple Silicon) — dev driver *and* a second analysis worker. The full Demucs/beat_this/cue-detr/MERT/Essentia pipeline runs locally on the MPS backend via [scripts/mac_analyze_loop.py](scripts/mac_analyze_loop.py) (the GPU counterpart runs on a `gpubox` Vast box — `~/workspace/gpubox`); pulls audio from pi-storage over Tailscale, writes results back. Expect ~200–250 s/track vs ~85 s on a 4090 — useful when no Vast box is rented or for the long tail. Also drives the **labeling** workflow.
+- **gpubox-rented GPU** (ephemeral) — **GPU-bound analysis** (stem separation, MERT) and **Essentia** (no aarch64 wheels — must run on x86_64). Job pulls audio from pi-storage over Tailscale, runs inference, writes results back, terminates. **Always rent + manage GPU boxes with `gpubox`** (`~/workspace/gpubox`) — the only sanctioned path; it rents from Vast.ai under the hood, races healthy offers, and guarantees guarded teardown. Never raw-`curl` the Vast API or ad-hoc rent. Cost target ≤$5–10 for the whole 16k-track corpus on a 3090/4090 spot. *(Separator: **Roformer** is current; **Demucs** is stale/legacy — see [analysis/CLAUDE.md](analysis/CLAUDE.md) "Stem-separation backends".)*
+- **Mac** (Apple Silicon) — dev driver *and* a second analysis worker. The full Demucs/beat_this/cue-detr/MERT/Essentia pipeline runs locally on the MPS backend via [scripts/mac_analyze_loop.py](scripts/mac_analyze_loop.py) (the GPU counterpart, [analysis/gpu_worker.py](analysis/gpu_worker.py), runs on a `gpubox`-rented box); pulls audio from pi-storage over Tailscale, writes results back. Expect ~200–250 s/track vs ~85 s on a 4090 — useful when no GPU box is rented or for the long tail. Also drives the **labeling** workflow.
 
 The full **"which dependency runs where"** split (Essentia/Demucs/MERT vs
 beat_this/cue-detr/librosa) lives in [analysis/CLAUDE.md](analysis/CLAUDE.md).
@@ -214,13 +214,13 @@ The **audio-download topology** (yt-dlp / spotdl / YT Music) lives in
 | DB | `/mnt/storage/data/db/music_database.db` |
 | Track audio | `/mnt/storage/objects/{track_id}/{track_id}__{platform}__{player_id}.{ext}` |
 | Demucs stems | `/mnt/storage/stems/{track_audio_id}/{vocals,drums,bass,other,instrumental}.{ext}` |
-| Essentia TF model cache | `/mnt/storage/data/essentia_models/*.pb` (synced from Vast.ai or fetched on first use) |
+| Essentia TF model cache | `/mnt/storage/data/essentia_models/*.pb` (synced from a gpubox GPU or fetched on first use) |
 
 The repo's `data/db/music_database.db` is **a stale local copy for development — never the source of truth.** Services on pi-storage write to the canonical DB continuously; the local copy diverges quickly. To inspect canonical state, query pi-storage directly: `ssh pi-storage 'sqlite3 /mnt/storage/data/db/music_database.db "..."'` or via the FastAPI jobqueue.
 
 **Pi-storage venvs:**
 - `venvs/web_crawler/` — scraper, materializer, FastAPI jobqueue (BeautifulSoup, lxml, ddddocr, FastAPI).
-- `venvs/audio/` — yt-dlp + spotdl for downloads, plus the CPU analysis stack (PyTorch CPU, beat_this, cue-detr, librosa, pyloudnorm). **Does not include Essentia / Demucs / MERT** — those run on Vast.ai or the Mac.
+- `venvs/audio/` — yt-dlp + spotdl for downloads, plus the CPU analysis stack (PyTorch CPU, beat_this, cue-detr, librosa, pyloudnorm). **Does not include Essentia / Demucs / MERT** — those run on a gpubox GPU or the Mac.
 
 **Mac venvs (same names, different role):**
 - `venvs/audio/` — same stack as pi-storage but with MPS-backed PyTorch, so beat_this / cue-detr / Demucs / MERT all run on Apple Silicon GPU.
@@ -228,7 +228,7 @@ The repo's `data/db/music_database.db` is **a stale local copy for development �
 
 Use [Makefile](Makefile) for cluster ops (`make deploy`, `make status`, `make ssh-storage`).
 
-> **Deploy caveat:** pi-storage systemd units that ran `python -m audio_pipeline.main` / `.vast_worker` must be repointed to `ingest.main` / `analysis.vast_worker` (renamed out of `audio_pipeline/`) before `make deploy`, or services won't restart.
+> **Deploy caveat:** pi-storage systemd units that ran `python -m audio_pipeline.main` must be repointed to `ingest.main` (renamed out of `audio_pipeline/`) before `make deploy`, or services won't restart.
 
 ## How agents work here
 

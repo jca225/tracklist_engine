@@ -140,7 +140,7 @@ def _build_separator(
         msst_logger = get_logger()
         if not hasattr(msst_logger, "console_handler"):
             # get_logger() short-circuits when the caller already configured
-            # logging (e.g. vast_loop's basicConfig) and returns a logger
+            # logging (e.g. the loop driver's basicConfig) and returns a logger
             # without the console_handler attr MSSeparator.set_log_level
             # expects. Attach one so the vendored code's contract holds.
             handler = logging.StreamHandler()

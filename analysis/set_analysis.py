@@ -46,7 +46,7 @@ def analyze_set(
     clearly separated from track stems on disk.
 
     ``skip_stems=True`` runs the beat grid only (empty StemSet) — for when
-    separation is scheduled on another host (e.g. roformer on Vast) and this
+    separation is scheduled on another host (e.g. roformer on a gpubox GPU) and this
     host only needs ``measure_times_json`` for set-side MERT."""
     assert asset.set_audio_id is not None, (
         "SetAudioAsset must be persisted before analysis"

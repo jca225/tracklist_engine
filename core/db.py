@@ -37,7 +37,7 @@ def connect(db_path: Path) -> Iterator[sqlite3.Connection]:
     try:
         conn.row_factory = sqlite3.Row
         # Default: enforce FKs (matches canonical DB invariants). Scratch DB
-        # callers (e.g. Vast worker writing to /workspace/scratch.db before
+        # callers (e.g. the GPU worker writing to /workspace/scratch.db before
         # shipping rows back to canonical) set TRACKLIST_DISABLE_FK=1 because
         # the scratch DB has no track_audio rows to satisfy the FK; the
         # actual integrity check happens when those rows hit canonical.

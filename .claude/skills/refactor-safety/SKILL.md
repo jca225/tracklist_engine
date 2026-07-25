@@ -65,7 +65,7 @@ Update all `import` / `from` lines. Keep intentional legacy strings:
 If module entrypoints changed, update deploy caveats in root [CLAUDE.md](CLAUDE.md) and affected module guides. Example:
 
 - `python -m audio_pipeline.main` → `python -m ingest.main`
-- `python -m audio_pipeline.vast_worker` → `python -m analysis.vast_worker`
+- `python -m analysis.vast_worker` → `python -m analysis.gpu_worker`
 
 ---
 
