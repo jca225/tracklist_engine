@@ -1,6 +1,6 @@
-"""Brick 7 — canonical feature producers over the provenance substrate.
+"""Bricks 7+8 — canonical feature producers over the provenance substrate.
 
-Two REAL producers demonstrate the canonical feature-store path
+Four REAL producers demonstrate the canonical feature-store path
 (docs/engine/feature_store_and_registry.md):
 
 - ``analyze.landmark_fp`` — fresh compute: audio bytes → landmark-fingerprint
@@ -13,6 +13,13 @@ Two REAL producers demonstrate the canonical feature-store path
   the audio artifact, with a ProcessSpec whose ``model_refs`` name the MERT
   model. Bytes are copied, never recomputed — this is how existing feature
   storage walks onto the canonical model.
+- ``analyze.whisper`` (Brick 8) — fresh compute: audio bytes → word-timestamp
+  transcript JSON via the REAL ``lyrics_align.transcribe_words`` Whisper path
+  (openai/whisper-large-v3-turbo), wrapped as-is behind the pure bytes→bytes
+  contract.
+- ``analyze.hubert`` (Brick 8) — fresh compute: audio bytes → serialized
+  HuBERT frame features via the REAL ``stem_placement.hubert_of`` path
+  (facebook/hubert-base-ls960 layer 9, the mix_vocals placement features).
 
 Plus ``register_trained_decoder``: the real trained checkpoint on disk
 (`.cache/trajectory/decoder_slotsplit_seed0.pt`, the exact `trajectory/train.py:601`
@@ -62,7 +69,12 @@ from workspaces.alignment_prototype.landmark_fp import (
     SR,
     fingerprint_from_file_streaming,
 )
+from workspaces.alignment_prototype.lyrics_align import MODEL as _WHISPER_MODEL_REF
 from workspaces.alignment_prototype.mert_store import _PROBE_LAYER, _cache_path
+from workspaces.alignment_prototype.refine_ref_offsets import (
+    HOP as _GRID_HOP,
+    SR as _GRID_SR,
+)
 
 _REPO = Path(__file__).resolve().parent.parent.parent
 _OUT_ROOT = Path(__file__).resolve().parent / "out" / "provenance" / "producers"
@@ -77,6 +89,11 @@ _GT_FIXTURES = {
     "2nvzlh2k": _REPO / "labeling" / "fixtures" / "bb11_ground_truth.yaml",
 }
 _MERT_MODEL_REF = "m-a-p/MERT-v1-330M"
+# Mirrors workspaces/section_hsmm/similarity_probe.py (_HUBERT_MODEL/_HUBERT_LAYER),
+# the module stem_placement.hubert_of stands on. Not imported: similarity_probe
+# pulls sibling scorecard modules at import time; two constants beat that weight.
+_HUBERT_MODEL_REF = "facebook/hubert-base-ls960"
+_HUBERT_LAYER = 9
 _PI_HOST = "pi-storage"
 _ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
@@ -248,6 +265,119 @@ def migrate_cached_mert(
     except Exception as exc:
         repo.fail(run, {"error": repr(exc)})
         raise
+
+
+# --- producer 3: Whisper transcript (fresh compute, Brick 8) -----------------
+@artifact_type(kind="whisper_transcript", media_type="application/json", version=1)
+class WhisperTranscriptArtifact:
+    """Word-timestamp ASR stream: JSON ``{model, n_words, words:[{w,s,e}]}`` —
+    the exact ``lyrics_align.transcribe_words`` payload the lyrics channel
+    consumes."""
+
+
+@transformation(
+    "analyze.whisper",
+    "1",
+    inputs={"audio": "audio"},
+    outputs={"transcript": "whisper_transcript"},
+    stage="analysis",
+    params={
+        "language": "en",
+        "task": "transcribe",
+        "block_s": 300.0,
+        "chunk_length_s": 28,
+        "stride_length_s": 4,
+        "enhance_vocals": False,
+    },
+    reproducibility="best_effort",  # GPU/MPS ASR decode is not bit-stable
+    model_refs=(_WHISPER_MODEL_REF,),
+)
+def whisper_producer(inputs: Mapping[str, bytes]) -> Mapping[str, bytes]:
+    """Audio bytes → word-timestamp transcript JSON bytes.
+
+    Wraps the REAL ``lyrics_align.transcribe_words`` Whisper path unchanged
+    (enhance=False — VoiceFixer stays off, matching the raw-transcription
+    default). The bytes land in a random temp file, so lyrics_align's
+    mtime-keyed disk cache never aliases two different inputs."""
+    from workspaces.alignment_prototype.lyrics_align import transcribe_words
+
+    content = inputs["audio"]
+    with tempfile.NamedTemporaryFile(suffix=_sniff_suffix(content)) as tmp:
+        tmp.write(content)
+        tmp.flush()
+        words = transcribe_words(tmp.name, enhance=False)
+    payload = {
+        "v": 1,
+        "kind": "whisper_transcript",
+        "model": _WHISPER_MODEL_REF,
+        "n_words": len(words),
+        "words": words,
+    }
+    return {
+        "transcript": json.dumps(payload, sort_keys=True, separators=(",", ":")).encode(
+            "utf-8"
+        )
+    }
+
+
+# --- producer 4: HuBERT features (fresh compute, Brick 8) --------------------
+@artifact_type(
+    kind="hubert_features", media_type="application/x-hubert-frames", version=1
+)
+class HubertFeaturesArtifact:
+    """Phonetic frame features (D, T) on the SR/HOP grid: one JSON header
+    line, then the raw float32 array — the ``stem_placement`` mix_vocals
+    representation."""
+
+
+def _serialize_hubert_features(feat: np.ndarray, *, layer: int) -> bytes:
+    """Deterministic bytes for one HuBERT feature matrix (same header+raw
+    scheme as ``_serialize_mert_series`` — byte-stable for content-addressing)."""
+    feat = np.ascontiguousarray(feat, dtype=np.float32)
+    header = {
+        "v": 1,
+        "kind": "hubert_features",
+        "model": _HUBERT_MODEL_REF,
+        "layer": layer,
+        "dim": int(feat.shape[0]),
+        "n_frames": int(feat.shape[1]),
+        "grid": {"sr": _GRID_SR, "hop": _GRID_HOP},
+        "arrays": [
+            {"name": "features", "dtype": str(feat.dtype), "shape": list(feat.shape)}
+        ],
+    }
+    return (
+        json.dumps(header, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        + b"\n"
+        + feat.tobytes()
+    )
+
+
+@transformation(
+    "analyze.hubert",
+    "1",
+    inputs={"audio": "audio"},
+    outputs={"features": "hubert_features"},
+    stage="analysis",
+    params={"layer": _HUBERT_LAYER, "sr": _GRID_SR, "hop": _GRID_HOP},
+    reproducibility="best_effort",  # accelerator inference is not bit-stable
+    model_refs=(_HUBERT_MODEL_REF, f"layer={_HUBERT_LAYER}"),
+)
+def hubert_producer(inputs: Mapping[str, bytes]) -> Mapping[str, bytes]:
+    """Audio bytes → serialized HuBERT feature-matrix bytes.
+
+    Wraps the REAL ``stem_placement.hubert_of`` path unchanged (lazy import —
+    stem_placement transitively loads torch/transformers)."""
+    from workspaces.alignment_prototype.stem_placement import hubert_of
+
+    content = inputs["audio"]
+    with tempfile.NamedTemporaryFile(suffix=_sniff_suffix(content)) as tmp:
+        tmp.write(content)
+        tmp.flush()
+        feat = hubert_of(tmp.name, layer=_HUBERT_LAYER)
+    if feat is None:
+        raise RuntimeError("hubert_of returned None for present audio bytes")
+    return {"features": _serialize_hubert_features(feat, layer=_HUBERT_LAYER)}
 
 
 # --- §8: register the real trained decoder checkpoint ------------------------
