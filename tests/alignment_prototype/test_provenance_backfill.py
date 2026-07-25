@@ -16,6 +16,11 @@ import wave
 import numpy as np
 import pytest
 
+# The backfill runs REAL fingerprint compute (landmark_fp → librosa). The CI
+# guardrails env is minimal-dep (no librosa); skip there rather than fail. The
+# substrate/registry/laws paths are covered dep-free by tests/provenance/.
+pytest.importorskip("librosa")
+
 from core.provenance import LawVerdict, check_laws
 from core.provenance.store import ArtifactStore, connect
 from workspaces.alignment_prototype import producers, provenance_backfill
