@@ -6,10 +6,14 @@ types: these writers are the only DB functions that depend on analysis.models,
 so they live in the analysis stage and import core.db for the connection
 primitive.
 """
+
 from __future__ import annotations
 
 import json
+import logging
+import os
 import sqlite3
+import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -22,8 +26,124 @@ from .models import EssentiaFeatures, MeasureEmbedding, TrackAnalysisResult
 if TYPE_CHECKING:
     from .set_analysis import SetAnalysisResult
 
+log = logging.getLogger(__name__)
 
-def persist_set_analysis(db_path: Path, result: "SetAnalysisResult") -> Result[None, DbError]:
+# --- forward-routing dual-write (cutover Decision 2, step 2) -----------------
+#
+# When enabled, a just-persisted feature is ALSO registered into the canonical
+# content-addressed provenance store — so new analysis is canonical by
+# construction. Three properties make this safe to land (and deploy) before it is
+# ever turned on in production:
+#   * ADDITIVE  — runs only AFTER the legacy write has committed; the legacy path
+#                 above is byte-for-byte unchanged.
+#   * FLAGGED   — off unless BOTH env vars are set (PROVENANCE_DUAL_WRITE truthy
+#                 AND PROVENANCE_STORE_ROOT a real path). Unset ⇒ this returns
+#                 before importing anything, so it cannot slow the legacy path.
+#   * DEFENSIVE — the whole body is wrapped; ANY failure is logged and swallowed.
+#                 A provenance-store problem can never fail or slow-fatally an
+#                 analysis run.
+# Turning it on in production is a separate, human step (set both env vars on the
+# analysis workers, deploy, restart) — not done here.
+
+_DUAL_WRITE_FLAG = "PROVENANCE_DUAL_WRITE"
+_STORE_ROOT_ENV = "PROVENANCE_STORE_ROOT"
+_MERT_MODEL_REFS = ("m-a-p/MERT-v1-95M", "layer=6")
+
+
+def _dual_write_enabled() -> bool:
+    return os.environ.get(_DUAL_WRITE_FLAG, "").strip().lower() in {"1", "true", "yes"}
+
+
+def _serialize_measures(measures: "list[MeasureEmbedding]") -> bytes:
+    """Deterministic, content-addressable blob of a track's MERT measure stack:
+    one sorted-key JSON header line, then the raw per-measure embedding bytes in
+    measure-index order (byte-stable for content addressing)."""
+    ms = sorted(measures, key=lambda m: m.measure_idx)
+    header = {
+        "v": 1,
+        "kind": "mert_features",
+        "n_measures": len(ms),
+        "measures": [
+            {
+                "idx": m.measure_idx,
+                "start_s": m.start_s,
+                "end_s": m.end_s,
+                "dim": m.dim,
+                "dtype": m.dtype,
+            }
+            for m in ms
+        ],
+    }
+    body = b"".join(m.embedding_bytes for m in ms)
+    return (
+        json.dumps(header, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        + b"\n"
+        + body
+    )
+
+
+def _maybe_dual_write_provenance(result: TrackAnalysisResult) -> None:
+    """Additively register the just-persisted MERT features into the canonical
+    provenance store. Fully guarded: returns silently unless explicitly enabled,
+    and never raises (a provenance failure must not affect the analysis run)."""
+    if not _dual_write_enabled() or not result.measures:
+        return
+    root = os.environ.get(_STORE_ROOT_ENV, "").strip()
+    if not root:
+        log.warning(
+            "%s set but %s unset — skipping provenance dual-write",
+            _DUAL_WRITE_FLAG,
+            _STORE_ROOT_ENV,
+        )
+        return
+    try:
+        # Lazy imports: nothing here touches the legacy path when disabled.
+        from core.provenance import (
+            ArtifactStore,
+            ProvenanceRepository,
+            connect as prov_connect,
+            register_computed_feature,
+        )
+
+        db_root = Path(root)
+        db_root.mkdir(parents=True, exist_ok=True)
+        conn = prov_connect(db_root)
+        store = ArtifactStore(db_root, conn)
+        repo = ProvenanceRepository(conn)
+        try:
+            commit = (
+                subprocess.check_output(["git", "rev-parse", "--short", "HEAD"])
+                .decode()
+                .strip()
+            )
+        except Exception:
+            commit = "unknown"
+
+        art = register_computed_feature(
+            "mert_features",
+            _serialize_measures(list(result.measures)),
+            media_type="application/octet-stream",
+            analyzer_name="analysis.mert",
+            analyzer_version=str(result.analyzer_versions.get("mert", "1")),
+            store=store,
+            repo=repo,
+            model_refs=_MERT_MODEL_REFS,
+            params={"source": "analysis.persist_analysis"},
+            code_commit=commit,
+            metadata={"track_audio_id": result.track_audio_id},
+        )
+        log.info(
+            "provenance dual-write: track_audio_id=%s mert_features=%s",
+            result.track_audio_id,
+            art.content_sha256[:12],
+        )
+    except Exception as exc:  # never let provenance break analysis
+        log.warning("provenance dual-write failed (ignored): %r", exc)
+
+
+def persist_set_analysis(
+    db_path: Path, result: "SetAnalysisResult"
+) -> Result[None, DbError]:
     """Write `SetAnalysisResult` atomically to set_analysis + set_stems.
 
     Both tables are keyed by set_audio_id; the stems UNIQUE constraint is
@@ -74,7 +194,9 @@ def persist_set_analysis(db_path: Path, result: "SetAnalysisResult") -> Result[N
     return Ok(None)
 
 
-def persist_analysis(db_path: Path, result: TrackAnalysisResult) -> Result[None, DbError]:
+def persist_analysis(
+    db_path: Path, result: TrackAnalysisResult
+) -> Result[None, DbError]:
     """Write a `TrackAnalysisResult` atomically across 4 analysis tables.
 
     Upserts stems, track_analysis, and a bundled `audio_pipeline_v1` row in
@@ -148,8 +270,13 @@ def persist_analysis(db_path: Path, result: TrackAnalysisResult) -> Result[None,
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        m.track_audio_id, m.measure_idx, m.start_s, m.end_s,
-                        m.dim, m.dtype, m.embedding_bytes,
+                        m.track_audio_id,
+                        m.measure_idx,
+                        m.start_s,
+                        m.end_s,
+                        m.dim,
+                        m.dtype,
+                        m.embedding_bytes,
                     ),
                 )
 
@@ -159,14 +286,31 @@ def persist_analysis(db_path: Path, result: TrackAnalysisResult) -> Result[None,
             conn.commit()
     except sqlite3.DatabaseError as e:
         return Err(DbError(kind="integrity", detail=str(e)))
+    # Additive forward-routing: only reached after the legacy write committed;
+    # fully guarded + off by default (see _maybe_dual_write_provenance).
+    _maybe_dual_write_provenance(result)
     return Ok(None)
 
 
 # Map Essentia's KeyExtractor tonic strings to pitch class 0..11 (C=0).
 _PITCH_CLASS: dict[str, int] = {
-    "C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4,
-    "F": 5, "F#": 6, "Gb": 6, "G": 7, "G#": 8, "Ab": 8,
-    "A": 9, "A#": 10, "Bb": 10, "B": 11,
+    "C": 0,
+    "C#": 1,
+    "Db": 1,
+    "D": 2,
+    "D#": 3,
+    "Eb": 3,
+    "E": 4,
+    "F": 5,
+    "F#": 6,
+    "Gb": 6,
+    "G": 7,
+    "G#": 8,
+    "Ab": 8,
+    "A": 9,
+    "A#": 10,
+    "Bb": 10,
+    "B": 11,
 }
 
 
@@ -221,8 +365,9 @@ def _write_essentia_row(conn: sqlite3.Connection, feat: EssentiaFeatures) -> Non
             feat.key_mode,
             feat.key_strength,
             feat.bpm,
-            feat.danceability_tf if feat.danceability_tf is not None
-                else feat.danceability_sp / 3.0,
+            feat.danceability_tf
+            if feat.danceability_tf is not None
+            else feat.danceability_sp / 3.0,
             feat.mood_aggressive,
             feat.valence,
             feat.mood_acoustic,
@@ -261,8 +406,13 @@ def persist_mert_measures(
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        m.track_audio_id, m.measure_idx, m.start_s, m.end_s,
-                        m.dim, m.dtype, m.embedding_bytes,
+                        m.track_audio_id,
+                        m.measure_idx,
+                        m.start_s,
+                        m.end_s,
+                        m.dim,
+                        m.dtype,
+                        m.embedding_bytes,
                     ),
                 )
             row = conn.execute(
@@ -314,8 +464,13 @@ def persist_set_mert_measures(
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        set_audio_id, m.measure_idx, m.start_s, m.end_s,
-                        m.dim, m.dtype, m.embedding_bytes,
+                        set_audio_id,
+                        m.measure_idx,
+                        m.start_s,
+                        m.end_s,
+                        m.dim,
+                        m.dtype,
+                        m.embedding_bytes,
                     ),
                 )
             row = conn.execute(
@@ -341,7 +496,8 @@ def persist_set_mert_measures(
 
 
 def persist_essentia_features(
-    db_path: Path, feat: EssentiaFeatures,
+    db_path: Path,
+    feat: EssentiaFeatures,
 ) -> Result[None, DbError]:
     """Standalone writer for the `essentia_v2` row.
 

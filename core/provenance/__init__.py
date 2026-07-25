@@ -7,6 +7,7 @@ engine can be provenanced until these exist.
 """
 
 from .decisions import decide, entropy
+from .ingest import register_computed_feature
 from .explain import (
     AxisView,
     HumanAssertionView,
@@ -89,6 +90,7 @@ __all__ = [
     "make_training_snapshot",
     "make_fitted_model",
     "decide",
+    "register_computed_feature",
     "entropy",
     "check_laws",
     "format_law_results",
