@@ -58,6 +58,16 @@ purely additive (it does not change training behavior or the decode path) and is
 realized when the head is next trained. Until then, law 13/14 grounding stands on
 the real trajectory-decoder registration.
 
+**Realized (Brick 9, 2026-07-25):** `train.py --save-head-checkpoint PATH`
+(opt-in, default None — training behavior unchanged when absent) persists the
+fitted head via `external/checkpoint.py`;
+`workspaces/alignment_prototype/register_identity_head.py` registers it into the
+Brick-7 producers store as a content-addressed `MODEL_CHECKPOINT` +
+`TrainingSnapshot` (BB12 GT fixture + the trained-on MERT cache bytes) +
+training `ProcessSpec` + `FittedModel(axis=IDENTITY)`. Laws 13/14 now PASS on
+that store with a real identity model. Substrate-store scope only — the shipped
+law_audit verdicts stand.
+
 ## What "touching infra" means here (safety contract)
 
 - Only **additive** writes to pi under `/mnt/storage/provenance/**`.
