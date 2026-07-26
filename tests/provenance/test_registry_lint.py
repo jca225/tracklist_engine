@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from core.provenance.registry_lint import (
     find_collisions,
+    find_undeclared_kinds,
     scan_source,
 )
 
@@ -77,3 +78,45 @@ def f(x): return x
 
 def test_syntax_error_file_is_skipped_not_crashed():
     assert scan_source("def (:", "broken.py") == []
+
+
+# --- fold-in E: generated kind-consistency law --------------------------------
+
+_TXN_UNDECLARED = """
+from core.provenance.registry import transformation
+@transformation("p", "1", inputs={"a": "audio"}, outputs={"b": "not_a_kind"}, stage="s")
+def f(x): return x
+"""
+
+_ART_SATISFIES = """
+from core.provenance.registry import artifact_type
+@artifact_type("not_a_kind", "application/json", version=1)
+class T: ...
+"""
+
+_TXN_BUILTIN = """
+from core.provenance.registry import transformation
+@transformation("p", "1", inputs={"a": "audio"}, outputs={"b": "feature_blob"}, stage="s")
+def f(x): return x
+"""
+
+
+def test_transformation_captures_referenced_kinds():
+    d = scan_source(_TXN_UNDECLARED, "a.py")
+    assert set(d[0].refs) == {"audio", "not_a_kind"}
+
+
+def test_undeclared_kind_is_flagged():
+    u = find_undeclared_kinds(scan_source(_TXN_UNDECLARED, "a.py"))
+    kinds = {x.kind for x in u}
+    assert kinds == {"not_a_kind"}  # 'audio' is a built-in ArtifactKind
+
+
+def test_declaring_the_kind_satisfies_the_reference():
+    decls = scan_source(_TXN_UNDECLARED, "a.py") + scan_source(_ART_SATISFIES, "b.py")
+    assert find_undeclared_kinds(decls) == []
+
+
+def test_builtin_kinds_need_no_declaration():
+    # both 'audio' and 'feature_blob' are built-in ArtifactKind values
+    assert find_undeclared_kinds(scan_source(_TXN_BUILTIN, "a.py")) == []

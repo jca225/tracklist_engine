@@ -31,6 +31,7 @@ class Declaration:
     line: int
     decorator: str  # "artifact_type" | "transformation"
     identity: str  # the collision key ("kind" or "name@version")
+    refs: tuple[str, ...] = ()  # kinds a transformation references (inputs+outputs)
 
 
 def _str_arg(node: ast.expr | None) -> str | None:
@@ -39,6 +40,14 @@ def _str_arg(node: ast.expr | None) -> str | None:
         if isinstance(node, ast.Constant) and isinstance(node.value, str)
         else None
     )
+
+
+def _dict_values(node: ast.expr | None) -> tuple[str, ...]:
+    """String values of a ``{role: kind}`` dict literal (the kinds); () if not a
+    statically-readable dict."""
+    if not isinstance(node, ast.Dict):
+        return ()
+    return tuple(v for v in (_str_arg(x) for x in node.values) if v is not None)
 
 
 def _decl_from_call(call: ast.Call, path: str) -> Declaration | None:
@@ -67,7 +76,8 @@ def _decl_from_call(call: ast.Call, path: str) -> Declaration | None:
     )
     if tname is None or version is None:
         return None
-    return Declaration(path, call.lineno, name, f"txn:{tname}@{version}")
+    refs = _dict_values(kw.get("inputs")) + _dict_values(kw.get("outputs"))
+    return Declaration(path, call.lineno, name, f"txn:{tname}@{version}", refs=refs)
 
 
 def scan_source(text: str, path: str) -> list[Declaration]:
@@ -125,6 +135,45 @@ def find_collisions(decls: list[Declaration]) -> dict[str, list[Declaration]]:
     }
 
 
+def _builtin_kinds() -> frozenset[str]:
+    """The built-in ``ArtifactKind`` enum values. Imported lazily (core-only,
+    stdlib-cheap); empty if unavailable so the fence degrades to declared-only."""
+    try:
+        from core.provenance.types import ArtifactKind
+
+        return frozenset(str(k.value) for k in ArtifactKind)
+    except Exception:
+        return frozenset()
+
+
+def declared_kinds(decls: list[Declaration]) -> frozenset[str]:
+    """Kinds declared via ``@artifact_type`` (identity ``kind:X``)."""
+    return frozenset(
+        d.identity[len("kind:") :] for d in decls if d.identity.startswith("kind:")
+    )
+
+
+@dataclass(frozen=True)
+class UndeclaredRef:
+    decl: Declaration
+    kind: str  # a referenced kind that is neither declared nor built-in
+
+
+def find_undeclared_kinds(decls: list[Declaration]) -> list[UndeclaredRef]:
+    """Generated structural law (fold-in E): every kind a transformation
+    references in inputs/outputs must be a declared ``@artifact_type`` or a
+    built-in ``ArtifactKind``. A producer emitting/consuming an undeclared kind
+    is structural drift — the derived fence appears the moment a type is added,
+    so it can't silently rot (the #19 failure mode)."""
+    known = declared_kinds(decls) | _builtin_kinds()
+    out: list[UndeclaredRef] = []
+    for d in decls:
+        for k in d.refs:
+            if k not in known:
+                out.append(UndeclaredRef(d, k))
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:  # pragma: no cover - CLI glue
     import argparse
 
@@ -139,17 +188,25 @@ def main(argv: list[str] | None = None) -> int:  # pragma: no cover - CLI glue
     for r in roots:
         decls.extend(scan_tree(r))
     collisions = find_collisions(decls)
-    if not collisions:
-        print(f"registry-lint: OK ({len(decls)} declarations, no collisions)")
+    undeclared = find_undeclared_kinds(decls)
+    if not collisions and not undeclared:
+        print(f"registry-lint: OK ({len(decls)} declarations, no collisions/drift)")
         return 0
     for ident, locs in sorted(collisions.items()):
         print(f"registry-lint: DUPLICATE {ident} declared in {len(locs)} places:")
         for d in locs:
             print(f"    {d.file}:{d.line}")
-    print(
-        "registry-lint: registry declarations must be append-only — a repeated "
-        "(name, version)/kind is a merge collision. Bump the version or rename."
-    )
+    for u in sorted(undeclared, key=lambda x: (x.decl.file, x.kind)):
+        print(
+            f"registry-lint: UNDECLARED KIND {u.kind!r} referenced by "
+            f"{u.decl.identity} ({Path(u.decl.file).name}:{u.decl.line}) — "
+            "declare it with @artifact_type or use a built-in ArtifactKind"
+        )
+    if collisions:
+        print(
+            "registry-lint: registry declarations must be append-only — a repeated "
+            "(name, version)/kind is a merge collision. Bump the version or rename."
+        )
     return 1
 
 
