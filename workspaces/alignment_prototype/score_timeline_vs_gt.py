@@ -45,7 +45,10 @@ from workspaces.alignment_prototype.identity_bridge import (
     canonicalize_gt_rows,
     load_identity_map,
 )
-from workspaces.alignment_prototype.never_matched import unmatched_gt_forms
+from workspaces.alignment_prototype.never_matched import (
+    identity_recall,
+    unmatched_gt_forms,
+)
 from workspaces.alignment_prototype.refine_ref_offsets import (
     _STEM_FILE,
     find_aligning_dir,
@@ -565,8 +568,21 @@ def main(argv: list[str] | None = None) -> int:
     n = len(spans)
     print(f"=== end-to-end pipeline vs GT ({args.set_id}, {n} predicted spans) ===")
     nid = id_ok + len(id_bad)
+    # HONEST identity headline: appearance-recall over the ADJUDICABLE (bound) GT.
+    # The de-poisoned GT abstains on a large fraction of appearances (no track_id);
+    # the per-span number below is prediction-centric and DEFLATED by that abstain
+    # (a correct prediction on an abstained appearance scores as a miss). Recall
+    # over bound appearances excludes the unadjudicable ones instead of failing them.
+    idr = identity_recall(gt_rows, spans)
     print(
-        f"identity: {id_ok}/{nid} ({100 * id_ok / max(nid, 1):.0f}%)  "
+        f"identity (HONEST — recall over adjudicable GT): "
+        f"{idr['hits']}/{idr['bound']} ({100 * idr['recall']:.0f}%)  "
+        f"| adjudicable {100 * idr['adjudicable_frac']:.0f}% "
+        f"({idr['abstain']} appearances abstain — UNMEASURABLE, not scored)"
+    )
+    print(
+        f"identity (per-span, DEFLATED by abstain — diagnostic only): "
+        f"{id_ok}/{nid} ({100 * id_ok / max(nid, 1):.0f}%)  "
         f"[{no_gt} spans had no same-slot GT row]"
     )
     # Form-level coverage: GT rows no predicted span selects (nearest-set_start)
