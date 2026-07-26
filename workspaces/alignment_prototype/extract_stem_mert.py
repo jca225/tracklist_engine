@@ -193,6 +193,28 @@ def span_measure_mask(start_s, end_s, span_start: float, span_end: float):
     return [span_start <= m <= span_end for m in mids]
 
 
+def resolve_parent_cues(rows: tuple[dict, ...]) -> tuple[dict, ...]:
+    """Fill acappella/``w``-row cues from their parent slot.
+
+    Acappella rows are concurrent overlays (e.g. ``001w1`` layered over ``001``)
+    and carry cue 0 / NULL in the DB — their timing is the parent slot's. Without
+    this every acappella query windows the same front-of-mix segment (identical
+    queries → chance identity). Idempotent: a non-``w`` slot is its own parent.
+    """
+    import re
+
+    cue_by_label = {r["slot_label"]: r.get("cue_s") for r in rows}
+    out: list[dict] = []
+    for r in rows:
+        r = dict(r)
+        if not r.get("cue_s"):
+            parent = re.sub(r"w\d+$", "", r["slot_label"])
+            if parent != r["slot_label"] and cue_by_label.get(parent):
+                r["cue_s"] = cue_by_label[parent]
+        out.append(r)
+    return tuple(out)
+
+
 def acappella_targets(rows: tuple[dict, ...]) -> list[dict]:
     """The set's acappella slots (claimed_stem == 'acappella') with a claim —
     the only slots the acappella-only extraction touches."""
@@ -272,6 +294,9 @@ def run(argv: list[str] | None = None) -> int:  # pragma: no cover - GPU/IO driv
         rows = tuple(json.loads(Path(args.rows_json).read_text()))
     else:
         rows = infer.fetch_slot_rows(args.set_id)
+    # Acappella w-rows inherit the parent slot's cue; without this the query
+    # windows collapse to the front of the mix (identical → chance identity).
+    rows = resolve_parent_cues(rows)
     mix_end = float(mix.end_s[-1]) if len(mix.end_s) else 0.0
     targets, _anchors, _medians = infer.build_stub_targets(rows, mix_end)
     span_by_slot = {t.slot_label: (t.set_start_s, t.set_end_s) for t in targets}

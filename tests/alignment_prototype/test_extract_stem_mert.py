@@ -9,8 +9,31 @@ from workspaces.alignment_prototype.extract_stem_mert import (
     acappella_targets,
     measure_times_from_series,
     plan_extraction,
+    resolve_parent_cues,
     span_measure_mask,
 )
+
+
+def test_resolve_parent_cues_fills_w_rows():
+    rows = (
+        {"slot_label": "001", "cue_s": 127.0},
+        {"slot_label": "001w1", "cue_s": 0.0},  # acappella overlay -> parent 001
+        {"slot_label": "002w2", "cue_s": None},  # parent 002 missing -> stays
+        {"slot_label": "003", "cue_s": 300.0},
+    )
+    out = {r["slot_label"]: r["cue_s"] for r in resolve_parent_cues(rows)}
+    assert out["001w1"] == 127.0  # inherited from parent
+    assert out["002w2"] in (None, 0.0)  # no parent cue -> unchanged
+    assert out["003"] == 300.0  # non-w untouched (idempotent)
+
+
+def test_resolve_parent_cues_idempotent():
+    rows = ({"slot_label": "001", "cue_s": 5.0}, {"slot_label": "001w1", "cue_s": 0.0})
+    once = resolve_parent_cues(rows)
+    twice = resolve_parent_cues(once)
+    assert [r["cue_s"] for r in once] == [r["cue_s"] for r in twice]
+
+
 from workspaces.alignment_prototype.stem_mert import INSTRUMENTAL_LAYER, VOCAL_LAYER
 
 _ROWS = (
