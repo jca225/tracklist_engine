@@ -164,7 +164,18 @@ def margin_gate(
     top1 = scored[0]
     claim_score = next((c.score for c in scored if c.recording_id == claim_id), None)
 
-    if top1.recording_id != claim_id and top1.score is not None and top1.score >= floor:
+    # Override only on a *real* margin: either there is no claim to protect
+    # (claimless slot -> confident fill) or the claim was itself scorable, so the
+    # gap is meaningful. A non-None claim we simply could not score is NOT
+    # evidence the claim is wrong (blind MERT is 68% on BB12) -> do no harm, fall
+    # through to accept-claim rather than override on an infinite margin.
+    claim_comparable = claim_id is None or claim_score is not None
+    if (
+        claim_comparable
+        and top1.recording_id != claim_id
+        and top1.score is not None
+        and top1.score >= floor
+    ):
         margin = top1.score - (claim_score if claim_score is not None else -np.inf)
         if margin >= tau:
             return IdentityDecision(

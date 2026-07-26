@@ -109,6 +109,25 @@ def test_gate_abstains_when_no_claim_and_nothing_scorable():
     assert d.recording_id is None
 
 
+def test_gate_does_not_override_an_unscorable_claim():
+    # The claim is a pool member but could not be scored (no features); a rival
+    # clears the floor. Do no harm: an un-scored claim is not evidence it is
+    # wrong, so keep it rather than override on an infinite margin.
+    ranked = [CandidateScore("audio_says", 0.9), CandidateScore("claim", None)]
+    d = margin_gate(ranked, "claim", tau=0.3, floor=0.5)
+    assert d.decision == Decision.ACCEPT_CLAIM
+    assert d.recording_id == "claim"
+    assert d.top1_id == "audio_says"  # still reported for provenance
+
+
+def test_gate_fills_claimless_slot_when_confident():
+    # No claim to protect + a candidate clears the floor -> confident fill.
+    ranked = [CandidateScore("audio_says", 0.9)]
+    d = margin_gate(ranked, None, tau=0.3, floor=0.5)
+    assert d.decision == Decision.OVERRIDE
+    assert d.recording_id == "audio_says"
+
+
 def test_gate_below_floor_does_not_override():
     # top1 disagrees with a big margin but is below the confidence floor -> keep claim.
     ranked = [CandidateScore("audio_says", 0.4), CandidateScore("claim", 0.0)]
