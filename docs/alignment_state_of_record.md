@@ -1,22 +1,29 @@
 # Alignment — State of Record (current best + settled decisions)
 
-> **As of 2026-07-24 @ `20e0a21`** (see decisions #20/#21/#22 — open-set identity
-> works against a real candidate pool, the combiner **transfers** cross-set
-> (BB11↔BB12 LOSO) but ≈ borda, and **identity is stem-split**: the working LF and
-> the best MERT layer both flip between vocal (chroma useless / MERT-L3) and
-> instrumental (chroma top-tier / MERT-L22), and MERT's cross-set instability is
-> vocal-specific. Exercises #19's fix-path-1. Also #18/#19 — the "identity
-> axis" measures the tokenizer claim, not the aligner; GT verified drift-free on
-> canonical; de-friction pass added timeline provenance + `make align-state`).
-> **Operation Crush has EXITED** (decision #15, soundness) and its **completeness
-> closure is now SHIPPING** — Phase A (sound correctness + axis plumbing) is done
-> on PR #75 (decision #17); Phases B–E remain. The GT is de-poisoned +
-> content-addressed on canonical pi, and the binder now carries the full identity
-> axis product to the GT row. This unblocks the post-Crush re-measure — the first
-> *honest* alignment numbers (§3), sequenced after Phase B. The current best still
-> spans unmerged branches: TRM/flywheel work is on `trm-ablation-framework`; the
-> co-training/grammar/transition artifacts below remain on `cotrain-corpus-harvest`
-> and must be reconciled before use.
+> **As of 2026-07-26 @ `b6663ea`.** **RT1 honest baseline landed on `main`** (PR
+> #105): the de-poisoned + form-centric scorecard, regenerated bridge id_maps, and
+> human-verified GT completion are now canonical, and [alignment_status.md](alignment_status.md)
+> carries the honest numbers (identity 51%/61% per-span vs the old poisoned 82/84).
+> This is the honest-as-possible read of the **July `_lt` predictions**; the fully
+> honest number still needs a **re-inference on clean canonical** (decision #18's
+> remaining step). **Phase 1B identity capability = cores built, not yet wired**
+> (branch `provenance-engine-phase1`): the blind open-set identity LF + stem-domain
+> MERT pure cores + spec (`docs/engine/phase1b_identity_capability_spec.md`, on
+> branch `provenance-engine-phase1` until it merges)
+> are done and unit-tested — the capability half of decision #19's fix-path-1
+> (replace the size-1 candidate pool + gated audio-perception override). Remaining:
+> variant-aware MERT extraction runner + GPU pull + the `infer.py` override seam.
+>
+> Prior settled context: decisions #20/#21/#22 — open-set identity works against a
+> real candidate pool, the combiner **transfers** cross-set (BB11↔BB12 LOSO) but ≈
+> borda, and **identity is stem-split** (vocal → chroma useless / MERT-L3;
+> instrumental → chroma top-tier / MERT-L22; MERT's cross-set instability is
+> vocal-specific). #18/#19 — the shipped "identity axis" measures the tokenizer
+> claim, not the aligner (Phase 1B is the fix). **Operation Crush has EXITED**
+> (decision #15) with GT de-poisoned + content-addressed on canonical; completeness
+> Phase A shipped (#17, PR #75), Phases B–E remain. The current best still spans
+> unmerged branches: TRM/flywheel on `trm-ablation-framework`; co-training/grammar/
+> transition artifacts on `cotrain-corpus-harvest` — reconcile before use.
 >
 > **What this doc is.** The single *living* answer to "what is the aligner at its
 > best right now, and what have we settled on — so build ON this, don't
@@ -442,19 +449,38 @@ from scorers. Dead ends live in the EXPERIMENTS ledger.
   **~8.6%** (18,805/218,467 distinct tracks) have audio and `is_reference` is essentially
   unpopulated (443 rows) — the ingest frontier, not gating alignment. Do NOT read the 8.6% as
   an aligner problem; it's acquisition.
-- **Post-Crush re-measure — RT1 BLOCKED on apparatus, not GT (decision #18).**
-  Canonical GT write-back is DONE + verified drift-free (decision #15), but the honest
-  re-measure **cannot** be done by re-scoring the existing timelines: they are July-6
-  predictions built on the unverified claim spine, and the bridge id_maps
-  (`labeling/fixtures/id_maps/<set>.json`) are missing (BB12) / stale (BB11) with a deleted
-  generator. **Sequenced fix (in progress 2026-07-23):** (1) write a reproducible bridge-id_map
-  generator + regenerate BB11/BB12 from clean canonical `set_track_slots` (validated 100% vs
-  the surviving BB11 map on shared keys; cheap, no GPU); (2) re-infer both sets on a Vast GPU
-  box against clean canonical (BB12 first — BB11 stalls Whisper), validating the id_map via the
-  ref-resolution count (0/N = still broken); (3) `make scorecard` / `make race` + TRM
-  `path_decode.trajectory_acc` → regenerate [alignment_status.md](alignment_status.md). Only
-  then are the numbers honest. Every prior headline is provisional. See
-  [operation_rolling_thunder_proposed.md](operation_rolling_thunder_proposed.md).
+- **Post-Crush re-measure — RT1 apparatus LANDED on `main` (PR #105); one step
+  remains (decision #18).** The de-poisoned + **form-centric** scorecard,
+  regenerated bridge id_maps (`labeling/fixtures/id_maps/<set>.json`, both sets),
+  and **human-verified GT completion** (spectrogram review) are now on `main`, and
+  [alignment_status.md](alignment_status.md) carries the honest numbers (identity
+  **51%/61%** per-span, form-centric, audible-weighted — not comparable to the old
+  poisoned 82/84). **Caveat:** these score the **July `_lt` predictions** honestly
+  against corrected GT; the *fully* honest number still needs the **re-inference on
+  clean canonical** (re-infer both sets on a **gpubox** GPU — BB12 first, BB11
+  stalls Whisper — validating the id_map via ref-resolution count, then `make
+  scorecard` / `make race` + TRM `path_decode.trajectory_acc` → regen status.md).
+  That re-inference is the remaining RT1 step. **Recovery note:** the RT1 work was
+  recovered from the abandoned `fix/rt1-form-centric-remeasure` branch, whose tip
+  commit (`43d6f0e`, mislabeled a guardrails bump) deleted ~1,590 files; the poison
+  branch was deleted from origin after the 6 good commits were cherry-picked into
+  #105. See [operation_rolling_thunder_proposed.md](operation_rolling_thunder_proposed.md).
+- **Phase 1B identity capability — pure cores BUILT, not yet wired (branch
+  `provenance-engine-phase1`).** The capability half of decision #19's fix-path-1:
+  replace the shipped **size-1 candidate pool** (which forces the aligner to inherit
+  the tokenizer claim) with a real multi-candidate pool + a **fail-closed** audio-
+  perception override. Done + unit-tested this session: `open_set_identity.py` (blind
+  stem-routed MERT-chamfer identity LF — no tracklist prior, no oracle pitch;
+  conditional top-k + borda + margin gate) and `stem_mert.py` (stem-domain per-layer
+  MERT extraction core). Spec: `docs/engine/phase1b_identity_capability_spec.md`
+  (on branch `provenance-engine-phase1` until it merges).
+  **Remaining (in order):** (A) `candidate_pool.py` (variant-aware {claim} ∪ stem-ref
+  pool); (B) the MERT **data dependency** — a variant-aware L3/L22 stem-MERT extraction
+  runner + a GPU pull (deferred this session; `export_mert_from_pi.py` already takes a
+  layer arg but exports full-mix/full-track, not stems); (C) the `infer.py` gated
+  override seam (touches the live inference path — do LAST). Acceptance gate:
+  identity ≥ the RT1 baseline on **both** sets (do-no-harm), numbers → status.md only
+  after. Grounded in decisions #19/#20/#21/#22.
 - **`labeling/` package reorganization — PARKED by owner (2026-07-22, "do later").** Raised
   after Phase A; assessment: the recurring bug class is SSOT drift (A4 = catalog vs pull
   reimplementing slot→audio resolution), not disorganization broadly. Pilot when resumed =
