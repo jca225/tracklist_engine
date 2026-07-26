@@ -14,7 +14,7 @@ REPO         := ~/tracklist_engine
 PIP          := $(REPO)/venvs/web_crawler/bin/pip
 DB           := /mnt/storage/data/db/music_database.db
 
-.PHONY: help check check-corpus check-inventory docs-gc docs-gc-apply audit-gt scorecard race align-state align-ablate deploy deploy-storage deploy-worker \
+.PHONY: help check check-fast check-corpus check-inventory docs-gc docs-gc-apply audit-gt scorecard race align-state align-ablate deploy deploy-storage deploy-worker \
         restart-jobqueue start-scraper stop-scraper restart-retry \
         install-taste-scrape restart-taste-scrape logs-taste-scrape \
         install-corpus-integrity logs-corpus-integrity \
@@ -22,7 +22,8 @@ DB           := /mnt/storage/data/db/music_database.db
 
 help:
 	@echo "Common targets:"
-	@echo "  make check            — guardrails script + full pytest suite"
+	@echo "  make check            — guardrails + typecheck + FULL pytest suite (pre-push gate)"
+	@echo "  make check-fast       — guardrails + a curated fast pytest subset (~4s inner-loop)"
 	@echo "  make collide          — which branches will conflict, hotspots, landing order"
 	@echo "  make land-budget      — branches grown past the point where landing gets ugly"
 	@echo "  make land-verify      — after a rebase: did the merge produce parseable code"
@@ -56,6 +57,21 @@ check:
 	venvs/audio/bin/python scripts/guardrails.py
 	bash scripts/typecheck.sh
 	venvs/audio/bin/python -m pytest tests/ -q
+
+# Fast inner-loop gate: the mechanical fences (guardrails.py already rides the
+# entropy_audit AST bug-class fences via run_checks) + a curated, import-light
+# pytest subset covering the dev-tooling and identity/core logic. Runs in a few
+# seconds vs ~40s+ for the full `make check` suite, so it's cheap to run on every
+# save. It is NOT a substitute for `make check` before a push — the full suite
+# (and mypy) is the real gate; this is the "did I obviously break something" loop.
+# No `slow` marker exists in the repo, so the subset is an explicit file list.
+FAST_TESTS := tests/test_guardrails_dead_flags.py tests/test_wip_limit.py \
+	tests/test_entropy_audit.py tests/test_repo_root_paths.py \
+	tests/test_identity_axes.py tests/test_recording_axes.py \
+	tests/core tests/scripts
+check-fast:
+	venvs/audio/bin/python scripts/guardrails.py
+	venvs/audio/bin/python -m pytest $(FAST_TESTS) -q
 
 typecheck:
 	bash scripts/typecheck.sh
