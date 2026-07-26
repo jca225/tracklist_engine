@@ -251,6 +251,13 @@ def run(argv: list[str] | None = None) -> int:  # pragma: no cover - GPU/IO driv
     )
     p.add_argument("--device", default="auto", help="cuda|mps|cpu|auto")
     p.add_argument("--limit", type=int, default=0, help="cap refs (0=all) for smoke")
+    p.add_argument(
+        "--rows-json",
+        type=Path,
+        default=None,
+        help="pre-fetched slot rows (JSON list of {slot_label, recording_id, "
+        "claimed_stem, cue_s, name}); avoids SSHing pi on a box with no pi access",
+    )
     args = p.parse_args(argv)
     sr = mert_adapter.MERT_SR
 
@@ -261,7 +268,10 @@ def run(argv: list[str] | None = None) -> int:  # pragma: no cover - GPU/IO driv
         case Ok((_sid, mix, refs)):
             pass
 
-    rows = infer.fetch_slot_rows(args.set_id)
+    if args.rows_json is not None:
+        rows = tuple(json.loads(Path(args.rows_json).read_text()))
+    else:
+        rows = infer.fetch_slot_rows(args.set_id)
     mix_end = float(mix.end_s[-1]) if len(mix.end_s) else 0.0
     targets, _anchors, _medians = infer.build_stub_targets(rows, mix_end)
     span_by_slot = {t.slot_label: (t.set_start_s, t.set_end_s) for t in targets}
