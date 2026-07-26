@@ -630,6 +630,25 @@ def run_checks() -> list[Violation]:
 
     for msg in _entropy_check():
         violations.append(Violation(_EA_BASELINE, 0, "entropy_audit", msg))
+    # Registry version-collision fence (fold-in C): the provenance registry must
+    # be append-only — a repeated (name, version)/kind declared in two places is
+    # the duplicate a merge would silently land. Static AST scan; no imports.
+    try:
+        from core.provenance.registry_lint import find_collisions, scan_tree
+
+        for ident, locs in sorted(find_collisions(scan_tree(REPO_ROOT)).items()):
+            where = ", ".join(f"{Path(d.file).name}:{d.line}" for d in locs)
+            violations.append(
+                Violation(
+                    Path(locs[0].file),
+                    locs[0].line,
+                    "registry_collision",
+                    f"{ident} declared in {len(locs)} places ({where}) — registry "
+                    "declarations are append-only; bump the version or rename",
+                )
+            )
+    except ImportError:
+        pass  # core.provenance not importable (e.g. partial checkout) — skip
     return violations
 
 
