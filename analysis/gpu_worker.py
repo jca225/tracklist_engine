@@ -139,7 +139,10 @@ def _next_unanalyzed(
     """Return (track_audio_id, audio_path) for the next track that has
     a track_audio row but no track_analysis row. When set_ids is non-empty,
     restrict to tracks that appear in any of those sets (via
-    dj_set_track_media_links). ``exclude`` quarantines track_audio_ids that
+    set_track_slots, the canonical per-set spine — NOT
+    dj_set_track_media_links, whose scrape-only rows silently drop gap
+    tracks that were manually ingested without a scraped media link).
+    ``exclude`` quarantines track_audio_ids that
     already failed this run so a poison track can't be re-selected forever
     (it has no track_analysis row, so the IS NULL predicate keeps returning
     it otherwise — the infinite-spin class fixed in the loop driver). Returns
@@ -165,8 +168,9 @@ def _next_unanalyzed(
                       ON tan.track_audio_id = ta.track_audio_id
                     WHERE tan.track_audio_id IS NULL
                       AND ta.track_id IN (
-                          SELECT DISTINCT track_id FROM dj_set_track_media_links
+                          SELECT DISTINCT track_id FROM set_track_slots
                           WHERE set_id IN ({placeholders})
+                            AND track_id IS NOT NULL
                       ){excl_clause}
                     ORDER BY ta.track_audio_id
                     LIMIT 1
