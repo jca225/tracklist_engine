@@ -35,7 +35,10 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-os.environ["TRACKLIST_DISABLE_FK"] = "1"
+# NB: TRACKLIST_DISABLE_FK is set inside main(), NOT at module scope — setting
+# it on import mutates global process env and disables FK enforcement for any
+# test that imports this module (it silently broke unrelated cascade-delete
+# tests). Same rule as render_set_stems.py / the ws1-prefetch plan doc.
 
 from analysis import persistence
 from analysis.adapters import audio_io, mert_adapter
@@ -125,6 +128,16 @@ def fetch_measure_times(track_audio_id: int) -> tuple[float, ...]:
         f"WHERE track_audio_id = {track_audio_id}"
     )
     out = ssh_pi(sql)
+    if not out.strip():
+        # measure_times_json IS NULL (analysis ran without a beat grid) or the
+        # row is absent. json.loads("") raises JSONDecodeError which, uncaught
+        # by the loop's `except CalledProcessError`, kills the whole backfill
+        # on the first such row. Raise a caught ValueError instead so the loop
+        # quarantines this one track and continues.
+        raise ValueError(
+            f"no measure_times_json for track_audio_id={track_audio_id} "
+            "(NULL beat grid or missing track_analysis row)"
+        )
     times = json.loads(out)
     return tuple(float(t) for t in times)
 
@@ -235,6 +248,11 @@ def push_mert_rows(track_audio_id: int, mert_version: str) -> None:
 
 def main() -> int:
     import argparse
+
+    # Scratch DB has no track_audio parent rows; disable FK enforcement so the
+    # raw INSERTs of MERT rows don't trip on missing parents. Set here (not at
+    # import) — see the note above the imports.
+    os.environ["TRACKLIST_DISABLE_FK"] = "1"
 
     p = argparse.ArgumentParser(description="MERT-only 330M backfill over pi-storage.")
     p.add_argument(
@@ -374,8 +392,11 @@ def main() -> int:
                 code, level, msg = exit_status(n_done, n_failed)
                 log.log(level, "hit --max-tracks=%d — %s", args.max_tracks, msg)
                 return code
-        except subprocess.CalledProcessError as e:
-            log.error("[%d] subprocess failed: %s", tid, e)
+        except (subprocess.CalledProcessError, ValueError) as e:
+            # ValueError covers the fetch_measure_times NULL guard and
+            # json.JSONDecodeError (a ValueError subclass) — quarantine the
+            # track, never crash the whole loop.
+            log.error("[%d] failed: %s", tid, e)
             n_failed += 1
             failed_tids.add(tid)
         finally:

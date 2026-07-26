@@ -22,7 +22,7 @@ pytest.importorskip("torch")  # gpu_worker -> pipeline -> torch
 from analysis.gpu_worker import _next_unanalyzed  # noqa: E402
 
 
-def _make_db(path, *, analyzed=(), tracks=(101, 102, 103)):
+def _make_db(path, *, analyzed=(), tracks=(101, 102, 103), slots=(), media_links=()):
     conn = sqlite3.connect(path)
     conn.executescript(
         """
@@ -32,6 +32,8 @@ def _make_db(path, *, analyzed=(), tracks=(101, 102, 103)):
             path TEXT
         );
         CREATE TABLE track_analysis (track_audio_id INTEGER PRIMARY KEY);
+        CREATE TABLE set_track_slots (set_id TEXT, track_id TEXT);
+        CREATE TABLE dj_set_track_media_links (set_id TEXT, track_id TEXT);
         """
     )
     for tid in tracks:
@@ -41,6 +43,16 @@ def _make_db(path, *, analyzed=(), tracks=(101, 102, 103)):
         )
     for tid in analyzed:
         conn.execute("INSERT INTO track_analysis (track_audio_id) VALUES (?)", (tid,))
+    for set_id, tid in slots:
+        conn.execute(
+            "INSERT INTO set_track_slots (set_id, track_id) VALUES (?, ?)",
+            (set_id, f"trk{tid}"),
+        )
+    for set_id, tid in media_links:
+        conn.execute(
+            "INSERT INTO dj_set_track_media_links (set_id, track_id) VALUES (?, ?)",
+            (set_id, f"trk{tid}"),
+        )
     conn.commit()
     conn.close()
 
@@ -82,6 +94,35 @@ def test_exclude_composes_with_analyzed(tmp_path):
     db = tmp_path / "m.db"
     _make_db(db, analyzed=(101,))
     r = _next_unanalyzed(db, None, frozenset({102}))
+    assert r.is_ok()
+    assert r.value is not None
+    assert r.value[0] == 103
+
+
+def test_set_filter_uses_canonical_spine_not_media_links(tmp_path):
+    # Bug-audit C2: set-scope filtering must come from set_track_slots (the
+    # canonical per-set spine), not dj_set_track_media_links (scrape-only). A
+    # "gap" track — manually ingested audio present in the spine but with NO
+    # scraped media link — was silently skipped under set filtering. Here 102 is
+    # such a gap row: in the spine for set "S", absent from media links. It must
+    # be selected; the old code (querying dj_set_track_media_links) returned None.
+    db = tmp_path / "m.db"
+    _make_db(
+        db,
+        slots=[("S", 102)],
+        media_links=[("S", 999)],  # a different, non-ingested track
+    )
+    r = _next_unanalyzed(db, ("S",))
+    assert r.is_ok()
+    assert r.value is not None
+    assert r.value[0] == 102
+
+
+def test_set_filter_restricts_to_set(tmp_path):
+    # A track in the spine of a DIFFERENT set is not selected.
+    db = tmp_path / "m.db"
+    _make_db(db, slots=[("OTHER", 101), ("S", 103)])
+    r = _next_unanalyzed(db, ("S",))
     assert r.is_ok()
     assert r.value is not None
     assert r.value[0] == 103
