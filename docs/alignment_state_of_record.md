@@ -1,18 +1,26 @@
 # Alignment — State of Record (current best + settled decisions)
 
-> **As of 2026-07-26 @ `b6663ea`.** **RT1 honest baseline landed on `main`** (PR
+> **As of 2026-07-26 @ `b2b9e59`.** **RT1 honest baseline landed on `main`** (PR
 > #105): the de-poisoned + form-centric scorecard, regenerated bridge id_maps, and
 > human-verified GT completion are now canonical, and [alignment_status.md](alignment_status.md)
 > carries the honest numbers (identity 51%/61% per-span vs the old poisoned 82/84).
 > This is the honest-as-possible read of the **July `_lt` predictions**; the fully
 > honest number still needs a **re-inference on clean canonical** (decision #18's
-> remaining step). **Phase 1B identity capability = cores built, not yet wired**
-> (branch `provenance-engine-phase1`): the blind open-set identity LF + stem-domain
-> MERT pure cores + spec (`docs/engine/phase1b_identity_capability_spec.md`, on
-> branch `provenance-engine-phase1` until it merges)
-> are done and unit-tested — the capability half of decision #19's fix-path-1
-> (replace the size-1 candidate pool + gated audio-perception override). Remaining:
-> variant-aware MERT extraction runner + GPU pull + the `infer.py` override seam.
+> remaining step). **Phase 1B identity capability = BUILT + MEASURED e2e, DEFERS on
+> BB12 (does not ship)** (branch `phase1b-wire`, PR #109; extraction driver + gate
+> added this session). The full override pipeline is now real and validated on GPU
+> data: multi-candidate pool (Part A) + blind stem-MERT chamfer LF (Part B) + a
+> gated `infer.py` override seam (Part C, **default-off / fail-closed**) + the L3
+> stem-MERT extraction runner (`extract_stem_mert.py`) + a GT-anchored acceptance
+> gate (`eval_1b_identity.py`). **First honest, GT-anchored acappella number: the
+> blind LF does NOT beat the tokenizer claim on BB12** (net-negative — it fixes some
+> wrong claims but breaks more correct ones; numbers in [alignment_status.md](alignment_status.md)).
+> Per the spec's own rule, **blind-LF-alone defers** — awaits the co-train combiner
+> (decision #23). **Load-bearing caveat:** the query windows were the broad
+> parent-slot spans (acappella `w`-rows inherit the parent cue), which depress the
+> LF (query-query cosine ≈ 0.99); a **tight GT-span re-measure** is the open front
+> before concluding the approach's ceiling. Side finding: the tokenizer's acappella
+> *claim* is itself wrong on a majority of slots (claim-vs-GT baseline).
 >
 > Prior settled context: decisions #20/#21/#22 — open-set identity works against a
 > real candidate pool, the combiner **transfers** cross-set (BB11↔BB12 LOSO) but ≈
@@ -129,6 +137,26 @@ and co-training seam). Harness: `harness/`. Agentic loop: `agentic/`.
 ## 2. Settled decisions (append-only; status = SETTLED | SUPERSEDED-BY-#N)
 
 > Append new entries at the top. Never rewrite history — supersede it.
+
+**#23 — Phase 1B blind-LF acappella identity override, measured e2e on BB12,
+DEFERS — does not ship.** `2026-07-26` · SETTLED (verdict) / OPEN (tight-window
+re-measure). The full override pipeline (multi-candidate pool + blind stem-MERT
+L3 chamfer + gated `infer.py` seam + extraction runner + GT-anchored gate) is
+built and validated on real GPU data. Against clean GT on BB12 acappella slots,
+the blind LF **does not beat the tokenizer claim** — net-negative (fixes some
+wrong claims, breaks more correct ones). Per the Phase 1B spec's own acceptance
+rule ("a capability that regresses does not ship — it waits for the co-train
+combiner"), blind-LF-alone **defers**; the override seam stays default-off /
+fail-closed. **Caveat that gates the verdict's strength:** query windows were the
+broad parent-slot spans (acappella `w`-rows carry cue 0 and inherit the parent
+slot's cue — fixed via `resolve_parent_cues`, but still one window per parent,
+~127 s), which contaminates the vocal query (query-query cosine ≈ 0.99). The
+earlier open-set finding (#20) measured ~68% for this LF with tighter windows, so
+32% is the *coarse-window floor*, not the ceiling — **a tight GT-span re-measure
+(and saving the full mix-L3 so windows are re-tunable without re-renting) is the
+open front** before calling the approach dead. Instrumental identity is untested
+here (extraction was acappella-only, the contested axis). Numbers →
+[alignment_status.md](alignment_status.md).
 
 **#22 — Identity is stem-split: the LF that works AND the best MERT layer both flip
 between vocal and instrumental; MERT's cross-set instability is vocal-specific.**
@@ -383,6 +411,19 @@ from scorers. Dead ends live in the EXPERIMENTS ledger.
 
 ## 3. Open fronts (what's live / undecided right now)
 
+- **Phase 1B tight-window re-measure — the immediate open 1B front (decision #23).**
+  The e2e gate ran on broad parent-slot windows and the blind LF underperformed the
+  claim; the coarse window is the prime suspect (query-query cosine ≈ 0.99, vs the
+  #20 finding's ~68% with tighter windows). Next: (1) re-extract BB12 acappella with
+  **tight GT-span windows**, and **save the full mix-vocal L3** so windows are
+  re-tunable locally without re-renting; (2) extract **BB11** (staged: stems/cache/GT
+  present, rows JSON built) so the **full LOSO gate** (identity ≥ RT1 on both sets,
+  τ/floor tuned on one and validated on the other) can run; (3) then the ship/defer
+  verdict is final. Pipeline built on `phase1b-wire` (PR #109): `extract_stem_mert.py`
+  (runner + `resolve_parent_cues`), `eval_1b_identity.py` (GT time-join gate),
+  `candidate_pool.py` / `identity_override.py` (default-off seam). GPU driver:
+  `scripts/gpubox_extract_1b.py` (needs a `--set-id` param before it lands). This is
+  a windowing/reference front, **not** a compute or architecture one.
 - **TRM real pseudo-label flywheel — E1 is next.** The architecture works but
   synthetic-only transfer fails (decision #14). Verify MERT + fingerprint caches
   for the pool, materialize only agentic `AUTO_COMMIT` spans from BB10 as
