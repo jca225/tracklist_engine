@@ -244,7 +244,8 @@ Use your best judgement on when to commit and push. The default Claude Code rule
 
 Mechanical checks catch rename drift, stale module names, and wrong adapter path depth:
 
-- **`make check`** — runs [scripts/guardrails.py](scripts/guardrails.py) (stale-name/path/dead-flag + the [scripts/entropy_audit.py](scripts/entropy_audit.py) AST bug-class fences) + fast pytest subset before push
+- **`make check`** — the pre-push gate: [scripts/guardrails.py](scripts/guardrails.py) (stale-name/path/dead-flag/WIP-limit + the [scripts/entropy_audit.py](scripts/entropy_audit.py) AST bug-class fences) + mypy (`scripts/typecheck.sh`) + the **full** pytest suite
+- **`make check-fast`** — inner-loop check: guardrails (which rides the entropy_audit fences) + a curated, import-light pytest subset (~5s vs ~40s+). Cheap to run on every save; NOT a substitute for `make check` before a push
 - **Git hooks** — one-time per clone: `git config core.hooksPath .githooks`
 - **Cursor rules** — [.cursor/rules/](.cursor/rules/) (`identity-axes`, `repo-paths`) load when editing matching files
 - **Refactor checklist** — [.claude/skills/refactor-safety/SKILL.md](.claude/skills/refactor-safety/SKILL.md) for module renames and directory splits
