@@ -173,32 +173,161 @@ class IdentityFeatureBundle:
         return b
 
 
-def run(argv: list[str] | None = None) -> int:  # pragma: no cover - GPU/IO driver
-    """CLI: extract L3/L22 stem MERT for a set and write the feature bundle.
+# ---- Pure resolution (unit-tested; no FS/DB/GPU) ------------------------------
 
-    Resolves the set's mix stems (mix_vocals/mix_instrumental) + the
-    stem-partitioned reference audios on pi/aligning-dir, runs one MERT pass per
-    stem via ``stem_mert.embed_stem_layers``, slices the routed layer, and saves
-    an ``IdentityFeatureBundle``. GPU-bound — run on a rented gpubox or Mac MPS.
-    The resolution glue (which audio path / measure grid per item) is the piece
-    validated during the extraction run; the plan + bundle above are its spec.
+
+def measure_times_from_series(start_s, end_s) -> tuple[float, ...]:
+    """N+1 measure boundaries from a MertSeries' per-measure start/end arrays
+    (the grid the stored MERT was computed on — Demucs stems share the source's
+    timeline, so it applies to the stem). Empty -> ()."""
+    starts = [float(x) for x in start_s]
+    if not starts:
+        return ()
+    return tuple(starts) + (float(end_s[-1]),)
+
+
+def span_measure_mask(start_s, end_s, span_start: float, span_end: float):
+    """Boolean mask over measures whose midpoint falls in [span_start, span_end]
+    — used to slice the mix query to a slot's play span."""
+    mids = [0.5 * (float(a) + float(b)) for a, b in zip(start_s, end_s)]
+    return [span_start <= m <= span_end for m in mids]
+
+
+def acappella_targets(rows: tuple[dict, ...]) -> list[dict]:
+    """The set's acappella slots (claimed_stem == 'acappella') with a claim —
+    the only slots the acappella-only extraction touches."""
+    return [
+        r
+        for r in rows
+        if pool_stem_for(r.get("claimed_stem")) == "acappella" and r.get("recording_id")
+    ]
+
+
+def vocals_stem_path(aligning_dir, slot_label: str, name: str):
+    """Path to a ref's Demucs vocals stem in the aligning dir. Tries the canonical
+    ``stems/<slot>__<name>/vocals.flac`` then globs ``stems/<slot>__*/vocals.flac``
+    (aligning dirs carry tag-suffixed variant folders) and takes the shortest
+    (least-annotated) match. Returns None if no vocals stem exists."""
+    from pathlib import Path as _P
+
+    stems = _P(aligning_dir) / "stems"
+    canonical = stems / f"{slot_label}__{name}" / "vocals.flac"
+    if canonical.exists():
+        return canonical
+    cands = sorted(
+        stems.glob(f"{slot_label}__*/vocals.flac"), key=lambda p: len(str(p))
+    )
+    return cands[0] if cands else None
+
+
+# ---- I/O driver (GPU/audio; exercised by the extraction run) -------------------
+
+
+def run(argv: list[str] | None = None) -> int:  # pragma: no cover - GPU/IO driver
+    """Extract L3 acappella stem-MERT for a set and write the feature bundle.
+
+    ACAPPELLA-ONLY first cut (the contested axis; instrumental identity is already
+    strong). For every acappella slot: compute L3 MERT over the ref's Demucs
+    vocals stem (grid = that recording's stored MERT measure grid) and over the
+    mix-vocal window for that slot's play span, and save an
+    ``IdentityFeatureBundle`` the ``infer.py`` seam loads. Device auto-selects
+    cuda->mps->cpu; run on a rented gpubox (fast) or Mac MPS.
     """
     import argparse
+
+    import librosa
+
+    from analysis.adapters import mert_adapter
+    from core.result import Err, Ok
+    from workspaces.alignment_prototype import infer
+    from workspaces.alignment_prototype.mert_store import load_bb12_mert
+    from workspaces.alignment_prototype.stem_mert import VOCAL_LAYER, embed_stem_layers
 
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--set-id", required=True)
     p.add_argument("--cache-dir", type=Path, required=True)
-    p.add_argument("--device", default=None, help="cuda|mps|cpu (auto if unset)")
-    args = p.parse_args(argv)
-    raise SystemExit(
-        "extract_stem_mert.run is the GPU/IO driver: resolve stem audio + measure "
-        f"grids for set {args.set_id} (device={args.device or 'auto'}) and call "
-        "stem_mert.embed_stem_layers per plan item, then "
-        f"IdentityFeatureBundle(...).save({args.cache_dir}). Wire to the "
-        "pi/aligning-dir audio resolver during the extraction run (deferred to "
-        "the gpubox step)."
+    p.add_argument(
+        "--aligning-dir", type=Path, required=True, help="~/aligning/<set>__*"
     )
+    p.add_argument("--device", default="auto", help="cuda|mps|cpu|auto")
+    p.add_argument("--limit", type=int, default=0, help="cap refs (0=all) for smoke")
+    args = p.parse_args(argv)
+    sr = mert_adapter.MERT_SR
+
+    match load_bb12_mert(args.set_id):
+        case Err(msg):
+            print(f"MERT bundle load failed: {msg}", file=sys.stderr)
+            return 1
+        case Ok((_sid, mix, refs)):
+            pass
+
+    rows = infer.fetch_slot_rows(args.set_id)
+    mix_end = float(mix.end_s[-1]) if len(mix.end_s) else 0.0
+    targets, _anchors, _medians = infer.build_stub_targets(rows, mix_end)
+    span_by_slot = {t.slot_label: (t.set_start_s, t.set_end_s) for t in targets}
+    aca = acappella_targets(rows)
+    if args.limit:
+        aca = aca[: args.limit]
+    print(f"acappella slots: {len(aca)}  (device resolving via {args.device})")
+
+    match mert_adapter.load(device=args.device):
+        case Err(e):
+            print(f"MERT model load failed: {e}", file=sys.stderr)
+            return 1
+        case Ok(handle):
+            pass
+
+    # Mix-vocal L3 once over the whole mix (sliced per slot afterwards).
+    mix_vocals = Path(args.aligning_dir) / "mix_vocals.flac"
+    if not mix_vocals.exists():
+        print(f"missing {mix_vocals}", file=sys.stderr)
+        return 1
+    mv, _ = librosa.load(str(mix_vocals), sr=sr, mono=True)
+    mix_grid = measure_times_from_series(mix.start_s, mix.end_s)
+    mix_l3 = embed_stem_layers(handle, mv, mix_grid, layers=(VOCAL_LAYER,))
+    if mix_l3 is None or VOCAL_LAYER not in mix_l3:
+        print("mix-vocal MERT extraction failed", file=sys.stderr)
+        return 1
+    mix_l3 = mix_l3[VOCAL_LAYER]  # (dim, n_mix_measures)
+    print(f"mix-vocal L3: {mix_l3.shape}")
+
+    bundle = IdentityFeatureBundle(set_id=args.set_id)
+    ref_ids: list[str] = []
+    for r in aca:
+        rid = r["recording_id"]
+        slot = r["slot_label"]
+        # Query: slice the mix-vocal L3 to this slot's play span.
+        span = span_by_slot.get(slot)
+        if span:
+            mask = span_measure_mask(mix.start_s, mix.end_s, span[0], span[1])
+            cols = [i for i, m in enumerate(mask) if m]
+            if cols:
+                bundle.queries[slot] = mix_l3[:, cols]
+                bundle.spans[slot] = float(span[1] - span[0])
+        # Ref: L3 over the recording's Demucs vocals stem.
+        series = refs.get(rid)
+        vpath = vocals_stem_path(args.aligning_dir, slot, r.get("name", ""))
+        if series is None or vpath is None:
+            print(f"  skip ref {slot}/{rid}: series={series is not None} stem={vpath}")
+            continue
+        rv, _ = librosa.load(str(vpath), sr=sr, mono=True)
+        grid = measure_times_from_series(series.start_s, series.end_s)
+        emb = embed_stem_layers(handle, rv, grid, layers=(VOCAL_LAYER,))
+        if emb is None or VOCAL_LAYER not in emb:
+            print(f"  skip ref {slot}/{rid}: extraction returned None")
+            continue
+        bundle.refs[rid] = emb[VOCAL_LAYER]
+        ref_ids.append(rid)
+        print(f"  ref {slot}/{rid}: {emb[VOCAL_LAYER].shape}")
+
+    bundle.set_pool_by_stem = {"acappella": tuple(ref_ids), "instrumental": ()}
+    out = bundle.save(args.cache_dir)
+    print(
+        f"wrote {out}: {len(bundle.queries)} queries, {len(bundle.refs)} refs "
+        f"(acappella pool)"
+    )
+    return 0
 
 
 if __name__ == "__main__":  # pragma: no cover
-    run()
+    raise SystemExit(run())

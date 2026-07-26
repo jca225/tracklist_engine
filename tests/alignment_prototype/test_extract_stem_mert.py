@@ -6,7 +6,10 @@ import numpy as np
 
 from workspaces.alignment_prototype.extract_stem_mert import (
     IdentityFeatureBundle,
+    acappella_targets,
+    measure_times_from_series,
     plan_extraction,
+    span_measure_mask,
 )
 from workspaces.alignment_prototype.stem_mert import INSTRUMENTAL_LAYER, VOCAL_LAYER
 
@@ -66,6 +69,34 @@ def test_bundle_roundtrips_through_disk(tmp_path):
     assert np.array_equal(loaded.refs["a1"], b.refs["a1"])
     assert loaded.set_pool_by_stem == {"acappella": ("a1",), "instrumental": ()}
     assert loaded.spans == {"1": 88.0}
+
+
+def test_measure_times_appends_final_boundary():
+    # N measures -> N+1 boundaries (start_s[0..n-1] + end_s[-1]).
+    mt = measure_times_from_series([0.0, 2.0, 4.0], [2.0, 4.0, 6.0])
+    assert mt == (0.0, 2.0, 4.0, 6.0)
+    assert measure_times_from_series([], []) == ()
+
+
+def test_span_measure_mask_selects_by_midpoint():
+    start = [0.0, 2.0, 4.0, 6.0]
+    end = [2.0, 4.0, 6.0, 8.0]  # mids 1,3,5,7
+    mask = span_measure_mask(start, end, 2.5, 6.0)  # mids 3,5 in range
+    assert mask == [False, True, True, False]
+
+
+def test_acappella_targets_filters_stem_and_claim():
+    rows = (
+        {"slot_label": "1", "claimed_stem": "acappella", "recording_id": "a"},
+        {"slot_label": "2", "claimed_stem": "regular", "recording_id": "b"},
+        {
+            "slot_label": "3",
+            "claimed_stem": "acappella",
+            "recording_id": None,
+        },  # no claim
+    )
+    got = acappella_targets(rows)
+    assert [r["slot_label"] for r in got] == ["1"]
 
 
 def test_bundle_load_feeds_resolve_identities(tmp_path):
