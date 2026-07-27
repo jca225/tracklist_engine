@@ -120,7 +120,7 @@ git switch main && git pull --ff-only && git switch -c chore/repo-declutter
 | Fork | tracked py | last commit | verdict | action |
 |---|---|---|---|---|
 | `msst_webui` | 0 | none | empty | **PARK — live RoFormer root** (see execution notes) |
-| `streaming_mir` | 5 | 07-15 | already promoted into `analysis/pipeline.py` | `git rm -r` |
+| `streaming_mir` | 5 | 07-15 | already promoted into `analysis/pipeline.py` | **RETIRED 2026-07-27** |
 | `separation_qa` | 7 | 07-10 | isolated? | **PARK — setup script dependency** (see execution notes) |
 | `mashup_compat` | 7 | 07-23 | recent, isolated | PARK — leave for now |
 | `source_detection` | 10 | 07-19 | 7 refs, verify first | PARK — leave for now |
@@ -182,7 +182,8 @@ original ledger understated:
    `workspaces/separation_qa/download_msst_models.py` and writes smoke paths
    under that tree. Comment/doc refs elsewhere are fine; the setup script is a
    real external consumer.
-3. **`workspaces/streaming_mir` — safe to retire.** External hits are
-   comment/doc only (`scripts/render_set_stems.py`, tests, CLAUDE.md). No
-   `from workspaces.streaming_mir` outside the fork. Promoted findings live in
-   `analysis/` + `render_set_stems.py`.
+3. **`workspaces/streaming_mir` — RETIRED 2026-07-27** on `chore/repo-declutter`.
+   External hits were comment/doc only (`scripts/render_set_stems.py`, tests,
+   CLAUDE.md). No `from workspaces.streaming_mir` outside the fork. Promoted
+   findings live in `analysis/` + `render_set_stems.py`. Untracked
+   `ws2_snippets/` moved to `~/tracklist_attic/streaming_mir/`.
