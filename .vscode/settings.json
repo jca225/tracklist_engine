@@ -1,0 +1,21 @@
+{
+  "python-envs.defaultEnvManager": "ms-python.python:system",
+  "python.defaultInterpreterPath": "${workspaceFolder}/venvs/audio/bin/python",
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "venvs": true,
+    "data": true,
+    "logs": true,
+    "profiles": true,
+    "reports": true,
+    "deploy": true,
+    "cue-detr": true,
+    ".claude/worktrees": true
+  },
+  "search.exclude": {
+    "venvs": true,
+    "data": true,
+    "archive": true
+  }
+}

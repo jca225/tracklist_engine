@@ -1,6 +1,8 @@
 venv
 venvs
-.vscode
+# Shared explorer excludes stay tracked; local launch/debug configs stay private.
+.vscode/*
+!.vscode/settings.json
 __pycache__
 */__pycache__
 **/__pycache__
