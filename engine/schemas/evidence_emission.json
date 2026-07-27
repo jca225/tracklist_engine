@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alignment_algorithm.local/schemas/evidence_emission.json",
+  "title": "EvidenceEmission",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "emission_id",
+    "unit_id",
+    "source_spec_id",
+    "source_name",
+    "source_family",
+    "producer_run_id",
+    "abstained",
+    "native_score"
+  ],
+  "properties": {
+    "emission_id": { "type": "string", "format": "uuid" },
+    "unit_id": { "type": "string", "format": "uuid" },
+    "source_spec_id": { "type": "string", "format": "uuid" },
+    "source_name": { "type": "string", "minLength": 1 },
+    "source_family": { "type": "string", "minLength": 1 },
+    "producer_run_id": { "type": "string", "format": "uuid" },
+    "value": {},
+    "abstained": { "type": "boolean" },
+    "native_score": {
+      "type": "object",
+      "required": ["family", "value", "scale"],
+      "properties": {
+        "family": { "type": "string" },
+        "value": { "type": "number" },
+        "scale": { "type": "string" },
+        "support": { "type": ["integer", "null"] }
+      }
+    },
+    "evidence_ids": {
+      "type": "array",
+      "items": { "type": "string", "format": "uuid" },
+      "default": []
+    }
+  }
+}

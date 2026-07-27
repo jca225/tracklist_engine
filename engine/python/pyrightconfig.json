@@ -1,0 +1,14 @@
+{
+  "include": ["sensors", "tests"],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.13",
+  "typeCheckingMode": "strict",
+  "reportMissingImports": true,
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "extraPaths": [".venv/lib/python3.13/site-packages"]
+    }
+  ]
+}

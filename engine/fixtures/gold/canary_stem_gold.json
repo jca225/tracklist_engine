@@ -1,0 +1,12 @@
+{
+  "note": "Held-out human stem labels for canary gates. Do NOT regenerate from claimed_stem_lf emissions — independence is the point.",
+  "source": "ableton_gt_curated",
+  "labels": [
+    {"set_id": "2nvzlh2k", "row_index": 0, "stem": "acappella"},
+    {"set_id": "2nvzlh2k", "row_index": 1, "stem": "instrumental"},
+    {"set_id": "2nvzlh2k", "row_index": 2, "stem": "acappella"},
+    {"set_id": "1fsnxchk", "row_index": 0, "stem": "acappella"},
+    {"set_id": "1fsnxchk", "row_index": 1, "stem": "instrumental"},
+    {"set_id": "1fsnxchk", "row_index": 2, "stem": "acappella"}
+  ]
+}

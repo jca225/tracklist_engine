@@ -1,22 +1,14 @@
 # Alignment — State of Record (current best + settled decisions)
 
-> **As of 2026-07-27 @ `6ec532c`.** **RT1 honest baseline landed on `main`** (PR
-> #105): the de-poisoned + form-centric scorecard, regenerated bridge id_maps, and
-> human-verified GT completion are now canonical, and [alignment_status.md](alignment_status.md)
-> carries the honest numbers (identity 51%/61% per-span vs the old poisoned 82/84).
-> This is the honest-as-possible read of the **July `_lt` predictions**; the fully
-> honest number still needs a **re-inference on clean canonical** (decision #18's
-> remaining step). **Phase 1B identity capability = BUILT + MEASURED e2e, DEFERS on
-> BB12 (does not ship)** (PR #109). Blind-LF-alone defers (#23); **tight GT-span
-> re-measure** remains the open 1B front. **Crush completeness Phase B foundation
-> SHIPPED** (decision #27, PR #80): `content_history` ledger + never-drop-on-replace
-> + FLAC-PCM key + tombstones. The coverage lift is **not** that foundation — it is
-> the **derivation lever** (stem-regen never-drop + certificate-gated historical
-> emit; plan `phase-b-derivation-worker-path-plan.md`) still open as C0–C3 + pi gate.
-> Week-2 architecture priority: **E1 real-pseudo TRM flywheel** (unblocks Phase 2
-> structure after #26); reconcile the `e1-flywheel` worktree onto main before
-> treating it as current-best. Co-training/grammar artifacts on
-> `cotrain-corpus-harvest` still need reconcile.
+> **As of 2026-07-27 @ `6468d0ea`.** **RT1 honest baseline on `main`** (PR
+> #105); [alignment_status.md](alignment_status.md) is the numbers SSOT. **Phase 1B
+> DEFERS** on blind LF (#23); tight GT-span re-measure remains open. **Crush Phase B
+> foundation SHIPPED** (#27 / PR #80); **derivation lever C0–C3 code SHIPPED** (PR
+> #122) — pi acceptance still coordinated. Focus layout promoted `alignment/` +
+> reorganized `analysis/` (PR #124). **Rust provenance kernel incubates at
+> `engine/`** (#28) — fixtures canary only; not the live aligner. Week-2 priority
+> still **E1 real-pseudo TRM** + 1B tight-window; do not cut live drivers over to
+> `engine/` yet.
 >
 > **What this doc is.** The single *living* answer to "what is the aligner at its
 > best right now, and what have we settled on — so build ON this, don't
@@ -133,22 +125,22 @@ and co-training seam). Harness: `harness/`. Agentic loop: `agentic/`.
 
 > Append new entries at the top. Never rewrite history — supersede it.
 
-**#27 — Crush completeness Phase B foundation SHIPPED; coverage lift = derivation
-lever (still open).** `2026-07-27` · SETTLED (foundation) / OPEN (derivation C0–C3
-+ pi acceptance). PR #80 landed `ingest/content_history.py` (B1), never-drop-hash
-on replace (B2 half), FLAC-PCM/mdat payload keys in catalog (B3 part), and
-relink/detach tombstones (B4). That closes the *ledger substrate*. It does **not**
-by itself lift BB12 66%→~80%: payload-equal historical generations are already
-bound by the live payload key (redundant), and payload-different ones lack a
-sound certificate without **derivation lineage** (parent master hash on separated
-rows). Remaining work is the deferred plan
-[phase-b-derivation-worker-path-plan.md](superpowers/plans/2026-07-22-phase-b-derivation-worker-path-plan.md):
-C0 parent_* columns → C1 stem-regen never-drop in `run_separation` → C2
-certificate-gated historical emit → C3 `historical-content` id_source plumbing →
-coordinated pi migrate + BB re-export. **Do not force-deploy**; C1 touches GPU/Mac
-separation hot paths. Supersedes the "Phase B = next build" open-front wording
-and #17's "Next = Phase B". Phases C–E (prov backlog / fuzzy / write-back close)
-remain after the derivation lever.
+**#28 — Rust provenance kernel incubates at `engine/`; live aligner stays Python.**
+`2026-07-27` · SETTLED. The rewrite from `~/workspace/alignment_algorithm`
+(`dj_kernel` / `dj_migrate` + Python sensors) lands as top-level [`engine/`](../engine/)
+(PR #125): fixtures-only `make engine-check` / `make engine-canary`. It is **not**
+a rename of `alignment/` and must not receive live DAG drivers, pi DB apply, or
+scorecard paths until a later cutover with migrate-from-live-DB. Desktop
+`alignment/` + `analysis/` remain the operative SoR for Aug-1. Contract sync:
+[`docs/engine/dj_engine_pseudocode.md`](engine/dj_engine_pseudocode.md).
+
+**#27 — Crush completeness Phase B foundation SHIPPED; derivation lever code
+SHIPPED (pi gate remains).** `2026-07-27` · SETTLED (foundation + C0–C3 code) /
+OPEN (pi acceptance). PR #80 landed the ledger substrate; PR #122 landed
+derivation C0–C3 (parent lineage + historical-content catalog emit + stem-regen
+never-drop). Coverage lift still needs **coordinated pi migrate + BB re-export**
+— do not force-deploy. Phases C–E remain after that gate. Supersedes the
+"derivation C0–C3 still open" wording in earlier #27 drafts.
 
 **#26 — Synthetic-only TRM evidence cannot calibrate STRUCTURE yet.**
 `2026-07-26` · SETTLED. The live `.cache/trajectory/decoder_1fsnxchk.pt`
@@ -451,17 +443,13 @@ from scorers. Dead ends live in the EXPERIMENTS ledger.
 
 ## 3. Open fronts (what's live / undecided right now)
 
-- **Week 2 draft (Day 7 closeout of the 7-day plan).** Act I–II done; Act III
-  bought the provenance shape, not a finished Phase 2. Priority order: (1) **E1
+- **Week 2 draft (post focus-layout + engine incubate).** Priority order: (1) **E1
   real-pseudo TRM flywheel** — only path that unblocks STRUCTURE posteriors
-  after #26; starvation gate first; (2) **Phase 1B tight-window re-measure** +
-  BB11 extract / LOSO identity gate (#23) — parallel, does not block E1;
-  (3) placement research stays inside the off-path belief→timeline seam (shadow
-  lane only); (4) **hot-path / dual-read cutover** remains deferred until
-  placement + structure clear honest coverage on both sets; (5) reconcile
-  `trm-ablation-framework` / `cotrain-corpus-harvest` before treating those
-  branches as current-best. `alignment_status.md` was **not** regenerated this
-  closeout — no new complete scorer run; cite the existing SSOT until one lands.
+  after #26; (2) **Phase 1B tight-window re-measure** + BB11 / LOSO (#23);
+  (3) **pi acceptance** for derivation (#122 / #27) — coordinate, do not force;
+  (4) placement stays shadow-lane only; (5) **`engine/` cutover** deferred (#28)
+  until migrate talks to live DB — keep Python `alignment/` as operative.
+  Cite [alignment_status.md](alignment_status.md) until a fresh scorer run.
 - **Phase 2 structure posterior — blocked on real-distribution TRM (decision
   #26).** Belief→timeline plumbing, LOSO producer, and uncalibrated evidence
   artifacts (conv `decode_with_evidence` + TRM `trm_decode_with_evidence`) are

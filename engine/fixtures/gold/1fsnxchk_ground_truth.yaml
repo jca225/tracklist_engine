@@ -1,0 +1,128 @@
+set_id: 1fsnxchk
+source: ableton_session
+annotated_by: user
+tracks:
+- track: Post Malone - Congratulations  Acapella
+  slot_label: '002'
+  track_id: 281u6p4x
+  claimed_stem: acappella
+  ref_source: online_candidate
+  set_start_s: 64.4327
+  set_end_s: 94.3862
+  ref_start_s: 170.004
+  ref_end_s: 200.728
+  tempo_ratio: 1.02573
+  pitch_shift_semi: 1
+  audible_frac: 0.995
+  audible_end_s: 94.2355
+  gain_curve:
+  - - 64.433
+    - 1.0471
+  - - 94.208
+    - 1.0471
+  - - 94.386
+    - 0.0003
+  id_source: content
+- track: Two Friends - Emily (Remix)
+  slot_label: '003'
+  claimed_stem: instrumental
+  ref_source: demucs
+  set_start_s: 64.4457
+  set_end_s: 129.767
+  ref_start_s: 30.7515
+  ref_end_s: 206.514
+  tempo_ratio: 1
+  ref_segments:
+  - mix_start_s: 64.4457
+    mix_end_s: 92.8869
+    ref_start_s: 30.7515
+    ref_end_s: 59.1927
+    tempo_ratio: 1
+  - mix_start_s: 92.8869
+    mix_end_s: 123.895
+    ref_start_s: 154.392
+    ref_end_s: 185.4
+    tempo_ratio: 1
+  - mix_start_s: 123.895
+    mix_end_s: 129.767
+    ref_start_s: 200.642
+    ref_end_s: 206.514
+    tempo_ratio: 1
+  gain_curve:
+  - - 64.446
+    - 1
+  - - 92.887
+    - 1
+  - - 123.895
+    - 1
+  - - 129.767
+    - 1
+  id_source: abstain
+- track: Avicii - Fade Into Darkness (Studio Acapella)
+  slot_label: '004'
+  track_id: 728rvg5
+  claimed_stem: acappella
+  ref_source: online_candidate
+  set_start_s: 78.9993
+  set_end_s: 136.687
+  ref_start_s: 39.6076
+  ref_end_s: 157.133
+  tempo_ratio: 1.008
+  pitch_shift_semi: 1
+  is_loop: true
+  ref_segments:
+  - mix_start_s: 78.9993
+    mix_end_s: 82.8534
+    ref_start_s: 153.248
+    ref_end_s: 157.133
+    tempo_ratio: 1.008
+  - mix_start_s: 82.8832
+    mix_end_s: 86.6332
+    ref_start_s: 153.248
+    ref_end_s: 157.028
+    tempo_ratio: 1.008
+  - mix_start_s: 86.6481
+    mix_end_s: 90.4576
+    ref_start_s: 153.248
+    ref_end_s: 157.088
+    tempo_ratio: 1.008
+  - mix_start_s: 90.4874
+    mix_end_s: 92.9278
+    ref_start_s: 153.248
+    ref_end_s: 155.708
+    tempo_ratio: 1.008
+  - mix_start_s: 111.071
+    mix_end_s: 136.687
+    ref_start_s: 39.6076
+    ref_end_s: 65.4282
+    tempo_ratio: 1.008
+  audible_frac: 0.855
+  audible_end_s: 128.28
+  gain_curve:
+  - - 78.999
+    - 1
+  - - 82.853
+    - 1
+  - - 82.883
+    - 1
+  - - 86.633
+    - 1
+  - - 86.648
+    - 1
+  - - 90.458
+    - 1
+  - - 90.487
+    - 1
+  - - 92.928
+    - 1
+  - - 111.071
+    - 1
+  - - 125.735
+    - 1
+  - - 128.592
+    - 0.0003
+  - - 130.973
+    - 0.0003
+  - - 136.687
+    - 0.0003
+  id_source: content

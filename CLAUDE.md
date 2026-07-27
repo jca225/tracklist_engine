@@ -46,6 +46,9 @@ different synthetic-vs-real difficulty and generalization; read progress as thre
 curves, never one scalar.
 
 Everything outside this chain is one of:
+- An incubating provenance kernel: `engine/` (Rust `dj_kernel` /
+  `dj_migrate` + Python sensors). Fixtures-only canary today — **not** the live
+  aligner. See [engine/README.md](engine/README.md).
 - A vendored dependency: `cue-detr/` (DETR-based cue-point detection model,
   consumed only by `analysis/canonical_cues.py`).
 - Exploration / scratch: `eda/` notebooks.

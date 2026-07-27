@@ -53,12 +53,14 @@ _SUBPROCESS_FUNCS = frozenset({"run", "check_call", "check_output", "Popen", "ca
 # net-subprocess fences apply only where we actually shell out to pi-storage.
 _NET_SCOPE_ROOTS = ("scripts", "ingest", "analysis")
 # Keep in lockstep with guardrails.py SKIP_DIR_NAMES: msst_webui (vendored MSST
-# separation trainer) and data/ are not our code — their bug-classes aren't ours.
+# separation trainer), engine/ (incubating Rust kernel), and data/ are not the
+# Desktop DAG's bug-classes to police here.
 _SKIP_PARTS = frozenset(
     {
         "venvs",
         "cue-detr",
         "msst_webui",
+        "engine",
         "data",
         "__pycache__",
         ".git",
