@@ -149,10 +149,19 @@ def _reader_drop_count(root) -> int:
 ID_COVERAGE_MIN = 0.5
 
 
+_SOUND_ID_SOURCES = frozenset({"content", "historical-content"})
+
+
 def id_coverage(tracks) -> tuple[int, int, float]:
-    """(content-bound, total, fraction) of GT tracks whose id came from content."""
+    """(sound-bound, total, fraction) of GT tracks bound by content strata.
+
+    Sound strata = ``content`` (live catalog) ∪ ``historical-content``
+    (certificate-gated ledger emit). Fuzzy / abstain do not count.
+    """
     total = len(tracks)
-    resolved = sum(1 for t in tracks if getattr(t, "id_source", "") == "content")
+    resolved = sum(
+        1 for t in tracks if getattr(t, "id_source", "") in _SOUND_ID_SOURCES
+    )
     return resolved, total, (resolved / total if total else 1.0)
 
 
@@ -240,7 +249,7 @@ def main(argv: list[str] | None = None) -> int:
         abstained = [
             t.slot_label or t.label
             for t in gt.tracks
-            if getattr(t, "id_source", "") != "content"
+            if getattr(t, "id_source", "") not in _SOUND_ID_SOURCES
         ]
         print(
             f"REFUSING to export: only {resolved}/{total} tracks ({coverage:.0%}) "

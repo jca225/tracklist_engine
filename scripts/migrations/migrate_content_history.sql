@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS content_history (
     track_audio_id  INTEGER,
     content_sha256  TEXT,
     payload_sha256  TEXT,
+    parent_content_sha256 TEXT,
+    parent_payload_sha256 TEXT,
     op              TEXT,
     source          TEXT,
     generation      INTEGER NOT NULL DEFAULT 0,
