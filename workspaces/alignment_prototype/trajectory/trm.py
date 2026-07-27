@@ -248,6 +248,86 @@ def trm_decode_segments(
     return frames_to_segments(ref_bin, null_mask, bin_s)
 
 
+def trm_decode_with_evidence(
+    out: TRMOutput,
+    bin_s: float,
+    vocab: OffsetVocab,
+    *,
+    top_k: int = 3,
+) -> tuple[list[tuple[float, float, float]], TrajectoryEvidence]:
+    """Decode TRM segments and retain uncalibrated offset-class candidate mass.
+
+    Hard-path decode matches ``trm_decode_segments`` (final-step argmax). The
+    retained evidence is softmax over the fixed offset vocabulary — never a
+    calibrated STRUCTURE posterior. Candidates are projected back to ref bins
+    so downstream consumers share one frame schema with the conv decoder.
+    """
+    import numpy as np
+    import torch
+
+    from workspaces.alignment_prototype.trajectory.decode import (
+        EVIDENCE_KIND_TRM,
+        FrameCandidate,
+        FrameEvidence,
+        TrajectoryEvidence,
+    )
+    from .offset_coords import offset_labels_to_ref_bins
+    from .targets import frames_to_segments
+
+    if top_k < 1:
+        raise ValueError("top_k must be positive")
+    logits = out.logits[-1]
+    if logits.ndim != 3 or logits.shape[0] < 1 or logits.shape[-1] < 2:
+        raise ValueError("TRM logits must have shape (batch, mix_frames, vocab)")
+    row_logits = logits[0]
+    if row_logits.shape[0] == 0:
+        return [], TrajectoryEvidence(1, EVIDENCE_KIND_TRM, ())
+
+    labels = row_logits.argmax(dim=-1).detach().cpu().numpy().astype(np.int64)
+    ref_bin, null_mask = offset_labels_to_ref_bins(labels, vocab)
+    segments = frames_to_segments(ref_bin, null_mask, bin_s)
+
+    probabilities = torch.softmax(
+        row_logits.detach().float().cpu().to(dtype=torch.float64), dim=-1
+    )
+    p = probabilities.cpu().numpy()
+    denom = float(np.log(p.shape[1]))
+    frames: list[FrameEvidence] = []
+    for t, row in enumerate(p):
+        order = np.argsort(row)[::-1]
+        candidates = []
+        for index in order[: min(top_k, len(order))]:
+            idx = int(index)
+            if idx == vocab.null_index:
+                candidates.append(
+                    FrameCandidate(ref_bin=None, probability=float(row[idx]))
+                )
+            else:
+                off = int(vocab.index_to_offset_bin(np.asarray([idx]))[0])
+                candidates.append(
+                    FrameCandidate(ref_bin=int(t + off), probability=float(row[idx]))
+                )
+        selected = int(labels[t])
+        positive = row[row > 0.0]
+        entropy = float(-(positive * np.log(positive)).sum() / denom)
+        top_margin = float(row[order[0]] - row[order[1]])
+        frames.append(
+            FrameEvidence(
+                decoded_ref_bin=None if bool(null_mask[t]) else int(ref_bin[t]),
+                decoded_probability=float(row[selected]),
+                null_probability=float(row[vocab.null_index]),
+                normalized_entropy=entropy,
+                top1_top2_margin=top_margin,
+                candidates=tuple(candidates),
+            )
+        )
+    return segments, TrajectoryEvidence(
+        schema_version=1,
+        evidence_kind=EVIDENCE_KIND_TRM,
+        frames=tuple(frames),
+    )
+
+
 __all__ = [
     "TRMCore",
     "TRMDecoder",
@@ -256,4 +336,5 @@ __all__ = [
     "trm_offset_targets",
     "trm_offset_ce",
     "trm_decode_segments",
+    "trm_decode_with_evidence",
 ]
