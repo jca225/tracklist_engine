@@ -8,9 +8,10 @@ the shape:
 
     Probe.run(MixContext, RefContext, CandidatePool) -> AlignmentResult
 
-`confidence` is contracted to [0,1] (calibration is a separate step) so a single
-abstention threshold and cross-probe agreement are meaningful. A driver — LLM
-agent, deterministic pipeline, or trained model — is anything that produces
+`confidence` is contracted to [0,1] as a normalized *native probe signal*.
+Calibration is a separate, explicit step: this value is suitable for a probe's
+own abstention threshold but MUST NOT be relabeled as a posterior. A driver —
+LLM agent, deterministic pipeline, or trained model — is anything that produces
 AlignmentResults against this surface.
 """
 
@@ -41,13 +42,13 @@ class AlignmentResult:
 
     The single shape all probes and drivers emit. ``offset_s`` is the primary
     ref-time placement of the span start; ``segments`` carries the full piecewise
-    map when it's not a single line. ``confidence`` is calibrated to [0,1] so
-    ``abstain`` and cross-probe comparison are well-defined; ``source`` records
-    which probe/driver produced it (for ablation + agreement merging).
+    map when it's not a single line. ``confidence`` is a normalized native
+    signal in [0,1], not a posterior; ``source`` records which probe/driver
+    produced it (for ablation + agreement merging).
     """
 
     recording_id: str | None
-    offset_s: float
+    offset_s: float | None
     ref_end_s: float | None = None
     segments: tuple[RefSegment, ...] = ()
     tempo_ratio: float | None = None
@@ -58,9 +59,13 @@ class AlignmentResult:
     def __post_init__(self) -> None:
         if not (0.0 <= self.confidence <= 1.0):
             raise ValueError(
-                f"confidence must be calibrated to [0,1], got {self.confidence!r} "
+                f"confidence must be normalized to [0,1], got {self.confidence!r} "
                 f"(source={self.source!r})"
             )
+        if self.abstain and self.offset_s is not None:
+            raise ValueError("an abstaining result must use offset_s=None")
+        if not self.abstain and self.offset_s is None:
+            raise ValueError("a committed result requires offset_s")
 
     @classmethod
     def abstained(
@@ -69,7 +74,7 @@ class AlignmentResult:
         """A no-decision result — the probe declines rather than guesses."""
         return cls(
             recording_id=recording_id,
-            offset_s=0.0,
+            offset_s=None,
             confidence=0.0,
             abstain=True,
             source=source,

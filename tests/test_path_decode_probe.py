@@ -42,6 +42,7 @@ def test_loop_produces_multiple_segments():
 def test_no_segments_abstains():
     r = pdp.path_result_to_alignment([], 99.0, n_mix_frames=100, recording_id="rec1")
     assert r.abstain
+    assert r.offset_s is None
 
 
 def test_weak_path_abstains():

@@ -6,9 +6,9 @@ AlignmentResult.segments. offset_s/ref_end_s summarize the first/last segment.
 
 Confidence is the Viterbi path score divided by the number of mix frames — i.e.
 the mean per-frame match quality, net of jump penalties — clamped to [0,1]. That
-is a principled provisional signal (not a fabricated logistic), but it is the
-probe whose confidence most needs calibration (Phase 3.3); the mapping is isolated
-in `score_to_confidence` so calibration drops in there.
+is a principled normalized native signal (not a fabricated logistic and NOT a
+posterior), but it is the probe whose confidence most needs calibration. A
+separately versioned calibrator must turn it into an axis posterior.
 """
 
 from __future__ import annotations

@@ -705,7 +705,7 @@ def real_probe_scorer(
             results.append(
                 AlignmentResult(
                     recording_id=entry["recording_id"],
-                    offset_s=entry["offset_s"],
+                    offset_s=None if entry["abstain"] else entry["offset_s"],
                     confidence=entry["confidence"],
                     abstain=entry["abstain"],
                     source=name,

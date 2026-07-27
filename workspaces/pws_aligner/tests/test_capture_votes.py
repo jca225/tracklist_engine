@@ -231,6 +231,7 @@ def test_capture_span_abstainer_recorded(tmp_path, monkeypatch):
 
     assert by_name["chroma"]["abstain"]
     assert by_name["chroma"]["recording_id"] is None
+    assert by_name["chroma"]["offset_s"] is None
 
 
 def test_capture_span_raiser_becomes_abstain(tmp_path, monkeypatch):
