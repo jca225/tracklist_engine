@@ -102,7 +102,7 @@ them hides which one broke (the lesson of the collapse ladder:
 
 ## 3. The benchmark (cornerstone deliverable — build first)
 
-`workspaces/alignment_prototype/eval_bench.py`: score any method across sets on
+`alignment/eval_bench.py`: score any method across sets on
 the §2 metrics, with **abstain-aware coverage-vs-accuracy curves**, not single
 numbers. Datasets, in order of what they buy:
 

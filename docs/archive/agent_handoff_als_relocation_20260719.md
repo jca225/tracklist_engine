@@ -178,7 +178,7 @@ CCR→Killers) and the `tlp*` ids not in DB (slots 024w1, 026w1, 028w1).
 - `scripts/reconcile_works.py` — DB work-merge candidate report (found 0; dry-run).
 - `labeling/export_als_to_gt.py` — the exporter (DEFAULT_ALS is stale; Step B).
 - `tests/labeling/test_export_capture_fidelity.py` — the capture-fidelity fence.
-- `workspaces/alignment_prototype/score_timeline_vs_gt.py` — the scorer.
+- `alignment/score_timeline_vs_gt.py` — the scorer.
 - `eda/alignment/spectrogram_review/` — the review website (was running).
 
 ## Quick orientation commands for the next agent

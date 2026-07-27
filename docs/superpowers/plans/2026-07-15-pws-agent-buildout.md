@@ -201,6 +201,6 @@ at scale) before promoting out of `workspaces/`. Until then it stays a fork.
 ## Global constraints
 
 - `from __future__ import annotations`, full type hints, frozen dataclasses, pure functions.
-- No edits to `workspaces/alignment_prototype/`. No new GT. Verify every commit's tests yourself.
+- No edits to `alignment/`. No new GT. Verify every commit's tests yourself.
 - Each task: write the failing test, verify RED, implement, verify GREEN on the FULL new test
-  file, run the whole `workspaces/pws_aligner/tests/` suite, commit.
+  file, run the whole `pws_aligner/tests/` suite, commit.

@@ -23,16 +23,16 @@ import numpy as np
 from eda.alignment.ridge_diagnostic.cases import CaseRecord
 from eda.alignment.ridge_diagnostic.features import _mix_full_path, _resolve_ref_path
 from core.contracts import MANIFEST_FILENAME, load_manifest
-from workspaces.alignment_prototype.fp_index import FpKey
-from workspaces.alignment_prototype.fp_index import load as fp_load
-from workspaces.alignment_prototype.fp_index import save_cached
-from workspaces.alignment_prototype.landmark_fp import (
+from alignment.fp_index import FpKey
+from alignment.fp_index import load as fp_load
+from alignment.fp_index import save_cached
+from alignment.landmark_fp import (
     constellation,
     fingerprint_from_audio,
     hashes,
 )
-from workspaces.alignment_prototype.mix_fp_hits import load_mix_mono, offset_candidates
-from workspaces.alignment_prototype.refine_ref_offsets import find_aligning_dir
+from alignment.mix_fp_hits import load_mix_mono, offset_candidates
+from alignment.refine_ref_offsets import find_aligning_dir
 
 _HERE = Path(__file__).resolve().parent
 _OUT = _HERE / "out"

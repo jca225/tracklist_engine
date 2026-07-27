@@ -14,11 +14,10 @@ REPO         := ~/tracklist_engine
 PIP          := $(REPO)/venvs/web_crawler/bin/pip
 DB           := /mnt/storage/data/db/music_database.db
 
-.PHONY: help check check-fast check-corpus check-inventory docs-gc docs-gc-apply audit-gt scorecard race align-state align-ablate deploy deploy-storage deploy-worker \
+.PHONY: help check check-fast check-inventory docs-gc docs-gc-apply scorecard race align-state align-ablate deploy deploy-storage deploy-worker \
         restart-jobqueue start-scraper stop-scraper restart-retry \
         install-taste-scrape restart-taste-scrape logs-taste-scrape \
-        install-corpus-integrity logs-corpus-integrity \
-        status logs-jobqueue logs-scraper logs-retry queue ssh-storage ssh-worker
+                status logs-jobqueue logs-scraper logs-retry queue ssh-storage ssh-worker
 
 help:
 	@echo "Common targets:"
@@ -29,7 +28,6 @@ help:
 	@echo "  make land-verify      — after a rebase: did the merge produce parseable code"
 	@echo "  make docs-gc          — classify stale docs (dry run; docs-gc-apply archives)"
 	@echo "  make check-inventory SET=<set_id> — slot satisfaction gate (pi-storage)"
-	@echo "  make audit-gt SET=<set_id> — audio-verify a labeling .als vs the mix"
 	@echo "  make scorecard        — aligner per-span scorecard + failure attribution"
 	@echo "  make race             — race classical/agentic/ml drivers on one board (SETS=, DRIVERS=)"
 	@echo "  make align-ablate     — run paper ablation matrix → store → print headline + ablation tables"
@@ -102,12 +100,6 @@ docs-gc:
 docs-gc-apply:
 	venvs/audio/bin/python scripts/docs_gc.py --apply
 
-# Corpus data-integrity: identity/reference invariants over the CANONICAL DB
-# (the data analogue of `make check`, which polices the source tree). ERROR
-# rows must be 0; WARN rows are acquisition/routing backlogs.
-check-corpus:
-	ssh $(PI_STORAGE) 'cd $(REPO) && venvs/audio/bin/python scripts/corpus_integrity.py --db $(DB)'
-
 check-inventory:
 	@test -n "$(SET)" || (echo "Usage: make check-inventory SET=<set_id>" && exit 1)
 	venvs/audio/bin/python labeling/acquire/pull_set_for_alignment.py $(SET) --check
@@ -116,12 +108,6 @@ check-inventory:
 # ref-offset / pitch per clip). Run after (re-)labeling a set and before
 # trusting a GT export — catches silent timestamp drift the XML round-trip
 # tests cannot see.
-audit-gt:
-	@test -n "$(SET)" || (echo "Usage: make audit-gt SET=<set_id> [ALS=<path>]" && exit 1)
-	venvs/audio/bin/python -m workspaces.source_detection.als_audit --set-id $(SET) $(if $(ALS),--als $(ALS),)
-
-# One-command aligner scorecard: per-span table + impact-weighted failure
-# attribution for BB11+BB12 (reads out/<set>_predicted_timeline_lt.json).
 scorecard:
 	venvs/audio/bin/python -m eda.alignment.failure_analysis.build_span_table
 	venvs/audio/bin/python -m eda.alignment.failure_analysis.analyze
@@ -133,7 +119,7 @@ scorecard:
 SETS ?= 1fsnxchk,2nvzlh2k
 DRIVERS ?= classical,agentic,ml
 race:
-	venvs/audio/bin/python -m workspaces.alignment_prototype.drivers.race \
+	venvs/audio/bin/python -m alignment.drivers.race \
 		--sets $(SETS) --drivers $(DRIVERS) $(EXTRA)
 
 # Where is the aligner for a set, and can I trust its timeline? Prints each
@@ -147,9 +133,9 @@ align-state:
 # Compose grain reproduces `make race` with auto baseline-injection + a
 # reproducible JSONL ledger; CONFIG selects the matrix. Isolate-grain (decoder
 # bake-off) ships with the TRM build (docs/trm_decoder_bakeoff.md).
-CONFIG ?= workspaces/alignment_prototype/pipeline/configs/race_default.yaml
+CONFIG ?= alignment/pipeline/configs/race_default.yaml
 ablate:
-	venvs/audio/bin/python -m workspaces.alignment_prototype.pipeline.cli \
+	venvs/audio/bin/python -m alignment.pipeline.cli \
 		--config $(CONFIG) $(EXTRA)
 
 # E1 real pseudo-label flywheel (docs/trm_flywheel_design.md §7).
@@ -157,29 +143,29 @@ ablate:
 # SYNTH=generate_v2 root for the synthetic-only control.
 POOL ?= w1mgcjt
 EVAL ?= 2nvzlh2k
-TIMELINE ?= workspaces/alignment_prototype/out/$(POOL)_predicted_timeline.json
+TIMELINE ?= alignment/out/$(POOL)_predicted_timeline.json
 SYNTH ?= data/synthetic_mixes_v2
 trm-e1:
-	venvs/audio/bin/python -m workspaces.alignment_prototype.trajectory.e1 \
+	venvs/audio/bin/python -m alignment.trajectory.e1 \
 		--pool-set $(POOL) --eval-set $(EVAL) \
 		--base-timeline $(TIMELINE) --synthetic-root $(SYNTH) $(EXTRA)
 
 align-ablate:
-	venvs/audio/bin/python -m workspaces.alignment_prototype.experiments.cli $(EXTRA)
+	venvs/audio/bin/python -m alignment.experiments.cli $(EXTRA)
 
 # The kernel entrypoint (P1, docs/architecture_north_star.md): align ONE set
 # with the current-best default composition and score it. No flags needed.
 # The default driver flips to ml when it wins the race board (P3).
 align:
 	@test -n "$(SET)" || { echo "usage: make align SET=<set_id>"; exit 1; }
-	venvs/audio/bin/python -m workspaces.alignment_prototype.drivers.race \
+	venvs/audio/bin/python -m alignment.drivers.race \
 		--sets $(SET) --drivers classical $(EXTRA)
 
 # W1 determinism check (kernel_data_engine_plan): run the kernel twice, diff.
 # Expensive (two full aligns) — nightly-grade, not pre-commit. Byte-identity
 # is the bar; if MPS nondeterminism ever breaks it, the span diff below says
 # exactly where, and the plan's stated fallback is tolerance-based equality.
-PROTO_OUT := workspaces/alignment_prototype/out
+PROTO_OUT := alignment/out
 determinism:
 	@test -n "$(SET)" || { echo "usage: make determinism SET=<set_id>"; exit 1; }
 	$(MAKE) align SET=$(SET)
@@ -263,18 +249,8 @@ restart-taste-scrape:
 logs-taste-scrape:
 	ssh $(PI_WORKER) 'sudo journalctl -u tracklist-taste-scrape.service -f --no-hostname'
 
-# Install the daily corpus-integrity watcher on pi-storage (a failed run =
 # an ERROR-severity structural violation; it stays failed until the next clean
 # run). Requires the code to already be deployed (make deploy).
-install-corpus-integrity:
-	scp deploy/corpus-integrity.service $(PI_STORAGE):/tmp/corpus-integrity.service
-	scp deploy/corpus-integrity.timer $(PI_STORAGE):/tmp/corpus-integrity.timer
-	ssh $(PI_STORAGE) 'sudo mv /tmp/corpus-integrity.service /etc/systemd/system/tracklist-corpus-integrity.service && sudo mv /tmp/corpus-integrity.timer /etc/systemd/system/tracklist-corpus-integrity.timer && sudo systemctl daemon-reload && sudo systemctl enable --now tracklist-corpus-integrity.timer && sudo systemctl start tracklist-corpus-integrity.service'
-	@ssh $(PI_STORAGE) 'systemctl status tracklist-corpus-integrity.service --no-pager | head -12'
-
-logs-corpus-integrity:
-	ssh $(PI_STORAGE) 'sudo journalctl -u tracklist-corpus-integrity.service --no-pager | tail -40'
-
 # ---------- shells ----------------------------------------------------------
 
 ssh-storage:

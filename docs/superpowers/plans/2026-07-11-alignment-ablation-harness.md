@@ -4,7 +4,7 @@
 
 **Goal:** Build a reproducible ablation harness that runs every method/toggle through ONE scorer, stores per-span results in one long-format table, and emits paper tables with span-level bootstrap CIs.
 
-**Architecture:** A new `workspaces/alignment_prototype/experiments/` package generalizes the existing `drivers/race.py`: a declarative `Cell` matrix `{driver-config × set}` → each driver's existing `align_set(ctx)` produces a timeline (cached) → a single extracted `score_spans()` yields per-span rows → a sqlite long store → a report with paired span-bootstrap CIs. Reuses all drivers and the scorer; the only refactor to existing code is extracting the scorer's inline per-span loop into a reusable `score_spans()` (DRY — a second copy would be the metric drift we're eliminating).
+**Architecture:** A new `alignment/experiments/` package generalizes the existing `drivers/race.py`: a declarative `Cell` matrix `{driver-config × set}` → each driver's existing `align_set(ctx)` produces a timeline (cached) → a single extracted `score_spans()` yields per-span rows → a sqlite long store → a report with paired span-bootstrap CIs. Reuses all drivers and the scorer; the only refactor to existing code is extracting the scorer's inline per-span loop into a reusable `score_spans()` (DRY — a second copy would be the metric drift we're eliminating).
 
 **Tech Stack:** Python 3 (repo style: `from __future__ import annotations`, frozen dataclasses, full type hints), numpy, sqlite3 (stdlib — no pyarrow/pandas in `venvs/audio`), pytest.
 
@@ -26,7 +26,7 @@
 ## File Structure
 
 ```
-workspaces/alignment_prototype/
+alignment/
   score_timeline_vs_gt.py        # MODIFY: add SpanScore + score_spans(); main() consumes it
   experiments/
     __init__.py                  # CREATE (empty)
@@ -49,7 +49,7 @@ Makefile                         # MODIFY: add `align-ablate` target
 ## Task 1: Extract `score_spans()` from the scorer (the one refactor)
 
 **Files:**
-- Modify: `workspaces/alignment_prototype/score_timeline_vs_gt.py`
+- Modify: `alignment/score_timeline_vs_gt.py`
 - Test: `tests/alignment_prototype/test_score_spans.py`
 
 **Interfaces:**
@@ -74,15 +74,15 @@ class SpanScore:
 
 - [ ] **Step 1: Capture the current output as a golden file**
 
-The refactor must not change `main()`'s output. Pick a set whose `_lt` timeline exists locally (check `workspaces/alignment_prototype/out/`). Run WITHOUT `--fibers` (no audio needed):
+The refactor must not change `main()`'s output. Pick a set whose `_lt` timeline exists locally (check `alignment/out/`). Run WITHOUT `--fibers` (no audio needed):
 
 Run:
 ```bash
 cd /Users/johnnycabrahams/Desktop/tracklist_engine
-ls workspaces/alignment_prototype/out/*_predicted_timeline*.json
-venvs/audio/bin/python -m workspaces.alignment_prototype.score_timeline_vs_gt \
+ls alignment/out/*_predicted_timeline*.json
+venvs/audio/bin/python -m alignment.score_timeline_vs_gt \
   --set-id 1fsnxchk \
-  --timeline workspaces/alignment_prototype/out/1fsnxchk_predicted_timeline_lt.json \
+  --timeline alignment/out/1fsnxchk_predicted_timeline_lt.json \
   --decompose > /tmp/score_golden_1fsnxchk.txt 2>&1
 cat /tmp/score_golden_1fsnxchk.txt
 ```
@@ -95,10 +95,10 @@ Expected: the scorecard prints (identity, placement, trajectory, decomposition).
 from __future__ import annotations
 from pathlib import Path
 import pytest
-from workspaces.alignment_prototype.score_timeline_vs_gt import score_spans, SpanScore
+from alignment.score_timeline_vs_gt import score_spans, SpanScore
 
 REPO = Path(__file__).resolve().parents[2]
-TL = REPO / "workspaces/alignment_prototype/out/1fsnxchk_predicted_timeline_lt.json"
+TL = REPO / "alignment/out/1fsnxchk_predicted_timeline_lt.json"
 
 @pytest.mark.skipif(not TL.exists(), reason="needs local _lt timeline")
 def test_score_spans_returns_row_per_span():
@@ -130,9 +130,9 @@ In `score_timeline_vs_gt.py`:
 
 Run:
 ```bash
-venvs/audio/bin/python -m workspaces.alignment_prototype.score_timeline_vs_gt \
+venvs/audio/bin/python -m alignment.score_timeline_vs_gt \
   --set-id 1fsnxchk \
-  --timeline workspaces/alignment_prototype/out/1fsnxchk_predicted_timeline_lt.json \
+  --timeline alignment/out/1fsnxchk_predicted_timeline_lt.json \
   --decompose > /tmp/score_after_1fsnxchk.txt 2>&1
 diff /tmp/score_golden_1fsnxchk.txt /tmp/score_after_1fsnxchk.txt && echo "IDENTICAL"
 ```
@@ -141,7 +141,7 @@ Expected: `IDENTICAL` (empty diff). Then run the pytest from Step 2 — expected
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/score_timeline_vs_gt.py tests/alignment_prototype/test_score_spans.py
+git add alignment/score_timeline_vs_gt.py tests/alignment_prototype/test_score_spans.py
 git commit -m "refactor(scorer): extract score_spans() per-span rows; main() consumes it"
 ```
 
@@ -150,7 +150,7 @@ git commit -m "refactor(scorer): extract score_spans() per-span rows; main() con
 ## Task 2: `matrix.py` — cells, hashing, PAPER matrix
 
 **Files:**
-- Create: `workspaces/alignment_prototype/experiments/__init__.py` (empty), `workspaces/alignment_prototype/experiments/matrix.py`
+- Create: `alignment/experiments/__init__.py` (empty), `alignment/experiments/matrix.py`
 - Test: `tests/alignment_prototype/test_experiments_matrix.py`
 
 **Interfaces:**
@@ -161,7 +161,7 @@ git commit -m "refactor(scorer): extract score_spans() per-span rows; main() con
 ```python
 # tests/alignment_prototype/test_experiments_matrix.py
 from __future__ import annotations
-from workspaces.alignment_prototype.experiments.matrix import Cell, cell_hash, PAPER
+from alignment.experiments.matrix import Cell, cell_hash, PAPER
 
 def test_cell_hash_stable_and_order_independent():
     a = Cell(driver="classical", set_id="1fsnxchk", decoder="looptrace")
@@ -186,7 +186,7 @@ Expected: FAIL (`ModuleNotFoundError`).
 - [ ] **Step 2: Implement `matrix.py`**
 
 ```python
-# workspaces/alignment_prototype/experiments/matrix.py
+# alignment/experiments/matrix.py
 """Declarative ablation matrix: one Cell = one (driver-config, set) to run+score.
 
 An ablation is a pair of cells differing by exactly one field. Sets:
@@ -245,7 +245,7 @@ Expected: PASS.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/experiments/__init__.py workspaces/alignment_prototype/experiments/matrix.py tests/alignment_prototype/test_experiments_matrix.py
+git add alignment/experiments/__init__.py alignment/experiments/matrix.py tests/alignment_prototype/test_experiments_matrix.py
 git commit -m "feat(experiments): ablation matrix (Cell, cell_hash, PAPER)"
 ```
 
@@ -254,7 +254,7 @@ git commit -m "feat(experiments): ablation matrix (Cell, cell_hash, PAPER)"
 ## Task 3: `store.py` — sqlite long-format results store
 
 **Files:**
-- Create: `workspaces/alignment_prototype/experiments/store.py`
+- Create: `alignment/experiments/store.py`
 - Test: `tests/alignment_prototype/test_experiments_store.py`
 
 **Interfaces:**
@@ -267,9 +267,9 @@ git commit -m "feat(experiments): ablation matrix (Cell, cell_hash, PAPER)"
 # tests/alignment_prototype/test_experiments_store.py
 from __future__ import annotations
 from pathlib import Path
-from workspaces.alignment_prototype.experiments.store import Store
-from workspaces.alignment_prototype.experiments.matrix import Cell
-from workspaces.alignment_prototype.score_timeline_vs_gt import SpanScore
+from alignment.experiments.store import Store
+from alignment.experiments.matrix import Cell
+from alignment.score_timeline_vs_gt import SpanScore
 
 def _row(strict):
     return SpanScore("6", "recX", "acappella", "multiseg", True, 3.0, strict, strict, None, 2)
@@ -292,7 +292,7 @@ Expected: FAIL (`ModuleNotFoundError`).
 - [ ] **Step 2: Implement `store.py`**
 
 ```python
-# workspaces/alignment_prototype/experiments/store.py
+# alignment/experiments/store.py
 """Long-format sqlite results store: one row per (cell × span). Tidy — every
 paper table is a GROUP BY. Idempotent on (cell_hash, slot, recording_id)."""
 from __future__ import annotations
@@ -301,8 +301,8 @@ import sqlite3
 from dataclasses import asdict
 from pathlib import Path
 
-from workspaces.alignment_prototype.experiments.matrix import Cell, cell_hash
-from workspaces.alignment_prototype.score_timeline_vs_gt import SpanScore
+from alignment.experiments.matrix import Cell, cell_hash
+from alignment.score_timeline_vs_gt import SpanScore
 
 _COLS = [
     "cell_hash", "driver", "set_id", "decoder", "ml_gate", "live",
@@ -370,7 +370,7 @@ Expected: PASS.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/experiments/store.py tests/alignment_prototype/test_experiments_store.py
+git add alignment/experiments/store.py tests/alignment_prototype/test_experiments_store.py
 git commit -m "feat(experiments): sqlite long-format results store"
 ```
 
@@ -379,7 +379,7 @@ git commit -m "feat(experiments): sqlite long-format results store"
 ## Task 4: `run.py` — cell → timeline (cached) → score → store
 
 **Files:**
-- Create: `workspaces/alignment_prototype/experiments/run.py`
+- Create: `alignment/experiments/run.py`
 - Test: `tests/alignment_prototype/test_experiments_run.py`
 
 **Interfaces:**
@@ -393,9 +393,9 @@ git commit -m "feat(experiments): sqlite long-format results store"
 from __future__ import annotations
 import json
 from pathlib import Path
-from workspaces.alignment_prototype.experiments.run import run_cell
-from workspaces.alignment_prototype.experiments.matrix import Cell
-from workspaces.alignment_prototype.experiments.store import Store
+from alignment.experiments.run import run_cell
+from alignment.experiments.matrix import Cell
+from alignment.experiments.store import Store
 
 class _StubDriver:
     calls = 0
@@ -429,7 +429,7 @@ Expected: FAIL (`ModuleNotFoundError`).
 - [ ] **Step 2: Implement `run.py`**
 
 ```python
-# workspaces/alignment_prototype/experiments/run.py
+# alignment/experiments/run.py
 """Run a Cell: build its driver (with toggles), produce a timeline (cached by
 cell_hash), score via the single scorer, write per-span rows to the store.
 
@@ -441,13 +441,13 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from workspaces.alignment_prototype.drivers.base import SetContext
-from workspaces.alignment_prototype.drivers.classical import ClassicalDriver
-from workspaces.alignment_prototype.drivers.agentic import AgenticDriver
-from workspaces.alignment_prototype.drivers.ml import HybridMlDriver
-from workspaces.alignment_prototype.experiments.matrix import Cell, cell_hash
-from workspaces.alignment_prototype.experiments.store import Store
-from workspaces.alignment_prototype.score_timeline_vs_gt import score_spans
+from alignment.drivers.base import SetContext
+from alignment.drivers.classical import ClassicalDriver
+from alignment.drivers.agentic import AgenticDriver
+from alignment.drivers.ml import HybridMlDriver
+from alignment.experiments.matrix import Cell, cell_hash
+from alignment.experiments.store import Store
+from alignment.score_timeline_vs_gt import score_spans
 
 _CACHE = Path(__file__).resolve().parent / "cache"
 
@@ -498,7 +498,7 @@ Expected: PASS.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/experiments/run.py tests/alignment_prototype/test_experiments_run.py
+git add alignment/experiments/run.py tests/alignment_prototype/test_experiments_run.py
 git commit -m "feat(experiments): run_cell — cached timeline + single-scorer rows to store"
 ```
 
@@ -507,7 +507,7 @@ git commit -m "feat(experiments): run_cell — cached timeline + single-scorer r
 ## Task 5: `report.py` — tables + span-bootstrap CIs
 
 **Files:**
-- Create: `workspaces/alignment_prototype/experiments/report.py`
+- Create: `alignment/experiments/report.py`
 - Test: `tests/alignment_prototype/test_experiments_report.py`
 
 **Interfaces:**
@@ -519,7 +519,7 @@ git commit -m "feat(experiments): run_cell — cached timeline + single-scorer r
 ```python
 # tests/alignment_prototype/test_experiments_report.py
 from __future__ import annotations
-from workspaces.alignment_prototype.experiments.report import (
+from alignment.experiments.report import (
     mean_ci, paired_delta_ci, headline_table,
 )
 
@@ -553,7 +553,7 @@ Expected: FAIL (`ModuleNotFoundError`).
 - [ ] **Step 2: Implement `report.py`**
 
 ```python
-# workspaces/alignment_prototype/experiments/report.py
+# alignment/experiments/report.py
 """Paper tables from the long store. CIs are span-level bootstrap ONLY (n=2 sets
 forbids a set-level CI). Every trajectory table carries the fiber − strict gap."""
 from __future__ import annotations
@@ -631,7 +631,7 @@ Expected: PASS.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/experiments/report.py tests/alignment_prototype/test_experiments_report.py
+git add alignment/experiments/report.py tests/alignment_prototype/test_experiments_report.py
 git commit -m "feat(experiments): report tables + span-bootstrap CIs"
 ```
 
@@ -640,13 +640,13 @@ git commit -m "feat(experiments): report tables + span-bootstrap CIs"
 ## Task 6: `cli.py` + `make align-ablate` + guard/smoke
 
 **Files:**
-- Create: `workspaces/alignment_prototype/experiments/cli.py`
+- Create: `alignment/experiments/cli.py`
 - Modify: `Makefile`
 - Test: extend `tests/alignment_prototype/test_experiments_report.py` with a guard test (or a new `test_experiments_guard.py`).
 
 **Interfaces:**
 - Consumes: everything above.
-- Produces: `python -m workspaces.alignment_prototype.experiments.cli [--fibers] [--matrix paper]` → runs every PAPER cell through `run_cell`, then prints the headline + the C4 and driver ablations. Classical base timelines are computed once per set and reused for agentic/ml cells.
+- Produces: `python -m alignment.experiments.cli [--fibers] [--matrix paper]` → runs every PAPER cell through `run_cell`, then prints the headline + the C4 and driver ablations. Classical base timelines are computed once per set and reused for agentic/ml cells.
 
 - [ ] **Step 1: Write the guard test (single scorer)**
 
@@ -658,7 +658,7 @@ from pathlib import Path
 
 EX
 
-P = Path(__file__).resolve().parents[2] / "workspaces/alignment_prototype/experiments"
+P = Path(__file__).resolve().parents[2] / "alignment/experiments"
 
 def test_only_score_spans_supplies_metrics():
     """No experiments module may import the raw trajectory_acc or a duplicate
@@ -680,7 +680,7 @@ Expected: FAIL to parse until you remove the `EX` line, then PASS (no experiment
 - [ ] **Step 2: Implement `cli.py`**
 
 ```python
-# workspaces/alignment_prototype/experiments/cli.py
+# alignment/experiments/cli.py
 """Run the PAPER ablation matrix → store → print headline + ablation tables.
 
 Base classical timelines are computed once per set and reused for agentic/ml
@@ -690,10 +690,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from workspaces.alignment_prototype.experiments.matrix import PAPER, Cell
-from workspaces.alignment_prototype.experiments.run import run_cell, build_driver, _cached_timeline
-from workspaces.alignment_prototype.experiments.store import Store
-from workspaces.alignment_prototype.experiments import report
+from alignment.experiments.matrix import PAPER, Cell
+from alignment.experiments.run import run_cell, build_driver, _cached_timeline
+from alignment.experiments.store import Store
+from alignment.experiments import report
 
 _RESULTS = Path(__file__).resolve().parent / "results" / "scores.db"
 
@@ -738,7 +738,7 @@ Add to `Makefile` (near the `race:` target):
 
 ```makefile
 align-ablate:
-	venvs/audio/bin/python -m workspaces.alignment_prototype.experiments.cli $(EXTRA)
+	venvs/audio/bin/python -m alignment.experiments.cli $(EXTRA)
 ```
 
 - [ ] **Step 4: End-to-end smoke (opt-in — needs real audio/DB; may run on pi)**
@@ -754,7 +754,7 @@ Expected: a headline table and three ablation rows, including the C4 (looptrace 
 ```bash
 venvs/audio/bin/python -m pytest tests/alignment_prototype/ -v
 make check
-git add workspaces/alignment_prototype/experiments/cli.py Makefile tests/alignment_prototype/test_experiments_guard.py
+git add alignment/experiments/cli.py Makefile tests/alignment_prototype/test_experiments_guard.py
 git commit -m "feat(experiments): cli + make align-ablate + single-scorer guard"
 ```
 

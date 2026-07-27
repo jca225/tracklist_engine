@@ -4,7 +4,7 @@ Validated by extract_warp_table.py (two channel-locked axes) + decompose_bpm.py
 (acappella warp is derived from the BPM gap, 70-75% within ±5%). The generator
 should NOT sample tempo_ratio directly; it samples BPMs and derives.
 
-Artifact schema (consumed by workspaces/alignment_prototype/synthetic_mix/):
+Artifact schema (consumed by alignment/synthetic_mix/):
   bed_tempo:      near-native jitter for instrumental/regular beds
   overlay_warp:   DERIVED model for acappella/regular overlays + octave-fold prob
   cut_up:         segment/jump model for the instrumental bed channel (axis 2)

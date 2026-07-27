@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-19  
 **Status:** implemented (shadow); real-set outcome ledgered NO-GO for peak HuBERT  
-**Home:** `workspaces/alignment_prototype/fp_segments/` (shadow-only; not canonical)  
+**Home:** `alignment/fp_segments/` (shadow-only; not canonical)  
 **Prerequisite:** `e704e53` like-for-like stem lanes; vocal landmark FP ledgered
 NO-GO in `attic/EXPERIMENTS.md`
 
@@ -95,7 +95,7 @@ Default for `--lane vocal` becomes `hubert`. Instrumental ignores
 `--observation` (or rejects non-landmark).
 
 Output remains a shadow segment bank under
-`workspaces/alignment_prototype/out/fp_segments/`, never a PredictedTimeline.
+`alignment/out/fp_segments/`, never a PredictedTimeline.
 
 ### Evaluation protocol
 
@@ -118,7 +118,7 @@ Output remains a shadow segment bank under
 | Modify | `fp_segments/run.py` (`--observation`, vocal branch) |
 | Create | `tests/alignment_prototype/test_fp_segment_hubert_retrieve.py` |
 | Modify | `docs/superpowers/plans/2026-07-19-sparse-fingerprint-segment-aligner.md` (checkpoint) |
-| Modify | `workspaces/alignment_prototype/attic/EXPERIMENTS.md` (after real shadow) |
+| Modify | `alignment/attic/EXPERIMENTS.md` (after real shadow) |
 
 Optionally a tiny `fp_segments/prepare_hubert.py` only if whole-mix HuBERT
 precompute needs an explicit CLI; otherwise `_ensure_feat` on first run is

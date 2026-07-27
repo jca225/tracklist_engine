@@ -54,7 +54,7 @@ re-opening one needs new evidence, not a fresh opinion.
 - **Timelines are stale-prone artifacts.** `out/*_timeline.json` are un-tracked
   and overwritten by any `infer`/`make race`. NEVER compare timelines of
   different vintages. The cohort guard in
-  `workspaces/alignment_prototype/experiments/bb_baselines.py` (mtime spread >
+  `alignment/experiments/bb_baselines.py` (mtime spread >
   6 h → hard fail) exists for this — F0 generalizes it to the main scorecard.
 - **Placement is fiber-fair by nearest-instance match** (`score_spans` matches
   each span to its nearest same-recording GT instance). Do NOT exclude
@@ -72,7 +72,7 @@ re-opening one needs new evidence, not a fresh opinion.
   misses most real repeats, so any fiber-based scoring is a *lower bound* — a
   span flagged `n_instances=1` may still be an unflagged repeat. F0 must treat
   this honestly, not paper over it.
-- Dead ends: read `workspaces/alignment_prototype/attic/EXPERIMENTS.md` before
+- Dead ends: read `alignment/attic/EXPERIMENTS.md` before
   re-testing ANY idea.
 
 ---
@@ -106,8 +106,8 @@ guard is lifted out of `experiments/bb_baselines.py` into a shared helper the ma
 ### Task F0.1: fiber equivalence classes from GT
 
 **Files:**
-- Create: `workspaces/alignment_prototype/fiber_assignment.py`
-- Test: `workspaces/alignment_prototype/test_fiber_assignment.py`
+- Create: `alignment/fiber_assignment.py`
+- Test: `alignment/test_fiber_assignment.py`
 
 **Interfaces:**
 - Produces: `equivalence_classes(gt_rows: list[dict], fibers) -> dict[str, int]`
@@ -118,7 +118,7 @@ guard is lifted out of `experiments/bb_baselines.py` into a shared helper the ma
 - [ ] **Step 1: failing test** — two GT rows of the same recording whose
   ref-starts fall in one validated fiber share a class; a third, unflagged
   single-instance row is its own class.
-- [ ] **Step 2:** run `pytest workspaces/alignment_prototype/test_fiber_assignment.py::test_equivalence_classes -v` → FAIL.
+- [ ] **Step 2:** run `pytest alignment/test_fiber_assignment.py::test_equivalence_classes -v` → FAIL.
 - [ ] **Step 3:** implement `equivalence_classes` (group by fiber id; singletons for `fiber_id<0` / `n_instances<2`).
 - [ ] **Step 4:** run test → PASS.
 - [ ] **Step 5:** commit `feat(scorer): fiber equivalence classes (validated-only, low-recall-honest)`.
@@ -126,7 +126,7 @@ guard is lifted out of `experiments/bb_baselines.py` into a shared helper the ma
 ### Task F0.2: optimal fiber-consistent assignment
 
 **Files:**
-- Modify: `workspaces/alignment_prototype/fiber_assignment.py`
+- Modify: `alignment/fiber_assignment.py`
 - Test: same test file
 
 **Interfaces:**
@@ -147,8 +147,8 @@ guard is lifted out of `experiments/bb_baselines.py` into a shared helper the ma
 ### Task F0.3: wire into trajectory_acc, keep strict as diagnostic
 
 **Files:**
-- Modify: `workspaces/alignment_prototype/path_decode.py:508` (`trajectory_acc`)
-- Test: `workspaces/alignment_prototype/test_fiber_assignment.py`
+- Modify: `alignment/path_decode.py:508` (`trajectory_acc`)
+- Test: `alignment/test_fiber_assignment.py`
 
 **Interfaces:**
 - Consumes: `assign` from F0.2.
@@ -167,11 +167,11 @@ guard is lifted out of `experiments/bb_baselines.py` into a shared helper the ma
 ### Task F0.4: lift the cohort guard into the shared scorer
 
 **Files:**
-- Create: `workspaces/alignment_prototype/timeline_provenance.py` (move
+- Create: `alignment/timeline_provenance.py` (move
   `_git_sha`/`driver_provenance`/`cohort_spread_s` out of `experiments/bb_baselines.py`)
 - Modify: `experiments/bb_baselines.py` (import from the new module — no logic change),
   `score_timeline_vs_gt.py` (stamp provenance + warn on stale cohort in its report)
-- Test: `workspaces/alignment_prototype/test_timeline_provenance.py`
+- Test: `alignment/test_timeline_provenance.py`
 
 - [ ] **Step 1: failing test** — a cohort spanning >6 h is flagged incoherent; the
   extracted functions return the same values the bb_baselines tests already pin.
@@ -183,7 +183,7 @@ guard is lifted out of `experiments/bb_baselines.py` into a shared helper the ma
 ### Task F0.5: regression-pin the canonical numbers
 
 **Files:**
-- Create: `workspaces/alignment_prototype/test_scorecard_regression.py`
+- Create: `alignment/test_scorecard_regression.py`
 
 - [ ] **Step 1:** write a test that runs `score_spans` on the committed BB12
   coherent timelines and asserts the headline placement medians match
@@ -203,7 +203,7 @@ are measurable.
 
 **Directive, not a TDD plan.** Sensor phase is frozen; the actor is the wall.
 
-- **Where:** `workspaces/alignment_prototype/trajectory/` (`train.py`, `model.py`,
+- **Where:** `alignment/trajectory/` (`train.py`, `model.py`,
   `decode.py`, `targets.py`, `recon_loss.py`, `synthetic_adapter.py`). Current
   state: scaffold built, held-out BB11 ~0.42/0.49 (verify vs status doc).
 - **First action:** with F0's fiber-consistent scorer live, re-baseline the
@@ -237,8 +237,8 @@ are measurable.
 
 **Directive.** The only path to 40k without hand-GT.
 
-- **Where:** `workspaces/alignment_prototype/cotrain.py`,
-  `workspaces/pws_aligner/` (`cotrain_seam.py`, `label_model.py`, `verifier.py`,
+- **Where:** `alignment/cotrain.py`,
+  `pws_aligner/` (`cotrain_seam.py`, `label_model.py`, `verifier.py`,
   `run_phase1.py`). **A parallel agent was active here on 2026-07-17** — `git log`
   + scan `out/` mtimes before touching (settled coordination rule; never revert
   their workspace).
@@ -267,6 +267,6 @@ are measurable.
 - Living record: [docs/alignment_state_of_record.md](../../alignment_state_of_record.md)
   (run `/align-checkpoint` after any front moves).
 - Numbers SSOT: [docs/alignment_status.md](../../alignment_status.md).
-- Dead ends: `workspaces/alignment_prototype/attic/EXPERIMENTS.md`.
+- Dead ends: `alignment/attic/EXPERIMENTS.md`.
 - This session's banked deliverables: cohort guard + fiber-fair placement metric
   in `experiments/bb_baselines.py`; coherent BB12 result; BB11 regenerated on Vast.

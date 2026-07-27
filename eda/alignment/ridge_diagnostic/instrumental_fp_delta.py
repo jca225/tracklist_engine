@@ -13,7 +13,7 @@ import json
 from copy import deepcopy
 from pathlib import Path
 
-from workspaces.alignment_prototype.drivers.base import (
+from alignment.drivers.base import (
     finalize,
     gt_stem_by_slot,
     norm_slot,

@@ -3,8 +3,8 @@
 
 This is the map read at ``labeling/fixtures/id_maps/<set_id>.json`` by the
 scorer (``eda/alignment/failure_analysis/build_span_table.py``,
-``workspaces/alignment_prototype/score_timeline_vs_gt.py``) and by inference
-(``workspaces/alignment_prototype/infer.py`` ``_manifest_by_tid``). Its job is to
+``alignment/score_timeline_vs_gt.py``) and by inference
+(``alignment/infer.py`` ``_manifest_by_tid``). Its job is to
 put predictions and GT into ONE id-namespace: a predicted span / manifest row
 may be keyed by any scrape-namespace id (``set_track_slots.tlp_id`` — a bare
 number, or ``track_id`` — a hash or ``tlp<n>`` for un-resolved sided rows), while

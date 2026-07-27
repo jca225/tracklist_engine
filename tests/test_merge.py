@@ -3,7 +3,7 @@ This is the deterministic driver's fusion rule — the payoff of a shared contra
 
 from __future__ import annotations
 
-from workspaces.alignment_prototype.harness import AlignmentResult, merge
+from alignment.harness import AlignmentResult, merge
 
 
 def _r(rec, off, conf, *, source="p", abstain=False):

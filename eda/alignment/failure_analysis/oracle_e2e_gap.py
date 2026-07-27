@@ -65,18 +65,18 @@ if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
 from eda.alignment.failure_analysis.build_span_table import _load_gt
-from workspaces.alignment_prototype.path_decode import (
+from alignment.path_decode import (
     _gt_pieces,
     _pieces,
     _ref_at,
     _span_class,
     trajectory_acc,
 )
-from workspaces.alignment_prototype.score_timeline_vs_gt import (
+from alignment.score_timeline_vs_gt import (
     _pred_segs_from_span,
 )
 
-_ALN = _REPO / "workspaces" / "alignment_prototype"
+_ALN = _REPO / "alignment"
 
 SETS = [
     ("1fsnxchk", "BB12", _REPO / "labeling/fixtures/bb12_ground_truth.yaml"),

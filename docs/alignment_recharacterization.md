@@ -195,8 +195,8 @@ is a concrete experiment, not a vibe.
 
 - BB ablation + per-axis + LOSO: `experiments/results/scores.db` via
   `make align-ablate` (2026-07-12); regenerate with
-  `python -m workspaces.alignment_prototype.experiments.cli --fibers`.
-- UnmixDB: `python -m workspaces.alignment_prototype.external.eval_bench
+  `python -m alignment.experiments.cli --fibers`.
+- UnmixDB: `python -m alignment.external.eval_bench
   --unmixdb-root ~/data/unmixdb-v1.1 --methods grid_mf,no_warp,nmf,dtw,fused,fused_resample
   --stratified --identity --n-distractors 50 --max-mixes 150`.
 - Headline/loss-decomposition/fiber provenance: [alignment_status.md](alignment_status.md).

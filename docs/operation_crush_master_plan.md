@@ -490,7 +490,7 @@ with a **pre-registered kill line**, or stays dead. Triage into three buckets:
   refuted twice; the ledger says do not re-test.** Only the *continuous/cotrain*
   PWS flavor is live. Same rule for any attic KILL marked double-sourced.
 
-Deliverable: walk `workspaces/alignment_prototype/attic/EXPERIMENTS.md` + the
+Deliverable: walk `alignment/attic/EXPERIMENTS.md` + the
 closed-experiments ledger and tag every entry 1/2/3 before any revival begins.
 
 ---

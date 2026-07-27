@@ -118,12 +118,12 @@ Preferred shadow mode; not default-driver yet.
 
 ```bash
 venvs/audio/bin/python \
-  -m workspaces.alignment_prototype.fp_segments.run \
+  -m alignment.fp_segments.run \
   --set-id 2nvzlh2k \
-  --timeline workspaces/alignment_prototype/out/2nvzlh2k_agentic_baseline_gtstem.json \
+  --timeline alignment/out/2nvzlh2k_agentic_baseline_gtstem.json \
   --mix-hash-cache eda/alignment/ridge_diagnostic/out/stem_mix_hash_cache \
   --stem-overrides labeling/fixtures/bb11_ground_truth.yaml \
-  --output workspaces/alignment_prototype/out/fp_segments/2nvzlh2k.json
+  --output alignment/out/fp_segments/2nvzlh2k.json
 ```
 
 `--stem-overrides` is evaluation-only and compensates for historical timelines
@@ -136,23 +136,23 @@ vocal hashes:
 
 ```bash
 venvs/audio/bin/python \
-  -m workspaces.alignment_prototype.fp_segments.prepare \
+  -m alignment.fp_segments.prepare \
   --set-id 2nvzlh2k \
-  --timeline workspaces/alignment_prototype/out/2nvzlh2k_agentic_baseline_gtstem.json \
+  --timeline alignment/out/2nvzlh2k_agentic_baseline_gtstem.json \
   --lane vocal \
-  --mix-hash-cache workspaces/alignment_prototype/out/fp_segments/cache/mix \
-  --ref-fp-cache workspaces/alignment_prototype/out/fp_segments/cache/ref \
+  --mix-hash-cache alignment/out/fp_segments/cache/mix \
+  --ref-fp-cache alignment/out/fp_segments/cache/ref \
   --stem-overrides labeling/fixtures/bb11_ground_truth.yaml
 
 venvs/audio/bin/python \
-  -m workspaces.alignment_prototype.fp_segments.run \
+  -m alignment.fp_segments.run \
   --set-id 2nvzlh2k \
-  --timeline workspaces/alignment_prototype/out/2nvzlh2k_agentic_baseline_gtstem.json \
+  --timeline alignment/out/2nvzlh2k_agentic_baseline_gtstem.json \
   --lane vocal \
-  --mix-hash-cache workspaces/alignment_prototype/out/fp_segments/cache/mix \
-  --ref-fp-cache workspaces/alignment_prototype/out/fp_segments/cache/ref \
+  --mix-hash-cache alignment/out/fp_segments/cache/mix \
+  --ref-fp-cache alignment/out/fp_segments/cache/ref \
   --stem-overrides labeling/fixtures/bb11_ground_truth.yaml \
-  --output workspaces/alignment_prototype/out/fp_segments/2nvzlh2k_vocal.json
+  --output alignment/out/fp_segments/2nvzlh2k_vocal.json
 ```
 
 The operative pseudocode is:
@@ -260,7 +260,7 @@ Do not create a second fingerprint implementation or a second timeline schema.
 
 ## Public contracts
 
-Create `workspaces/alignment_prototype/fp_segments/`.
+Create `alignment/fp_segments/`.
 
 ### `schema.py`
 

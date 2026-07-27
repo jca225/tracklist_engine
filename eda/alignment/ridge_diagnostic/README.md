@@ -47,7 +47,7 @@ venvs/audio/bin/python -m eda.alignment.ridge_diagnostic.run --n 2 --min-place-e
 
 ## Inputs
 
-- **Timelines:** `workspaces/alignment_prototype/out/<set_id>_agentic_timeline.json`
+- **Timelines:** `alignment/out/<set_id>_agentic_timeline.json`
   (preferred) or `*_predicted_timeline*.json`, scored via `score_timeline_vs_gt`.
 - **Ground truth:** `labeling/fixtures/bb11_ground_truth.yaml`,
   `labeling/fixtures/bb12_ground_truth.yaml`.
@@ -96,5 +96,5 @@ buried in the full mix; a follow-up pass could re-run those channels on
 ## Non-goals
 
 - **Do not** build or train a mashup-invariant encoder from this package.
-- **Do not** add probes/channels to `workspaces/alignment_prototype/{infer,harness,drivers}`.
+- **Do not** add probes/channels to `alignment/{infer,harness,drivers}`.
 - **Do not** claim statistical generalization from n&lt;50.

@@ -5,7 +5,7 @@
 > multi-candidate pool + a **gated** audio-perception override. Built + measured
 > against the RT1 honest baseline (Phase 1A), on branch
 > `provenance-engine-phase1`. Grounded in
-> [../../workspaces/alignment_prototype/open_set_acappella_identity_findings.md](../../workspaces/alignment_prototype/open_set_acappella_identity_findings.md)
+> [../../alignment/open_set_acappella_identity_findings.md](../../alignment/open_set_acappella_identity_findings.md)
 > and the law audit ([law_audit.md](law_audit.md) §4/§5).
 
 ## 0. The defect, precisely

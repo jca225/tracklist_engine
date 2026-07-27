@@ -54,7 +54,7 @@ Reading before experimenting saves days:
 
 - **Decode-geometry tie-breakers** for instance-selection (flat penalty,
   directional, magnitude-graded `--warp-jump`) — all net neutral-to-negative.
-  See `workspaces/alignment_prototype/looptrace/NOTES.md`. Audio is identical
+  See `alignment/looptrace/NOTES.md`. Audio is identical
   across a true repeat, so no position/geometry heuristic can disambiguate.
 - **"Make synthetic emit loops/multiseg"** — already done; the generator emits
   them (`generate_v2 → labels_v2`). The un-run lever is repeat *ambiguity*, not

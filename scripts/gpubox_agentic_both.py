@@ -143,7 +143,7 @@ def main() -> int:
         "eda/alignment/__init__.py",
         "eda/alignment/mert_vectors.py",  # mert_store.probe_vector
         "workspaces/section_hsmm",  # stem_placement → similarity_probe._hubert
-        "workspaces/alignment_prototype",
+        "alignment",
         "scripts/vast_bootstrap.sh",
     ):
         src = REPO / rel
@@ -171,8 +171,8 @@ def main() -> int:
             excludes=excludes if src.is_dir() else (),
         )
     box.session.exec(
-        f"mkdir -p {CODE}/workspaces/alignment_prototype/.cache "
-        f"{CODE}/workspaces/alignment_prototype/out",
+        f"mkdir -p {CODE}/alignment/.cache "
+        f"{CODE}/alignment/out",
         timeout=60,
     )
 
@@ -203,12 +203,12 @@ def main() -> int:
 
     # --- sync caches + slim aligning (BB11 + BB10) --------------------------
     print("[push] mert/lyrics/fp_index/slot_cues caches…")
-    cache = REPO / "workspaces/alignment_prototype/.cache"
+    cache = REPO / "alignment/.cache"
     box.session.exec(
-        f"mkdir -p {CODE}/workspaces/alignment_prototype/.cache/mert "
-        f"{CODE}/workspaces/alignment_prototype/.cache/lyrics "
-        f"{CODE}/workspaces/alignment_prototype/.cache/fp_index "
-        f"{CODE}/workspaces/alignment_prototype/.cache/slot_cues",
+        f"mkdir -p {CODE}/alignment/.cache/mert "
+        f"{CODE}/alignment/.cache/lyrics "
+        f"{CODE}/alignment/.cache/fp_index "
+        f"{CODE}/alignment/.cache/slot_cues",
         timeout=30,
     )
     for name in ("mert", "lyrics", "fp_index", "slot_cues"):
@@ -219,7 +219,7 @@ def main() -> int:
         print(f"  push cache/{name}…")
         box.session.push(
             str(src) + "/",
-            f"{CODE}/workspaces/alignment_prototype/.cache/{name}/",
+            f"{CODE}/alignment/.cache/{name}/",
             timeout=1800,
             delete=False,
         )
@@ -271,7 +271,7 @@ def main() -> int:
         f"cd {CODE} && PYTHONPATH={CODE} {PY} - <<'PY'\n"
         "import json, sys\n"
         "from pathlib import Path\n"
-        "from workspaces.alignment_prototype.infer import _vocal_ref_path\n"
+        "from alignment.infer import _vocal_ref_path\n"
         "root = Path('/root/aligning')\n"
         "ok = True\n"
         f"for sid in [{sid_list}]:\n"
@@ -310,8 +310,8 @@ def main() -> int:
 
     # Need predicted timelines on the box
     print("[push] predicted timelines…")
-    out_dir = REPO / "workspaces/alignment_prototype/out"
-    box.session.exec(f"mkdir -p {CODE}/workspaces/alignment_prototype/out", timeout=30)
+    out_dir = REPO / "alignment/out"
+    box.session.exec(f"mkdir -p {CODE}/alignment/out", timeout=30)
     timeline_names = (
         ["w1mgcjt_predicted_timeline.json"]
         if args.bb10_only
@@ -325,7 +325,7 @@ def main() -> int:
         if p.is_file():
             box.session.push(
                 str(p),
-                f"{CODE}/workspaces/alignment_prototype/out/{name}",
+                f"{CODE}/alignment/out/{name}",
                 timeout=120,
                 delete=False,
             )
@@ -339,17 +339,17 @@ export PYTHONPATH={CODE}
 export HF_HOME=/workspace/hf
 export TRANSFORMERS_CACHE=/workspace/hf
 export PYTHONUNBUFFERED=1
-mkdir -p /workspace/hf workspaces/alignment_prototype/out
+mkdir -p /workspace/hf alignment/out
 
 echo "=== BB10 pool agentic (unlabeled) ==="
-{PY} -u -m workspaces.alignment_prototype.drivers.flywheel \\
+{PY} -u -m alignment.drivers.flywheel \\
   --set-id w1mgcjt \\
-  --reuse-base workspaces/alignment_prototype/out/w1mgcjt_predicted_timeline.json
+  --reuse-base alignment/out/w1mgcjt_predicted_timeline.json
 
 echo "=== materialize BB10 pseudo-GT ==="
-{PY} -u -m workspaces.alignment_prototype.trajectory.materialize_pseudo_gt \\
-  --timeline workspaces/alignment_prototype/out/w1mgcjt_agentic_timeline.json \\
-  --out workspaces/alignment_prototype/out/w1mgcjt_pseudo_gt.yaml \\
+{PY} -u -m alignment.trajectory.materialize_pseudo_gt \\
+  --timeline alignment/out/w1mgcjt_agentic_timeline.json \\
+  --out alignment/out/w1mgcjt_pseudo_gt.yaml \\
   --set-id w1mgcjt
 
 echo "ALL_DONE"
@@ -363,17 +363,17 @@ export PYTHONPATH={CODE}
 export HF_HOME=/workspace/hf
 export TRANSFORMERS_CACHE=/workspace/hf
 export PYTHONUNBUFFERED=1
-mkdir -p /workspace/hf workspaces/alignment_prototype/out
+mkdir -p /workspace/hf alignment/out
 
 echo "=== BB11 structure_cue agentic ==="
 {PY} -u - <<'PY'
 from pathlib import Path
-from workspaces.alignment_prototype.drivers.base import SetContext
-from workspaces.alignment_prototype.drivers.agentic import AgenticDriver
+from alignment.drivers.base import SetContext
+from alignment.drivers.agentic import AgenticDriver
 ctx = SetContext.for_set("2nvzlh2k", preflight=True)
-base = Path("workspaces/alignment_prototype/out/2nvzlh2k_predicted_timeline.json")
+base = Path("alignment/out/2nvzlh2k_predicted_timeline.json")
 if not base.is_file():
-    cands = sorted(Path("workspaces/alignment_prototype/out").glob("2nvzlh2k*predicted*timeline*.json"))
+    cands = sorted(Path("alignment/out").glob("2nvzlh2k*predicted*timeline*.json"))
     if not cands:
         raise SystemExit("no BB11 base timeline on box — push out/ first")
     base = cands[0]
@@ -383,14 +383,14 @@ print("BB11_DONE", out)
 PY
 
 echo "=== BB10 pool agentic (unlabeled) ==="
-{PY} -u -m workspaces.alignment_prototype.drivers.flywheel \\
+{PY} -u -m alignment.drivers.flywheel \\
   --set-id w1mgcjt \\
-  --reuse-base workspaces/alignment_prototype/out/w1mgcjt_predicted_timeline.json
+  --reuse-base alignment/out/w1mgcjt_predicted_timeline.json
 
 echo "=== materialize BB10 pseudo-GT ==="
-{PY} -u -m workspaces.alignment_prototype.trajectory.materialize_pseudo_gt \\
-  --timeline workspaces/alignment_prototype/out/w1mgcjt_agentic_timeline.json \\
-  --out workspaces/alignment_prototype/out/w1mgcjt_pseudo_gt.yaml \\
+{PY} -u -m alignment.trajectory.materialize_pseudo_gt \\
+  --timeline alignment/out/w1mgcjt_agentic_timeline.json \\
+  --out alignment/out/w1mgcjt_pseudo_gt.yaml \\
   --set-id w1mgcjt
 
 echo "ALL_DONE"

@@ -105,9 +105,9 @@ the two concrete poison mechanisms from the July handoffs.
 ### 3.4 Placement
 
 - `contract/registry.py` + `SYSTEM_CONTRACT.md` live at **repo root / `docs/`** —
-  canonical, discoverable. **Not** in `workspaces/alignment_prototype` (an
+  canonical, discoverable. **Not** in `alignment` (an
   experimental, currently frozen fork; a repo-truth artifact cannot live there).
-- Archiving stale aligner scaffolding into `workspaces/alignment_prototype/attic/`
+- Archiving stale aligner scaffolding into `alignment/attic/`
   is a *separate* Phase-0 cleanup, not part of this contract.
 
 ## 4. Sequencing into Operation Crush Phase 0

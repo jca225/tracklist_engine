@@ -113,8 +113,8 @@ then the download just flips it onto real data.
 
 ## Critical files
 
-- New: `workspaces/alignment_prototype/eval_bench.py`,
-  `workspaces/alignment_prototype/nmf_baseline.py`.
+- New: `alignment/eval_bench.py`,
+  `alignment/nmf_baseline.py`.
 - Reuse: `external/unmixdb.py`, `external/feature_series.py`,
   `refine_ref_offsets.py`, `continuity_refine.py`, `path_decode.py`,
   `landmark_fp.py`.

@@ -27,7 +27,7 @@
 >
 > **What it is NOT.** It does not restate headline numbers (those live only in
 > [alignment_status.md](alignment_status.md)) or dead ends (those live in
-> [workspaces/alignment_prototype/attic/EXPERIMENTS.md](../workspaces/alignment_prototype/attic/EXPERIMENTS.md)).
+> [alignment/attic/EXPERIMENTS.md](../alignment/attic/EXPERIMENTS.md)).
 > It cites them. If this doc and an SSOT disagree, the SSOT wins and this doc is
 > stale — re-run `/align-checkpoint`.
 
@@ -90,7 +90,7 @@ wrong-variant label cannot slip (decision #17, Phase A).
   identify by their instrumental backbone, not their vocal, because in a mashup the
   mix vocal stem carries the *overlaid* acappellas, not the bed's own vocal (65/70
   via instr handle, 0 vocal-only). Full method + numbers:
-  [`open_set_acappella_identity_findings.md`](../workspaces/alignment_prototype/open_set_acappella_identity_findings.md).
+  [`open_set_acappella_identity_findings.md`](../alignment/open_set_acappella_identity_findings.md).
 - **Placement** — the wall (roughly tied with structure as the weakest axis).
   Grid-lock (beat-grid snapping) is *the* placement lever; boundary novelty
   (Foote) supplies a `set_start` prior; per-stem HuBERT `set_start` votes a
@@ -123,8 +123,8 @@ wrong-variant label cannot slip (decision #17, Phase A).
 - **Fibers** (self-repeat classes) credit "right repeated content" via the
   fiber-aware scoring gate.
 
-**Where the engine lives:** `workspaces/alignment_prototype/` (probes, decode,
-scorer, trajectory/TRM) + `workspaces/pws_aligner/` (weak-supervision fusion
+**Where the engine lives:** `alignment/` (probes, decode,
+scorer, trajectory/TRM) + `pws_aligner/` (weak-supervision fusion
 and co-training seam). Harness: `harness/`. Agentic loop: `agentic/`.
 
 ---
@@ -225,7 +225,7 @@ ceiling 94–95% on *both* sets (vs acappella BB12's 88%). Combiner still transf
 borda (89% both directions). Implication for the aligner's real candidate pool
 (#19/#20): route by stem — instrumental spans lean chroma/fp + high-layer MERT, vocal
 spans lean low-layer MERT. Numbers + method:
-[`open_set_acappella_identity_findings.md`](../workspaces/alignment_prototype/open_set_acappella_identity_findings.md)
+[`open_set_acappella_identity_findings.md`](../alignment/open_set_acappella_identity_findings.md)
 (§ Instrumental chain). Refines #20/#21.
 
 **#21 — The open-set identity combiner TRANSFERS cross-set (BB11↔BB12 LOSO), but
@@ -244,7 +244,7 @@ only ~88% (12% of spans no LF reaches) — sensor/reference quality caps harder 
 sharply BB11→BB12 and on BB12 the pitch-fingerprint *beats* it; LF dominance flips
 across sets and the combiner's reweighting is what absorbs it. Open question: why
 BB12 is harder (contamination / separation quality / ref-pool). Numbers + method:
-[`open_set_acappella_identity_findings.md`](../workspaces/alignment_prototype/open_set_acappella_identity_findings.md)
+[`open_set_acappella_identity_findings.md`](../alignment/open_set_acappella_identity_findings.md)
 (§ Cross-set LOSO). Refines #20.
 
 **#20 — Open-set acappella identity works against a real candidate pool: MERT
@@ -267,7 +267,7 @@ strong LF already has rank-0) or reference-quality (derived `vocals.flac` /
 annotator-flagged bad refs) — **not** sensor limits; hand-tuned gating overfits at
 n=91, so the honest lever is a **learned cross-set combiner (co-train)**, which the
 LOSO precedent (#6-adjacent) says transfers for identity. Numbers + method:
-[`open_set_acappella_identity_findings.md`](../workspaces/alignment_prototype/open_set_acappella_identity_findings.md).
+[`open_set_acappella_identity_findings.md`](../alignment/open_set_acappella_identity_findings.md).
 Related: [[project_trm_alignment_core]], [[project_identity_by_string_bug_class]],
 [[project_stem_cand_wrong_recording_gap]].
 
@@ -304,7 +304,7 @@ canonical pi: `set_ground_truth` is genuinely de-poisoned and **drift-free vs th
 git fixtures** — abstains stored as NULL `recording_id` (BB12 57/110, BB11 64/84),
 counts exact (315 rows), per-label binding diff = **0 drift**; pi code current
 with `origin/main` (the "~92 behind" note is stale — autopull caught up). BUT the
-predicted timelines (`workspaces/alignment_prototype/out/*_predicted_timeline_lt.json`)
+predicted timelines (`alignment/out/*_predicted_timeline_lt.json`)
 are **from July 6**, generated when the aligner drew candidate identity from the
 **unverified claim spine** (`set_track_slots`) — which Crush never touched — and the
 **bridge id_maps** (`labeling/fixtures/id_maps/<set>.json`, scrape-id→canonical
@@ -370,8 +370,8 @@ while synthetic train-fit rose: this is a measured sim2real gap, not
 underfitting. More GPU on the same synthetic distribution is not the lever.
 Use either synthetic realism or, first, the cheaper real pseudo-label flywheel;
 run E1 on real AUTO_COMMIT spans before scaling. Full evidence and protocol:
-[`trm_decoder_bakeoff.md`](../workspaces/alignment_prototype/docs/trm_decoder_bakeoff.md)
-and [`trm_flywheel_design.md`](../workspaces/alignment_prototype/docs/trm_flywheel_design.md).
+[`trm_decoder_bakeoff.md`](../alignment/docs/trm_decoder_bakeoff.md)
+and [`trm_flywheel_design.md`](../alignment/docs/trm_flywheel_design.md).
 These are experiment diagnostics, not headline status metrics.
 
 **#13 — Primary bet = learned placement/structure; PWS demoted to the fusion
@@ -492,7 +492,7 @@ from scorers. Dead ends live in the EXPERIMENTS ledger.
   labels, and evaluate strictly on BB11 GT. No pi writes. The first gate is
   starvation: if too few spans survive, calibrate ACCEPT precision before building
   more machinery. Protocol:
-  [`trm_flywheel_design.md`](../workspaces/alignment_prototype/docs/trm_flywheel_design.md).
+  [`trm_flywheel_design.md`](../alignment/docs/trm_flywheel_design.md).
 - **Synthetic realism — alternative, not current first move.** Two measured
   mismatches are drop-from-top starts and regular full-track spans. The
   `bb12-real` curriculum addresses the first; the second is blocked on regular
@@ -517,7 +517,7 @@ from scorers. Dead ends live in the EXPERIMENTS ledger.
   `eval_transitions.py`, and `TRANSITION_PROBE_FINDINGS.md`.
 - **Co-training seam — dry-run skeleton built on
   `cotrain-corpus-harvest`, not yet reconciled.**
-  `workspaces/pws_aligner/cotrain_seam.py` maps suspects to acquisition cases and
+  `pws_aligner/cotrain_seam.py` maps suspects to acquisition cases and
   accepted placements to training signals without canonical mutation.
   `real_probe_scorer` is wired to the shared `capture_votes` harness, including
   absolute→relative offset normalization, and abstains when audio is absent.
@@ -587,9 +587,9 @@ from scorers. Dead ends live in the EXPERIMENTS ledger.
 | For… | Read | Rule |
 |---|---|---|
 | Headline numbers | [alignment_status.md](alignment_status.md) | Owns every headline metric; regenerate, don't hand-edit |
-| Dead ends / closed experiments | [attic/EXPERIMENTS.md](../workspaces/alignment_prototype/attic/EXPERIMENTS.md) | Read before re-trying anything |
-| Current TRM verdict | [trm_decoder_bakeoff.md](../workspaces/alignment_prototype/docs/trm_decoder_bakeoff.md) | Architecture works; synthetic-only sim2real fails |
-| Real pseudo-label next step | [trm_flywheel_design.md](../workspaces/alignment_prototype/docs/trm_flywheel_design.md) | E1 before scale |
+| Dead ends / closed experiments | [attic/EXPERIMENTS.md](../alignment/attic/EXPERIMENTS.md) | Read before re-trying anything |
+| Current TRM verdict | [trm_decoder_bakeoff.md](../alignment/docs/trm_decoder_bakeoff.md) | Architecture works; synthetic-only sim2real fails |
+| Real pseudo-label next step | [trm_flywheel_design.md](../alignment/docs/trm_flywheel_design.md) | E1 before scale |
 | Interpretive frame | [alignment_recharacterization.md](alignment_recharacterization.md) | Never collapse to one scalar |
 | Objective / round-trip contract | [alignment_objective.md](alignment_objective.md) · [architecture_north_star.md](architecture_north_star.md) | `make align SET=<id>` |
 | Set ids | BB11 = `2nvzlh2k`, BB12 = `1fsnxchk` | Only two GT sets exist |

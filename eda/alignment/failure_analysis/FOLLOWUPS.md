@@ -80,7 +80,7 @@ on the same one-liner. Tests: `tests/labeling/test_export_drops_deactivated.py`
 **⚠ Metric NOT yet de-contaminated.** The scorer reads `set_ground_truth` on pi-storage,
 still written from the *old* export. WS1's first step — re-export both sets and write back
 (`labeling/write_back_ground_truth.py`) — is required before the scorecard reflects this.
-Also `workspaces/alignment_prototype/fibers/gt_als.py` reads GT loops directly from the
+Also `alignment/fibers/gt_als.py` reads GT loops directly from the
 `.als` via `parse_layer_clips`; it should filter `silence_reason` too (follow-up, not on
 the headline metric path).
 
@@ -191,7 +191,7 @@ semitone transpose by ear; if it still clashes, re-acquire the correct version (
 
 > **Detune vs wrong-version — cross-ref (not folded here).** The tool that decides
 > WS5's "is this a genuine detune or a wrong rip?" question is the micro-pitch detune
-> estimator ([project_micropitch_detune]): `workspaces/alignment_prototype/pitch_detune.py`,
+> estimator ([project_micropitch_detune]): `alignment/pitch_detune.py`,
 > `measure_detune.py`, corpus arm `lab/corpus_empirics/bb_pitch_detune.py`, write-up in
 > `docs/alignment_paper_draft.md`. That work is a separately-owned thread (alignment
 > paper + corpus-empirics, own `aux.db` findings home) and is intentionally **kept

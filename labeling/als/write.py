@@ -1,7 +1,7 @@
 """Write side of the `.als` codec: session mutation (seeding primitives).
 
 These mutate a parsed session tree in place — the seeder
-(`workspaces/alignment_prototype/seed_als_from_timeline.py`) gzips the result
+(`alignment/seed_als_from_timeline.py`) gzips the result
 back to disk. Per the `.als` crash history, never allocate new PointeeIds;
 reuse the template's existing automation targets.
 """
@@ -79,7 +79,7 @@ def write_clip_source_paths(root: etree._Element, edits: list[tuple[str, str]]) 
     ``SourceContext/OriginalFileRef`` (the historical/browser-hint copy).
     The seeder deliberately strips ``OriginalFileRef`` from every clip when a
     session is built (see
-    ``workspaces/alignment_prototype/review/seed_als_from_timeline.py``,
+    ``alignment/review/seed_als_from_timeline.py``,
     "so clip_original_path falls through to SampleRef/FileRef/Path instead of
     a stale template path") — a freshly-seeded session, which is what this
     runs against, never carries one, so there is nothing else to touch.

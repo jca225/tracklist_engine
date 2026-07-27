@@ -10,22 +10,22 @@
 
 ## Global Constraints
 
-- Run everything from repo root with `venvs/audio/bin/python`. Module path: `workspaces.alignment_prototype.external.eval_bench`.
+- Run everything from repo root with `venvs/audio/bin/python`. Module path: `alignment.external.eval_bench`.
 - UnmixDB present locally at `~/data/unmixdb-v1.1` (8 GB).
 - `eval_bench --synthetic` (feature-space, no audio) MUST stay green after every task — it is the fast smoke test.
 - Sampling for the headline run: seed 0, 240-mix stratified (20 per warp×effect stratum), matching the shipped `external/out/unmixdb_bench.txt`, so numbers are comparable.
 - Abstain sentinel: a `Pred` with `set_start_s = float("nan")`. Non-abstain preds always have finite `set_start_s`.
 - No C++/Rust. Hot loops are already native (scipy/numpy). Python only.
-- Tests live in `workspaces/alignment_prototype/external/tests/` (create the dir + `__init__.py` in Task 1).
+- Tests live in `alignment/external/tests/` (create the dir + `__init__.py` in Task 1).
 
 ---
 
 ### Task 1: Stratum parser
 
 **Files:**
-- Modify: `workspaces/alignment_prototype/external/eval_bench.py`
-- Create: `workspaces/alignment_prototype/external/tests/__init__.py` (empty)
-- Test: `workspaces/alignment_prototype/external/tests/test_eval_bench.py`
+- Modify: `alignment/external/eval_bench.py`
+- Create: `alignment/external/tests/__init__.py` (empty)
+- Test: `alignment/external/tests/test_eval_bench.py`
 
 **Interfaces:**
 - Produces: `stratum(mix_id: str) -> tuple[str, str]` returning `(warp, effect)`. UnmixDB mix ids look like `set042mix3-resample-bass-07`; warp ∈ {none,resample,stretch}, effect ∈ {none,bass,compressor,distortion}. Unknown/unparseable → `("unknown", "unknown")`.
@@ -33,8 +33,8 @@
 - [ ] **Step 1: Write the failing test**
 
 ```python
-# workspaces/alignment_prototype/external/tests/test_eval_bench.py
-from workspaces.alignment_prototype.external.eval_bench import stratum
+# alignment/external/tests/test_eval_bench.py
+from alignment.external.eval_bench import stratum
 
 
 def test_stratum_parses_warp_and_effect():
@@ -50,7 +50,7 @@ def test_stratum_unknown_on_garbage():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/external/tests/test_eval_bench.py -v`
+Run: `venvs/audio/bin/python -m pytest alignment/external/tests/test_eval_bench.py -v`
 Expected: FAIL with `ImportError: cannot import name 'stratum'`
 
 - [ ] **Step 3: Write minimal implementation**
@@ -76,15 +76,15 @@ def stratum(mix_id: str) -> tuple[str, str]:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/external/tests/test_eval_bench.py -v`
+Run: `venvs/audio/bin/python -m pytest alignment/external/tests/test_eval_bench.py -v`
 Expected: PASS (2 tests)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/external/eval_bench.py \
-        workspaces/alignment_prototype/external/tests/__init__.py \
-        workspaces/alignment_prototype/external/tests/test_eval_bench.py
+git add alignment/external/eval_bench.py \
+        alignment/external/tests/__init__.py \
+        alignment/external/tests/test_eval_bench.py
 git commit -m "feat(eval_bench): stratum(mix_id) warp×effect parser"
 ```
 
@@ -93,8 +93,8 @@ git commit -m "feat(eval_bench): stratum(mix_id) warp×effect parser"
 ### Task 2: Abstain-aware scorer + no-abstain / open toggle
 
 **Files:**
-- Modify: `workspaces/alignment_prototype/external/eval_bench.py`
-- Test: `workspaces/alignment_prototype/external/tests/test_eval_bench.py`
+- Modify: `alignment/external/eval_bench.py`
+- Test: `alignment/external/tests/test_eval_bench.py`
 
 **Interfaces:**
 - Consumes: `Sample`, `GTSpan`, `Pred` (existing).
@@ -109,7 +109,7 @@ git commit -m "feat(eval_bench): stratum(mix_id) warp×effect parser"
 # append to test_eval_bench.py
 import math
 import numpy as np
-from workspaces.alignment_prototype.external.eval_bench import (
+from alignment.external.eval_bench import (
     GTSpan, Pred, Sample, is_abstain, make_fused, score_sample,
 )
 
@@ -141,7 +141,7 @@ def test_make_fused_is_a_method_factory():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/external/tests/test_eval_bench.py -v`
+Run: `venvs/audio/bin/python -m pytest alignment/external/tests/test_eval_bench.py -v`
 Expected: FAIL with `ImportError: cannot import name 'is_abstain'`
 
 - [ ] **Step 3: Write minimal implementation**
@@ -160,7 +160,7 @@ def _fused_impl(sample: Sample, min_votes: float) -> dict[int, Pred]:
     if sample.mix_path is None or not sample.track_paths:
         return {}
     import librosa
-    from workspaces.alignment_prototype.landmark_fp import fp_offset
+    from alignment.landmark_fp import fp_offset
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -224,18 +224,18 @@ In `score_sample`, replace the row-append block (inside the `for sp in sample.gt
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/external/tests/test_eval_bench.py -v`
+Run: `venvs/audio/bin/python -m pytest alignment/external/tests/test_eval_bench.py -v`
 Expected: PASS (5 tests)
 
 Also verify the synthetic smoke still works:
-Run: `venvs/audio/bin/python -m workspaces.alignment_prototype.external.eval_bench --synthetic`
+Run: `venvs/audio/bin/python -m alignment.external.eval_bench --synthetic`
 Expected: prints the placement/warp table with no traceback.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/external/eval_bench.py \
-        workspaces/alignment_prototype/external/tests/test_eval_bench.py
+git add alignment/external/eval_bench.py \
+        alignment/external/tests/test_eval_bench.py
 git commit -m "feat(eval_bench): abstain-aware scorer + make_fused(min_votes) mode toggle"
 ```
 
@@ -244,8 +244,8 @@ git commit -m "feat(eval_bench): abstain-aware scorer + make_fused(min_votes) mo
 ### Task 3: Stratified summary with abstain-rate column
 
 **Files:**
-- Modify: `workspaces/alignment_prototype/external/eval_bench.py`
-- Test: `workspaces/alignment_prototype/external/tests/test_eval_bench.py`
+- Modify: `alignment/external/eval_bench.py`
+- Test: `alignment/external/tests/test_eval_bench.py`
 
 **Interfaces:**
 - Consumes: `stratum`, per-row `abstained` field.
@@ -257,7 +257,7 @@ git commit -m "feat(eval_bench): abstain-aware scorer + make_fused(min_votes) mo
 ```python
 # append to test_eval_bench.py
 import pandas as pd
-from workspaces.alignment_prototype.external.eval_bench import summary_by_stratum
+from alignment.external.eval_bench import summary_by_stratum
 
 
 def test_summary_by_stratum_groups_and_reports_abstain():
@@ -281,7 +281,7 @@ def test_summary_by_stratum_groups_and_reports_abstain():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/external/tests/test_eval_bench.py::test_summary_by_stratum_groups_and_reports_abstain -v`
+Run: `venvs/audio/bin/python -m pytest alignment/external/tests/test_eval_bench.py::test_summary_by_stratum_groups_and_reports_abstain -v`
 Expected: FAIL with `ImportError: cannot import name 'summary_by_stratum'`
 
 - [ ] **Step 3: Write minimal implementation**
@@ -335,17 +335,17 @@ Also update the flat `summary` — add one line inside its per-method dict, and 
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/external/tests/test_eval_bench.py -v`
+Run: `venvs/audio/bin/python -m pytest alignment/external/tests/test_eval_bench.py -v`
 Expected: PASS (6 tests)
 
-Run: `venvs/audio/bin/python -m workspaces.alignment_prototype.external.eval_bench --synthetic`
+Run: `venvs/audio/bin/python -m alignment.external.eval_bench --synthetic`
 Expected: table prints, now with an `abstain_pct` column, no traceback.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/external/eval_bench.py \
-        workspaces/alignment_prototype/external/tests/test_eval_bench.py
+git add alignment/external/eval_bench.py \
+        alignment/external/tests/test_eval_bench.py
 git commit -m "feat(eval_bench): summary_by_stratum + abstain_pct column"
 ```
 
@@ -354,8 +354,8 @@ git commit -m "feat(eval_bench): summary_by_stratum + abstain_pct column"
 ### Task 4: DTW baseline method
 
 **Files:**
-- Modify: `workspaces/alignment_prototype/external/eval_bench.py`
-- Test: `workspaces/alignment_prototype/external/tests/test_eval_bench.py`
+- Modify: `alignment/external/eval_bench.py`
+- Test: `alignment/external/tests/test_eval_bench.py`
 
 **Interfaces:**
 - Consumes: `Sample`, `Pred`, `librosa.sequence.dtw`, existing `detect_offset` for the tempo estimate.
@@ -365,7 +365,7 @@ git commit -m "feat(eval_bench): summary_by_stratum + abstain_pct column"
 
 ```python
 # append to test_eval_bench.py
-from workspaces.alignment_prototype.external.eval_bench import method_dtw, HOP, SR
+from alignment.external.eval_bench import method_dtw, HOP, SR
 
 
 def test_method_dtw_recovers_planted_offset():
@@ -393,7 +393,7 @@ def test_method_dtw_abstains_on_tiny_track():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/external/tests/test_eval_bench.py::test_method_dtw_recovers_planted_offset -v`
+Run: `venvs/audio/bin/python -m pytest alignment/external/tests/test_eval_bench.py::test_method_dtw_recovers_planted_offset -v`
 Expected: FAIL with `ImportError: cannot import name 'method_dtw'`
 
 - [ ] **Step 3: Write minimal implementation**
@@ -443,17 +443,17 @@ METHODS: dict[str, Method] = {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/external/tests/test_eval_bench.py -v`
+Run: `venvs/audio/bin/python -m pytest alignment/external/tests/test_eval_bench.py -v`
 Expected: PASS (8 tests)
 
-Run: `venvs/audio/bin/python -m workspaces.alignment_prototype.external.eval_bench --synthetic --methods grid_mf,dtw`
+Run: `venvs/audio/bin/python -m alignment.external.eval_bench --synthetic --methods grid_mf,dtw`
 Expected: table with both methods, no traceback.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/external/eval_bench.py \
-        workspaces/alignment_prototype/external/tests/test_eval_bench.py
+git add alignment/external/eval_bench.py \
+        alignment/external/tests/test_eval_bench.py
 git commit -m "feat(eval_bench): method_dtw (André DTW baseline, feature space)"
 ```
 
@@ -462,9 +462,9 @@ git commit -m "feat(eval_bench): method_dtw (André DTW baseline, feature space)
 ### Task 5: Wire the reduction CLI + run the headline table
 
 **Files:**
-- Modify: `workspaces/alignment_prototype/external/eval_bench.py` (CLI)
-- Create: `workspaces/alignment_prototype/external/out/reduction_table.txt` (artifact)
-- Modify: `workspaces/alignment_prototype/external/unmixdb_findings.md` (append reduction section)
+- Modify: `alignment/external/eval_bench.py` (CLI)
+- Create: `alignment/external/out/reduction_table.txt` (artifact)
+- Modify: `alignment/external/unmixdb_findings.md` (append reduction section)
 
 **Interfaces:**
 - Consumes: everything above.
@@ -506,7 +506,7 @@ Add after the flat-summary print:
 
 - [ ] **Step 2: Smoke-test the new flags on synthetic**
 
-Run: `venvs/audio/bin/python -m workspaces.alignment_prototype.external.eval_bench --synthetic --methods grid_mf,dtw --stratified`
+Run: `venvs/audio/bin/python -m alignment.external.eval_bench --synthetic --methods grid_mf,dtw --stratified`
 Expected: flat table AND a stratified table print (synthetic ids are `synth0…` → stratum `unknown/unknown`), no traceback.
 
 - [ ] **Step 3: Run the headline reduction table on UnmixDB**
@@ -514,10 +514,10 @@ Expected: flat table AND a stratified table print (synthetic ids are `synth0…`
 Run (this is the real run — audio, ~240 mixes; expect minutes-to-tens-of-minutes):
 
 ```bash
-venvs/audio/bin/python -m workspaces.alignment_prototype.external.eval_bench \
+venvs/audio/bin/python -m alignment.external.eval_bench \
   --unmixdb-root ~/data/unmixdb-v1.1 --max-mixes 240 --feature chroma \
   --methods nmf,dtw,fused --stratified --identity \
-  | tee workspaces/alignment_prototype/external/out/reduction_table.txt
+  | tee alignment/external/out/reduction_table.txt
 ```
 
 Expected: an artifact file with the flat table (nmf/dtw/fused, incl. `abstain_pct`), the warp×effect stratified table, and the identity block. No traceback; non-zero rows for each method.
@@ -525,10 +525,10 @@ Expected: an artifact file with the flat table (nmf/dtw/fused, incl. `abstain_pc
 - [ ] **Step 4: Run André-mode vs open-mode contrast for `fused`**
 
 ```bash
-venvs/audio/bin/python -m workspaces.alignment_prototype.external.eval_bench \
+venvs/audio/bin/python -m alignment.external.eval_bench \
   --unmixdb-root ~/data/unmixdb-v1.1 --max-mixes 240 --feature chroma \
   --methods fused --min-votes 20 --stratified \
-  | tee -a workspaces/alignment_prototype/external/out/reduction_table.txt
+  | tee -a alignment/external/out/reduction_table.txt
 ```
 
 Expected: the `fused` row now shows `abstain_pct > 0` and (hypothesis) tighter committed MAE than André-mode — the abstention-as-capability contrast.
@@ -540,9 +540,9 @@ Add a new `## Reduction table (André mode)` section to `external/unmixdb_findin
 - [ ] **Step 6: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/external/eval_bench.py \
-        workspaces/alignment_prototype/external/out/reduction_table.txt \
-        workspaces/alignment_prototype/external/unmixdb_findings.md
+git add alignment/external/eval_bench.py \
+        alignment/external/out/reduction_table.txt \
+        alignment/external/unmixdb_findings.md
 git commit -m "feat(eval_bench): reduction table run — nmf/dtw/fused stratified, André vs open mode"
 ```
 

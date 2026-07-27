@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-19  
 **Status:** approved for implementation  
-**Package:** `workspaces/alignment_prototype/daw_env/`
+**Package:** `alignment/daw_env/`
 
 ## Problem
 
@@ -48,6 +48,6 @@ Shadow scorecard vs agentic baseline on BB11/BB12: no regression on placement me
 ## CLI
 
 ```bash
-venvs/audio/bin/python -m workspaces.alignment_prototype.daw_env \
+venvs/audio/bin/python -m alignment.daw_env \
   --set-id 1fsnxchk --mode a|b [--timeline PATH] [--max-steps N]
 ```

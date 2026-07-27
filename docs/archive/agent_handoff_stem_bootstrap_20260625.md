@@ -16,7 +16,7 @@ the breaking point."
 
 ## What was built
 
-**`workspaces/alignment_prototype/stem_match_probe.py`** — new module, three arms:
+**`alignment/stem_match_probe.py`** — new module, three arms:
 
 - `--arm synthetic` — sum K real vocal (or instrumental) stems into a DIRTY mix
   channel at known offsets/gains; PERFECT ground truth. For the host stem recover
@@ -38,13 +38,13 @@ stems live in `data/mashup_compat/stems/<track_audio_id>/{vocals,instrumental}.f
 ### Run commands
 ```bash
 # breaking-point curve (cheap, no GPU)
-venvs/audio/bin/python -m workspaces.alignment_prototype.stem_match_probe \
+venvs/audio/bin/python -m alignment.stem_match_probe \
   --arm synthetic --stem vocals --features chroma,mfcc --depths 1,2,3,4,5,6 --trials 25
 # real BB12 acappella, stem-routed identity
-venvs/audio/bin/python -m workspaces.alignment_prototype.stem_match_probe \
+venvs/audio/bin/python -m alignment.stem_match_probe \
   --arm real --stem vocals --features hubert --extra-distractors 10
 # headline: routed dual-channel scorecard
-venvs/audio/bin/python -m workspaces.alignment_prototype.stem_match_probe \
+venvs/audio/bin/python -m alignment.stem_match_probe \
   --arm routed --extra-distractors 12
 ```
 GPU note: HuBERT matched-filter is 768-dim → each correlation ~64× chroma. Keep

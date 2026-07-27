@@ -39,7 +39,7 @@ from pathlib import Path
 import yaml
 
 REPO = Path(__file__).resolve().parents[3]
-OUT = REPO / "workspaces" / "alignment_prototype" / "out"
+OUT = REPO / "alignment" / "out"
 FIX = REPO / "labeling" / "fixtures"
 SETS = {"2nvzlh2k": "bb11", "1fsnxchk": "bb12"}
 MICRO_S = 5.0

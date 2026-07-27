@@ -119,14 +119,14 @@ def load_mono(
 
 
 def chroma_feat(y: np.ndarray) -> np.ndarray:
-    from workspaces.alignment_prototype.refine_ref_offsets import chroma
+    from alignment.refine_ref_offsets import chroma
 
     return chroma(y)
 
 
 def hubert_feat(y: np.ndarray, layer: int = 9) -> np.ndarray:
     """(768, T) HuBERT embeddings — for vocal/acappella distinguishability."""
-    from workspaces.section_hsmm.similarity_probe import _hubert
+    from alignment.hubert_embed import _hubert
 
     return _hubert(y, layer)
 
@@ -151,7 +151,7 @@ def resolve_set_id(set_ref: str) -> str:
 
 
 def aligning_dir(set_ref: str) -> Path | None:
-    from workspaces.pws_aligner.capture_votes import _find_aligning_dir
+    from pws_aligner.capture_votes import _find_aligning_dir
 
     return _find_aligning_dir(resolve_set_id(set_ref))
 
@@ -168,7 +168,7 @@ def load_gt(set_ref: str):
 
 
 def load_manifest(set_ref: str) -> dict[str, dict]:
-    from workspaces.pws_aligner.capture_votes import _load_manifest_by_rid
+    from pws_aligner.capture_votes import _load_manifest_by_rid
 
     set_id = resolve_set_id(set_ref)
     d = aligning_dir(set_id)
@@ -196,9 +196,9 @@ def ensure_timeline_cmd(set_ref: str) -> str:
     """The exact command to generate a missing predicted timeline (run in a shell)."""
     set_id = resolve_set_id(set_ref)
     return (
-        "venvs/audio/bin/python -m workspaces.alignment_prototype.infer "
+        "venvs/audio/bin/python -m alignment.infer "
         f"--set-id {set_id} --band-s 45 && "
-        "venvs/audio/bin/python -m workspaces.alignment_prototype.joint_ref_decode "
+        "venvs/audio/bin/python -m alignment.joint_ref_decode "
         f"--set-id {set_id}"
     )
 
@@ -207,14 +207,14 @@ def ensure_timeline_cmd(set_ref: str) -> str:
 
 
 def mix_stem_path(set_ref: str, stem: str) -> Path | None:
-    from workspaces.pws_aligner.capture_votes import _mix_audio_path
+    from pws_aligner.capture_votes import _mix_audio_path
 
     d = aligning_dir(set_ref)
     return _mix_audio_path(d, stem) if d else None
 
 
 def ref_audio_path(set_ref: str, recording_id: str, stem: str) -> Path | None:
-    from workspaces.pws_aligner.capture_votes import _ref_audio_path
+    from pws_aligner.capture_votes import _ref_audio_path
 
     row = load_manifest(set_ref).get(recording_id)
     return _ref_audio_path(row, stem) if row else None
@@ -247,7 +247,7 @@ def set_xray(set_ref: str, *, fibers: bool = True):
             f"no predicted timeline for {resolve_set_id(set_ref)} — run:\n  "
             + ensure_timeline_cmd(set_ref)
         )
-    from workspaces.alignment_prototype.score_timeline_vs_gt import score_spans
+    from alignment.score_timeline_vs_gt import score_spans
 
     set_id = resolve_set_id(set_ref)
     scores = score_spans(set_id, timeline_path(set_ref), fibers=fibers)
@@ -409,7 +409,7 @@ def render_span_snippets(
     If the played clip is indistinguishable from BOTH ref positions, that span is
     the ceiling made audible. Returns {name: path} or None if audio missing.
     """
-    from workspaces.alignment_prototype.review.render_review_snippets import (
+    from alignment.review.render_review_snippets import (
         ffmpeg_snippet,
     )
 

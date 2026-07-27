@@ -6,16 +6,16 @@
 
 **Architecture:** Identity stays categorical (recordings ARE categorical — the sound part of Dawid–Skene); offsets get a continuous noise model: per probe, offset ~ inlier·N(μ_span, σ_probe²) + (1−inlier)·Uniform(±240 s), with per-probe identity accuracy, σ, and inlier rate learned by EM over unlabeled spans (no GT). Learned 1/σ² IS the `neuro/` inverse-variance fusion, made self-supervised. Operation LFs are a separate categorical lane where DS-style aggregation is well-matched.
 
-**Tech Stack:** Python (stdlib `math`/`dataclasses` for the model — no numpy needed in the EM), pytest, existing `workspaces/pws_aligner` infrastructure (Vote, capture_votes, verifier, run_phase1), `librosa` for the operation LF only.
+**Tech Stack:** Python (stdlib `math`/`dataclasses` for the model — no numpy needed in the EM), pytest, existing `pws_aligner` infrastructure (Vote, capture_votes, verifier, run_phase1), `librosa` for the operation LF only.
 
 ## Global Constraints
 
 - Python: `venvs/audio/bin/python` from repo root; tests via `venvs/audio/bin/python -m pytest`.
 - Style: `from __future__ import annotations`, full type hints, frozen dataclasses, pure functions, errors-as-values in core / fail-fast in CLIs (repo CLAUDE.md).
 - **Offset frame invariant (LOAD-BEARING):** all `Vote.offset_s` values are RELATIVE (`ref_start_s − set_start_s`). `capture_votes.py` normalizes absolute-frame probes (`chroma`, `continuity`, `hubert`) at capture (commit 561aa7d). Never re-convert downstream.
-- **No changes to `workspaces/alignment_prototype/`** (fork must beat it before promotion — `workspaces_dir` convention).
+- **No changes to `alignment/`** (fork must beat it before promotion — `workspaces_dir` convention).
 - **No new GT.** BB11 (`2nvzlh2k`) / BB12 (`1fsnxchk`) GT is validation/grading only.
-- **No hand-typed headline numbers** outside `docs/alignment_status.md` machinery (SSOT rule). Gate verdicts go in `workspaces/pws_aligner/CLAUDE.md`.
+- **No hand-typed headline numbers** outside `docs/alignment_status.md` machinery (SSOT rule). Gate verdicts go in `pws_aligner/CLAUDE.md`.
 - Commit after every task (project overrides "only commit when asked"). Branch: `pws-phase1b-continuous` (worktree off `pws-alignment-reframe`).
 - Baseline numbers to beat (BB12, from the v2b gate — for reference in acceptance checks, do not re-type elsewhere): hand-tuned `source_priority` identity 84%, ref-offset median 14.0 s, strict trajectory 42%; refuted DS scored 32% / 33.6 s / 33%.
 
@@ -37,12 +37,12 @@ The pre-commit hook fails at HEAD on `pws-alignment-reframe` (pre-existing from 
 
 ```bash
 cd /path/to/repo
-grep -rn --include='*.py' -E 'manifest\.json' workspaces/pws_aligner workspaces/streaming_mir scripts analysis ingest | wc -l
+grep -rn --include='*.py' -E 'manifest\.json' pws_aligner workspaces/streaming_mir scripts analysis ingest | wc -l
 git diff 80d3140..416558a --stat | head -30
 git diff 80d3140..416558a -S 'manifest.json' --name-only
 git diff 80d3140..416558a -G 'parents\[[0-9]\]' --name-only
 ```
-Expected: the offending files are in the phase-1 merge (likely `workspaces/pws_aligner/` and/or `workspaces/streaming_mir/` code).
+Expected: the offending files are in the phase-1 merge (likely `pws_aligner/` and/or `workspaces/streaming_mir/` code).
 
 - [ ] **Step 2: Decide fix vs ratchet per occurrence**
 
@@ -52,7 +52,7 @@ Rule: if an occurrence is a `Path(__file__).parents[N]` that would break under t
 
 Set `raw_manifest_read` baseline to the current count (99) and `parents_depth` to (138), each with a `"justification"` field (the ratchet file's existing entries show the schema — mirror it):
 ```json
-"raw_manifest_read": {"baseline": 99, "justification": "2026-07-14 pws-phase1 merge added deliberate manifest reads in workspaces/pws_aligner capture tooling; reviewed, not drive-by"}
+"raw_manifest_read": {"baseline": 99, "justification": "2026-07-14 pws-phase1 merge added deliberate manifest reads in pws_aligner capture tooling; reviewed, not drive-by"}
 ```
 (Adjust key names to match the file's actual schema — read it first.)
 
@@ -73,11 +73,11 @@ git commit -m "chore: reconcile guardrails ratchet after pws-phase1 merge"
 ### Task 1: `ContinuousLabelModel` — EM over (recording, offset)
 
 **Files:**
-- Create: `workspaces/pws_aligner/continuous_model.py`
-- Test: `workspaces/pws_aligner/tests/test_continuous_model.py`
+- Create: `pws_aligner/continuous_model.py`
+- Test: `pws_aligner/tests/test_continuous_model.py`
 
 **Interfaces:**
-- Consumes: `Vote`, `AbstainReason` from `workspaces/pws_aligner/votes.py` (fields: `probe: str`, `span_id: str`, `recording_id: str | None`, `offset_s: float` (RELATIVE), `confidence: float`, `abstained: bool`, `reason: AbstainReason`, `features: tuple[float, ...]`).
+- Consumes: `Vote`, `AbstainReason` from `pws_aligner/votes.py` (fields: `probe: str`, `span_id: str`, `recording_id: str | None`, `offset_s: float` (RELATIVE), `confidence: float`, `abstained: bool`, `reason: AbstainReason`, `features: tuple[float, ...]`).
 - Produces (used by Tasks 2–4):
   - `ProbeNoise(accuracy: float, sigma_s: float, inlier: float)` (frozen dataclass)
   - `FusedSpan(recording_id: str | None, offset_s: float, confidence: float, n_votes: int)` (frozen dataclass)
@@ -86,13 +86,13 @@ git commit -m "chore: reconcile guardrails ratchet after pws-phase1 merge"
 - [ ] **Step 1: Write the failing tests**
 
 ```python
-# workspaces/pws_aligner/tests/test_continuous_model.py
+# pws_aligner/tests/test_continuous_model.py
 from __future__ import annotations
 
 import random
 
-from workspaces.pws_aligner.continuous_model import ContinuousLabelModel, FusedSpan
-from workspaces.pws_aligner.votes import AbstainReason, Vote
+from pws_aligner.continuous_model import ContinuousLabelModel, FusedSpan
+from pws_aligner.votes import AbstainReason, Vote
 
 
 def _vote(probe: str, span_id: str, rec: str | None, off: float,
@@ -188,13 +188,13 @@ def test_unseen_probe_uses_default_priors():
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_continuous_model.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'workspaces.pws_aligner.continuous_model'`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_continuous_model.py -v`
+Expected: FAIL — `ModuleNotFoundError: No module named 'pws_aligner.continuous_model'`
 
 - [ ] **Step 3: Implement `continuous_model.py`**
 
 ```python
-# workspaces/pws_aligner/continuous_model.py
+# pws_aligner/continuous_model.py
 """Continuous label model: EM over (categorical recording, continuous offset).
 
 Answer to the Phase-1 kill-gate (see CLAUDE.md): Dawid-Skene over 2s offset
@@ -394,18 +394,18 @@ class ContinuousLabelModel:
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_continuous_model.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_continuous_model.py -v`
 Expected: 5 PASS. If `test_oracle_learns_sigma_ordering_and_identity` is flaky on tolerances, tighten the synthetic (n=500) rather than loosening asserts.
 
 - [ ] **Step 5: Run the whole pws_aligner suite (no regressions)**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/ -q`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/ -q`
 Expected: all pass (46 existing + 5 new).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add workspaces/pws_aligner/continuous_model.py workspaces/pws_aligner/tests/test_continuous_model.py
+git add pws_aligner/continuous_model.py pws_aligner/tests/test_continuous_model.py
 git commit -m "feat(pws): continuous label model — EM over per-probe Gaussian offset noise"
 ```
 
@@ -414,22 +414,22 @@ git commit -m "feat(pws): continuous label model — EM over per-probe Gaussian 
 ### Task 2: Fused-placement bridge + `run_phase1 --model continuous`
 
 **Files:**
-- Modify: `workspaces/pws_aligner/decode_bridge.py` (add `fused_to_placement`)
-- Modify: `workspaces/pws_aligner/run_phase1.py` (add `--model continuous` branch)
-- Test: `workspaces/pws_aligner/tests/test_decode_bridge.py` (extend)
+- Modify: `pws_aligner/decode_bridge.py` (add `fused_to_placement`)
+- Modify: `pws_aligner/run_phase1.py` (add `--model continuous` branch)
+- Test: `pws_aligner/tests/test_decode_bridge.py` (extend)
 
 **Interfaces:**
 - Consumes: `FusedSpan`, `ContinuousLabelModel` from Task 1; existing `posterior_to_placement()` in `decode_bridge.py`.
 - Produces: `fused_to_placement(span_id: str, fused: FusedSpan) -> dict` emitting the **identical dict schema** as `posterior_to_placement` (same keys — read that function first and mirror it exactly), except `offset_s` carries the un-binned continuous value; plus a `<set_id>_pws_probe_noise.json` sidecar `{probe: {"accuracy":…, "sigma_s":…, "inlier":…}}`.
 
-- [ ] **Step 1: Read the existing schema** — open `workspaces/pws_aligner/decode_bridge.py::posterior_to_placement` and `run_phase1.py`'s timeline-writing code; note the exact output keys. The new function must produce the same keys so `score_timeline_vs_gt.py` consumes it unchanged.
+- [ ] **Step 1: Read the existing schema** — open `pws_aligner/decode_bridge.py::posterior_to_placement` and `run_phase1.py`'s timeline-writing code; note the exact output keys. The new function must produce the same keys so `score_timeline_vs_gt.py` consumes it unchanged.
 
 - [ ] **Step 2: Write the failing test** (adapt key names to what Step 1 found — the assertions below name the semantic content):
 
 ```python
-# append to workspaces/pws_aligner/tests/test_decode_bridge.py
-from workspaces.pws_aligner.continuous_model import FusedSpan
-from workspaces.pws_aligner.decode_bridge import fused_to_placement
+# append to pws_aligner/tests/test_decode_bridge.py
+from pws_aligner.continuous_model import FusedSpan
+from pws_aligner.decode_bridge import fused_to_placement
 
 
 def test_fused_to_placement_keeps_unbinned_offset():
@@ -448,7 +448,7 @@ def test_fused_to_placement_null_abstains():
 
 - [ ] **Step 3: Run to verify failure**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_decode_bridge.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_decode_bridge.py -v`
 Expected: FAIL — `ImportError: cannot import name 'fused_to_placement'`
 
 - [ ] **Step 4: Implement `fused_to_placement` in `decode_bridge.py`** (mirror `posterior_to_placement`'s exact keys; core shape):
@@ -473,13 +473,13 @@ def fused_to_placement(span_id: str, fused: FusedSpan) -> dict:
 
 - [ ] **Step 6: Run the full suite**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/ -q`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/ -q`
 Expected: all pass.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add workspaces/pws_aligner/decode_bridge.py workspaces/pws_aligner/run_phase1.py workspaces/pws_aligner/tests/test_decode_bridge.py
+git add pws_aligner/decode_bridge.py pws_aligner/run_phase1.py pws_aligner/tests/test_decode_bridge.py
 git commit -m "feat(pws): fused-placement bridge + run_phase1 --model continuous"
 ```
 
@@ -490,8 +490,8 @@ git commit -m "feat(pws): fused-placement bridge + run_phase1 --model continuous
 The calibration bar caught both DS failures (learned fp .038 vs GT-measured .474). The continuous model needs the same tripwire: learned σ must track GT-measured residuals.
 
 **Files:**
-- Modify: `workspaces/pws_aligner/verifier.py` (add continuous report beside the existing `calibration_report`)
-- Test: `workspaces/pws_aligner/tests/test_verifier.py` (extend)
+- Modify: `pws_aligner/verifier.py` (add continuous report beside the existing `calibration_report`)
+- Test: `pws_aligner/tests/test_verifier.py` (extend)
 
 **Interfaces:**
 - Consumes: `ProbeNoise` from Task 1; GT placements in the same form the existing `calibration_report` consumes (read `verifier.py` first and reuse its GT-loading path — pass GT as `dict[span_id, tuple[recording_id, gt_offset_s]]` if that is what it uses, otherwise adapt to its actual type).
@@ -503,9 +503,9 @@ The calibration bar caught both DS failures (learned fp .038 vs GT-measured .474
 - [ ] **Step 1: Write the failing test**
 
 ```python
-# append to workspaces/pws_aligner/tests/test_verifier.py
-from workspaces.pws_aligner.continuous_model import ProbeNoise
-from workspaces.pws_aligner.verifier import (
+# append to pws_aligner/tests/test_verifier.py
+from pws_aligner.continuous_model import ProbeNoise
+from pws_aligner.verifier import (
     continuous_calibration_report, sigma_rank_inversions,
 )
 
@@ -545,7 +545,7 @@ def test_sigma_rank_inversion_tripwire():
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_verifier.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_verifier.py -v`
 Expected: FAIL — `ImportError`
 
 - [ ] **Step 3: Implement in `verifier.py`**
@@ -608,10 +608,10 @@ def sigma_rank_inversions(
 
 - [ ] **Step 4: Run tests, full suite, commit**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/ -q` → all pass.
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/ -q` → all pass.
 
 ```bash
-git add workspaces/pws_aligner/verifier.py workspaces/pws_aligner/tests/test_verifier.py
+git add pws_aligner/verifier.py pws_aligner/tests/test_verifier.py
 git commit -m "feat(pws): continuous calibration report + sigma rank-inversion tripwire"
 ```
 
@@ -620,32 +620,32 @@ git commit -m "feat(pws): continuous calibration report + sigma rank-inversion t
 ### Task 4: Gate v3 — continuous model vs hand-tuned fusion on BB12
 
 **Files:**
-- Modify: `workspaces/pws_aligner/CLAUDE.md` (verdict)
+- Modify: `pws_aligner/CLAUDE.md` (verdict)
 - Create: gate artifacts (`1fsnxchk_pws_timeline.json`, `1fsnxchk_pws_probe_noise.json` — wherever run_phase1 writes them today)
 
 **Interfaces:**
-- Consumes: everything above; the genuine-votes file from the v2b gate (find it: `ls workspaces/pws_aligner/*votes*.json` or the path recorded in the v2b worktree ledger; if absent, regenerate with `capture_votes.py` — it runs the real harness probes per span; BB12 only, do NOT run BB11 lyrics/Whisper paths).
-- Produces: gate verdict written into `workspaces/pws_aligner/CLAUDE.md`.
+- Consumes: everything above; the genuine-votes file from the v2b gate (find it: `ls pws_aligner/*votes*.json` or the path recorded in the v2b worktree ledger; if absent, regenerate with `capture_votes.py` — it runs the real harness probes per span; BB12 only, do NOT run BB11 lyrics/Whisper paths).
+- Produces: gate verdict written into `pws_aligner/CLAUDE.md`.
 
 - [ ] **Step 1: Locate or regenerate genuine BB12 votes**
 
 ```bash
-ls workspaces/pws_aligner/ | grep -i vote
+ls pws_aligner/ | grep -i vote
 # if absent:
-venvs/audio/bin/python -m workspaces.pws_aligner.capture_votes --set-id 1fsnxchk  # check its --help for exact args
+venvs/audio/bin/python -m pws_aligner.capture_votes --set-id 1fsnxchk  # check its --help for exact args
 ```
 
 - [ ] **Step 2: Run the continuous model end-to-end**
 
 ```bash
-venvs/audio/bin/python -m workspaces.pws_aligner.run_phase1 --model continuous <votes-file args per its --help>
+venvs/audio/bin/python -m pws_aligner.run_phase1 --model continuous <votes-file args per its --help>
 ```
 Expected: timeline JSON + probe-noise sidecar written; zero spans crash.
 
 - [ ] **Step 3: Score against GT**
 
 ```bash
-venvs/audio/bin/python -m workspaces.alignment_prototype.score_timeline_vs_gt --set-id 1fsnxchk <timeline arg per its --help>
+venvs/audio/bin/python -m alignment.score_timeline_vs_gt --set-id 1fsnxchk <timeline arg per its --help>
 ```
 Record: identity %, ref-offset median (s), strict trajectory %, NULL/abstain span count.
 
@@ -653,7 +653,7 @@ Record: identity %, ref-offset median (s), strict trajectory %, NULL/abstain spa
 
 Run `continuous_calibration_report` + `sigma_rank_inversions` on the fitted noise vs BB12 GT (small runner inline in `run_phase1.py --calibrate` or a 20-line script beside it). Expected: **zero rank inversions**; learned σ ordering must match measured MAD ordering (fp tightest). If inversions fire, the gate FAILS regardless of scorecard numbers (right-answer-for-wrong-reasons guard).
 
-- [ ] **Step 5: Verdict — three explicit outcomes** (write into `workspaces/pws_aligner/CLAUDE.md`, dated, alongside the v1/v2b verdicts; update memory `project_pws_gate_verdict` accordingly):
+- [ ] **Step 5: Verdict — three explicit outcomes** (write into `pws_aligner/CLAUDE.md`, dated, alongside the v1/v2b verdicts; update memory `project_pws_gate_verdict` accordingly):
 
   - **PASS:** ≥ hand-tuned fusion on ≥2 of {identity, ref-offset median, strict traj} AND no calibration inversions AND NULL-abstain rate well below v2b's ~62%. → next step is BB11 held-out confirmation, then promotion discussion.
   - **PARTIAL:** beats DS decisively, approaches hand fusion, calibration clean. → iterate (per-axis σ? instance-conditioning per FABLE gate) — still Phase-1b, document levers.
@@ -662,7 +662,7 @@ Run `continuous_calibration_report` + `sigma_rank_inversions` on the fitted nois
 - [ ] **Step 6: Commit** (artifacts per repo convention — timelines are usually gitignored; commit the CLAUDE.md verdict + any runner code):
 
 ```bash
-git add workspaces/pws_aligner/CLAUDE.md workspaces/pws_aligner/run_phase1.py
+git add pws_aligner/CLAUDE.md pws_aligner/run_phase1.py
 git commit -m "eval(pws): gate v3 — continuous label model vs hand fusion on BB12 (verdict inside)"
 ```
 
@@ -673,8 +673,8 @@ git commit -m "eval(pws): gate v3 — continuous label model vs hand fusion on B
 The pivotal discriminator from the spec (§I.4 keystone) and the ontology research: varispeed ⇒ pitch shift = 12·log₂(r) coupled to tempo ratio r; key-lock ⇒ r ≠ 1 with pitch preserved. Genuinely categorical ⇒ DS-style aggregation is well-matched here (this lane, unlike offsets, keeps the categorical machinery).
 
 **Files:**
-- Create: `workspaces/pws_aligner/operations.py`
-- Test: `workspaces/pws_aligner/tests/test_operations.py`
+- Create: `pws_aligner/operations.py`
+- Test: `pws_aligner/tests/test_operations.py`
 
 **Interfaces:**
 - Consumes: `AbstainReason` from `votes.py`; `librosa`, `numpy` (already in `venvs/audio`).
@@ -687,13 +687,13 @@ The pivotal discriminator from the spec (§I.4 keystone) and the ontology resear
 - [ ] **Step 1: Write the failing test** (synthetic — librosa provides both transforms, no repo audio needed):
 
 ```python
-# workspaces/pws_aligner/tests/test_operations.py
+# pws_aligner/tests/test_operations.py
 from __future__ import annotations
 
 import librosa
 import numpy as np
 
-from workspaces.pws_aligner.operations import (
+from pws_aligner.operations import (
     TempoPitchLabel, keylock_vs_varispeed,
 )
 
@@ -740,13 +740,13 @@ def test_keyshift_on_top_abstains():
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_operations.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_operations.py -v`
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement `operations.py`**
 
 ```python
-# workspaces/pws_aligner/operations.py
+# pws_aligner/operations.py
 """Categorical operation LFs (lane 2 of Phase-1b).
 
 Unlike offsets (continuous — see continuous_model.py), operation-type labels
@@ -843,13 +843,13 @@ fails marginally, raise to 60 bins/octave before touching tolerances.
 
 - [ ] **Step 4: Run tests, full suite**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_operations.py -v` → 4 PASS.
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/ -q` → all pass.
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_operations.py -v` → 4 PASS.
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/ -q` → all pass.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/pws_aligner/operations.py workspaces/pws_aligner/tests/test_operations.py
+git add pws_aligner/operations.py pws_aligner/tests/test_operations.py
 git commit -m "feat(pws): keylock-vs-varispeed operation LF (first categorical lane LF)"
 ```
 
@@ -858,7 +858,7 @@ git commit -m "feat(pws): keylock-vs-varispeed operation LF (first categorical l
 ### Task 6: Operation-LF runner on BB12 (analysis, no gate)
 
 **Files:**
-- Create: `workspaces/pws_aligner/run_operations.py`
+- Create: `pws_aligner/run_operations.py`
 
 **Interfaces:**
 - Consumes: `keylock_vs_varispeed` from Task 5; span enumeration + audio loading from `capture_votes.py` (reuse its loaders — read that file and import its span/audio helpers rather than re-implementing).
@@ -869,16 +869,16 @@ git commit -m "feat(pws): keylock-vs-varispeed operation LF (first categorical l
 - [ ] **Step 2: Run on BB12**
 
 ```bash
-venvs/audio/bin/python -m workspaces.pws_aligner.run_operations --set-id 1fsnxchk
+venvs/audio/bin/python -m pws_aligner.run_operations --set-id 1fsnxchk
 ```
 Expected: JSON written; histogram printed; no crashes. Sanity expectations (not asserts): mashup-heavy BB12 should show a real KEYLOCK/VARISPEED mixture, not 100% one label (per the 31%-repitched-acappellas memory the varispeed/repitch class must be non-empty).
 
-- [ ] **Step 3: Record the histogram** in `workspaces/pws_aligner/CLAUDE.md` under a "lane 2 — operations" heading (counts only, no accuracy claims).
+- [ ] **Step 3: Record the histogram** in `pws_aligner/CLAUDE.md` under a "lane 2 — operations" heading (counts only, no accuracy claims).
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add workspaces/pws_aligner/run_operations.py workspaces/pws_aligner/CLAUDE.md
+git add pws_aligner/run_operations.py pws_aligner/CLAUDE.md
 git commit -m "feat(pws): operation-LF runner — keylock/varispeed histogram on BB12 spans"
 ```
 

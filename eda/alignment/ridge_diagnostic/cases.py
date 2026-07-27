@@ -6,14 +6,14 @@ from pathlib import Path
 
 import yaml
 
-from workspaces.alignment_prototype.path_decode import gt_placement_onset
-from workspaces.alignment_prototype.score_timeline_vs_gt import (
+from alignment.path_decode import gt_placement_onset
+from alignment.score_timeline_vs_gt import (
     norm_slot,
     score_spans,
 )
 
 _REPO = Path(__file__).resolve().parents[3]
-_ALN_OUT = _REPO / "workspaces" / "alignment_prototype" / "out"
+_ALN_OUT = _REPO / "alignment" / "out"
 
 SET_META = {
     "1fsnxchk": ("BB12", _REPO / "labeling/fixtures/bb12_ground_truth.yaml"),

@@ -31,8 +31,8 @@
    reports 176-file overlap with `chore/repo-housekeeping` + 8 more branches.
    Renames wait for a quiet tree (a later "Wave 2").
 3. **DO NOT touch:** `data/` (46G; but 113 tracked `data/djs/*.json` job files
-   must stay), `venvs/`, the DAG modules, `workspaces/alignment_prototype`,
-   `workspaces/pws_aligner`, `core/provenance`, `tests/`.
+   must stay), `venvs/`, the DAG modules, `alignment`,
+   `pws_aligner`, `core/provenance`, `tests/`.
 4. **Tracked vs untracked matters:** tracked files → `git rm` (git history is
    the "just in case" backup, fully recoverable). Untracked files → physically
    move (git won't save them; deleting is permanent).

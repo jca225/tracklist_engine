@@ -310,9 +310,9 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 The residual source's fuel. The scorer *computes* never-matched recordings but only `print()`s a count and only for acappellas. This extracts a pure, generalized (all-stems) helper and writes it to JSON.
 
 **Files:**
-- Create: `workspaces/alignment_prototype/never_matched.py`
+- Create: `alignment/never_matched.py`
 - Test: `tests/test_never_matched.py`
-- (Wiring, untested glue) Modify: `workspaces/alignment_prototype/score_timeline_vs_gt.py` — add a `--emit-never-matched PATH` flag in the `--decompose` block (~lines 622–633) that calls the helper with the in-scope `gt_rows` and `spans` and writes the JSON.
+- (Wiring, untested glue) Modify: `alignment/score_timeline_vs_gt.py` — add a `--emit-never-matched PATH` flag in the `--decompose` block (~lines 622–633) that calls the helper with the in-scope `gt_rows` and `spans` and writes the JSON.
 
 **Interfaces:**
 - Produces:
@@ -331,7 +331,7 @@ Create `tests/test_never_matched.py`:
 ```python
 from pathlib import Path
 import json
-from workspaces.alignment_prototype.never_matched import (
+from alignment.never_matched import (
     never_matched_recordings, write_never_matched,
 )
 
@@ -361,11 +361,11 @@ def test_write_never_matched_json_shape(tmp_path):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `venvs/audio/bin/python -m pytest tests/test_never_matched.py -v`
-Expected: FAIL — `ModuleNotFoundError: workspaces.alignment_prototype.never_matched`.
+Expected: FAIL — `ModuleNotFoundError: alignment.never_matched`.
 
 - [ ] **Step 3: Implement the helper**
 
-Create `workspaces/alignment_prototype/never_matched.py`:
+Create `alignment/never_matched.py`:
 
 ```python
 """Serialize the GT recordings that no predicted span matched — the residual
@@ -422,11 +422,11 @@ Expected: PASS.
 
 - [ ] **Step 5: Wire the flag into the scorer (glue — no new test)**
 
-In `workspaces/alignment_prototype/score_timeline_vs_gt.py`, in the `--decompose` block where `gt_rows`, `spans`, and `matched_tids` are already in scope (~lines 622–633), add after the existing never-matched print:
+In `alignment/score_timeline_vs_gt.py`, in the `--decompose` block where `gt_rows`, `spans`, and `matched_tids` are already in scope (~lines 622–633), add after the existing never-matched print:
 
 ```python
         if getattr(args, "emit_never_matched", None):
-            from workspaces.alignment_prototype.never_matched import write_never_matched
+            from alignment.never_matched import write_never_matched
             from pathlib import Path as _Path
             write_never_matched(set_id, gt_rows, spans, _Path(args.emit_never_matched))
 ```
@@ -440,13 +440,13 @@ And register the flag in the argparse setup (next to the `--decompose` flag):
 
 - [ ] **Step 6: Sanity-run against BB12 (manual verification)**
 
-Run: `venvs/audio/bin/python -m workspaces.alignment_prototype.score_timeline_vs_gt --set-id 1fsnxchk --decompose --emit-never-matched out/1fsnxchk_never_matched.json` (adjust to the script's actual timeline arg).
+Run: `venvs/audio/bin/python -m alignment.score_timeline_vs_gt --set-id 1fsnxchk --decompose --emit-never-matched out/1fsnxchk_never_matched.json` (adjust to the script's actual timeline arg).
 Expected: `out/1fsnxchk_never_matched.json` exists and lists ~11 recordings. If the arg surface differs, match the script's existing `--decompose` invocation; do not invent flags.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/never_matched.py tests/test_never_matched.py workspaces/alignment_prototype/score_timeline_vs_gt.py
+git add alignment/never_matched.py tests/test_never_matched.py alignment/score_timeline_vs_gt.py
 git commit -m "feat(align): serialize never-matched GT recordings to JSON (all stems)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"

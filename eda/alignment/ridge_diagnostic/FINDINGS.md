@@ -2,7 +2,7 @@
 
 Date: 2026-07-18
 Study SHA: 2d83ea2 (CLI run); findings revised in this doc tree.
-Timelines used: `workspaces/alignment_prototype/out/1fsnxchk_agentic_timeline.json` (BB12), `workspaces/alignment_prototype/out/2nvzlh2k_agentic_timeline.json` (BB11)
+Timelines used: `alignment/out/1fsnxchk_agentic_timeline.json` (BB12), `alignment/out/2nvzlh2k_agentic_timeline.json` (BB11)
 n cases: 12
 Contrast threshold (aid only): 2.0
 

@@ -19,7 +19,7 @@ now hinges on **proving the flywheel is safe** (ACCEPT precision) and building t
 ### 1. ACCEPT-precision gate (flywheel safety) — DIRECTIONAL PASS, rigorous run deferred
 - **What/why:** does the seam's ACCEPT band ("≥2 independent probes agree") mean
   the candidate ref is GT-correct? If not, pseudo-labels poison training.
-- **Built:** `workspaces/pws_aligner/validate_accept_precision.py` — `build_gt_cases`
+- **Built:** `pws_aligner/validate_accept_precision.py` — `build_gt_cases`
   (BB GT → positive + **decoy** cases), `score_by_stem` (per-axis), 8 TDD tests
   (`tests/test_validate_accept_precision.py`). Committed on branch
   `worktree-cotrain-accept-precision` (worktree `.claude/worktrees/cotrain-accept-precision`,
@@ -27,7 +27,7 @@ now hinges on **proving the flywheel is safe** (ACCEPT precision) and building t
 - **Result:** instrumental smoke (3 spans) = **precision 1.000, 0 false-accepts**
   → strong axis looks **poison-free** (tiny sample, NOT certified).
 - **✅ PERF BUG FIXED (commit `6929b4d`, this branch).** `MixFeatureCache`
-  (`workspaces/pws_aligner/mix_feature_cache.py`) memoizes all mix-side features
+  (`pws_aligner/mix_feature_cache.py`) memoizes all mix-side features
   (full-mix landmark fp, whole-mix chroma, windowed mix chroma/HuBERT) + ref
   features per run; the full-mix work now runs ONCE per span, not per candidate.
   New seams: `fp_offset(mix_fp=…)` + `FingerprintProbe(mix_fp=…)` (both symmetric

@@ -9,11 +9,11 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-import workspaces.alignment_prototype.refine_ref_offsets as refine_ref_offsets
-from workspaces.alignment_prototype.infer_fused import _resolve_ref
-from workspaces.alignment_prototype.joint_ref_decode import _ref_audio_for
-from workspaces.alignment_prototype.refine_ref_offsets import ref_audio_for
-from workspaces.alignment_prototype.stem_resolve import resolve_stem
+import alignment.refine_ref_offsets as refine_ref_offsets
+from alignment.infer_fused import _resolve_ref
+from alignment.joint_ref_decode import _ref_audio_for
+from alignment.refine_ref_offsets import ref_audio_for
+from alignment.stem_resolve import resolve_stem
 
 
 def _touch(path: Path) -> Path:

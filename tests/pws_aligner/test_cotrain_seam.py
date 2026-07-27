@@ -19,8 +19,8 @@ from core.acquisition_case import (
     ProblemClass,
     TrainingSignal,
 )
-from workspaces.alignment_prototype.harness.contract import AlignmentResult
-from workspaces.pws_aligner.cotrain_seam import (
+from alignment.harness.contract import AlignmentResult
+from pws_aligner.cotrain_seam import (
     Band,
     BandThresholds,
     CandidateProposal,
@@ -36,7 +36,7 @@ from workspaces.pws_aligner.cotrain_seam import (
     real_probe_scorer,
     slot_is_suspect,
 )
-from workspaces.pws_aligner.cotrain_seam import SlotSignal
+from pws_aligner.cotrain_seam import SlotSignal
 
 
 # ── Seam 1: suspect → AcquisitionCase ─────────────────────────────────────────
@@ -363,7 +363,7 @@ def test_real_probe_scorer_routes_probes_by_stem(tmp_path):
     # Stem routing is honored even in the all-abstain (no-audio) path: an
     # acappella candidate gets the vocal-axis probe set (hubert/continuity/chroma),
     # a regular candidate gets fp/chroma. Sources are the routed probe names.
-    from workspaces.pws_aligner.cotrain_seam import RefCandidate
+    from pws_aligner.cotrain_seam import RefCandidate
 
     scorer = real_probe_scorer(aligning_dir=tmp_path / "no_such_set")
     acap = RefCandidate(recording_id="r", source_url="yt://x", stem="acappella")

@@ -77,8 +77,8 @@ probe), `docs/archive/stem_routing_plan.md`, this doc. The continuity result reu
 
 ## Reproduce
 ```
-venvs/audio/bin/python -m workspaces.alignment_prototype.instrumental_ref_offset_eval \
+venvs/audio/bin/python -m alignment.instrumental_ref_offset_eval \
   --als "$HOME/aligning/1fsnxchk__*/BB12 align.als" --set-dir "$HOME/aligning/1fsnxchk__*"
-venvs/audio/bin/python -m workspaces.alignment_prototype.continuity_refine \
+venvs/audio/bin/python -m alignment.continuity_refine \
   --eval --feature hubert --stems acappella --acap-band-s 0.0
 ```

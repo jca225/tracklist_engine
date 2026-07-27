@@ -12,7 +12,7 @@
 
 - **Decoder held fixed at `--decoder looptrace`** across ALL rungs (matches the `_lt` scorecard source of truth). Never mix decoders within a ladder run — lifts must reflect oracle-input substitution only.
 - **Fixed denominator = GT-acappella rows.** Every rung's acappella traj is the mean over the *same* set of GT-acap rows (a row with no decodable span scores 0). Never aggregate over predicted spans (that drops mis-identified spans and inflates R0).
-- **Oracle substitution is eval-only.** No production timeline/routing/ingest/identity change. Do not edit `joint_ref_decode.py`, `harness/axes.py`, or anything under `workspaces/pws_aligner/**`.
+- **Oracle substitution is eval-only.** No production timeline/routing/ingest/identity change. Do not edit `joint_ref_decode.py`, `harness/axes.py`, or anything under `pws_aligner/**`.
 - **Axis rule:** `claimed_stem` for scoring comes from the GT row, never the timeline span.
 - **n=2 → report per-set** (BB11, BB12 separately). Never pool into a cross-set CI.
 - **Set ids:** BB11 = `2nvzlh2k`, BB12 = `1fsnxchk`.
@@ -23,7 +23,7 @@
 ### Task 1: Rung timeline builder (pure, slot-matched substitution)
 
 **Files:**
-- Create: `workspaces/alignment_prototype/evals/oracle_ladder.py`
+- Create: `alignment/evals/oracle_ladder.py`
 - Test: `tests/alignment_prototype/test_oracle_ladder.py`
 
 **Interfaces:**
@@ -40,7 +40,7 @@
 
 ```python
 # tests/alignment_prototype/test_oracle_ladder.py
-from workspaces.alignment_prototype.evals import oracle_ladder as ol
+from alignment.evals import oracle_ladder as ol
 
 
 def _r0():
@@ -108,7 +108,7 @@ Expected: FAIL (`ModuleNotFoundError` / `AttributeError: build_rung_timeline`).
 - [ ] **Step 3: Write minimal implementation**
 
 ```python
-# workspaces/alignment_prototype/evals/oracle_ladder.py
+# alignment/evals/oracle_ladder.py
 """Acappella oracle→e2e gap decomposition ("oracle ladder").
 
 Attributes the acappella trajectory gap between end-to-end and oracle-placement
@@ -119,7 +119,7 @@ docs/superpowers/specs/2026-07-18-acappella-oracle-ladder-design.md.
 """
 from __future__ import annotations
 
-from workspaces.alignment_prototype.score_timeline_vs_gt import norm_slot
+from alignment.score_timeline_vs_gt import norm_slot
 
 RUNGS: tuple[str, ...] = ("R0", "R1", "R2", "R3")
 
@@ -171,7 +171,7 @@ Expected: PASS (4 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/evals/oracle_ladder.py tests/alignment_prototype/test_oracle_ladder.py
+git add alignment/evals/oracle_ladder.py tests/alignment_prototype/test_oracle_ladder.py
 git commit -m "feat(evals): oracle-ladder rung timeline builder (slot-matched substitution)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -182,7 +182,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ### Task 2: GT-row-centric acappella aggregation (fixed denominator)
 
 **Files:**
-- Modify: `workspaces/alignment_prototype/evals/oracle_ladder.py`
+- Modify: `alignment/evals/oracle_ladder.py`
 - Test: `tests/alignment_prototype/test_oracle_ladder.py`
 
 **Interfaces:**
@@ -220,7 +220,7 @@ Expected: FAIL (`AttributeError: summarize_acappella`).
 - [ ] **Step 3: Write minimal implementation**
 
 ```python
-# add to workspaces/alignment_prototype/evals/oracle_ladder.py
+# add to alignment/evals/oracle_ladder.py
 from typing import Callable  # (add to imports at top)
 
 
@@ -259,7 +259,7 @@ Expected: PASS (5 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/evals/oracle_ladder.py tests/alignment_prototype/test_oracle_ladder.py
+git add alignment/evals/oracle_ladder.py tests/alignment_prototype/test_oracle_ladder.py
 git commit -m "feat(evals): fixed-denominator acappella aggregation for the oracle ladder
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -270,7 +270,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ### Task 3: Ladder runner CLI + real score_fn (integration, anchor-gated)
 
 **Files:**
-- Modify: `workspaces/alignment_prototype/evals/oracle_ladder.py`
+- Modify: `alignment/evals/oracle_ladder.py`
 
 **Interfaces:**
 - Consumes:
@@ -291,7 +291,7 @@ Notes for the implementer:
 - [ ] **Step 1: Implement the runner**
 
 ```python
-# add to workspaces/alignment_prototype/evals/oracle_ladder.py
+# add to alignment/evals/oracle_ladder.py
 import argparse
 import json
 import sys
@@ -300,14 +300,14 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from workspaces.alignment_prototype import joint_ref_decode as jrd
-from workspaces.alignment_prototype import score_timeline_vs_gt as sc
-from workspaces.alignment_prototype.path_decode import (
+from alignment import joint_ref_decode as jrd
+from alignment import score_timeline_vs_gt as sc
+from alignment.path_decode import (
     FPS,
     _ensure_feat,
     trajectory_acc,
 )
-from workspaces.alignment_prototype.refine_ref_offsets import find_aligning_dir
+from alignment.refine_ref_offsets import find_aligning_dir
 
 _REPO = Path(__file__).resolve().parents[3]
 
@@ -349,7 +349,7 @@ def real_score_fn(set_id: str, by_tid: dict, fibers: bool):
         if not fibers or ref_audio is None:
             return None
         if ref_audio not in cache:
-            from workspaces.alignment_prototype.ref_fibers import compute_fibers
+            from alignment.ref_fibers import compute_fibers
 
             hf = np.load(_ensure_feat(ref_audio, ref_audio, "hubert", 9))
             cache[ref_audio] = compute_fibers(hf, FPS, audio_path=ref_audio)
@@ -455,17 +455,17 @@ Expected: PASS (5 tests; the runner import must not break collection).
 
 Run:
 ```bash
-venvs/audio/bin/python -m workspaces.alignment_prototype.evals.oracle_ladder \
+venvs/audio/bin/python -m alignment.evals.oracle_ladder \
   --set-id 1fsnxchk \
   --gt labeling/fixtures/bb12_ground_truth.yaml \
-  --r0-timeline workspaces/alignment_prototype/out/1fsnxchk_predicted_timeline_lt.json
+  --r0-timeline alignment/out/1fsnxchk_predicted_timeline_lt.json
 ```
 Expected: prints R0..R3 strict/fiber. **Gate:** R0 strict in ~0.09–0.18 and fiber ~0.28–0.36 (reproduces the scorecard acappella e2e); R3 strict in ~0.38–0.48 (looptrace-oracle ballpark). If R0 or R3 is far outside range, STOP — the harness is wrong (debug matching / ref-audio resolution / decoder args) before trusting any lift.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/evals/oracle_ladder.py
+git add alignment/evals/oracle_ladder.py
 git commit -m "feat(evals): oracle-ladder runner (looptrace-fixed re-decode + attribution)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -476,18 +476,18 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ### Task 4: Run both sets, write findings, apply decision rule
 
 **Files:**
-- Create: `workspaces/alignment_prototype/evals/ORACLE_LADDER_FINDINGS.md`
-- Modify: `workspaces/alignment_prototype/looptrace/NOTES.md` (append a dated pointer to the findings)
+- Create: `alignment/evals/ORACLE_LADDER_FINDINGS.md`
+- Modify: `alignment/looptrace/NOTES.md` (append a dated pointer to the findings)
 
 - [ ] **Step 1: Run BB11 and BB12 (backgroundable; features build on first use)**
 
 ```bash
 for sid_gt in "2nvzlh2k:bb11" "1fsnxchk:bb12"; do
   sid=${sid_gt%%:*}; nm=${sid_gt##*:}
-  venvs/audio/bin/python -m workspaces.alignment_prototype.evals.oracle_ladder \
+  venvs/audio/bin/python -m alignment.evals.oracle_ladder \
     --set-id $sid --gt labeling/fixtures/${nm}_ground_truth.yaml \
-    --r0-timeline workspaces/alignment_prototype/out/${sid}_predicted_timeline_lt.json \
-    2>&1 | tee workspaces/alignment_prototype/out/oracle_ladder/${sid}.log
+    --r0-timeline alignment/out/${sid}_predicted_timeline_lt.json \
+    2>&1 | tee alignment/out/oracle_ladder/${sid}.log
 done
 ```
 Expected: two per-set tables + attribution blocks. Confirm both R0/R3 anchors are in range for BOTH sets.
@@ -496,7 +496,7 @@ Expected: two per-set tables + attribution blocks. Confirm both R0/R3 anchors ar
 
 Run (BB12 shown; repeat BB11):
 ```bash
-venvs/audio/bin/python -m workspaces.alignment_prototype.path_decode --eval \
+venvs/audio/bin/python -m alignment.path_decode --eval \
   --feature hubert --stems acappella --fibers --workers 8 \
   --gt labeling/fixtures/bb12_ground_truth.yaml 2>&1 | tail -15
 ```
@@ -513,7 +513,7 @@ Add a dated section "Oracle→e2e gap decomposition (2026-07-18)" summarizing th
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/evals/ORACLE_LADDER_FINDINGS.md workspaces/alignment_prototype/looptrace/NOTES.md
+git add alignment/evals/ORACLE_LADDER_FINDINGS.md alignment/looptrace/NOTES.md
 git commit -m "docs(evals): oracle-ladder findings + decision on the acappella selector
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"

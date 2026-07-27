@@ -22,7 +22,7 @@ discrimination, ~2% are boundary/acquisition.**
 
 - **Numbers SSOT:** [docs/alignment_status.md](../../../docs/alignment_status.md).
   Do not hand-type identity/placement metrics elsewhere; regenerate from the scorer.
-- **Sensor freeze is in force** (`workspaces/alignment_prototype/docs/trm_decoder_bakeoff.md`): do NOT
+- **Sensor freeze is in force** (`alignment/docs/trm_decoder_bakeoff.md`): do NOT
   add new probes/channels/priors. Both levers here are *actor/output* changes, not
   perception — they are inside the two sanctioned lanes (decoder + contracts).
 - **Axis rule:** take `claimed_stem` from the matched GT row, never the timeline span.
@@ -30,7 +30,7 @@ discrimination, ~2% are boundary/acquisition.**
   gain on n=2 that does not hold on both sets is not a finding.
 - **The scorecard is the only arbiter** (`make scorecard`). Report identity strict
   before/after per set, and confirm no regression in placement / trajectory-acc.
-- **Collision:** other live sessions own `workspaces/pws_aligner/**` (harvest+cache)
+- **Collision:** other live sessions own `pws_aligner/**` (harvest+cache)
   and the `cotrain-corpus-harvest` branch. Stay out of both. Branch off `main`.
 
 ---

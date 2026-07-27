@@ -1,7 +1,7 @@
 # warp_analysis — empirical warp prior for synthetic mashup generation
 
 Purpose: make the parallel agent's synthetic mashups
-(`workspaces/alignment_prototype/synthetic_mix/`) warp tracks the way real DJs
+(`alignment/synthetic_mix/`) warp tracks the way real DJs
 do, so the trajectory decoder trains across a smaller domain gap. Handoff is the
 config artifact **`warp_prior.json`** — this module does NOT edit the generator.
 

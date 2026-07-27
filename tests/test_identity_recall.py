@@ -10,7 +10,7 @@ scored.
 
 from __future__ import annotations
 
-from workspaces.alignment_prototype.never_matched import identity_recall
+from alignment.never_matched import identity_recall
 
 
 def _gt(tid, ss, se, **kw):

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from workspaces.alignment_prototype.trajectory.targets import (
+from alignment.trajectory.targets import (
     KIND_IGNORE,
     KIND_NULL,
     KIND_POSITION,

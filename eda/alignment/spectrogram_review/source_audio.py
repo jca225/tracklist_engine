@@ -14,7 +14,7 @@ import re
 from pathlib import Path
 
 from core.contracts import MANIFEST_FILENAME
-from workspaces.alignment_prototype.fp_placement_refine import find_aligning_dir
+from alignment.fp_placement_refine import find_aligning_dir
 
 _STEM_FILE = {"acappella": "vocals", "instrumental": "instrumental"}
 _AUDIO_EXT = (".flac", ".wav", ".m4a", ".mp3")

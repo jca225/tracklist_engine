@@ -34,10 +34,10 @@ _REPO = Path(__file__).resolve().parents[3]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from workspaces.alignment_prototype.score_timeline_vs_gt import norm_slot
+from alignment.score_timeline_vs_gt import norm_slot
 
 OUT_DIR = Path(__file__).resolve().parent / "out"
-_ALN = _REPO / "workspaces" / "alignment_prototype"
+_ALN = _REPO / "alignment"
 
 SETS = [
     ("1fsnxchk", "BB12", _REPO / "labeling/fixtures/bb12_ground_truth.yaml"),
@@ -331,7 +331,7 @@ def main() -> int:
     # the local ~/aligning manifest the run actually used.
     _emit("\n== 6b. LOOPTRACE COVERAGE on acappella (silent-fallback attribution) ==")
     try:
-        from workspaces.alignment_prototype.refine_ref_offsets import (
+        from alignment.refine_ref_offsets import (
             find_aligning_dir,
         )
 

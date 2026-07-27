@@ -15,7 +15,7 @@ from labeling.acquire.audio_index import (
     refresh_audio_index,
     write_audio_index,
 )
-from workspaces.alignment_prototype.stem_resolve import resolve_stem
+from alignment.stem_resolve import resolve_stem
 
 
 def _touch(path: Path) -> Path:
@@ -105,7 +105,7 @@ def test_existing_index_fails_closed_instead_of_using_stale_manifest_stem(
 
 def test_trajectory_ref_resolution_uses_audio_index(tmp_path: Path) -> None:
     pytest.importorskip("librosa")
-    from workspaces.alignment_prototype.trajectory.features import resolve_span_audio
+    from alignment.trajectory.features import resolve_span_audio
 
     indexed = _touch(tmp_path / "tracks" / "indexed.m4a")
     stale = _touch(tmp_path / "tracks" / "stale.m4a")

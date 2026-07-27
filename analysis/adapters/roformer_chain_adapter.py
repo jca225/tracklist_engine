@@ -1,7 +1,7 @@
 """MSST RoFormer chain — vocals + instrumental ensembles via MSSeparator.
 
 Drop-in alternative to demucs_adapter / uvr_chain_adapter. Requires
-workspaces/msst_webui + venvs/msst (see scripts/setup_roformer_separation.sh).
+vendor/msst_webui + venvs/msst (see scripts/setup_roformer_separation.sh).
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ import soundfile as sf
 from core.result import Err, Ok, Result
 from ..errors import StemError
 from ..models import StemAsset, StemSet
-from ..roformer_config import ModelSpec, RoformerChainConfig
+from ..separation.roformer_config import ModelSpec, RoformerChainConfig
 
 _log = logging.getLogger(__name__)
 

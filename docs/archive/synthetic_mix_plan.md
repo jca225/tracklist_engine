@@ -29,7 +29,7 @@ is not the training distribution.
 
 **Goal:** produce ~10–500 labeled synthetic mixes + ear-check pass.
 
-**Module:** `workspaces/alignment_prototype/synthetic_mix/`
+**Module:** `alignment/synthetic_mix/`
 
 | File | Role |
 |------|------|
@@ -62,17 +62,17 @@ data/synthetic_mixes/synth_NNNN/
 
 ```bash
 # Generate corpus (start small)
-venvs/audio/bin/python -m workspaces.alignment_prototype.synthetic_mix.generate \
+venvs/audio/bin/python -m alignment.synthetic_mix.generate \
   --n 100 --curriculum medium --out data/synthetic_mixes
 
 # Pretrain (chroma = fast smoke; mert = real run — required for BB12 ablation)
-venvs/audio/bin/python -m workspaces.alignment_prototype.external.pretrain \
+venvs/audio/bin/python -m alignment.external.pretrain \
   --synthetic-root data/synthetic_mixes --features mert --max-mixes 100 \
-  --out workspaces/alignment_prototype/.cache/pretrain_synthetic_mert.pt
+  --out alignment/.cache/pretrain_synthetic_mert.pt
 
 # Decisive ablation
-venvs/audio/bin/python -m workspaces.alignment_prototype.external.pretrain --ablation \
-  --pretrain-checkpoint workspaces/alignment_prototype/.cache/pretrain_synthetic_mert.pt
+venvs/audio/bin/python -m alignment.external.pretrain --ablation \
+  --pretrain-checkpoint alignment/.cache/pretrain_synthetic_mert.pt
 ```
 
 **Success criterion:** pretrain→finetune **identity_acc** and **MAE set_start** beat
@@ -109,7 +109,7 @@ loops, ref_segments, handoffs). See **`docs/synthetic_mix_plan_v2_bb12.md`** for
 realistic generator plan.
 
 Pulled artifacts:
-- `workspaces/alignment_prototype/.cache/pretrain_synthetic_mert.pt`
+- `alignment/.cache/pretrain_synthetic_mert.pt`
 - `data/synthetic_mixes/synth_pretrain.log`
 
 ## Kill criteria (when to stop investing)

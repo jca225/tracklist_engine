@@ -1,5 +1,22 @@
 # analysis/ — per-track + per-set MIR analysis
 
+## Package layout
+
+```
+analysis/
+  adapters/       # MIR backend wrappers (roformer, demucs, essentia, cue-detr, …)
+  separation/     # stem backends + config (roformer_*, uvr_*, stem_mask)
+  identity/       # identity-axis verifiers (data / learned / verify)
+  cues/           # canonical_cues + grid_repair
+  pipeline.py     # per-track orchestrator (package root)
+  persistence.py
+  set_analysis.py
+  gpu_worker.py
+```
+
+Thin re-export shims at the old flat module paths (`analysis.roformer_config`,
+etc.) keep existing `python -m` / imports working during the transition.
+
 Consumes downloaded audio (from [ingest/](../ingest/CLAUDE.md)) and produces the
 analysis outputs: beat grids, stems, cue points, key/BPM/mood features, and MERT
 section embeddings. Writes the *audio-pipeline tables* (`track_analysis`,
@@ -23,7 +40,7 @@ so nothing downstream (schema, alignment, library) changes when you switch.
 
 | Backend | What | Speed | When |
 |---|---|---|---|
-| `roformer` *(current)* | MSST RoFormer vocal+instrumental ensemble ([adapters/roformer_chain_adapter.py](adapters/roformer_chain_adapter.py); needs `workspaces/msst_webui` + `venvs/msst`, see `scripts/setup_roformer_separation.sh`) | GPU ensemble | **default choice for new runs** |
+| `roformer` *(current)* | MSST RoFormer vocal+instrumental ensemble ([adapters/roformer_chain_adapter.py](adapters/roformer_chain_adapter.py); needs `vendor/msst_webui` + `venvs/msst`, see `scripts/setup_roformer_separation.sh`) | GPU ensemble | **default choice for new runs** |
 | `demucs` *(stale/legacy, code default)* | `htdemucs_ft`, 2-stem ([adapters/demucs_adapter.py](adapters/demucs_adapter.py)) | ~1 model pass | legacy / fallback only |
 | `uvr` | audio-separator cleanup **chain** ([adapters/uvr_chain_adapter.py](adapters/uvr_chain_adapter.py)): Kim Vocals 2 → karaoke ensemble → dereverb → de-echo → denoise (note: its `instrumental_cascade` re-sums via demucs) | ~5 sequential passes (much slower) | when a *clean dry lead vocal* matters more than throughput |
 

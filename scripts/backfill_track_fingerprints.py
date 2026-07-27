@@ -3,7 +3,7 @@
 
 Stores kind=landmark JSON blobs (not tempo-rigid chromaprint) for reference
 ``track_audio`` rows. Also writes a local cache under
-``workspaces/alignment_prototype/.cache/fp_index/`` for Mac alignment tools.
+``alignment/.cache/fp_index/`` for Mac alignment tools.
 
 Run on Mac against pi-storage (rsync audio, write canonical DB via SSH):
 
@@ -30,7 +30,7 @@ sys.path.insert(0, str(REPO))
 
 from core.db import connect
 from core.result import Err, Ok
-from workspaces.alignment_prototype.fp_index import (
+from alignment.fp_index import (
     DEFAULT_CACHE_DIR,
     FpKey,
     compute_from_file,

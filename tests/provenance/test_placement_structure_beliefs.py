@@ -12,8 +12,8 @@ from core.provenance import (
     SubjectRef,
     connect,
 )
-from workspaces.alignment_prototype.harness.contract import AlignmentResult, RefSegment
-from workspaces.alignment_prototype.placement_structure_beliefs import (
+from alignment.harness.contract import AlignmentResult, RefSegment
+from alignment.placement_structure_beliefs import (
     CalibratedAxisProbability,
     record_placement_structure_beliefs,
 )

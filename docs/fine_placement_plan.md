@@ -5,7 +5,7 @@
 
 ## Problem statement
 
-The P5 aligner (`workspaces/alignment_prototype/`) on BB12 held-out spans:
+The P5 aligner (`alignment/`) on BB12 held-out spans:
 
 | Column | State | MAE |
 |---|---|---|

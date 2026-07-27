@@ -7,9 +7,9 @@ from pathlib import Path
 from labeling.verify.anchor_check import _fmt_time, compare_anchors
 from labeling.schema import GroundTruthSet, GroundTruthTrack, load
 from core.result import Ok
-from workspaces.alignment_prototype.dataset import load_set, track_to_target
-from workspaces.alignment_prototype.losses import batch_loss
-from workspaces.alignment_prototype.model import CopyGTBaseline
+from alignment.dataset import load_set, track_to_target
+from alignment.losses import batch_loss
+from alignment.model import CopyGTBaseline
 
 
 def test_fmt_time():
@@ -62,8 +62,8 @@ def test_held_out_eval_copy_gt_zero():
     yaml_path = Path("labeling/fixtures/bb12_ground_truth.yaml")
     if not yaml_path.is_file():
         return
-    from workspaces.alignment_prototype.eval import evaluate
-    from workspaces.alignment_prototype.split import split_targets
+    from alignment.eval import evaluate
+    from alignment.split import split_targets
 
     match load_set(yaml_path):
         case Ok((_gt, targets)):

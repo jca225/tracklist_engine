@@ -17,7 +17,7 @@ the played span directly. Full memory: `project_placement_wall_was_decomposition
 MERT is identity-only (cannot localize, ~900s argmax) — do NOT use it for placement.
 
 ## What's already built + committed (reuse, don't rebuild)
-All in `workspaces/alignment_prototype/` unless noted. 17 commits this session.
+All in `alignment/` unless noted. 17 commits this session.
 
 **Placement pipeline (`mix_fp_hits.py`):**
 - `span_from_offset_votes(mix_hashes, ref_fp) -> (set_start_s, set_end_s, votes, offset_s)`
@@ -32,7 +32,7 @@ All in `workspaces/alignment_prototype/` unless noted. 17 commits this session.
 - Convention: `off = ref_frame - mix_frame`; build mix hashes ONCE per set via
   `landmark_fp.hashes(*constellation(mix))`, reuse across refs.
 
-**Runnable eval:** `eval_placement.py` (`python -m workspaces.alignment_prototype.eval_placement`)
+**Runnable eval:** `eval_placement.py` (`python -m alignment.eval_placement`)
 — runs decode_placements vs GT. Reproduce: set_start median 4.1s, <15s 73%.
 
 **Identity / axes / fibers (for fusion + per-stem):**
@@ -102,7 +102,7 @@ vocals** — use the AXIS-INVARIANT feature per `axes.py`:
 - **MERT is identity-only.** Synthetic pretrain is a closed negative (flat v1+v2).
 
 ## Verification
-- `python -m workspaces.alignment_prototype.eval_placement` → set_start median 4.1s, <15s 73% (regression).
+- `python -m alignment.eval_placement` → set_start median 4.1s, <15s 73% (regression).
 - After infer wiring: `infer` on BB12 (in-domain) then `score_timeline_vs_gt --set-id 1fsnxchk`
   — set_start should drop from the old ~30s to single-digit median.
 - `path_decode.py --eval --fibers` → fiber-aware traj-acc (53→59% baseline).
@@ -114,7 +114,7 @@ vocals** — use the AXIS-INVARIANT feature per `axes.py`:
 - Memories: `project_placement_wall_was_decomposition_error`, `project_hubert_vocal_ref_offset`,
   `project_key_change_breaks_chroma`, `project_fusion_needs_axis_prior`,
   `project_boundary_novelty_placement_prior`, `project_bb11_master_tempo_export`.
-- Module guide: `workspaces/alignment_prototype/CLAUDE.md` (updated with the reframe).
+- Module guide: `alignment/CLAUDE.md` (updated with the reframe).
 - Scratch experiments (not committed): `scratchpad/d1_*.py`, `d1d2_fusion_test.py`,
   `boundary_novelty_test.py`, `key_test.py` — the measurements behind the above.
 

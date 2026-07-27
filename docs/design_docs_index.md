@@ -10,7 +10,7 @@ are intentionally omitted below.
 
 Add a doc here when it's a durable design/plan worth keeping; remove + `git mv`
 to `archive/` when it's fully executed, superseded, or refuted (log refutations
-in `workspaces/alignment_prototype/attic/EXPERIMENTS.md`).
+in `alignment/attic/EXPERIMENTS.md`).
 
 ## Engine architecture — provenance-first rewrite
 

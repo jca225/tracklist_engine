@@ -61,7 +61,7 @@ the real trajectory-decoder registration.
 **Realized (Brick 9, 2026-07-25):** `train.py --save-head-checkpoint PATH`
 (opt-in, default None — training behavior unchanged when absent) persists the
 fitted head via `external/checkpoint.py`;
-`workspaces/alignment_prototype/register_identity_head.py` registers it into the
+`alignment/register_identity_head.py` registers it into the
 Brick-7 producers store as a content-addressed `MODEL_CHECKPOINT` +
 `TrainingSnapshot` (BB12 GT fixture + the trained-on MERT cache bytes) +
 training `ProcessSpec` + `FittedModel(axis=IDENTITY)`. Laws 13/14 now PASS on

@@ -12,7 +12,7 @@ Operation Crush is the data-integrity + model-infrastructure project for the Aug
 
 ### MERT — *MERT: Acoustic Music Understanding Model with Large-Scale Self-Supervised Training* (ICLR 2024)
 - Source: `Music Papers 2026/MERT.pdf`
-- Already the backbone of the identity channel (`analysis/adapters/mert_adapter.py`, `workspaces/alignment_prototype/mert_*`).
+- Already the backbone of the identity channel (`analysis/adapters/mert_adapter.py`, `alignment/mert_*`).
 - **Actionable:** upgrade to MERT 330M with a **learned weighted sum over all hidden states** instead of the single layer-6 pick. The paper shows layers 4–7 encode acoustic/tempo, 8–13 pitch/harmony, 14–19 timbre/instrumentation, 20–24 semantics.
 - **Actionable:** use **frame-level MERT features** for precise ref-offset localization, not only pooled embeddings.
 
@@ -35,7 +35,7 @@ Operation Crush is the data-integrity + model-infrastructure project for the Aug
 - Models transitions as **parameterized EQ + fader curves** applied to overlapping tracks, with explicit cue-out / cue-in points.
 - **Why it is the highest-leverage paper:** the `GroundTruthTrack` schema already captures `gain_curve`, `audible_start_s`, `audible_end_s`, and `audible_frac`. DJtransGAN provides the physical model that generates those values.
 - **Code changes:**
-  - Add `workspaces/alignment_prototype/transition_model.py` that, given two consecutive spans and their audio, fits a differentiable fade/EQ curve to the overlap.
+  - Add `alignment/transition_model.py` that, given two consecutive spans and their audio, fits a differentiable fade/EQ curve to the overlap.
   - Use the fitted curve to estimate `audible_start_s` / `audible_end_s` and score transition realism.
   - Use the paper's cue-out/cue-in definition (last/first diagonal DTW segment) to refine GT boundaries.
 - **Issue:** DJtransGAN transition model task under Operation Crush.

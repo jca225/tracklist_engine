@@ -92,7 +92,7 @@ timeline, strict scorer, regression audit
 
 ## Public contracts
 
-Create `workspaces/alignment_prototype/candidate_arbiter/`.
+Create `alignment/candidate_arbiter/`.
 
 ### `schema.py`
 
@@ -201,7 +201,7 @@ objective and frozen before held-out evaluation.
 - [ ] Add a baseline candidate for every span.
 - [ ] Validate that candidate materialization never changes a source timeline.
 - [ ] Store artifacts under
-  `workspaces/alignment_prototype/out/candidates/<set_id>.jsonl`.
+  `alignment/out/candidates/<set_id>.jsonl`.
 - [ ] Add schema-version and producer-SHA metadata.
 
 **Gate**

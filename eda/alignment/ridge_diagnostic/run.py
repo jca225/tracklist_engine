@@ -36,7 +36,7 @@ from eda.alignment.ridge_diagnostic.plot import (
     write_contrast_table,
 )
 from eda.alignment.ridge_diagnostic.ridge import gt_diagonal_mask, ridge_contrast
-from workspaces.alignment_prototype.refine_ref_offsets import find_aligning_dir
+from alignment.refine_ref_offsets import find_aligning_dir
 
 _PKG = Path(__file__).resolve().parent
 _OUT = _PKG / "out"

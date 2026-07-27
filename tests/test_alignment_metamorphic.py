@@ -23,8 +23,8 @@ np = pytest.importorskip("numpy")
 pytest.importorskip("librosa")
 pytest.importorskip("scipy")
 
-from workspaces.alignment_prototype.harness import CandidatePool, MixContext, RefContext
-from workspaces.alignment_prototype.harness.fingerprint_probe import FingerprintProbe
+from alignment.harness import CandidatePool, MixContext, RefContext
+from alignment.harness.fingerprint_probe import FingerprintProbe
 
 SR = 22050
 _FREQS = [440, 660, 550, 880, 330, 770, 495, 620, 392, 587, 466, 698]  # fixed melody

@@ -26,7 +26,7 @@ Committed: state-of-record SHAs `6906c48`, `74dfc70`, `75f9a94`; spec
 **JOB 1 — Synthetic volume curve (DECISIVE — do first).**
 The +0.024 lift is at only **100** synthetic mixes. The go/no-go for the whole
 program: **does more synthetic → more accuracy?**
-- Generate more synthetic mixes: `python -m workspaces.alignment_prototype.synthetic_mix.generate_v2 --n <N> --curriculum bb12-lite --out data/synthetic_mixes_v2_<N> --seed <s>` (needs the source stem catalog from pi-storage via `mashup_compat.pairs`/`PI_DB`).
+- Generate more synthetic mixes: `python -m alignment.synthetic_mix.generate_v2 --n <N> --curriculum bb12-lite --out data/synthetic_mixes_v2_<N> --seed <s>` (needs the source stem catalog from pi-storage via `mashup_compat.pairs`/`PI_DB`).
 - Retrain the trajectory decoder at N ∈ {100, 500, 1000, 2000, …}, eval held-out BB12, plot traj-acc vs N. If it keeps climbing → GREEN, scale the learned-aligner program.
 - Also run: matched-epoch + multi-seed (kill single-epoch noise), the other direction (train BB12→eval BB11), and a **pure-synthetic-only** variant (train on synthetic *only*, no real) to measure the true transfer gap vs. augmentation.
 
@@ -35,7 +35,7 @@ Co-training harvest needs analyzed mixes; only **4** are analyzed today
 (`set_measures`=0 beat grids, `set_stems`=4). Run RoFormer stems + beats + MERT +
 fingerprints on the 1,016 mixes (+ their refs). This is the repo's existing
 `analysis` stack (`scripts/vast_loop.py` / `analysis.vast_worker` pattern, pulls
-from pi-storage). Then the co-training seam (`workspaces/pws_aligner/cotrain_seam.py`)
+from pi-storage). Then the co-training seam (`pws_aligner/cotrain_seam.py`)
 can harvest pseudo-labels. **No new downloads needed** — the mixes are already on pi.
 
 ## 3. Infra — EC2 g5 in us-east-2 (NOT SageMaker)
@@ -62,7 +62,7 @@ Spot G = 0 everywhere → **on-demand only**.
 ```bash
 # ceiling (A, real-only):
 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 PYTHONUNBUFFERED=1 \
-python -u -m workspaces.alignment_prototype.trajectory.train \
+python -u -m alignment.trajectory.train \
   --split set --train-set 2nvzlh2k --eval-set 1fsnxchk --device cuda
 # augmented (B, real+synthetic):  add  --synthetic-root data/synthetic_mixes_v2
 ```
@@ -79,7 +79,7 @@ python -u -m workspaces.alignment_prototype.trajectory.train \
 - **`HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1`** after first model fetch — a stale
   HF file-lock (from a killed process) hung startup at 0 CPU. Let HuBERT
   (`facebook/hubert-base-ls960`) download once on the fresh box, THEN set offline.
-- **Feature cache** persists to `workspaces/alignment_prototype/.feat_cache/`
+- **Feature cache** persists to `alignment/.feat_cache/`
   (`*_hubertL9.npy`, `*_mel64.npy`, `*_chroma.npy`). Cold pass over 100 synthetic
   mixes = ~40 min on CPU; **GPU + persisted cache is the whole point.**
 - The Mac was slow because of **CPU contention from parallel `race`/`infer`

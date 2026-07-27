@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-import workspaces.alignment_prototype.harness.fingerprint_probe as fp
-from workspaces.alignment_prototype.harness import (
+import alignment.harness.fingerprint_probe as fp
+from alignment.harness import (
     AlignmentResult,
     CandidatePool,
     MixContext,

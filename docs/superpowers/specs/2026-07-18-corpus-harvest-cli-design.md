@@ -70,7 +70,7 @@ with no pi access:
 > audio → all probes abstain), and the census counts such rows as
 > "audio-missing", not eligible.
 
-## 5. Components (all in `workspaces/pws_aligner/corpus_harvest.py`)
+## 5. Components (all in `pws_aligner/corpus_harvest.py`)
 
 A single new module, mirroring `harvest.py`'s shape. Pure functions at the core,
 thin `main()` at the edge (repo Rust-flavoured-functional style).
@@ -176,7 +176,7 @@ pi DB ──query_corpus_slots──► [CorpusSlot]
 
 ## 8. Testing (TDD, against a fixture DB + fake scorer — no pi, no real audio)
 
-New `workspaces/pws_aligner/tests/test_corpus_harvest.py`:
+New `pws_aligner/tests/test_corpus_harvest.py`:
 
 1. **`query_corpus_slots`** on an in-memory SQLite fixture: returns only
    candidate-eligible slots; excludes non-reference mix/ref, wrong-stem ref,

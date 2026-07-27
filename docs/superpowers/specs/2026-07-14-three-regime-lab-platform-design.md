@@ -132,7 +132,7 @@ tracklist_engine/                  (same repo, restructured — NOT a new repo)
 │   └── learning/                  REGIME 3
 │       ├── labeling/     ← labeling
 │       ├── personalization/ ← personalization
-│       └── alignment/    ← workspaces/alignment_prototype  (moves at ITS P6, not in W1)
+│       └── alignment/    ← alignment  (moves at ITS P6, not in W1)
 │
 ├── platform/                      NEW · thin glue
 │   └── registry.py                declares: each lab's regime, contract types it

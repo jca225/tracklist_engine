@@ -4,14 +4,14 @@
 
 **Goal:** Build a thin batch CLI that runs the co-training flywheel's write-side over the pi-storage corpus — pi DB queries → build cases (cue-time anchored) → certified-probe scorer → harvest ledger — plus a `--census` mode that quantifies eligibility before the GPU stem pass.
 
-**Architecture:** One new module `workspaces/pws_aligner/corpus_harvest.py` of small pure functions with a thin `main()`. It adds only a **corpus case-builder** (DB → cases) and a **batch loop**; all alignment logic delegates to existing, tested machinery (`harvest.harvest` / `harvest.write_ledger` / `cotrain_seam.real_probe_scorer` / `cotrain_seam.corpus_mix_resolver`). Zero canonical-DB mutation (inherits the seam invariant). CPU-only for the certified axes (regular/instrumental skip HuBERT), so it runs on pi-storage.
+**Architecture:** One new module `pws_aligner/corpus_harvest.py` of small pure functions with a thin `main()`. It adds only a **corpus case-builder** (DB → cases) and a **batch loop**; all alignment logic delegates to existing, tested machinery (`harvest.harvest` / `harvest.write_ledger` / `cotrain_seam.real_probe_scorer` / `cotrain_seam.corpus_mix_resolver`). Zero canonical-DB mutation (inherits the seam invariant). CPU-only for the certified axes (regular/instrumental skip HuBERT), so it runs on pi-storage.
 
 **Tech Stack:** Python 3, stdlib `sqlite3` + `argparse` + `dataclasses`, pytest. Repo "Rust-flavoured functional" style: `from __future__ import annotations`, frozen dataclasses, full type hints, pure core + fail-fast edge.
 
 ## Global Constraints
 
 - Module + tests + spec live on branch `cotrain-corpus-harvest` (already created, stacked off `worktree-cotrain-accept-precision`). Work in the worktree at `/Users/johnnycabrahams/Desktop/tracklist_engine/.claude/worktrees/cotrain-accept-precision`.
-- Run tests with the repo venv from repo root: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_corpus_harvest.py -v`. Imports are absolute from repo root (e.g. `workspaces.pws_aligner.corpus_harvest`).
+- Run tests with the repo venv from repo root: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_corpus_harvest.py -v`. Imports are absolute from repo root (e.g. `pws_aligner.corpus_harvest`).
 - **Only the certified axes are harvestable.** Reuse `harvest.CERTIFIED_POLICY` verbatim (`regular` @ default 2-channel band, `instrumental` @ `min_agreeing=3`). Never add `acappella` — it must produce no cases and no ledger rows.
 - **Positive-only** cases (no decoys — decoys were only for the precision *gate*).
 - **Zero canonical mutation.** The CLI writes ONLY the harvest-ledger JSONL (via `harvest.write_ledger`, idempotent by `span_key`). It never writes the DB or the correction ledger.
@@ -24,14 +24,14 @@
 
 ## File Structure
 
-- **Create** `workspaces/pws_aligner/corpus_harvest.py` — the whole feature: `CorpusSlot`, `query_corpus_slots`, `build_corpus_cases`, `HarvestSummary`, `run_corpus_harvest`, `CensusReport`, `census_rows`, `census`, `main`, and helpers `_resolve` / `_default_scorer_factory`.
-- **Create** `workspaces/pws_aligner/tests/test_corpus_harvest.py` — fixture-DB + fake-scorer tests. No pi access, no real audio.
+- **Create** `pws_aligner/corpus_harvest.py` — the whole feature: `CorpusSlot`, `query_corpus_slots`, `build_corpus_cases`, `HarvestSummary`, `run_corpus_harvest`, `CensusReport`, `census_rows`, `census`, `main`, and helpers `_resolve` / `_default_scorer_factory`.
+- **Create** `pws_aligner/tests/test_corpus_harvest.py` — fixture-DB + fake-scorer tests. No pi access, no real audio.
 
 Reference shapes (from the existing code — do not redefine, import them):
 - `RefCandidate(recording_id, source_url, source_path=None, display_name="", version="original", stem="regular", variant="regular", track_audio_id=None)` — `cotrain_seam`.
 - `MixSpan(set_id, slot_label, set_start_s, span_dur_s)` — `cotrain_seam`.
 - `BandThresholds(min_probes=2, min_agreeing=2, accept_tol_s=1.0, accept_conf=0.55, review_tol_s=3.0, review_conf=0.70)` — `cotrain_seam`.
-- `AlignmentResult(recording_id, offset_s, ref_end_s=None, segments=(), tempo_ratio=None, confidence=0.0, abstain=False, source="")` — `workspaces.alignment_prototype.harness.contract`. **`confidence` must be in `[0,1]`** (enforced in `__post_init__`).
+- `AlignmentResult(recording_id, offset_s, ref_end_s=None, segments=(), tempo_ratio=None, confidence=0.0, abstain=False, source="")` — `alignment.harness.contract`. **`confidence` must be in `[0,1]`** (enforced in `__post_init__`).
 - `harvest(cases, scorer, *, policy=CERTIFIED_POLICY) -> list[HarvestRecord]` where `cases: Iterable[tuple[RefCandidate, MixSpan, dict|None]]` and `scorer: Callable[[RefCandidate, MixSpan], Sequence[AlignmentResult]]` — `harvest`.
 - `write_ledger(records, ledger: Path) -> int` (idempotent append, returns n written) — `harvest`.
 - `corpus_mix_resolver(mix_full_path: Path, mix_stem_dir: Path) -> (stem:str)->Path|None` and `real_probe_scorer(*, mix_resolver=...) -> RefMixScorer` — `cotrain_seam`.
@@ -41,8 +41,8 @@ Reference shapes (from the existing code — do not redefine, import them):
 ## Task 1: `CorpusSlot` + `query_corpus_slots` (pi DB → eligible slots)
 
 **Files:**
-- Create: `workspaces/pws_aligner/corpus_harvest.py`
-- Test: `workspaces/pws_aligner/tests/test_corpus_harvest.py`
+- Create: `pws_aligner/corpus_harvest.py`
+- Test: `pws_aligner/tests/test_corpus_harvest.py`
 
 **Interfaces:**
 - Consumes: nothing (entry).
@@ -53,7 +53,7 @@ Reference shapes (from the existing code — do not redefine, import them):
 
 - [ ] **Step 1: Write the failing test**
 
-Create `workspaces/pws_aligner/tests/test_corpus_harvest.py`:
+Create `pws_aligner/tests/test_corpus_harvest.py`:
 
 ```python
 """Corpus-harvest CLI: DB→cases→ledger glue + eligibility census.
@@ -71,7 +71,7 @@ import json
 import sqlite3
 from pathlib import Path
 
-from workspaces.pws_aligner.corpus_harvest import query_corpus_slots
+from pws_aligner.corpus_harvest import query_corpus_slots
 
 # NOTE: imports are added incrementally per task, so each task's test file
 # collects with only the names defined so far. Do NOT import later-task names
@@ -187,12 +187,12 @@ def test_query_respects_limit_and_order():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_corpus_harvest.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'workspaces.pws_aligner.corpus_harvest'` (or ImportError on the names).
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_corpus_harvest.py -v`
+Expected: FAIL — `ModuleNotFoundError: No module named 'pws_aligner.corpus_harvest'` (or ImportError on the names).
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create `workspaces/pws_aligner/corpus_harvest.py` with the header + Task-1 pieces:
+Create `pws_aligner/corpus_harvest.py` with the header + Task-1 pieces:
 
 ```python
 """Corpus-harvest CLI — co-training flywheel step 2 (batch runner over the corpus).
@@ -225,7 +225,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Sequence
 
-from workspaces.pws_aligner.cotrain_seam import (
+from pws_aligner.cotrain_seam import (
     BandThresholds,
     MixSpan,
     RefCandidate,
@@ -233,7 +233,7 @@ from workspaces.pws_aligner.cotrain_seam import (
     corpus_mix_resolver,
     real_probe_scorer,
 )
-from workspaces.pws_aligner.harvest import (
+from pws_aligner.harvest import (
     CERTIFIED_POLICY,
     harvest,
     write_ledger,
@@ -320,14 +320,14 @@ def query_corpus_slots(
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_corpus_harvest.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_corpus_harvest.py -v`
 Expected: PASS — 3 passed (the file contains only the `test_query_*` functions at this task; later tasks append more). Do NOT add stubs for later-task names — imports are incremental per task.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 cd /Users/johnnycabrahams/Desktop/tracklist_engine/.claude/worktrees/cotrain-accept-precision
-git add workspaces/pws_aligner/corpus_harvest.py workspaces/pws_aligner/tests/test_corpus_harvest.py
+git add pws_aligner/corpus_harvest.py pws_aligner/tests/test_corpus_harvest.py
 git commit -m "feat(cotrain): corpus_harvest CorpusSlot + query_corpus_slots (DB eligibility)"
 ```
 
@@ -336,8 +336,8 @@ git commit -m "feat(cotrain): corpus_harvest CorpusSlot + query_corpus_slots (DB
 ## Task 2: `build_corpus_cases` (slots → positive-only cases)
 
 **Files:**
-- Modify: `workspaces/pws_aligner/corpus_harvest.py`
-- Test: `workspaces/pws_aligner/tests/test_corpus_harvest.py`
+- Modify: `pws_aligner/corpus_harvest.py`
+- Test: `pws_aligner/tests/test_corpus_harvest.py`
 
 **Interfaces:**
 - Consumes: `CorpusSlot` (Task 1); `RefCandidate`, `MixSpan` (cotrain_seam).
@@ -350,7 +350,7 @@ git commit -m "feat(cotrain): corpus_harvest CorpusSlot + query_corpus_slots (DB
 Append to `test_corpus_harvest.py` (the import goes with the other imports near the top of the file; the rest is appended at the end):
 
 ```python
-from workspaces.pws_aligner.corpus_harvest import (  # noqa: E402
+from pws_aligner.corpus_harvest import (  # noqa: E402
     DEFAULT_SPAN_S,
     CorpusSlot,
     build_corpus_cases,
@@ -402,7 +402,7 @@ def test_build_cases_applies_ref_audio_root_to_relative_paths():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_corpus_harvest.py -k build_cases -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_corpus_harvest.py -k build_cases -v`
 Expected: FAIL — `ImportError: cannot import name 'build_corpus_cases'`.
 
 - [ ] **Step 3: Write minimal implementation**
@@ -455,13 +455,13 @@ def build_corpus_cases(
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_corpus_harvest.py -k build_cases -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_corpus_harvest.py -k build_cases -v`
 Expected: PASS (3 passed).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/pws_aligner/corpus_harvest.py workspaces/pws_aligner/tests/test_corpus_harvest.py
+git add pws_aligner/corpus_harvest.py pws_aligner/tests/test_corpus_harvest.py
 git commit -m "feat(cotrain): build_corpus_cases (cue-anchored positive-only cases)"
 ```
 
@@ -470,8 +470,8 @@ git commit -m "feat(cotrain): build_corpus_cases (cue-anchored positive-only cas
 ## Task 3: `run_corpus_harvest` (batch loop, per-set scorer, idempotent ledger)
 
 **Files:**
-- Modify: `workspaces/pws_aligner/corpus_harvest.py`
-- Test: `workspaces/pws_aligner/tests/test_corpus_harvest.py`
+- Modify: `pws_aligner/corpus_harvest.py`
+- Test: `pws_aligner/tests/test_corpus_harvest.py`
 
 **Interfaces:**
 - Consumes: `CorpusSlot`, `build_corpus_cases`, `_resolve` (Tasks 1–2); `harvest`, `write_ledger`, `CERTIFIED_POLICY`, `corpus_mix_resolver`, `real_probe_scorer`, `BandThresholds`, `RefMixScorer`.
@@ -486,8 +486,8 @@ git commit -m "feat(cotrain): build_corpus_cases (cue-anchored positive-only cas
 Append to `test_corpus_harvest.py` (imports with the others near the top; helpers/tests at the end):
 
 ```python
-from workspaces.alignment_prototype.harness.contract import AlignmentResult  # noqa: E402
-from workspaces.pws_aligner.corpus_harvest import run_corpus_harvest  # noqa: E402
+from alignment.harness.contract import AlignmentResult  # noqa: E402
+from pws_aligner.corpus_harvest import run_corpus_harvest  # noqa: E402
 
 
 def _agree(rec_id, sources, *, offset=12.0, conf=0.8):
@@ -579,7 +579,7 @@ def test_run_harvest_builds_one_scorer_per_set(tmp_path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_corpus_harvest.py -k run_harvest -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_corpus_harvest.py -k run_harvest -v`
 Expected: FAIL — `ImportError: cannot import name 'run_corpus_harvest'`.
 
 - [ ] **Step 3: Write minimal implementation**
@@ -651,13 +651,13 @@ def run_corpus_harvest(
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_corpus_harvest.py -k run_harvest -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_corpus_harvest.py -k run_harvest -v`
 Expected: PASS (4 passed).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/pws_aligner/corpus_harvest.py workspaces/pws_aligner/tests/test_corpus_harvest.py
+git add pws_aligner/corpus_harvest.py pws_aligner/tests/test_corpus_harvest.py
 git commit -m "feat(cotrain): run_corpus_harvest batch loop (per-set scorer, idempotent ledger)"
 ```
 
@@ -666,8 +666,8 @@ git commit -m "feat(cotrain): run_corpus_harvest batch loop (per-set scorer, ide
 ## Task 4: `census` (eligibility funnel, disk-checked)
 
 **Files:**
-- Modify: `workspaces/pws_aligner/corpus_harvest.py`
-- Test: `workspaces/pws_aligner/tests/test_corpus_harvest.py`
+- Modify: `pws_aligner/corpus_harvest.py`
+- Test: `pws_aligner/tests/test_corpus_harvest.py`
 
 **Interfaces:**
 - Consumes: `_resolve` (Task 2); `sqlite3.Row` connection.
@@ -683,7 +683,7 @@ git commit -m "feat(cotrain): run_corpus_harvest batch loop (per-set scorer, ide
 Append to `test_corpus_harvest.py` (imports with the others near the top; tests at the end):
 
 ```python
-from workspaces.pws_aligner.corpus_harvest import census, census_rows  # noqa: E402
+from pws_aligner.corpus_harvest import census, census_rows  # noqa: E402
 
 
 def test_census_classifies_blockers_per_axis(tmp_path):
@@ -748,7 +748,7 @@ def test_census_rows_excludes_uncertified_axis(tmp_path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_corpus_harvest.py -k census -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_corpus_harvest.py -k census -v`
 Expected: FAIL — `ImportError: cannot import name 'census'` / `census_rows`.
 
 - [ ] **Step 3: Write minimal implementation**
@@ -853,13 +853,13 @@ def census(
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_corpus_harvest.py -k census -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_corpus_harvest.py -k census -v`
 Expected: PASS (2 passed).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/pws_aligner/corpus_harvest.py workspaces/pws_aligner/tests/test_corpus_harvest.py
+git add pws_aligner/corpus_harvest.py pws_aligner/tests/test_corpus_harvest.py
 git commit -m "feat(cotrain): corpus-harvest eligibility census (disk-checked funnel)"
 ```
 
@@ -868,8 +868,8 @@ git commit -m "feat(cotrain): corpus-harvest eligibility census (disk-checked fu
 ## Task 5: `main` CLI wiring (both modes) + full-suite green
 
 **Files:**
-- Modify: `workspaces/pws_aligner/corpus_harvest.py`
-- Test: `workspaces/pws_aligner/tests/test_corpus_harvest.py`
+- Modify: `pws_aligner/corpus_harvest.py`
+- Test: `pws_aligner/tests/test_corpus_harvest.py`
 
 **Interfaces:**
 - Consumes: everything above.
@@ -880,7 +880,7 @@ git commit -m "feat(cotrain): corpus-harvest eligibility census (disk-checked fu
 Append to `test_corpus_harvest.py`:
 
 ```python
-from workspaces.pws_aligner.corpus_harvest import main  # noqa: E402
+from pws_aligner.corpus_harvest import main  # noqa: E402
 
 
 def _write_fixture_db(path: Path) -> None:
@@ -948,7 +948,7 @@ def test_main_harvest_mode_requires_out(tmp_path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_corpus_harvest.py -k main -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_corpus_harvest.py -k main -v`
 Expected: FAIL — `ImportError: cannot import name 'main'`.
 
 - [ ] **Step 3: Write minimal implementation**
@@ -1017,16 +1017,16 @@ if __name__ == "__main__":
 
 - [ ] **Step 4: Run the full test file + the module's existing suite**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_corpus_harvest.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_corpus_harvest.py -v`
 Expected: PASS (all tasks' tests green).
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_harvest.py workspaces/pws_aligner/tests/test_corpus_scorer.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_harvest.py pws_aligner/tests/test_corpus_scorer.py -v`
 Expected: PASS (no regression in the machinery this glue depends on).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/pws_aligner/corpus_harvest.py workspaces/pws_aligner/tests/test_corpus_harvest.py
+git add pws_aligner/corpus_harvest.py pws_aligner/tests/test_corpus_harvest.py
 git commit -m "feat(cotrain): corpus_harvest main() CLI (harvest + --census modes)"
 ```
 
@@ -1035,14 +1035,14 @@ git commit -m "feat(cotrain): corpus_harvest main() CLI (harvest + --census mode
 ## Task 6: Guardrails + docstring polish + module CLAUDE.md pointer
 
 **Files:**
-- Modify: `workspaces/pws_aligner/CLAUDE.md` (add a one-line pointer to the new CLI).
-- Verify: `workspaces/pws_aligner/corpus_harvest.py` module docstring is accurate.
+- Modify: `pws_aligner/CLAUDE.md` (add a one-line pointer to the new CLI).
+- Verify: `pws_aligner/corpus_harvest.py` module docstring is accurate.
 
 **Interfaces:**
 - Consumes: the finished module.
 - Produces: no code — docs + guardrail pass.
 
-- [ ] **Step 1: Add a pointer to `workspaces/pws_aligner/CLAUDE.md`**
+- [ ] **Step 1: Add a pointer to `pws_aligner/CLAUDE.md`**
 
 Under the "What's reusable" list, add:
 
@@ -1060,13 +1060,13 @@ Expected: prints `guardrails: OK` (WARNs about state-of-record staleness / docs-
 
 - [ ] **Step 3: Full module suite once more**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/ -q`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/ -q`
 Expected: PASS (whole pws_aligner suite green).
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add workspaces/pws_aligner/CLAUDE.md
+git add pws_aligner/CLAUDE.md
 git commit -m "docs(cotrain): point pws_aligner/CLAUDE.md at corpus_harvest CLI"
 ```
 

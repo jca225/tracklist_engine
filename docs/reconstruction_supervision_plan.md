@@ -146,7 +146,7 @@ actually track alignment correctness on BB12 (where we have GT)?
 - **RED** → stop. Reconstruction can't grade placement; the whole plan is dead and
   we've spent half a day, not two months.
 
-Implementation: `workspaces/alignment_prototype/recon_probe.py`
+Implementation: `alignment/recon_probe.py`
 (mel-magnitude per-frame cosine; stem-routed: acappella→vocal stem,
 instrumental→instrumental stem, regular→full mix). Output: `out/recon_probe_bb12.txt`.
 
@@ -228,7 +228,7 @@ gate **0.08** = do-no-harm (median 6.3→6.1s, moves ~4/96). So in-domain recon 
 
 **TURNKEY — when BB11 GT is exported** (`labeling.extract.export_als_to_gt` → `labeling/fixtures/bb11_ground_truth.yaml`):
 ```
-venvs/audio/bin/python -m workspaces.alignment_prototype.run_recon_experiment \
+venvs/audio/bin/python -m alignment.run_recon_experiment \
   --train-set 1fsnxchk --eval-set 2nvzlh2k --infer
 ```
 Gives (a) the first cross-set generalization number (baseline BB12→BB11 — also the

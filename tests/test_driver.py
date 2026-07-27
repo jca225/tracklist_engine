@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from workspaces.alignment_prototype.harness import (
+from alignment.harness import (
     AlignmentResult,
     CandidatePool,
     DeterministicDriver,
@@ -13,7 +13,7 @@ from workspaces.alignment_prototype.harness import (
     Probe,
     RefContext,
 )
-from workspaces.alignment_prototype.records import SlotCandidate
+from alignment.records import SlotCandidate
 
 
 class _FixedProbe(Probe):

@@ -54,7 +54,7 @@ a scorecard win, any new probe/channel/prior (sensor phase is frozen — this ta
 
 ## Architecture
 
-New module `workspaces/alignment_prototype/evals/instance_separability.py`, reusing
+New module `alignment/evals/instance_separability.py`, reusing
 `oracle_ladder.py`'s GT-row/fiber/score plumbing. Four units, each independently testable:
 
 ### Unit 1 — recoverable population (`build_population`)

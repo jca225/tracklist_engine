@@ -49,27 +49,16 @@ Everything outside this chain is one of:
 - A vendored dependency: `cue-detr/` (DETR-based cue-point detection model,
   consumed only by `analysis/canonical_cues.py`).
 - Exploration / scratch: `eda/` notebooks.
-- Experimental forks of chain modules: `workspaces/` (e.g.
-  `workspaces/alignment_workbench`). Promote a fork out of `workspaces/`
-  when it stabilizes.
-- The **personalization layer**: `personalization/` (promoted out of
-  `workspaces/taste_prior` on 2026-06-12) — SoundCloud listener cohorts +
-  per-user taste priors, the *producer* side of the step-2 generation-pretrain
-  boundary. Consumes nothing from the chain; exports a read-only bundle
-  ([docs/personalization_export_contract.md](docs/personalization_export_contract.md))
-  that the future learning repo trains on. Not part of the alignment DAG.
-- The **research lab**: `lab/` (split out 2026-07-12) — music-understanding work
-  (`corpus_empirics/`, `information_dynamics/`, `audience_prior/`) + product
-  design specs (`lab/specs/`). This is the **north-north star**: a DJ-music
-  research lab (SoundCloud + 1001Tracklists fusion, "why we like music") that
-  activates *once alignment is solved at scale*. Depends only on `labeling` GT;
-  **not part of the alignment DAG.** See [lab/CLAUDE.md](lab/CLAUDE.md). Kept lean
-  and separate on purpose — do not entangle it with the alignment engine.
+- The algorithmic aligner lives at top-level `alignment/` (promoted from
+  `workspaces/alignment_prototype`); weak-supervision fusion at `pws_aligner/`.
+  Remaining experimental forks (if any) stay under `workspaces/` until promoted.
+- **Deferred / attic'd (not in this checkout):** personalization, SoundCloud
+  lake, and the research `lab/` north-north-star live outside the focused DAG
+  tree (see `~/tracklist_attic/`). Do not re-entangle them with the aligner.
 
 **Two-tier north star.** *Operative (now):* a SOTA alignment algorithm that
 generalizes across ~40,000 DJ sets with as close to 100% accuracy as humanly
-possible — the gate. *North-north (deferred, in `lab/`):* the
-research lab above. Alignment is the necessary-but-not-sufficient foundation.
+possible — the gate. *North-north (deferred):* research lab / personalization (attic). Alignment is the necessary-but-not-sufficient foundation.
 Current state: [docs/alignment_state_of_record.md](docs/alignment_state_of_record.md)
 (prior stock-take [docs/alignment_bearings_20260712.md](docs/alignment_bearings_20260712.md)
 is a superseded 2026-07-12 snapshot).
@@ -157,17 +146,11 @@ subtree — keep stage-specific detail there, not here. Index:
   (`--prune`), the annotator rename convention.
 - **[eda/CLAUDE.md](eda/CLAUDE.md)** — exploratory analysis feeding the aligner
   (`eda/alignment/` MERT probes + `failure_analysis/` scorecard, imported by the
-  aligner) + `eda/queries/`. *(Corpus-empirics / info-dynamics moved to `lab/`
-  on 2026-07-12.)*
-- **[lab/CLAUDE.md](lab/CLAUDE.md)** — the deferred research lab (north-north
-  star): `corpus_empirics/` findings + `aux.db`, `information_dynamics/`,
-  `audience_prior/`, product specs. Not part of the alignment DAG. Full write-ups
-  in [lab/corpus_empirics/findings.md](lab/corpus_empirics/findings.md).
+  aligner) + `eda/queries/`. *(Corpus-empirics / info-dynamics attic'd with `lab/`.)*
+
 - **[core/CLAUDE.md](core/CLAUDE.md)** — shared substrate; `core/identity.py`
   (three axes); the rule that `core` imports nothing upward.
-- **[soundcloud/CLAUDE.md](soundcloud/CLAUDE.md)** — SoundCloud data-lake
-  substrate (anon `client_id` fetch + `sc_lake.db` on pi-storage). General
-  ingestion primitive consumed by `personalization`/`lab`; off the alignment DAG.
+
 
 ## Database
 

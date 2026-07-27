@@ -21,7 +21,7 @@ import pytest
 # must run BEFORE the workspaces import that triggers it).
 pytest.importorskip("librosa")
 
-from workspaces.alignment_prototype.fibers.detect import (  # noqa: E402
+from alignment.fibers.detect import (  # noqa: E402
     _avg_linkage,
     _fp_density_floor,
     _fp_lag_vote_floor,
@@ -202,7 +202,7 @@ def test_breathy_repeat_survives_silence_gate(tmp_path) -> None:
 def test_clone_verdict_certifies_copy_paste(tmp_path) -> None:
     """The null-test tier: an exact copy-paste pair must certify CLONE;
     unrelated content must read distinct (fused rule from fibers/NOTES.md)."""
-    from workspaces.alignment_prototype.fibers.gt_als import clone_verdict
+    from alignment.fibers.gt_als import clone_verdict
 
     rng = np.random.default_rng(8)
     sr = 22050

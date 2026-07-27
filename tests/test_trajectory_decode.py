@@ -11,12 +11,12 @@ pytest.importorskip("torch")
 
 import torch  # noqa: E402
 
-from workspaces.alignment_prototype.trajectory.decode import (  # noqa: E402
+from alignment.trajectory.decode import (  # noqa: E402
     TrajectoryEvidence,
     decode_with_evidence,
     viterbi_segments,
 )
-from workspaces.alignment_prototype.trajectory.model import diag_mean  # noqa: E402
+from alignment.trajectory.model import diag_mean  # noqa: E402
 
 BIN = 0.5
 

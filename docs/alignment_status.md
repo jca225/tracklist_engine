@@ -5,7 +5,7 @@
 > `recording_id` **equals the `set_track_slots` claim on 100% of spans** (157/157
 > fresh, 152/152 July-6) — **by construction**. The production candidate pool is
 > "naive: one recording per slot = the tokenizer's claim"
-> ([dataset.py:43](../workspaces/alignment_prototype/dataset.py#L43)), so
+> ([dataset.py:43](../alignment/dataset.py#L43)), so
 > `predict_sequence` has no identity decision to make; it only decodes placement.
 > Therefore every "identity" number below measures the **tokenizer's tracklist
 > claim vs GT**, NOT an aligner capability. Against clean GT the claim is right on
@@ -203,7 +203,7 @@ The lever for transferable placement is therefore **not** the MERT head — it i
 the **learned trajectory decoder + the agentic pseudo-label flywheel** (+ a third
 GT set to unlock the learned instance selector). Sensor phase is **frozen
 (2026-07-09)**: the channel inventory is rich enough; the wall is the actor. Dead
-ends live in [attic/EXPERIMENTS.md](../workspaces/alignment_prototype/attic/EXPERIMENTS.md)
+ends live in [attic/EXPERIMENTS.md](../alignment/attic/EXPERIMENTS.md)
 — read the verdict before re-testing.
 
 ---
@@ -223,13 +223,13 @@ target. Recorded here so it stops being re-litigated.
 # repo root, venvs/audio/bin/python. BB11=2nvzlh2k, BB12=1fsnxchk.
 make scorecard                       # attribution + per-axis + identity + set_start (_lt)
 for sid in 1fsnxchk 2nvzlh2k; do
-  tl=workspaces/alignment_prototype/out/${sid}_predicted_timeline_lt.json
-  venvs/audio/bin/python -m workspaces.alignment_prototype.score_timeline_vs_gt \
+  tl=alignment/out/${sid}_predicted_timeline_lt.json
+  venvs/audio/bin/python -m alignment.score_timeline_vs_gt \
       --set-id $sid --timeline $tl --decompose            # strict
-  venvs/audio/bin/python -m workspaces.alignment_prototype.score_timeline_vs_gt \
+  venvs/audio/bin/python -m alignment.score_timeline_vs_gt \
       --set-id $sid --timeline $tl --fibers --decompose   # fiber-aware
 done
-venvs/audio/bin/python -m workspaces.alignment_prototype.path_decode --eval \
+venvs/audio/bin/python -m alignment.path_decode --eval \
     --feature hubert --stems acappella --fibers --workers 8   # oracle ceiling
 make race                            # driver board (re-runs infer; mutates timelines)
 ```
@@ -242,9 +242,9 @@ diff against §1–§4. Any number you cannot regenerate → mark it
 
 - `eda/alignment/failure_analysis/FINDINGS.md` — full failure taxonomy, one
   binding cause per span. Owns the *detail*; this doc owns the headline.
-- `workspaces/alignment_prototype/looptrace/NOTES.md` — looptrace phase log +
+- `alignment/looptrace/NOTES.md` — looptrace phase log +
   dead decode threads.
-- `workspaces/alignment_prototype/cotrain_loso_findings.md` — LOSO write-up + caveats.
-- `workspaces/alignment_prototype/external/fiber_validation_findings.md` — SALAMI validation.
+- `alignment/cotrain_loso_findings.md` — LOSO write-up + caveats.
+- `alignment/external/fiber_validation_findings.md` — SALAMI validation.
 - `docs/agent_handoff_fibers_20260710.md` — race board source (carried §4).
-- `workspaces/alignment_prototype/attic/EXPERIMENTS.md` — closed-experiment verdicts.
+- `alignment/attic/EXPERIMENTS.md` — closed-experiment verdicts.

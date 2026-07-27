@@ -24,7 +24,7 @@ the §3 command block in the handoff.
 
 ## C2 — Loss attribution drifted (decode≫placement → decode≈placement)
 
-- **Where:** `workspaces/alignment_prototype/CLAUDE.md` "State (2026-07-08 …)".
+- **Where:** `alignment/CLAUDE.md` "State (2026-07-08 …)".
 - **Claimed:** "decode-residual 45% > placement ~31% > identity 6%".
 - **Regenerated (`make scorecard`, `_lt`, 2026-07-11):** decode-residual **38%**
   ≈ placement **37%** > mis-route 9% > identity 6% > tempo/octave 4% >
@@ -35,7 +35,7 @@ the §3 command block in the handoff.
 
 ## C3 — Acappella strict trajectory: "21%" was cross-metric / cross-timeline
 
-- **Where:** `workspaces/alignment_prototype/CLAUDE.md` ("acappella trajectory 21%").
+- **Where:** `alignment/CLAUDE.md` ("acappella trajectory 21%").
 - **Regenerated (`_lt`):** acappella **strict** traj-acc = **10% (BB12) / 12%
   (BB11)**; the scorecard binary success-rate is **11%**.
 - **Why:** the "21%" conflated (a) a *binary success rate* vs the *mean
@@ -76,7 +76,7 @@ the §3 command block in the handoff.
 ## C6 — Set-id ↔ BB label SWAPPED in cotrain table + flywheel handoff
 
 - **Where (two files):**
-  1. `workspaces/alignment_prototype/cotrain_loso_findings.md` LOSO table
+  1. `alignment/cotrain_loso_findings.md` LOSO table
      (rows 17–18): the parenthetical set_ids were inverted relative to the
      bb-labels *and* the doc's own preamble (line 5, which is correct). Row read
      `bb11 (1fsnxchk) … 150 spans … 18.6 s`.

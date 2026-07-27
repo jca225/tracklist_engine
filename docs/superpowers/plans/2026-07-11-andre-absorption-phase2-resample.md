@@ -16,8 +16,8 @@
 - Sensor-phase freeze is LIFTED for this work (John, 2026-07-11) — new channels are allowed.
 - `landmark_fp` constants: `SR=22050`, `FHOP=512`. `fp_offset` convention: recovered offset seconds = `off_frames * FHOP / SR * scale`. Mirror this exactly for the resample scale factor.
 - Abstain sentinel is a `Pred` with `set_start_s = float("nan")` (from Phase 0).
-- Tests live in `workspaces/alignment_prototype/external/tests/test_eval_bench.py` (eval_bench changes) and a new `workspaces/alignment_prototype/tests/test_landmark_fp_resample.py` (landmark_fp change — create dir + `__init__.py` in Task 3).
-- Every task keeps `venvs/audio/bin/python -m workspaces.alignment_prototype.external.eval_bench --synthetic` green.
+- Tests live in `alignment/external/tests/test_eval_bench.py` (eval_bench changes) and a new `alignment/tests/test_landmark_fp_resample.py` (landmark_fp change — create dir + `__init__.py` in Task 3).
+- Every task keeps `venvs/audio/bin/python -m alignment.external.eval_bench --synthetic` green.
 - Numbers written into any findings doc MUST come from a real run's stdout — never fabricated.
 
 ---
@@ -25,8 +25,8 @@
 ### Task 1: Fix `method_dtw` confidence — path-average, not best-cell
 
 **Files:**
-- Modify: `workspaces/alignment_prototype/external/eval_bench.py` (`method_dtw`)
-- Test: `workspaces/alignment_prototype/external/tests/test_eval_bench.py`
+- Modify: `alignment/external/eval_bench.py` (`method_dtw`)
+- Test: `alignment/external/tests/test_eval_bench.py`
 
 **Interfaces:**
 - Consumes: existing `method_dtw`, `Pred`, `Sample`, `GTSpan`.
@@ -57,7 +57,7 @@ def test_method_dtw_score_is_path_average_not_best_cell():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/external/tests/test_eval_bench.py::test_method_dtw_score_is_path_average_not_best_cell -v`
+Run: `venvs/audio/bin/python -m pytest alignment/external/tests/test_eval_bench.py::test_method_dtw_score_is_path_average_not_best_cell -v`
 Expected: FAIL — current score is `1 - C.min()` ≈ 1.0, so `< 0.95` fails.
 
 - [ ] **Step 3: Implement the path-average score**
@@ -73,14 +73,14 @@ In `method_dtw`, replace the final `out[idx] = Pred(...)` line. The warping path
 
 - [ ] **Step 4: Run tests to verify pass**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/external/tests/test_eval_bench.py -v`
+Run: `venvs/audio/bin/python -m pytest alignment/external/tests/test_eval_bench.py -v`
 Expected: PASS — all tests including the two prior DTW tests (planted-offset recovery, tiny-track abstain) still pass and the new path-average test passes.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/external/eval_bench.py \
-        workspaces/alignment_prototype/external/tests/test_eval_bench.py
+git add alignment/external/eval_bench.py \
+        alignment/external/tests/test_eval_bench.py
 git commit -m "fix(eval_bench): method_dtw score = 1 - path-average cost (was best-cell)"
 ```
 
@@ -89,8 +89,8 @@ git commit -m "fix(eval_bench): method_dtw score = 1 - path-average cost (was be
 ### Task 2: Fix identity-under-abstention — don't count a decline as wrong
 
 **Files:**
-- Modify: `workspaces/alignment_prototype/external/eval_bench.py` (`score_sample` identity block)
-- Test: `workspaces/alignment_prototype/external/tests/test_eval_bench.py`
+- Modify: `alignment/external/eval_bench.py` (`score_sample` identity block)
+- Test: `alignment/external/tests/test_eval_bench.py`
 
 **Interfaces:**
 - Consumes: `score_sample`, `is_abstain`, `Pred`, `Sample`, `GTSpan`.
@@ -124,7 +124,7 @@ def test_identity_excludes_abstained_spans():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/external/tests/test_eval_bench.py::test_identity_excludes_abstained_spans -v`
+Run: `venvs/audio/bin/python -m pytest alignment/external/tests/test_eval_bench.py::test_identity_excludes_abstained_spans -v`
 Expected: FAIL — current code counts the abstained span in the denominator (`hits / len(sample.gt)` = 1/2 = 0.5), and also compares `p.score > best_dist` on the abstained pred.
 
 - [ ] **Step 3: Implement committed-only identity**
@@ -154,17 +154,17 @@ Replace it with a committed-only count:
 
 - [ ] **Step 4: Run tests to verify pass**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/external/tests/test_eval_bench.py -v`
+Run: `venvs/audio/bin/python -m pytest alignment/external/tests/test_eval_bench.py -v`
 Expected: PASS — the new test plus all prior tests.
 
-Also smoke: `venvs/audio/bin/python -m workspaces.alignment_prototype.external.eval_bench --synthetic`
+Also smoke: `venvs/audio/bin/python -m alignment.external.eval_bench --synthetic`
 Expected: table prints, no traceback.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/external/eval_bench.py \
-        workspaces/alignment_prototype/external/tests/test_eval_bench.py
+git add alignment/external/eval_bench.py \
+        alignment/external/tests/test_eval_bench.py
 git commit -m "fix(eval_bench): identity over committed spans only (abstain != mis-id)"
 ```
 
@@ -173,9 +173,9 @@ git commit -m "fix(eval_bench): identity over committed spans only (abstain != m
 ### Task 3: `fp_offset_resample` — resample-ratio fingerprint search
 
 **Files:**
-- Modify: `workspaces/alignment_prototype/landmark_fp.py` (add function)
-- Create: `workspaces/alignment_prototype/tests/__init__.py` (empty)
-- Test: `workspaces/alignment_prototype/tests/test_landmark_fp_resample.py`
+- Modify: `alignment/landmark_fp.py` (add function)
+- Create: `alignment/tests/__init__.py` (empty)
+- Test: `alignment/tests/test_landmark_fp_resample.py`
 
 **Interfaces:**
 - Consumes: `constellation`, `hashes`, `_vote_histogram`, `vote_sharpness`, `SR`, `FHOP` (all in `landmark_fp`).
@@ -186,10 +186,10 @@ git commit -m "fix(eval_bench): identity over committed spans only (abstain != m
 - [ ] **Step 1: Write the failing test**
 
 ```python
-# workspaces/alignment_prototype/tests/test_landmark_fp_resample.py
+# alignment/tests/test_landmark_fp_resample.py
 import numpy as np
 import librosa
-from workspaces.alignment_prototype.landmark_fp import SR, fp_offset_resample
+from alignment.landmark_fp import SR, fp_offset_resample
 
 
 def _tone_complex(dur_s: float, freqs, sr: int = SR) -> np.ndarray:
@@ -222,7 +222,7 @@ def test_fp_offset_resample_recovers_planted_ratio_and_offset():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/tests/test_landmark_fp_resample.py -v`
+Run: `venvs/audio/bin/python -m pytest alignment/tests/test_landmark_fp_resample.py -v`
 Expected: FAIL with `ImportError: cannot import name 'fp_offset_resample'`
 
 - [ ] **Step 3: Implement `fp_offset_resample`**
@@ -268,15 +268,15 @@ def fp_offset_resample(
 
 - [ ] **Step 4: Run test to verify pass**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/tests/test_landmark_fp_resample.py -v`
+Run: `venvs/audio/bin/python -m pytest alignment/tests/test_landmark_fp_resample.py -v`
 Expected: PASS (recovers ratio within one grid step and offset within 1 s). If it fails only on fixture weakness, enrich per the latitude note and re-run.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/landmark_fp.py \
-        workspaces/alignment_prototype/tests/__init__.py \
-        workspaces/alignment_prototype/tests/test_landmark_fp_resample.py
+git add alignment/landmark_fp.py \
+        alignment/tests/__init__.py \
+        alignment/tests/test_landmark_fp_resample.py
 git commit -m "feat(landmark_fp): fp_offset_resample — resample-ratio search for pitch+tempo shift"
 ```
 
@@ -285,8 +285,8 @@ git commit -m "feat(landmark_fp): fp_offset_resample — resample-ratio search f
 ### Task 4: `method_fused_resample` in eval_bench
 
 **Files:**
-- Modify: `workspaces/alignment_prototype/external/eval_bench.py`
-- Test: `workspaces/alignment_prototype/external/tests/test_eval_bench.py`
+- Modify: `alignment/external/eval_bench.py`
+- Test: `alignment/external/tests/test_eval_bench.py`
 
 **Interfaces:**
 - Consumes: `fp_offset_resample` (Task 3), `Sample`, `Pred`, `SR`.
@@ -297,7 +297,7 @@ git commit -m "feat(landmark_fp): fp_offset_resample — resample-ratio search f
 ```python
 # append to test_eval_bench.py
 def test_method_fused_resample_returns_empty_without_audio():
-    from workspaces.alignment_prototype.external.eval_bench import method_fused_resample
+    from alignment.external.eval_bench import method_fused_resample
     mix = np.zeros((12, 400), dtype=np.float32)
     s = Sample("m", mix, {0: np.zeros((12, 40), np.float32)}, [GTSpan(0, 1.0, 1.0)])
     assert method_fused_resample(s) == {}  # no mix_path -> audio method no-ops
@@ -305,7 +305,7 @@ def test_method_fused_resample_returns_empty_without_audio():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/external/tests/test_eval_bench.py::test_method_fused_resample_returns_empty_without_audio -v`
+Run: `venvs/audio/bin/python -m pytest alignment/external/tests/test_eval_bench.py::test_method_fused_resample_returns_empty_without_audio -v`
 Expected: FAIL with `ImportError: cannot import name 'method_fused_resample'`
 
 - [ ] **Step 3: Implement `method_fused_resample`**
@@ -319,7 +319,7 @@ def method_fused_resample(sample: Sample) -> dict[int, Pred]:
     if sample.mix_path is None or not sample.track_paths:
         return {}
     import librosa
-    from workspaces.alignment_prototype.landmark_fp import fp_offset_resample
+    from alignment.landmark_fp import fp_offset_resample
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -349,17 +349,17 @@ METHODS: dict[str, Method] = {
 
 - [ ] **Step 4: Run test to verify pass**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/external/tests/test_eval_bench.py -v`
+Run: `venvs/audio/bin/python -m pytest alignment/external/tests/test_eval_bench.py -v`
 Expected: PASS (all tests).
 
-Smoke: `venvs/audio/bin/python -m workspaces.alignment_prototype.external.eval_bench --synthetic --methods grid_mf,fused_resample`
+Smoke: `venvs/audio/bin/python -m alignment.external.eval_bench --synthetic --methods grid_mf,fused_resample`
 Expected: table prints (fused_resample shows n=0 in feature-only synthetic — audio method), no traceback.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/external/eval_bench.py \
-        workspaces/alignment_prototype/external/tests/test_eval_bench.py
+git add alignment/external/eval_bench.py \
+        alignment/external/tests/test_eval_bench.py
 git commit -m "feat(eval_bench): method_fused_resample (resample-ratio placement)"
 ```
 
@@ -368,8 +368,8 @@ git commit -m "feat(eval_bench): method_fused_resample (resample-ratio placement
 ### Task 5: Run the resample arm + record the honest delta
 
 **Files:**
-- Modify: `workspaces/alignment_prototype/external/out/reduction_table.txt` (append, gitignored — local only)
-- Modify: `workspaces/alignment_prototype/external/unmixdb_findings.md` (append a resample-arm subsection)
+- Modify: `alignment/external/out/reduction_table.txt` (append, gitignored — local only)
+- Modify: `alignment/external/unmixdb_findings.md` (append a resample-arm subsection)
 
 **Interfaces:**
 - Consumes: `method_fused`, `method_fused_resample`, the `--stratified` CLI (Phase 0).
@@ -379,7 +379,7 @@ git commit -m "feat(eval_bench): method_fused_resample (resample-ratio placement
 Run (small, to estimate `fused_resample` per-mix cost — it fingerprints the ref ~30× per candidate):
 
 ```bash
-venvs/audio/bin/python -m workspaces.alignment_prototype.external.eval_bench \
+venvs/audio/bin/python -m alignment.external.eval_bench \
   --unmixdb-root ~/data/unmixdb-v1.1 --max-mixes 12 --feature chroma \
   --methods fused,fused_resample --stratified
 ```
@@ -391,10 +391,10 @@ Expected: a stratified table; note wall-clock. Extrapolate to pick the sample si
 Use the largest `--max-mixes` feasible in ~30 min from the probe (the shipped Phase-0 headline was 240 → 220 loaded; if `fused_resample` is too slow, drop to 120 or 60). Record the ACTUAL value used.
 
 ```bash
-venvs/audio/bin/python -m workspaces.alignment_prototype.external.eval_bench \
+venvs/audio/bin/python -m alignment.external.eval_bench \
   --unmixdb-root ~/data/unmixdb-v1.1 --max-mixes <N> --feature chroma \
   --methods fused,fused_resample --stratified \
-  2>&1 | tee -a workspaces/alignment_prototype/external/out/reduction_table.txt
+  2>&1 | tee -a alignment/external/out/reduction_table.txt
 ```
 
 Expected: stratified table with both methods; the comparison of interest is the three `resample` rows (bass/compressor/distortion/none) — `fused_resample` set_start MAE/med vs `fused`.
@@ -410,7 +410,7 @@ Also note the direction convention `fp_offset_resample` ended up using (from Tas
 - [ ] **Step 4: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/external/unmixdb_findings.md
+git add alignment/external/unmixdb_findings.md
 git commit -m "docs(findings): resample arm result — fp_offset_resample vs fused on resample stratum"
 ```
 

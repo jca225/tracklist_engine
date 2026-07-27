@@ -16,7 +16,7 @@ y(t)=\sum_i a_i(t)\,x_i(\phi_i(t))+b(t)
 \]
 
 Most of a "retrieval + Hough vote + sparse local alignment" stack already exists
-in `workspaces/alignment_prototype/` (chunking, fp offset-histogram voting,
+in `alignment/` (chunking, fp offset-histogram voting,
 path_decode / trajectory Viterbi). The open question is whether the remaining
 failures are:
 
@@ -29,7 +29,7 @@ failures are:
 
 A one-day diagnostic study that answers that binary with pictures, not faith.
 No training. No new probe wired into `infer` / `harness` (sensor phase is
-closed — see `workspaces/alignment_prototype/CLAUDE.md`). Output is a verdict
+closed — see `alignment/CLAUDE.md`). Output is a verdict
 grid + a short FINDINGS note.
 
 ## Non-goals

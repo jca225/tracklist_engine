@@ -54,10 +54,10 @@ we can stop after any phase with a strictly better codebase.
 |---|---|---|
 | §2 Artifact store + provenance | *(new)* `core/provenance/` | content-addressing partly exists in Crush's content catalog — **reuse, don't rebuild** |
 | §4 Observations (source ≠ truth) | `tokenizer/materialize.py`, `web_crawler/` | `set_track_slots.claimed_*` become **Observations**, never identity |
-| §5 Claims + Evidence | `workspaces/pws_aligner/` | the weak-supervision matrix already lives here |
+| §5 Claims + Evidence | `pws_aligner/` | the weak-supervision matrix already lives here |
 | §6 Audio acquire/analyze | `ingest/`, `analysis/` | wrap downloaders/analyzers as versioned `ProcessSpec` runs |
 | §7 Immutable Ableton labels | `labeling/als/`, `ableton_interpreter` | content-bind is **already built** (Crush) — formalize as `HumanLabelAssertion` |
-| §8–9 Fitted models + AxisBeliefs | `workspaces/alignment_prototype/` | wrap MERT/fp/chroma probes as belief models per axis |
+| §8–9 Fitted models + AxisBeliefs | `alignment/` | wrap MERT/fp/chroma probes as belief models per axis |
 | §10 Timeline decoder | `alignment_prototype/path_decode.py` etc. | must consume posteriors, emit `None`-not-`0.0` |
 | §11 Snapshots + promotion gates | *(new)* | the §16 laws become executable gates |
 | §12 Cotraining + pseudo-label lineage | `alignment_prototype/cotrain.py`, cotrain branch | reconcile the branch **into** this shape, don't merge as-is |

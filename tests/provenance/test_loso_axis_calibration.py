@@ -10,13 +10,13 @@ from core.provenance import (
     ProvenanceRepository,
     connect,
 )
-from workspaces.alignment_prototype.loso_axis_calibration import (
+from alignment.loso_axis_calibration import (
     fit_loso_axis_model,
     fit_source_axis_calibration,
     infer_held_set_beliefs,
     model_document,
 )
-from workspaces.alignment_prototype.score_timeline_vs_gt import SpanScore
+from alignment.score_timeline_vs_gt import SpanScore
 
 
 def _score(

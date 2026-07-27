@@ -1,6 +1,6 @@
 # The aligner as a POMDP: an agentic harness with an explicit action space
 
-**Status:** increments 1–3 BUILT 2026-07-02 (`workspaces/alignment_prototype/agentic/`:
+**Status:** increments 1–3 BUILT 2026-07-02 (`alignment/agentic/`:
 belief / events / actions / policy / loop + replay CLI) — the BB11 held-out gate was
 measured that day (transfer holds: 8.0s med cold, id 83%) and cleared the build.
 First replay validation on BB11 (151 spans): **auto-commit rung = 94% clean ≤15s,
