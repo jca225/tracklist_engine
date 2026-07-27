@@ -31,6 +31,8 @@ class CatalogEntry:
     crc: int | None = None
     head_hash: str | None = None
     variant: str = "regular"  # regular | extended
+    id_source: str = "content"  # content | historical-content
+    cert: str | None = None  # payload | derivation | None (live row)
 
 
 @dataclass(frozen=True)
@@ -83,6 +85,8 @@ class ClipIdentity:
     stem: str
     variant: str
     matched_by: str  # "size_crc" | "head_hash"
+    id_source: str = "content"  # content | historical-content
+    cert: str | None = None
 
 
 @dataclass(frozen=True)
@@ -116,6 +120,8 @@ def resolve_clip_identity(
                     stem=entry.stem,
                     variant=entry.variant,
                     matched_by="size_crc",
+                    id_source=entry.id_source,
+                    cert=entry.cert,
                 )
             )
 
@@ -131,6 +137,8 @@ def resolve_clip_identity(
                         stem=entry.stem,
                         variant=entry.variant,
                         matched_by="head_hash",
+                        id_source=entry.id_source,
+                        cert=entry.cert,
                     )
                 )
 

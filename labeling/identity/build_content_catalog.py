@@ -7,6 +7,11 @@ for m4a / decoded-PCM MD5 for FLAC), plus demucs vocals/instrumental stems
 (hashed here — track_stems has no stored hash; FLAC stems also get a PCM-MD5
 payload key so a re-encoded/re-containered stem still binds — spec v2.3/P11).
 
+C2: also emits certificate-gated *historical* generations from
+``content_history`` (valid=1 only): payload-equality or derivation
+(parent_content_sha256 matches the current regular master's content hash).
+Historical rows stamp ``id_source='historical-content'`` + ``cert``.
+
 stdlib only; run under pi's bare python3:
     python3 -m labeling.identity.build_content_catalog <set_id>   # prints JSON to stdout
 """
@@ -16,7 +21,6 @@ from __future__ import annotations
 import json
 import sqlite3
 import sys
-from pathlib import Path
 
 from labeling.identity.content_hash import file_sha256 as _file_sha256
 from labeling.identity.content_hash import flac_pcm_md5 as _flac_pcm_md5
@@ -42,6 +46,92 @@ def _payload_for(path, mdat_sha256, flac_pcm_md5):
     except OSError:
         return None
     return None
+
+
+def _emit_historical(conn, recs: list[str], live_entries: list[dict]) -> list[dict]:
+    """C2 — certificate-gated historical generations from content_history.
+
+    Emit only with a sound certificate (v4.1):
+    * payload — historical payload_sha256 equals a live sound entry's payload
+    * derivation — kind='separated' and parent_content_sha256 equals the
+      current regular master's content_sha256 for that recording
+    Tombstoned (valid=0) and uncertified generations are skipped.
+    """
+    if not recs:
+        return []
+    live_payloads = {
+        e["payload_sha256"] for e in live_entries if e.get("payload_sha256")
+    }
+    # Current regular master content hash per recording (derivation parent).
+    parent_master: dict[str, str] = {}
+    for e in live_entries:
+        if (
+            e.get("kind") == "master"
+            and e.get("stem") == "regular"
+            and e.get("content_sha256")
+            and e.get("recording_id")
+        ):
+            parent_master[str(e["recording_id"])] = str(e["content_sha256"])
+
+    live_content = {
+        e.get("content_sha256") for e in live_entries if e.get("content_sha256")
+    }
+
+    qmarks = ",".join("?" * len(recs))
+    try:
+        rows = conn.execute(
+            f"""
+            SELECT recording_id, stem, variant, kind, track_audio_id,
+                   content_sha256, payload_sha256,
+                   parent_content_sha256, parent_payload_sha256
+            FROM content_history
+            WHERE recording_id IN ({qmarks}) AND valid = 1
+            """,
+            recs,
+        ).fetchall()
+    except sqlite3.OperationalError:
+        # Table / parent_* columns not yet migrated — no historical emit.
+        return []
+
+    out: list[dict] = []
+    for (
+        rid,
+        stem,
+        variant,
+        kind,
+        taid,
+        csha,
+        psha,
+        parent_c,
+        _parent_p,
+    ) in rows:
+        if not csha:
+            continue
+        if csha in live_content:
+            continue  # already bound by live catalog entry
+        cert: str | None = None
+        if psha and psha in live_payloads:
+            cert = "payload"
+        elif (
+            kind == "separated" and parent_c and parent_master.get(str(rid)) == parent_c
+        ):
+            cert = "derivation"
+        if cert is None:
+            continue
+        out.append(
+            {
+                "content_sha256": csha,
+                "payload_sha256": psha,
+                "recording_id": rid,
+                "track_audio_id": str(taid) if taid is not None else "",
+                "stem": stem or "regular",
+                "variant": variant or "regular",
+                "kind": kind or "master",
+                "id_source": "historical-content",
+                "cert": cert,
+            }
+        )
+    return out
 
 
 def build_catalog(
@@ -90,6 +180,7 @@ def build_catalog(
                 "stem": stem or "regular",
                 "variant": variant or "regular",
                 "kind": "master",
+                "id_source": "content",
             }
         )
 
@@ -129,8 +220,11 @@ def build_catalog(
                 # (mirrors the master loop's `variant or "regular"`).
                 "variant": variant or "regular",
                 "kind": "separated",
+                "id_source": "content",
             }
         )
+
+    entries.extend(_emit_historical(conn, recs, entries))
     return {"set_id": set_id, "entries": entries}
 
 

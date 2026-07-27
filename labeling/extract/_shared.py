@@ -210,6 +210,8 @@ def _load_content_catalog(set_dir: Path) -> ContentCatalog | None:
                         stem=stem,
                         variant=variant,
                         head_hash=str(key),
+                        id_source=str(e.get("id_source") or "content"),
+                        cert=e.get("cert"),
                     )
                 )
     return ContentCatalog.from_entries(entries)
@@ -245,7 +247,12 @@ def _content_bind(
     if not r.is_ok() and clip.path.lower().endswith((".m4a", ".mp4", ".m4b")):
         r = resolve_clip_identity(clip, catalog, head_hash_of=_safe(mdat_sha256))
     if r.is_ok():
-        return r.value.recording_id, r.value.stem, r.value.variant, "content"
+        return (
+            r.value.recording_id,
+            r.value.stem,
+            r.value.variant,
+            r.value.id_source or "content",
+        )
     return None, None, None, "abstain"
 
 
@@ -261,7 +268,7 @@ def _clip_row(
         return None
     _rid_unused, slot_label, display, claimed_stem = resolve_identity(clip, manifest)
     recording_id, bind_stem, bind_variant, id_source = _content_bind(clip, catalog)
-    if id_source == "content":
+    if id_source in ("content", "historical-content"):
         # A content bind resolved a specific track_audio row: its stem/variant
         # are the SOUND identity and must win over the weaker path/manifest
         # guess (resolve_identity above) — right work, wrong stem is a wrong
