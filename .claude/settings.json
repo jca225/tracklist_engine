@@ -50,5 +50,17 @@
       "Bash(ssh vast *)",
       "Bash(nc -z *)"
     ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v braid >/dev/null 2>&1 && braid status || true"
+          }
+        ]
+      }
+    ]
   }
 }

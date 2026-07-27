@@ -12,6 +12,7 @@ Used by git pre-commit, Cursor afterFileEdit hook, and GitHub Actions.
 from __future__ import annotations
 
 import ast
+import os
 import re
 import subprocess
 import sys
@@ -591,6 +592,105 @@ def _check_gt_als_drift() -> list[Violation]:
     return violations
 
 
+# ---------------------------------------------------------------------------
+# WIP-limit fence — a flow-control fence, not a correctness one.
+#
+# A branch that runs far ahead of origin/main is expensive to land (merge cost
+# tracks commits-since-divergence, not calendar age — see AGENTS.md §Branch
+# protection and the branch-hygiene skill). This fence blocks a push/commit once
+# the branch is more than WIP_COMMIT_LIMIT commits ahead, nudging the author to
+# split it or land part of it. Two escape hatches keep it from being a straitjacket:
+# an `epic` branch (deliberately long-lived) or GUARDRAILS_ALLOW_BIG=1.
+#
+# Only commit-count is fenced. Branch *age* is intentionally NOT checked: a
+# pre-push guardrail has no reliable branch-creation timestamp (reflogs are
+# local-only and absent in CI / fresh clones), so an age gate would be silently
+# unenforceable. Commit-count is `git rev-list --count origin/main..HEAD` — the
+# same number the branch-hygiene tooling reports.
+WIP_COMMIT_LIMIT = 15
+
+
+def over_wip_limit(commits_ahead: int, branch_name: str, allow_big: bool) -> bool:
+    """Pure decision for the WIP-limit fence — testable without git.
+
+    Returns True when the branch is too far ahead AND no escape hatch applies.
+    Escape hatches: ``allow_big`` (the GUARDRAILS_ALLOW_BIG=1 env override) or a
+    branch whose name contains ``epic`` (a deliberately long-lived line of work).
+    """
+    if allow_big or "epic" in branch_name.lower():
+        return False
+    return commits_ahead > WIP_COMMIT_LIMIT
+
+
+def _current_branch() -> str | None:
+    """Current branch name, or None on a detached HEAD / non-git tree."""
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    name = proc.stdout.strip()
+    if not name or name == "HEAD":  # detached HEAD reports "HEAD"
+        return None
+    return name
+
+
+def _commits_ahead_of_origin_main() -> int | None:
+    """Commits on HEAD not on origin/main, or None if origin/main is absent.
+
+    Robust to a fresh clone / shallow CI checkout with no ``origin/main`` ref:
+    the rev-list exits nonzero, which we surface as None (fence no-ops) rather
+    than crashing the whole guardrails run.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "rev-list", "--count", "origin/main..HEAD"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:  # origin/main not present -> uncountable
+        return None
+    try:
+        return int(proc.stdout.strip())
+    except ValueError:
+        return None
+
+
+def _check_wip_limit() -> list[Violation]:
+    branch = _current_branch()
+    if branch is None or branch == "main":  # detached HEAD or main -> no-op
+        return []
+    ahead = _commits_ahead_of_origin_main()
+    if ahead is None:  # origin/main absent -> no-op, don't crash
+        return []
+    allow_big = os.environ.get("GUARDRAILS_ALLOW_BIG") == "1"
+    if not over_wip_limit(ahead, branch, allow_big):
+        return []
+    return [
+        Violation(
+            REPO_ROOT,
+            0,
+            "wip_limit",
+            f"branch '{branch}' is {ahead} commits ahead of origin/main "
+            f"(limit {WIP_COMMIT_LIMIT}) — split it or land part of it first "
+            f"(landing cost grows with commits-since-divergence). Escape "
+            f"hatches: put 'epic' in the branch name, or set "
+            f"GUARDRAILS_ALLOW_BIG=1.",
+        )
+    ]
+
+
 def run_checks() -> list[Violation]:
     violations: list[Violation] = []
     for path in _iter_py_files():
@@ -618,6 +718,7 @@ def run_checks() -> list[Violation]:
             violations.extend(_check_stale_audio_pipeline_docs(path, text))
     violations.extend(_check_gt_als_drift())
     violations.extend(_check_ratchets())
+    violations.extend(_check_wip_limit())
     # AST-based bug-class fences (subprocess-no-timeout / -no-encoding, bare
     # except) live in entropy_audit.py — the line-based ratchet above can't see a
     # missing kwarg on a multi-line call. Ride the same gate.
@@ -630,6 +731,42 @@ def run_checks() -> list[Violation]:
 
     for msg in _entropy_check():
         violations.append(Violation(_EA_BASELINE, 0, "entropy_audit", msg))
+    # Registry version-collision fence (fold-in C): the provenance registry must
+    # be append-only — a repeated (name, version)/kind declared in two places is
+    # the duplicate a merge would silently land. Static AST scan; no imports.
+    try:
+        from core.provenance.registry_lint import (
+            find_collisions,
+            find_undeclared_kinds,
+            scan_tree,
+        )
+
+        _decls = scan_tree(REPO_ROOT)
+        for ident, locs in sorted(find_collisions(_decls).items()):
+            where = ", ".join(f"{Path(d.file).name}:{d.line}" for d in locs)
+            violations.append(
+                Violation(
+                    Path(locs[0].file),
+                    locs[0].line,
+                    "registry_collision",
+                    f"{ident} declared in {len(locs)} places ({where}) — registry "
+                    "declarations are append-only; bump the version or rename",
+                )
+            )
+        # Fold-in E — generated structural law: every kind a producer references
+        # must be a declared @artifact_type or a built-in ArtifactKind.
+        for u in find_undeclared_kinds(_decls):
+            violations.append(
+                Violation(
+                    Path(u.decl.file),
+                    u.decl.line,
+                    "registry_undeclared_kind",
+                    f"{u.decl.identity} references kind {u.kind!r} that is neither "
+                    "a declared @artifact_type nor a built-in ArtifactKind",
+                )
+            )
+    except ImportError:
+        pass  # core.provenance not importable (e.g. partial checkout) — skip
     return violations
 
 
