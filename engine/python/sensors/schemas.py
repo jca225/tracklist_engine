@@ -39,7 +39,10 @@ def validate_payload(schema_name: str, payload: dict[str, Any]) -> dict[str, Any
     """Validate *payload* against a named schema; return it unchanged on success."""
     schema = load_schema(schema_name)
     validator = Draft202012Validator(schema)
-    errors = sorted(validator.iter_errors(payload), key=lambda e: list(e.path))
+    errors = sorted(
+        validator.iter_errors(payload),  # pyright: ignore[reportUnknownMemberType]
+        key=lambda e: list(e.path),
+    )
     if errors:
         messages = "; ".join(
             f"{'/'.join(map(str, e.path)) or '<root>'}: {e.message}" for e in errors
