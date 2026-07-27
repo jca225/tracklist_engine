@@ -1,6 +1,6 @@
 # Alignment — State of Record (current best + settled decisions)
 
-> **As of 2026-07-26 @ `6909033`.** **RT1 honest baseline landed on `main`** (PR
+> **As of 2026-07-26 @ `c62e9f5`.** **RT1 honest baseline landed on `main`** (PR
 > #105): the de-poisoned + form-centric scorecard, regenerated bridge id_maps, and
 > human-verified GT completion are now canonical, and [alignment_status.md](alignment_status.md)
 > carries the honest numbers (identity 51%/61% per-span vs the old poisoned 82/84).
@@ -458,6 +458,17 @@ from scorers. Dead ends live in the EXPERIMENTS ledger.
 
 ## 3. Open fronts (what's live / undecided right now)
 
+- **Week 2 draft (Day 7 closeout of the 7-day plan).** Act I–II done; Act III
+  bought the provenance shape, not a finished Phase 2. Priority order: (1) **E1
+  real-pseudo TRM flywheel** — only path that unblocks STRUCTURE posteriors
+  after #26; starvation gate first; (2) **Phase 1B tight-window re-measure** +
+  BB11 extract / LOSO identity gate (#23) — parallel, does not block E1;
+  (3) placement research stays inside the off-path belief→timeline seam (shadow
+  lane only); (4) **hot-path / dual-read cutover** remains deferred until
+  placement + structure clear honest coverage on both sets; (5) reconcile
+  `trm-ablation-framework` / `cotrain-corpus-harvest` before treating those
+  branches as current-best. `alignment_status.md` was **not** regenerated this
+  closeout — no new complete scorer run; cite the existing SSOT until one lands.
 - **Phase 2 structure posterior — blocked on real-distribution TRM (decision
   #26).** Belief→timeline plumbing, LOSO producer, and uncalibrated evidence
   artifacts (conv `decode_with_evidence` + TRM `trm_decode_with_evidence`) are
