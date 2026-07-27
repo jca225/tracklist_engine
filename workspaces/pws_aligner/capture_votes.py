@@ -117,7 +117,7 @@ def _probe_entry(
     *,
     probe: str,
     recording_id: str | None,
-    offset_s: float,
+    offset_s: float | None,
     confidence: float,
     abstain: bool,
 ) -> dict:
@@ -135,7 +135,7 @@ def _abstain_entry(probe: str) -> dict:
     return _probe_entry(
         probe=probe,
         recording_id=None,
-        offset_s=0.0,
+        offset_s=None,
         confidence=0.0,
         abstain=True,
     )
@@ -321,6 +321,7 @@ def _run_probe_safe(
         # Normalize to the votes-file RELATIVE frame (see _ABSOLUTE_FRAME_PROBES).
         offset = result.offset_s
         if not result.abstain and probe_name in _ABSOLUTE_FRAME_PROBES:
+            assert result.offset_s is not None
             offset = result.offset_s - span_set_start_s
         return _probe_entry(
             probe=probe_name,

@@ -41,6 +41,7 @@ def test_confidence_bounds_inclusive(ok):
 def test_abstained_constructor():
     r = AlignmentResult.abstained(source="fp", recording_id="rec2")
     assert r.abstain is True and r.confidence == 0.0 and r.source == "fp"
+    assert r.offset_s is None
 
 
 def test_refsegment_and_segments_carry_piecewise_map():
