@@ -388,3 +388,29 @@ lacks `recording_id` on spans (schema drift).
 **Next:** selective Demucs promote or official acappella acquire per worklist
 (not batch-16 like BB12); fix slot **027** missing bed; resolve reconcile
 orphans **017w2/038w2** before strict inventory.
+
+## Source-family Beta calibration for Phase 2 beliefs (2026-07-26) — STRUCTURE NO-GO
+
+**Question:** can a deliberately low-capacity, leakage-safe LOSO calibrator turn
+the existing timeline's source-family labels into transferable PLACEMENT and
+STRUCTURE posteriors, sufficient to exercise the provenanced timeline decoder?
+
+**Method:** fit Beta precision posteriors on one complete-GT set and freeze them
+before applying to the other; repeat in both directions. Placement correctness
+uses the canonical placement gate. Structure correctness uses the canonical
+strict-trajectory acceptance gate. Sparse source families fall back to the
+train-set global posterior. Every model is stamped `development_only`; same-set
+fit/apply is rejected.
+
+**Verdict:** useful infrastructure and a placement shadow lane, but **NO-GO for
+structure or cutover**. Placement source families clear the existing posterior
+floor in both transfer directions. No structure source family clears it, so the
+honest result is universal structure abstention. Lowering the posterior floor
+would force guesses from a source label that has not demonstrated sufficient
+cross-set precision; do not do that.
+
+**Keep:** the LOSO producer, model artifact, belief bundles, null-preserving
+decoder, and default-off scorer seam. **Do not re-test** source-family-only
+structure calibration on these two sets. The next structure calibrator needs
+candidate-level evidence (path score shape, agreement, fiber ambiguity, or a
+learned trajectory posterior), not merely `ref_decode_status`.
