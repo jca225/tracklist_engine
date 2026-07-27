@@ -280,3 +280,93 @@ def tombstone(
             return Ok(n)
     except sqlite3.Error as e:
         return Err(DbError(kind="integrity", detail=str(e)))
+
+
+# --- C1: stem-regen never-drop (hash existing stems before overwrite) ---
+
+_STEM_FILE_TO_AXIS = {
+    "vocals": "acappella",
+    "instrumental": "instrumental",
+}
+_STEM_EXTS = (".flac", ".wav", ".mp3", ".m4a")
+
+
+def _existing_stem_path(stem_dest: Path, name: str) -> Path | None:
+    for ext in _STEM_EXTS:
+        p = stem_dest / f"{name}{ext}"
+        if p.is_file():
+            return p
+    return None
+
+
+def record_stems_before_overwrite(
+    db_path: Path,
+    stem_dest: Path,
+    *,
+    recording_id: str,
+    variant: str,
+    parent_content_sha256: str | None,
+    parent_payload_sha256: str | None = None,
+    track_audio_id: int | None = None,
+    source: str = "run_separation",
+) -> int:
+    """C1 — hash existing vocals/instrumental stems and append separated gens.
+
+    Call **before** a re-separation overwrites ``stem_dest``. Only the DJ-axis
+    stems (vocals→acappella, instrumental→instrumental) are recorded; drums/
+    bass/other are ignored (P15). Returns the number of generations appended.
+
+    Requires ``parent_content_sha256`` (the regular master's content hash at
+    separation time) — without it there is no derivation certificate later.
+    Fail-soft: missing files / missing table / IO errors return 0 rather than
+    raising into the separation hot path.
+    """
+    if not parent_content_sha256 or not recording_id:
+        return 0
+    if not stem_dest.is_dir():
+        return 0
+    n = 0
+    try:
+        # Lazy import: content_hash pulls nothing heavy; keep content_history
+        # importable on bare pi python3 for ledger-only callers.
+        from labeling.identity.content_hash import file_sha256, flac_pcm_md5
+    except ImportError:
+        return 0
+    try:
+        with connect(db_path) as conn:
+            for fname, axis in _STEM_FILE_TO_AXIS.items():
+                path = _existing_stem_path(stem_dest, fname)
+                if path is None:
+                    continue
+                try:
+                    csha = file_sha256(path)
+                except OSError:
+                    continue
+                psha = None
+                if path.suffix.lower() == ".flac":
+                    try:
+                        psha = flac_pcm_md5(path)
+                    except OSError:
+                        psha = None
+                append_generation_on(
+                    conn,
+                    Generation(
+                        recording_id=recording_id,
+                        stem=axis,
+                        variant=variant or "regular",
+                        kind="separated",
+                        content_sha256=csha,
+                        payload_sha256=psha,
+                        parent_content_sha256=parent_content_sha256,
+                        parent_payload_sha256=parent_payload_sha256,
+                        track_audio_id=track_audio_id,
+                        op="re-separate",
+                        source=source,
+                    ),
+                )
+                n += 1
+            if n:
+                conn.commit()
+    except (sqlite3.Error, ValueError, OSError):
+        return 0
+    return n

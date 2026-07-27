@@ -8,13 +8,13 @@ everything the DB adapter needs to persist.
 from __future__ import annotations
 
 import json
+import logging
+import os
 import time
 from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
-
-import logging
 
 from .adapters import (
     audio_io,
@@ -44,6 +44,63 @@ from .models import (
 )
 
 _log = logging.getLogger(__name__)
+
+# C1: content_history DB for stem-regen never-drop. Override for scratch/tests.
+_DEFAULT_CONTENT_HISTORY_DB = Path("/mnt/storage/data/db/music_database.db")
+
+
+def _content_history_db() -> Path | None:
+    raw = os.environ.get("TRACKLIST_CONTENT_HISTORY_DB") or os.environ.get(
+        "TRACKLIST_DB"
+    )
+    if raw:
+        return Path(raw)
+    if _DEFAULT_CONTENT_HISTORY_DB.exists():
+        return _DEFAULT_CONTENT_HISTORY_DB
+    return None
+
+
+def _maybe_record_stem_regen(asset: AudioAsset, stems_dir: Path) -> None:
+    """C1 never-drop: hash existing stems before run_separation overwrites them.
+
+    Fail-soft — never raises into the analysis hot path.
+    """
+    if asset.stem != "regular" or not asset.sha256 or asset.track_audio_id is None:
+        return
+    db = _content_history_db()
+    if db is None:
+        return
+    # Adapters write to stems_dir/<track_audio_id>/; gpu_worker may already
+    # pass a per-track dir — probe both layouts.
+    candidates = (
+        stems_dir / str(asset.track_audio_id),
+        stems_dir,
+    )
+    try:
+        from ingest.content_history import record_stems_before_overwrite
+    except ImportError:
+        return
+    for dest in candidates:
+        try:
+            n = record_stems_before_overwrite(
+                db,
+                dest,
+                recording_id=asset.recording_id,
+                variant=asset.variant or "regular",
+                parent_content_sha256=asset.sha256,
+                track_audio_id=asset.track_audio_id,
+                source="analysis.pipeline.run_separation",
+            )
+        except Exception as exc:  # never fail separation for ledger
+            _log.warning("stem-regen history failed (ignored): %r", exc)
+            return
+        if n:
+            _log.info(
+                "content_history: recorded %d stem gen(s) before re-sep taid=%s",
+                n,
+                asset.track_audio_id,
+            )
+            return
 
 
 @dataclass(frozen=True)
@@ -258,6 +315,7 @@ def analyze_track(
 
     # The stem backend (demucs or uvr) writes stems to disk; its output is not
     # fed back into the analyzers below.
+    _maybe_record_stem_regen(asset, stems_dir)
     stems_r = run_separation(a, audio_path, stems_dir, asset.track_audio_id)
     stage_s["separation"] = time.monotonic() - _t
     if not stems_r.is_ok():
