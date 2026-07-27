@@ -28,6 +28,11 @@ from .targets import frames_to_segments
 
 _NEG = -1e9
 
+# Softmax masses from a model checkpoint — never a calibrated STRUCTURE belief.
+EVIDENCE_KIND_CONV = "uncalibrated_trajectory_logits"
+EVIDENCE_KIND_TRM = "uncalibrated_trm_offset_logits"
+_EVIDENCE_KINDS = frozenset({EVIDENCE_KIND_CONV, EVIDENCE_KIND_TRM})
+
 
 @dataclass(frozen=True)
 class FrameCandidate:
@@ -69,9 +74,12 @@ class TrajectoryEvidence:
     def from_json(cls, payload: str) -> TrajectoryEvidence:
         raw: dict[str, Any] = json.loads(payload)
         if raw.get("schema_version") != 1:
-            raise ValueError(f"unsupported trajectory evidence schema: {raw.get('schema_version')}")
-        if raw.get("evidence_kind") != "uncalibrated_trajectory_logits":
-            raise ValueError(f"unexpected trajectory evidence kind: {raw.get('evidence_kind')}")
+            raise ValueError(
+                f"unsupported trajectory evidence schema: {raw.get('schema_version')}"
+            )
+        kind = raw.get("evidence_kind")
+        if kind not in _EVIDENCE_KINDS:
+            raise ValueError(f"unexpected trajectory evidence kind: {kind}")
         frames = tuple(
             FrameEvidence(
                 decoded_ref_bin=frame["decoded_ref_bin"],
@@ -91,7 +99,7 @@ class TrajectoryEvidence:
         )
         return cls(
             schema_version=1,
-            evidence_kind="uncalibrated_trajectory_logits",
+            evidence_kind=str(kind),
             frames=frames,
         )
 
@@ -111,7 +119,9 @@ def trajectory_evidence(
     if top_k < 1:
         raise ValueError("top_k must be positive")
 
-    probabilities = torch.softmax(logits.detach().to(dtype=torch.float64), dim=-1)
+    probabilities = torch.softmax(
+        logits.detach().float().cpu().to(dtype=torch.float64), dim=-1
+    )
     p = probabilities.cpu().numpy()
     tr = logits.shape[1] - 1
     denom = np.log(logits.shape[1])
@@ -131,7 +141,9 @@ def trajectory_evidence(
         top_margin = float(row[order[0]] - row[order[1]])
         frames.append(
             FrameEvidence(
-                decoded_ref_bin=None if bool(null_mask[t]) else int(decoded_ref_bins[t]),
+                decoded_ref_bin=None
+                if bool(null_mask[t])
+                else int(decoded_ref_bins[t]),
                 decoded_probability=float(row[selected]),
                 null_probability=float(row[tr]),
                 normalized_entropy=entropy,
@@ -141,7 +153,7 @@ def trajectory_evidence(
         )
     return TrajectoryEvidence(
         schema_version=1,
-        evidence_kind="uncalibrated_trajectory_logits",
+        evidence_kind=EVIDENCE_KIND_CONV,
         frames=tuple(frames),
     )
 
@@ -221,8 +233,6 @@ def decode_with_evidence(
     """Decode segments and retain the model's frame-local candidate evidence."""
     _, ref_bin, null_mask = _decode(logits, lam, back_ratio, null_margin)
     if logits.shape[0] == 0 or logits.shape[1] <= 1:
-        return [], TrajectoryEvidence(1, "uncalibrated_trajectory_logits", ())
+        return [], TrajectoryEvidence(1, EVIDENCE_KIND_CONV, ())
     segments = frames_to_segments(ref_bin, null_mask, bin_s)
-    return segments, trajectory_evidence(
-        logits, ref_bin, null_mask, top_k=top_k
-    )
+    return segments, trajectory_evidence(logits, ref_bin, null_mask, top_k=top_k)

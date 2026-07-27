@@ -6,9 +6,11 @@ touches a real span — the v0 sanity, in unit form."""
 
 from __future__ import annotations
 
+import pytest
 import torch
 
 from workspaces.alignment_prototype.trajectory import trm
+from workspaces.alignment_prototype.trajectory.decode import TrajectoryEvidence
 from workspaces.alignment_prototype.trajectory.offset_coords import OffsetVocab
 
 
@@ -137,6 +139,42 @@ def test_trm_decode_segments_from_a_peaked_offset_logit():
     mix0, ref0, _ = segs[0]
     assert mix0 == 0.0
     assert abs(ref0 - 20 * 0.5) < 0.5  # offset 20 bins == 10 s ref start
+
+
+def test_trm_decode_with_evidence_keeps_uncertainty_and_round_trips():
+    Tm = 6
+    vocab = OffsetVocab(lo_bin=-4, hi_bin=40, res_bin=1)
+    peaked = torch.full((1, Tm, vocab.size), -10.0)
+    off_idx = 12 - vocab.lo_bin
+    peaked[0, :, off_idx] = 8.0
+    peaked_out = trm.TRMOutput(logits=[peaked], q=[torch.zeros(1)], y=peaked, z=peaked)
+    flat = torch.zeros(1, Tm, vocab.size)
+    flat_out = trm.TRMOutput(logits=[flat], q=[torch.zeros(1)], y=flat, z=flat)
+
+    segs, peaked_ev = trm.trm_decode_with_evidence(peaked_out, bin_s=0.5, vocab=vocab)
+    _, flat_ev = trm.trm_decode_with_evidence(flat_out, bin_s=0.5, vocab=vocab)
+
+    assert segs
+    assert peaked_ev.evidence_kind == "uncalibrated_trm_offset_logits"
+    assert peaked_ev.frames[0].normalized_entropy < 0.2
+    assert peaked_ev.frames[0].top1_top2_margin > 0.5
+    assert flat_ev.frames[0].normalized_entropy > 0.95
+    assert flat_ev.frames[0].top1_top2_margin == pytest.approx(0.0)
+
+    # NULL-dominant frame
+    nullish = peaked.clone()
+    nullish[0, 2, :] = -10.0
+    nullish[0, 2, vocab.null_index] = 12.0
+    null_out = trm.TRMOutput(logits=[nullish], q=[torch.zeros(1)], y=nullish, z=nullish)
+    _, null_ev = trm.trm_decode_with_evidence(null_out, bin_s=0.5, vocab=vocab)
+    assert null_ev.frames[2].decoded_ref_bin is None
+    assert null_ev.frames[2].null_probability > 0.99
+    assert null_ev.frames[2].candidates[0].ref_bin is None
+
+    payload = peaked_ev.to_json()
+    restored = TrajectoryEvidence.from_json(payload)
+    assert restored == peaked_ev
+    assert restored.to_json() == payload
 
 
 def test_sim_to_offset_evidence_gathers_the_diagonal():

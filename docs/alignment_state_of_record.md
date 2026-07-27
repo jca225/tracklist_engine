@@ -1,6 +1,6 @@
 # Alignment — State of Record (current best + settled decisions)
 
-> **As of 2026-07-26 @ `b73a4c1`.** **RT1 honest baseline landed on `main`** (PR
+> **As of 2026-07-26 @ `6909033`.** **RT1 honest baseline landed on `main`** (PR
 > #105): the de-poisoned + form-centric scorecard, regenerated bridge id_maps, and
 > human-verified GT completion are now canonical, and [alignment_status.md](alignment_status.md)
 > carries the honest numbers (identity 51%/61% per-span vs the old poisoned 82/84).
@@ -123,8 +123,11 @@ wrong-variant label cannot slip (decision #17, Phase A).
   pseudo-labels, with synthetic realism as the alternative lever (decision #14).
   Phase 2 structure beliefs and null-preserving timeline round-trip are built
   off-path. Source-family and hand-crafted candidate-summary calibration both
-  fail the cross-set structure gate; the learned trajectory decoder's own
-  candidate distribution is now the live calibration front.
+  fail the cross-set structure gate. Conv and TRM decoders now retain versioned
+  uncalibrated evidence artifacts off-path; calibrating STRUCTURE from the live
+  synthetic-only TRM checkpoint is closed (decision #26). The live structure
+  posterior front waits on a real-distribution TRM (E1 flywheel) or a new
+  independent sensor.
 
 **Cross-cutting machinery (settled, in use):**
 - **Scorer** scores over played + gain-audible intervals only (de-inflated; no
@@ -145,15 +148,28 @@ and co-training seam). Harness: `harness/`. Agentic loop: `agentic/`.
 
 > Append new entries at the top. Never rewrite history — supersede it.
 
-**#25 — Hand-crafted timeline summaries do not calibrate structure cross-set.**
-`2026-07-26` · SETTLED. Adding path geometry, decoded coverage, independent
-placement agreement, and fiber ambiguity to the development-only LOSO
-calibrator does not yield transferable structure discrimination. Do not lower
-the posterior floor or keep recombining the same summaries. The next honest
-structure posterior must expose competition inside the learned trajectory
-decoder (candidate logits/distribution) or come from a new independent sensor.
+**#26 — Synthetic-only TRM evidence cannot calibrate STRUCTURE yet.**
+`2026-07-26` · SETTLED. The live `.cache/trajectory/decoder_1fsnxchk.pt`
+checkpoint is a synthetic-only TRM. Off-path `trm_decode_with_evidence` retains
+its offset-class candidate mass, but on held-out BB11 the decode produces
+**zero** spans at the standing strict gate (sample n=40, 18 scored; max strict
+≪ 0.8) and continuous-strict ranking of evidence summaries is insignificant.
+Do not fit a STRUCTURE calibrator on this checkpoint or lower the posterior
+floor to manufacture coverage. The evidence artifact stays; the next structure
+posterior requires a real-distribution TRM (E1 flywheel / decision #14) that
+first produces nonzero honest structure successes, or a new independent sensor.
 Dead-end detail is in the EXPERIMENTS ledger; headline numbers remain in
 [alignment_status.md](alignment_status.md).
+
+**#25 — Hand-crafted timeline summaries do not calibrate structure cross-set.**
+`2026-07-26` · SETTLED / SUPERSEDED-IN-PART-BY-#26. Adding path geometry, decoded
+coverage, independent placement agreement, and fiber ambiguity to the
+development-only LOSO calibrator does not yield transferable structure
+discrimination. Do not lower the posterior floor or keep recombining the same
+summaries. Exposing the learned decoder's candidate distribution (built) was the
+right next step; #26 closes calibrating STRUCTURE from the live synthetic-only
+TRM weights. Dead-end detail is in the EXPERIMENTS ledger; headline numbers
+remain in [alignment_status.md](alignment_status.md).
 
 **#24 — Phase 2 belief→timeline contract is viable; source-family-only structure
 calibration defers.** `2026-07-26` · SETTLED (contract) / OPEN (candidate-level
@@ -442,18 +458,16 @@ from scorers. Dead ends live in the EXPERIMENTS ledger.
 
 ## 3. Open fronts (what's live / undecided right now)
 
-- **Phase 2 learned trajectory posterior — immediate architecture front
-  (decision #25).** The off-path belief decoder, provenance round-trip, and
-  default-off scorer seam are built; the leakage-safe LOSO producer proves the
-  calibration plumbing. Source-family and hand-crafted candidate-summary
-  structure calibration are now closed. The trajectory decoder now retains a
-  versioned `uncalibrated_trajectory_logits` evidence artifact off-path
-  (`decode_with_evidence`) without changing the hard-path decode API. Next:
-  LOSO-calibrate that distribution on one BB set and freeze on the other, then
-  emit STRUCTURE beliefs through the existing seam. Require nonzero honest
-  structure coverage before re-running the per-axis gate. **Do not lower the
-  posterior floor to manufacture coverage.** Dual-read/hot-path planning
-  remains blocked until this shadow gate clears on both sets.
+- **Phase 2 structure posterior — blocked on real-distribution TRM (decision
+  #26).** Belief→timeline plumbing, LOSO producer, and uncalibrated evidence
+  artifacts (conv `decode_with_evidence` + TRM `trm_decode_with_evidence`) are
+  built. Source-family, hand-crafted summaries, and synthetic-only TRM evidence
+  are closed as STRUCTURE calibrators. Next structure work is not another
+  calibrator class: run the E1 real pseudo-label flywheel until a held-out TRM
+  produces nonzero honest structure successes, then revisit LOSO calibration of
+  its evidence; otherwise pursue a new independent structure sensor.
+  **Do not lower the posterior floor.** Dual-read/hot-path planning remains
+  blocked.
 - **Phase 1B tight-window re-measure — the immediate open 1B front (decision #23).**
   The e2e gate ran on broad parent-slot windows and the blind LF underperformed the
   claim; the coarse window is the prime suspect (query-query cosine ≈ 0.99, vs the
@@ -467,12 +481,13 @@ from scorers. Dead ends live in the EXPERIMENTS ledger.
   `candidate_pool.py` / `identity_override.py` (default-off seam). GPU driver:
   `scripts/gpubox_extract_1b.py` (needs a `--set-id` param before it lands). This is
   a windowing/reference front, **not** a compute or architecture one.
-- **TRM real pseudo-label flywheel — E1 is next.** The architecture works but
-  synthetic-only transfer fails (decision #14). Verify MERT + fingerprint caches
-  for the pool, materialize only agentic `AUTO_COMMIT` spans from BB10 as
-  pseudo-GT, train TRM on those real-distribution labels, and evaluate strictly
-  on BB11 GT. No pi writes. The first gate is starvation: if too few spans
-  survive, calibrate ACCEPT precision before building more machinery. Protocol:
+- **TRM real pseudo-label flywheel — E1 is next (also unblocks Phase 2 structure).**
+  The architecture works but synthetic-only transfer fails (decision #14 / #26).
+  Verify MERT + fingerprint caches for the pool, materialize only agentic
+  `AUTO_COMMIT` spans from BB10 as pseudo-GT, train TRM on those real-distribution
+  labels, and evaluate strictly on BB11 GT. No pi writes. The first gate is
+  starvation: if too few spans survive, calibrate ACCEPT precision before building
+  more machinery. Protocol:
   [`trm_flywheel_design.md`](../workspaces/alignment_prototype/docs/trm_flywheel_design.md).
 - **Synthetic realism — alternative, not current first move.** Two measured
   mismatches are drop-from-top starts and regular full-track spans. The

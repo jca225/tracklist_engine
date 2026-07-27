@@ -437,3 +437,31 @@ fields on BB11/BB12. They summarize the decoder's output but do not expose its
 uncertainty about competing trajectories. The next structure belief must come
 from the learned trajectory decoder's candidate distribution/logits (or a new
 independent sensor), calibrated cross-set.
+
+## Synthetic-only TRM evidence → STRUCTURE calibration (2026-07-26) — NO-GO
+
+**Question:** does the live TRM checkpoint's uncalibrated offset-class candidate
+distribution discriminate held-out structure quality enough to support a
+STRUCTURE calibrator?
+
+**Method:** load `.cache/trajectory/decoder_1fsnxchk.pt` (args:
+`model=trm`, `synthetic_only=True`, train tag `1fsnxchk`), run
+`trm_decode_with_evidence` on BB11 spans from the classical LT timeline, score
+decoded segments with the canonical strict gate, and probe both the binary
+success label and continuous strict ranking from span-aggregated evidence
+(entropy, top1–top2 margin, decoded/null/rival mass, deep-supervision
+agreement).
+
+**Verdict:** not calibratable on this checkpoint. In a 40-span sample (18 with
+scorable GT structure) **zero** spans clear strict ≥ 0.8 (max ≪ gate); Spearman
+correlations of evidence summaries vs continuous strict are insignificant.
+Deep-supervision argmax agreement was constant. This matches decision #14's
+sim2real gap — the evidence API is fine; the weights never produce structure
+successes to calibrate.
+
+**Keep:** `trm_decode_with_evidence` / `uncalibrated_trm_offset_logits` as the
+off-path artifact for a future real-distribution TRM. **Do not** fit a
+STRUCTURE Beta/logistic calibrator on synthetic-only TRM evidence, and **do not
+re-probe** this checkpoint for structure posteriors. Unblock via E1
+real-pseudo TRM (nonzero held-out structure successes first) or a new
+independent structure sensor.
