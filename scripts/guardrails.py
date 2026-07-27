@@ -731,6 +731,42 @@ def run_checks() -> list[Violation]:
 
     for msg in _entropy_check():
         violations.append(Violation(_EA_BASELINE, 0, "entropy_audit", msg))
+    # Registry version-collision fence (fold-in C): the provenance registry must
+    # be append-only — a repeated (name, version)/kind declared in two places is
+    # the duplicate a merge would silently land. Static AST scan; no imports.
+    try:
+        from core.provenance.registry_lint import (
+            find_collisions,
+            find_undeclared_kinds,
+            scan_tree,
+        )
+
+        _decls = scan_tree(REPO_ROOT)
+        for ident, locs in sorted(find_collisions(_decls).items()):
+            where = ", ".join(f"{Path(d.file).name}:{d.line}" for d in locs)
+            violations.append(
+                Violation(
+                    Path(locs[0].file),
+                    locs[0].line,
+                    "registry_collision",
+                    f"{ident} declared in {len(locs)} places ({where}) — registry "
+                    "declarations are append-only; bump the version or rename",
+                )
+            )
+        # Fold-in E — generated structural law: every kind a producer references
+        # must be a declared @artifact_type or a built-in ArtifactKind.
+        for u in find_undeclared_kinds(_decls):
+            violations.append(
+                Violation(
+                    Path(u.decl.file),
+                    u.decl.line,
+                    "registry_undeclared_kind",
+                    f"{u.decl.identity} references kind {u.kind!r} that is neither "
+                    "a declared @artifact_type nor a built-in ArtifactKind",
+                )
+            )
+    except ImportError:
+        pass  # core.provenance not importable (e.g. partial checkout) — skip
     return violations
 
 
