@@ -1,14 +1,15 @@
 # Alignment — State of Record (current best + settled decisions)
 
-> **As of 2026-07-27 @ `6468d0ea`.** **RT1 honest baseline on `main`** (PR
+> **As of 2026-07-27 @ `1bdf6eef`.** **RT1 honest baseline on `main`** (PR
 > #105); [alignment_status.md](alignment_status.md) is the numbers SSOT. **Phase 1B
 > DEFERS** on blind LF (#23); tight GT-span re-measure remains open. **Crush Phase B
 > foundation SHIPPED** (#27 / PR #80); **derivation lever C0–C3 code SHIPPED** (PR
-> #122) — pi acceptance still coordinated. Focus layout promoted `alignment/` +
-> reorganized `analysis/` (PR #124). **Rust provenance kernel incubates at
-> `engine/`** (#28) — fixtures canary only; not the live aligner. Week-2 priority
-> still **E1 real-pseudo TRM** + 1B tight-window; do not cut live drivers over to
-> `engine/` yet.
+> #122) — pi acceptance still coordinated. Focus layout (#124) + `engine/` on main
+> (#125). **#29 hybrid destination** supersedes #28: Rust `engine/` is the Decide /
+> Promote / Act SoR; Python DAG stages are Propose sensors — reshape tracked in
+> [#126](https://github.com/jca225/tracklist_engine/issues/126). Live `make align`
+> stays Python until migrate + dual-run parity. Week-2 operative priority still
+> **E1 real-pseudo TRM** + 1B tight-window.
 >
 > **What this doc is.** The single *living* answer to "what is the aligner at its
 > best right now, and what have we settled on — so build ON this, don't
@@ -30,8 +31,8 @@
 **Operative (the gate):** a SOTA, rigorous alignment algorithm that generalizes
 across **~40,000 DJ sets** at as close to 100% accuracy as possible. (Earlier
 docs say "20,000" — superseded; ~40k is current.) **North-north (deferred behind
-the gate):** the DJ-music research lab in `lab/`. Alignment is
-necessary-but-not-sufficient for it.
+the gate):** DJ-music research lab / personalization (attic’d off the focused
+checkout). Alignment is necessary-but-not-sufficient for it.
 
 **Interpretive frame (never collapse to one scalar):** alignment is three
 near-orthogonal axes — **identity** (which recording), **placement** (where in
@@ -115,9 +116,15 @@ wrong-variant label cannot slip (decision #17, Phase A).
 - **Fibers** (self-repeat classes) credit "right repeated content" via the
   fiber-aware scoring gate.
 
-**Where the engine lives:** `alignment/` (probes, decode,
-scorer, trajectory/TRM) + `pws_aligner/` (weak-supervision fusion
-and co-training seam). Harness: `harness/`. Agentic loop: `agentic/`.
+**Where the engine lives (operative today):** Python `alignment/` (probes, decode,
+scorer, trajectory/TRM) + `pws_aligner/` (weak-supervision fusion and co-training
+seam). Harness: `harness/`. Agentic loop: `agentic/`.
+
+**Architecture destination (#29):** hybrid like `alignment_algorithm` — Rust
+[`engine/`](../engine/) owns Decide / Promote / Act + content-addressed artifacts;
+DAG stages (`web_crawler` → `tokenizer` → `ingest` → `analysis` → `labeling` →
+align *bodies*) Propose into that cortex. Not dual products; not delete-the-DAG.
+Reshape plan: [#126](https://github.com/jca225/tracklist_engine/issues/126).
 
 ---
 
@@ -125,14 +132,27 @@ and co-training seam). Harness: `harness/`. Agentic loop: `agentic/`.
 
 > Append new entries at the top. Never rewrite history — supersede it.
 
+**#29 — Hybrid destination: Rust cortex + Python DAG as Propose (supersedes #28).**
+`2026-07-27` · SETTLED. Desktop should look like `~/workspace/alignment_algorithm`:
+Rust `engine/` (`dj_kernel` / `dj_migrate`) is the Decide → Promote → Act SoR
+(artifacts, provenance, PWS); Python DAG stages remain and become Propose
+sensors/adapters (scrape, tokenize, ingest, MIR, Ableton, align bodies). **Not**
+a permanent Python-aligner + toy Rust sandbox; **not** throw away the DAG.
+Temporary safety: live `make align` / scorecard stay on Python until live-DB
+migrate dry-run + dual-run parity (tracked in
+[#126](https://github.com/jca225/tracklist_engine/issues/126)). Useful DEC ideas
+(data vs capta, epistemic stance, settle ≈ promote) inform the model; no Fuseki
+port required. Supersedes #28.
+
 **#28 — Rust provenance kernel incubates at `engine/`; live aligner stays Python.**
-`2026-07-27` · SETTLED. The rewrite from `~/workspace/alignment_algorithm`
+`2026-07-27` · SUPERSEDED-BY-#29. The rewrite from `~/workspace/alignment_algorithm`
 (`dj_kernel` / `dj_migrate` + Python sensors) lands as top-level [`engine/`](../engine/)
 (PR #125): fixtures-only `make engine-check` / `make engine-canary`. It is **not**
 a rename of `alignment/` and must not receive live DAG drivers, pi DB apply, or
 scorecard paths until a later cutover with migrate-from-live-DB. Desktop
 `alignment/` + `analysis/` remain the operative SoR for Aug-1. Contract sync:
 [`docs/engine/dj_engine_pseudocode.md`](engine/dj_engine_pseudocode.md).
+**Superseded:** destination is hybrid cutover (#29), not permanent sandbox.
 
 **#27 — Crush completeness Phase B foundation SHIPPED; derivation lever code
 SHIPPED (pi gate remains).** `2026-07-27` · SETTLED (foundation + C0–C3 code) /
@@ -443,13 +463,17 @@ from scorers. Dead ends live in the EXPERIMENTS ledger.
 
 ## 3. Open fronts (what's live / undecided right now)
 
-- **Week 2 draft (post focus-layout + engine incubate).** Priority order: (1) **E1
+- **Week 2 draft (post focus-layout + engine + #29).** Priority order: (1) **E1
   real-pseudo TRM flywheel** — only path that unblocks STRUCTURE posteriors
   after #26; (2) **Phase 1B tight-window re-measure** + BB11 / LOSO (#23);
   (3) **pi acceptance** for derivation (#122 / #27) — coordinate, do not force;
-  (4) placement stays shadow-lane only; (5) **`engine/` cutover** deferred (#28)
-  until migrate talks to live DB — keep Python `alignment/` as operative.
-  Cite [alignment_status.md](alignment_status.md) until a fresh scorer run.
+  (4) placement stays shadow-lane only; (5) **hybrid reshape** (#29 /
+  [#126](https://github.com/jca225/tracklist_engine/issues/126)) — first bite is
+  docs + Propose bridge, not flipping `make align`. Cite
+  [alignment_status.md](alignment_status.md) until a fresh scorer run.
+- **Hybrid reshape (deferred work, issue #126).** Phases: SoR already #29 →
+  stem Propose bridge → live `LEGACY_DB` migrate dry-run → dual-run → flip.
+  Difficulty: multi-week strangler; not a weekend rename.
 - **Phase 2 structure posterior — blocked on real-distribution TRM (decision
   #26).** Belief→timeline plumbing, LOSO producer, and uncalibrated evidence
   artifacts (conv `decode_with_evidence` + TRM `trm_decode_with_evidence`) are
