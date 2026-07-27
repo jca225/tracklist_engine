@@ -68,7 +68,7 @@ from eda.alignment.spectrogram_review.spectrogram import (
     mel_rgb,
     to_square,
 )
-from workspaces.alignment_prototype.fp_placement_refine import find_aligning_dir
+from alignment.fp_placement_refine import find_aligning_dir
 
 OUT_ROOT = Path(__file__).resolve().parent / "out"
 SR = 22_050

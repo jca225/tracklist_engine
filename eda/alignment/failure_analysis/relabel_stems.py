@@ -29,9 +29,9 @@ _REPO = Path(__file__).resolve().parents[3]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from workspaces.alignment_prototype.score_timeline_vs_gt import norm_slot  # noqa: E402
+from alignment.score_timeline_vs_gt import norm_slot  # noqa: E402
 
-_ALN = _REPO / "workspaces" / "alignment_prototype"
+_ALN = _REPO / "alignment"
 SETS = [
     ("1fsnxchk", _REPO / "labeling/fixtures/bb12_ground_truth.yaml"),
     ("2nvzlh2k", _REPO / "labeling/fixtures/bb11_ground_truth.yaml"),

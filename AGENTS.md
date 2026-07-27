@@ -33,7 +33,7 @@ is the *how we work* layer; the *what the code is* layer lives in
 
 ## 4. Record dead ends
 - A closed experiment goes in the **EXPERIMENTS ledger**
-  (`workspaces/alignment_prototype/attic/EXPERIMENTS.md`) with its verdict — so no
+  (`alignment/attic/EXPERIMENTS.md`) with its verdict — so no
   one re-litigates it. Read it before proposing something that smells familiar.
 
 ## 5. Canonical state is shared and live — coordinate before mutating

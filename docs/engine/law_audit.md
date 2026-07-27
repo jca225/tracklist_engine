@@ -77,7 +77,7 @@ lineage/snapshots (1, 13, 14, 16, 17), append-only human GT (8, 9), and the
 - `web_crawler/database/schema.sql` — 40 tables, none is `run`/`artifact`/`derivation`; only `content_history` carries a sha.
 - `analysis/persistence.py:52,103,127,145` — feature/analysis INSERTs with no `run_id`/input linkage.
 - `core/db.py:548-597` `insert_audio` — rows keyed by `(recording_id, platform, player_id)` locators, no producing Run.
-- `workspaces/alignment_prototype/infer.py:930` — timeline is `out_path.write_text(json.dumps(...))`, a bare file with no RunOutput edge.
+- `alignment/infer.py:930` — timeline is `out_path.write_text(json.dumps(...))`, a bare file with no RunOutput edge.
 - *Off-path:* `core/provenance` + producers DB under `out/provenance/` persist Run/Artifact rows for the Phase 2 shadow lane — does not clear the hot-path violation.
 
 ### 2 · provenance_is_acyclic — ⚪ N/A-NOT-BUILT → P1→P3

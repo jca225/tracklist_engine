@@ -166,7 +166,7 @@ turning under its own power.
 
 CPU-cheap golden subset (contract round-trips + scorer goldens) in CI on every
 push; full `make race` nightly on the Mac; ratchets extended (flags, silent
-fallbacks). Promotion checklist for `workspaces/alignment_prototype` →
+fallbacks). Promotion checklist for `alignment` →
 `alignment/` (architecture doc P6): P1–P4 exits held on two consecutive new
 sets.
 
@@ -190,7 +190,7 @@ gets there too. **Stretch:** P3 default-flip — [M]'s gate, not a promise.
 - **Interface churn vs [M]**: mitigated structurally — factors/posteriors are
   parallel emissions; nothing [M] reads changes until fusion v2 *wins the
   race*. Coordination artifact: a short handoff note in
-  `workspaces/alignment_prototype/looptrace/NOTES.md` when W2.1 lands.
+  `alignment/looptrace/NOTES.md` when W2.1 lands.
 - **Pseudo-label error propagation**: tiered weights, frozen auto-accept
   threshold until calibration exists, per-cycle held-out check with a revert
   rule (any cycle that drops transfer gets its pool quarantined).

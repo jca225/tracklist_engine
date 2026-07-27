@@ -60,7 +60,7 @@ SLOT_ID_MAP_ALLOW_FILES = frozenset(
 # poison — NOT the whole labeling/fixtures/id_maps/ directory, which also
 # carries an unrelated, still-live tlp*->recording_id namespace-bridge fixture
 # (e.g. id_maps/2nvzlh2k.json, built from set_track_slots for the BB11 scorer;
-# see workspaces/alignment_prototype/{infer,score_timeline_vs_gt}.py and
+# see alignment/{infer,score_timeline_vs_gt}.py and
 # eda/alignment/failure_analysis/build_span_table.py). Widening this to the
 # bare directory path would flag that unrelated, currently-in-use mechanism.
 SLOT_ID_MAP_FIXTURE_RE = re.compile(r"labeling/fixtures/id_maps/[\w./-]*_slots\.json")
@@ -79,8 +79,8 @@ DOCS_DIR = REPO_ROOT / "docs"
 STATE_OF_RECORD_PATH = DOCS_DIR / "alignment_state_of_record.md"
 # Commits touching these paths are what should trigger a re-checkpoint.
 STATE_RECORD_ALIGNER_PATHS = (
-    "workspaces/alignment_prototype",
-    "workspaces/pws_aligner",
+    "alignment",
+    "pws_aligner",
     "agentic",
     "harness",
     "docs/alignment_state_of_record.md",
@@ -259,7 +259,7 @@ ALS_CORE_FORBIDDEN = (
     ),
     (
         re.compile(
-            r"(?:from|import)\s+(?:core|web_crawler|ingest|analysis|tokenizer|eda|personalization|workspaces)\b"
+            r"(?:from|import)\s+(?:core|web_crawler|ingest|analysis|tokenizer|eda|alignment|pws_aligner|workspaces)\b"
         ),
         "codec-core als module imports project-side code",
     ),
@@ -400,9 +400,9 @@ _RATCHET_SKIP_PARTS = frozenset({"attic", "tests", "contracts"})
 # a flag that has been default-on for two weeks becomes code and its flag
 # dies, so this number only goes down.
 _KERNEL_ROOTS = (
-    "workspaces/alignment_prototype/infer.py",
-    "workspaces/alignment_prototype/joint_ref_decode.py",
-    "workspaces/alignment_prototype/drivers",
+    "alignment/infer.py",
+    "alignment/joint_ref_decode.py",
+    "alignment/drivers",
 )
 SCOPED_RATCHETS: dict[str, tuple[tuple[str, ...], re.Pattern[str]]] = {
     "kernel_flags": (_KERNEL_ROOTS, re.compile(r"add_argument\(")),

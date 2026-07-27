@@ -34,7 +34,7 @@ that changed nothing leaves the record alone).
 
 ## Boundaries (what does NOT go in the record)
 - **Numbers** → `docs/alignment_status.md` (regen from scorers; the record cites it).
-- **Dead ends** → `workspaces/alignment_prototype/attic/EXPERIMENTS.md`.
+- **Dead ends** → `alignment/attic/EXPERIMENTS.md`.
 - **Live cluster/box ops** (teardown SQL, tmux recovery) → these are operational,
   not strategic state; keep them in an ops handoff if needed, not the record.
 

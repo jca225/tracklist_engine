@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-17
 **Status:** approved (brainstorming), pre-implementation
-**Home:** `workspaces/alignment_prototype/trajectory/` (+ `synthetic_mix/`) — collision-free with the ingest agent
+**Home:** `alignment/trajectory/` (+ `synthetic_mix/`) — collision-free with the ingest agent
 **Relates to:** `docs/alignment_recharacterization.md` (3-axis frame), `[[project_synthetic_audio_trajectory_positive]]`, `[[project_trajectory_scaffold]]`, `[[project_pws_gate_verdict]]`
 
 ---
@@ -56,7 +56,7 @@ The gate is honest in all three directions; a null result is a real, publishable
 
 - **First read = near-free:** run Axes 1–2 on the 100 existing synthetic mixes + existing checkpoints; training is small (MPS/CPU). No Vast needed to get the initial signal.
 - **Scale only if promising:** Axis 1's large bucket (and any synthetic-fidelity expansion) is rendered/featurized on **Vast** — this is the "GPU stuff." Gated behind a non-RED first read.
-- **Collision:** touches only `workspaces/alignment_prototype/`. Fully parallel with the ingest agent's bugfixes and with the background coverage-optimal SC pull (which remains staged read-only as tier-2 fuel for *after* a learned model exists).
+- **Collision:** touches only `alignment/`. Fully parallel with the ingest agent's bugfixes and with the background coverage-optimal SC pull (which remains staged read-only as tier-2 fuel for *after* a learned model exists).
 
 ## 6. Risks / honesty checks
 
@@ -67,4 +67,4 @@ The gate is honest in all three directions; a null result is a real, publishable
 
 ## 7. Deliverable
 
-One results table (volume × realism × {floor, ceiling, synthetic}, both BB directions) + the Axis-1 curve, written to `workspaces/alignment_prototype/trajectory/out/` and summarized in the state-of-record's open-fronts, with the gate verdict (🟢/🟡/🔴) called explicitly.
+One results table (volume × realism × {floor, ceiling, synthetic}, both BB directions) + the Axis-1 curve, written to `alignment/trajectory/out/` and summarized in the state-of-record's open-fronts, with the gate verdict (🟢/🟡/🔴) called explicitly.

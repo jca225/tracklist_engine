@@ -29,9 +29,9 @@ from .adapters import (
 
 from core.models import AudioAsset
 from core.result import Err, Ok, Result
-from . import grid_repair
+from .cues import grid_repair
 from .adapters import mert_adapter
-from .roformer_config import RoformerChainConfig
+from .separation.roformer_config import RoformerChainConfig
 from .errors import AnalysisError, StemError
 from .models import (
     BeatGrid,

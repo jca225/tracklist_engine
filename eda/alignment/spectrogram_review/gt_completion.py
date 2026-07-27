@@ -377,7 +377,7 @@ def main(argv: list[str] | None = None) -> int:
 
     tl = args.timeline or (
         _REPO
-        / "workspaces/alignment_prototype/out"
+        / "alignment/out"
         / f"{args.set_id}_predicted_timeline_lt.json"
     )
     recs = _load_pi_recordings()

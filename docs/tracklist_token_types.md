@@ -194,7 +194,7 @@ model exposes; nothing to persist. Not a coverage gap.
 | `radio` variant, `deleted` rows | ❌ | separate |
 
 **Downstream truth:** the aligner's live contract reads only 5 `set_track_slots`
-fields (`workspaces/alignment_prototype/infer.py:fetch_slot_rows`), so every gap
+fields (`alignment/infer.py:fetch_slot_rows`), so every gap
 above needs threading through `materialize → set_track_slots/schema → manifest →
 infer` before it reaches the model. See WS-B in the mashup plan's Deferred
 section.

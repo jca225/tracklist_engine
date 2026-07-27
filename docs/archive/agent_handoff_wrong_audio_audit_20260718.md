@@ -45,7 +45,7 @@ why alignment is hard, and are there other bugs like this?*
 
 **2. Aligner audio-loading trace** — where does the *real* pipeline pick a file:
 - ✅ CLEAN (stable-id joins, no filename matching): GT scorer
-  `workspaces/alignment_prototype/score_timeline_vs_gt.py:185-192` (joins by
+  `alignment/score_timeline_vs_gt.py:185-192` (joins by
   track_id/recording_id) and manifest writer `labeling/pull_set_for_alignment.py:343-361`.
   **⇒ headline scores and the `project_identity_miss_decomposition` "84% not data" verdict
   are NOT contaminated by this bug.**

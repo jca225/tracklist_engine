@@ -586,7 +586,7 @@ This both removes bogus/colliding constituent slots from the denominator and kee
 
 ## Deferred (separate plans)
 
-- **WS-B — aligner conditioning:** thread the new columns through `core/contracts/manifest.py:ManifestRow`, the manifest writer, and `workspaces/alignment_prototype/infer.py:fetch_slot_rows`, then make the model condition on mashup structure. Task 5 lays the DB-read seam.
+- **WS-B — aligner conditioning:** thread the new columns through `core/contracts/manifest.py:ManifestRow`, the manifest writer, and `alignment/infer.py:fetch_slot_rows`, then make the model condition on mashup structure. Task 5 lays the DB-read seam.
 - **Other discarded tokens** (`rework of track X` source edge, `version_artist`, `feat.`/`featuring`, `radio` variant, `deleted` rows) — separate plans.
 
 ## pi-storage rollout (run once, coordinated)

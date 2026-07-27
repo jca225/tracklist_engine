@@ -9,11 +9,11 @@ failing span". No harness edits; no pi-storage; no stale manifest.
 
 Sources per span (all local, all reproducible on CPU):
   - GT fields          labeling/fixtures/<set>_ground_truth.yaml
-  - predictions        workspaces/alignment_prototype/out/<set>_predicted_timeline_lt.json
+  - predictions        alignment/out/<set>_predicted_timeline_lt.json
                        (the looptrace variant — carries ref_segments, so trajectory
                         is scorable; base timeline is scalar-only)
   - id namespace map   labeling/fixtures/id_maps/<set>.json   (bridge, when present)
-  - instance ambiguity workspaces/alignment_prototype/looptrace/out/audit_<set>.json
+  - instance ambiguity alignment/looptrace/out/audit_<set>.json
                        (frac_distinct = fraction of GT seconds that are distinct-take
                         repeats — unwinnable on phonetics alone)
 
@@ -37,21 +37,21 @@ _REPO = Path(__file__).resolve().parents[3]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from workspaces.alignment_prototype.path_decode import (
+from alignment.path_decode import (
     _span_class,
     audible_seconds,
     gap_hallucination_frac,
     gt_placement_onset,
     trajectory_acc,
 )
-from workspaces.alignment_prototype.never_matched import assign_spans_to_forms
-from workspaces.alignment_prototype.score_timeline_vs_gt import (
+from alignment.never_matched import assign_spans_to_forms
+from alignment.score_timeline_vs_gt import (
     _pred_segs_from_span,
     norm_slot,
 )
 
 OUT_DIR = Path(__file__).resolve().parent / "out"
-_ALN = _REPO / "workspaces" / "alignment_prototype"
+_ALN = _REPO / "alignment"
 
 # (set_id, human label, GT yaml)
 SETS = [
@@ -148,7 +148,7 @@ def _rows_for_set(set_id: str, label: str, gt_path: Path, suffix: str) -> list[d
     # id_map than the current state (the "is this file stale?" fog). Local-only
     # here — the spine (set_track_slots) needs pi, so it is not recomputed in the
     # scorecard; run `make align-state` for the full check.
-    from workspaces.alignment_prototype import provenance
+    from alignment import provenance
 
     fresh, drift = provenance.check(timeline, set_id, gt_paths=[gt_path])
     if not fresh:

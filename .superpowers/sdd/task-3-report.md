@@ -15,12 +15,12 @@ falls back to its existing `_default_mix_fp`).
 
 ### Files changed
 
-1. **`workspaces/pws_aligner/cotrain_seam.py`** — added `compute_mix_fp:
+1. **`pws_aligner/cotrain_seam.py`** — added `compute_mix_fp:
    Callable[[object], object] | None = None` kwarg to `real_probe_scorer`; changed
    `feat_cache = MixFeatureCache()` → `feat_cache = MixFeatureCache(compute_mix_fp=compute_mix_fp)`.
    (`Callable` was already imported at line 50 — no new import needed.)
 
-2. **`workspaces/pws_aligner/corpus_harvest.py`** — three edits:
+2. **`pws_aligner/corpus_harvest.py`** — three edits:
    - (a) `ScorerFactory` type alias changed to 3-arg `Callable[[Path, Path, "object | None"], RefMixScorer]`;
      `_default_scorer_factory` updated to accept and forward `compute_mix_fp`.
    - (b) `run_corpus_harvest` received new `mix_fp_cache_root: Path | None = None` param;
@@ -28,7 +28,7 @@ falls back to its existing `_default_mix_fp`).
      when cache root is set, else leaves it `None`; `scorer_factory` call updated to 3-arg.
    - (c) `main` received `--mix-fp-cache` CLI arg; passed to `run_corpus_harvest` in harvest branch.
 
-3. **`workspaces/pws_aligner/tests/test_corpus_harvest.py`** — added 2 new tests
+3. **`pws_aligner/tests/test_corpus_harvest.py`** — added 2 new tests
    (`test_harvest_uses_cached_fp_when_cache_root_set`, `test_harvest_no_cache_root_passes_none`);
    updated 4 pre-existing test factory signatures from 2-arg to
    `def factory(mix_full_path, mix_stem_dir, compute_mix_fp=None)`.
@@ -37,7 +37,7 @@ falls back to its existing `_default_mix_fp`).
 
 **RED** (first new test before implementation):
 ```
-FAILED workspaces/pws_aligner/tests/test_corpus_harvest.py::test_harvest_uses_cached_fp_when_cache_root_set
+FAILED pws_aligner/tests/test_corpus_harvest.py::test_harvest_uses_cached_fp_when_cache_root_set
 TypeError: run_corpus_harvest() got an unexpected keyword argument 'mix_fp_cache_root'
 1 failed in 0.15s
 ```

@@ -5,7 +5,7 @@ instrumental)`) so the analysis pipeline can select it via
 `load_analyzers(separator="uvr")` with zero downstream / schema change.
 
 Internally runs the config-driven `audio-separator` chain
-(`analysis/uvr_chain.yaml`): isolate → lead-vocal ensemble → dereverb →
+(`analysis/separation/uvr_chain.yaml`): isolate → lead-vocal ensemble → dereverb →
 de-echo → denoise, forwarding each stage's cleaned vocal to the next. The
 persisted `vocals` is the final stage's output; `instrumental` is the isolate
 stage's Instrumental.
@@ -25,7 +25,7 @@ from pathlib import Path
 from core.result import Err, Ok, Result
 from ..errors import StemError
 from ..models import StemAsset, StemSet
-from ..separation_config import ChainConfig
+from ..separation.separation_config import ChainConfig
 from . import audio_separator_adapter as asa
 from . import demucs_adapter
 

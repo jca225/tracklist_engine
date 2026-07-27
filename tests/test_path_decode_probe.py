@@ -6,8 +6,8 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-import workspaces.alignment_prototype.harness.path_decode_probe as pdp
-from workspaces.alignment_prototype.harness import (
+import alignment.harness.path_decode_probe as pdp
+from alignment.harness import (
     AlignmentResult,
     CandidatePool,
     MixContext,

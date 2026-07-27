@@ -1,7 +1,7 @@
 # Inference-time gain estimation — scope
 
 **Status:** scoping (2026-06-16). **Owner:** alignment_prototype.
-**Prereq context:** [[project_gt_gain_curve]], `workspaces/alignment_prototype/{joint_decode_probe,transition_probe}.py`.
+**Prereq context:** [[project_gt_gain_curve]], `alignment/{joint_decode_probe,transition_probe}.py`.
 
 ## Why this exists
 

@@ -8,7 +8,7 @@ Forms no span is assigned to are the honest recall loss.
 
 from __future__ import annotations
 
-from workspaces.alignment_prototype.never_matched import assign_spans_to_forms
+from alignment.never_matched import assign_spans_to_forms
 
 
 def _row(tid, ss):

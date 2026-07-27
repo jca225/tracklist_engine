@@ -10,40 +10,40 @@
 
 ## Global Constraints
 
-- **Home:** all new code under `workspaces/pws_aligner/`. **Import**, never copy, `workspaces/alignment_prototype/` modules. Do not modify `alignment_prototype` until the fork beats it on the scorecard.
+- **Home:** all new code under `pws_aligner/`. **Import**, never copy, `alignment/` modules. Do not modify `alignment_prototype` until the fork beats it on the scorecard.
 - **Sensor freeze respected:** add NO new probes/channels/priors. This effort touches only aggregation/training (the sanctioned learned-model + driver lanes per `alignment_prototype/CLAUDE.md`).
 - **No new GT authoring.** GT sets are validation only: **BB11 = `2nvzlh2k`, BB12 = `1fsnxchk`**. The committed baseline is the **corrected GT (`de1ce92`, 2026-07-14 re-export)** — the aligner's ~76% GT-seconds loss against it is *genuine failure concentrated in acappella decode + stem-routing*, not a data artifact. That acappella region is precisely where the label model must move the needle.
 - **BB12 (`1fsnxchk`) is the PRIMARY board; BB11 (`2nvzlh2k`) is confirmatory.** BB11 agentic **stalls on the Whisper lyrics probe on Mac MPS** — the stall is backend-specific, so run the Task-5 gate inference on a **Vast.ai CUDA box** (credit added 2026-07-14; API key `~/.config/vastai/vast_api_key`, use the curl API — the CLI is broken on Py3.14; instance recipe per `project_vastai_instance_choice`, PRO 4000-class ≈40.5 s/track; **list-before-create, destroy only your own instance**). On CUDA, BB11 runs with the lyrics probe enabled. Mac-MPS fallback: BB12 only, lyrics probe off for BB11 or skip BB11. Do not block the Task-5 decision on BB11 either way.
 - **Success bar (the falsifiable claim):** the learned label model beats hand-tuned `source_priority` fusion on the **BB12 scorecard** (identity + trajectory + set_start), confirmed on BB11 where runnable, adding zero new GT. Secondary: learned per-probe precisions track the measured `probe_precision_transfer` values (fp's ~0.90→0.53 feature-dependent swing).
 - **Gates:** Snorkel density/modeling-advantage gate before deploying the model over majority-vote; FABLE `Corr(X, LF)` gate before instance-conditioning any probe.
 - **Style:** `from __future__ import annotations`; frozen dataclasses for records; pure functions, I/O at edges; `core/result.py`-style Result in library code, `sys.exit` at CLI edges. Rust-flavoured functional Python.
-- **Tests run from repo root:** `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/... -v`.
-- **Scorecard command:** `venvs/audio/bin/python -m workspaces.alignment_prototype.score_timeline_vs_gt --set-id <id> [--fibers] [--decompose]`.
+- **Tests run from repo root:** `venvs/audio/bin/python -m pytest pws_aligner/tests/... -v`.
+- **Scorecard command:** `venvs/audio/bin/python -m alignment.score_timeline_vs_gt --set-id <id> [--fibers] [--decompose]`.
 
 ## File Structure
 
-- `workspaces/pws_aligner/__init__.py` — package marker.
-- `workspaces/pws_aligner/CLAUDE.md` — one-screen module guide (freeze note + PWS framing + kill-gate).
-- `workspaces/pws_aligner/votes.py` — `Vote` record + `collect_votes()` adapter (probe `AlignmentResult` → `Vote` + feature vector + typed abstain). Pure over given probe outputs.
-- `workspaces/pws_aligner/hypotheses.py` — `Hypothesis` record + `build_hypothesis_space()` + `vote_to_hypothesis()` (offset discretization).
-- `workspaces/pws_aligner/label_model.py` — `LabelModel` protocol; `DawidSkene` (numpy EM) baseline; `MajorityVote` fallback.
-- `workspaces/pws_aligner/density_gate.py` — `label_density()` + `choose_aggregator()` (Snorkel modeling-advantage gate).
-- `workspaces/pws_aligner/decode_bridge.py` — turn a per-span posterior over `H` into the timeline JSON placement (replaces `source_priority` for the fork's driver).
-- `workspaces/pws_aligner/fable/` — (Task 6, gated) FABLE instance-feature label model behind the same `LabelModel` protocol.
-- `workspaces/pws_aligner/verifier.py` — (Task 7) Confident-Learning auditor + GT-calibration report.
-- `workspaces/pws_aligner/tests/` — synthetic-oracle unit tests per module.
+- `pws_aligner/__init__.py` — package marker.
+- `pws_aligner/CLAUDE.md` — one-screen module guide (freeze note + PWS framing + kill-gate).
+- `pws_aligner/votes.py` — `Vote` record + `collect_votes()` adapter (probe `AlignmentResult` → `Vote` + feature vector + typed abstain). Pure over given probe outputs.
+- `pws_aligner/hypotheses.py` — `Hypothesis` record + `build_hypothesis_space()` + `vote_to_hypothesis()` (offset discretization).
+- `pws_aligner/label_model.py` — `LabelModel` protocol; `DawidSkene` (numpy EM) baseline; `MajorityVote` fallback.
+- `pws_aligner/density_gate.py` — `label_density()` + `choose_aggregator()` (Snorkel modeling-advantage gate).
+- `pws_aligner/decode_bridge.py` — turn a per-span posterior over `H` into the timeline JSON placement (replaces `source_priority` for the fork's driver).
+- `pws_aligner/fable/` — (Task 6, gated) FABLE instance-feature label model behind the same `LabelModel` protocol.
+- `pws_aligner/verifier.py` — (Task 7) Confident-Learning auditor + GT-calibration report.
+- `pws_aligner/tests/` — synthetic-oracle unit tests per module.
 
 ---
 
 ### Task 1: Scaffold package + `Vote` record + vote collection
 
 **Files:**
-- Create: `workspaces/pws_aligner/__init__.py`, `workspaces/pws_aligner/CLAUDE.md`
-- Create: `workspaces/pws_aligner/votes.py`
-- Test: `workspaces/pws_aligner/tests/test_votes.py`
+- Create: `pws_aligner/__init__.py`, `pws_aligner/CLAUDE.md`
+- Create: `pws_aligner/votes.py`
+- Test: `pws_aligner/tests/test_votes.py`
 
 **Interfaces:**
-- Consumes: `workspaces.alignment_prototype.harness.contract.AlignmentResult` (fields: `recording_id: str|None`, `offset_s: float`, `confidence: float`, `abstain: bool`, `source: str`).
+- Consumes: `alignment.harness.contract.AlignmentResult` (fields: `recording_id: str|None`, `offset_s: float`, `confidence: float`, `abstain: bool`, `source: str`).
 - Produces:
   - `AbstainReason` enum: `NO_DATA`, `LOW_MARGIN`, `OUT_OF_DOMAIN`, `NONE`.
   - `@dataclass(frozen=True) Vote(probe: str, span_id: str, recording_id: str|None, offset_s: float, confidence: float, abstained: bool, reason: AbstainReason, features: tuple[float, ...])`.
@@ -52,10 +52,10 @@
 - [ ] **Step 1: Write the failing test**
 
 ```python
-# workspaces/pws_aligner/tests/test_votes.py
+# pws_aligner/tests/test_votes.py
 from __future__ import annotations
-from workspaces.alignment_prototype.harness.contract import AlignmentResult
-from workspaces.pws_aligner.votes import Vote, AbstainReason, collect_votes
+from alignment.harness.contract import AlignmentResult
+from pws_aligner.votes import Vote, AbstainReason, collect_votes
 
 
 def test_collect_maps_result_and_abstain_reason():
@@ -76,19 +76,19 @@ def test_collect_maps_result_and_abstain_reason():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_votes.py -v`
-Expected: FAIL with `ModuleNotFoundError: workspaces.pws_aligner.votes`.
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_votes.py -v`
+Expected: FAIL with `ModuleNotFoundError: pws_aligner.votes`.
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create `workspaces/pws_aligner/__init__.py` (empty). Create `workspaces/pws_aligner/votes.py`:
+Create `pws_aligner/__init__.py` (empty). Create `pws_aligner/votes.py`:
 
 ```python
 from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from typing import Sequence
-from workspaces.alignment_prototype.harness.contract import AlignmentResult
+from alignment.harness.contract import AlignmentResult
 
 
 class AbstainReason(Enum):
@@ -131,17 +131,17 @@ def collect_votes(
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_votes.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_votes.py -v`
 Expected: PASS.
 
 - [ ] **Step 5: Write `CLAUDE.md`**
 
-Create `workspaces/pws_aligner/CLAUDE.md` with: (a) one line that this fork rebuilds the aligner as programmatic weak supervision per `docs/superpowers/specs/2026-07-14-pws-aligner-design.md`; (b) the sensor-freeze note (no new probes — aggregation only); (c) the kill-gate: "if Task 5's Dawid–Skene fusion does not beat `source_priority` on the BB11+BB12 scorecard, stop before FABLE."
+Create `pws_aligner/CLAUDE.md` with: (a) one line that this fork rebuilds the aligner as programmatic weak supervision per `docs/superpowers/specs/2026-07-14-pws-aligner-design.md`; (b) the sensor-freeze note (no new probes — aggregation only); (c) the kill-gate: "if Task 5's Dawid–Skene fusion does not beat `source_priority` on the BB11+BB12 scorecard, stop before FABLE."
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add workspaces/pws_aligner/__init__.py workspaces/pws_aligner/votes.py workspaces/pws_aligner/CLAUDE.md workspaces/pws_aligner/tests/test_votes.py
+git add pws_aligner/__init__.py pws_aligner/votes.py pws_aligner/CLAUDE.md pws_aligner/tests/test_votes.py
 git commit -m "feat(pws): Vote record + probe-result vote adapter"
 ```
 
@@ -150,8 +150,8 @@ git commit -m "feat(pws): Vote record + probe-result vote adapter"
 ### Task 2: Discrete hypothesis space + offset discretization
 
 **Files:**
-- Create: `workspaces/pws_aligner/hypotheses.py`
-- Test: `workspaces/pws_aligner/tests/test_hypotheses.py`
+- Create: `pws_aligner/hypotheses.py`
+- Test: `pws_aligner/tests/test_hypotheses.py`
 
 **Interfaces:**
 - Consumes: `Vote` (Task 1).
@@ -163,10 +163,10 @@ git commit -m "feat(pws): Vote record + probe-result vote adapter"
 - [ ] **Step 1: Write the failing test**
 
 ```python
-# workspaces/pws_aligner/tests/test_hypotheses.py
+# pws_aligner/tests/test_hypotheses.py
 from __future__ import annotations
-from workspaces.pws_aligner.votes import Vote, AbstainReason
-from workspaces.pws_aligner.hypotheses import (
+from pws_aligner.votes import Vote, AbstainReason
+from pws_aligner.hypotheses import (
     Hypothesis, build_hypothesis_space, vote_to_hypothesis,
 )
 
@@ -192,17 +192,17 @@ def test_space_dedups_and_puts_null_first():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_hypotheses.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_hypotheses.py -v`
 Expected: FAIL with `ModuleNotFoundError`.
 
 - [ ] **Step 3: Write minimal implementation**
 
 ```python
-# workspaces/pws_aligner/hypotheses.py
+# pws_aligner/hypotheses.py
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Sequence
-from workspaces.pws_aligner.votes import Vote
+from pws_aligner.votes import Vote
 
 _NULL_FIRST = object()
 
@@ -232,13 +232,13 @@ def build_hypothesis_space(votes: Sequence[Vote], bin_s: float = 2.0) -> tuple[H
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_hypotheses.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_hypotheses.py -v`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/pws_aligner/hypotheses.py workspaces/pws_aligner/tests/test_hypotheses.py
+git add pws_aligner/hypotheses.py pws_aligner/tests/test_hypotheses.py
 git commit -m "feat(pws): discrete hypothesis space + offset binning"
 ```
 
@@ -247,8 +247,8 @@ git commit -m "feat(pws): discrete hypothesis space + offset binning"
 ### Task 3: Dawid–Skene label model (numpy EM, no GT)
 
 **Files:**
-- Create: `workspaces/pws_aligner/label_model.py`
-- Test: `workspaces/pws_aligner/tests/test_label_model.py`
+- Create: `pws_aligner/label_model.py`
+- Test: `pws_aligner/tests/test_label_model.py`
 
 **Interfaces:**
 - Consumes: `Vote` (Task 1), `Hypothesis`, `build_hypothesis_space`, `vote_to_hypothesis` (Task 2).
@@ -260,12 +260,12 @@ git commit -m "feat(pws): discrete hypothesis space + offset binning"
 - [ ] **Step 1: Write the failing test (synthetic-oracle recovery)**
 
 ```python
-# workspaces/pws_aligner/tests/test_label_model.py
+# pws_aligner/tests/test_label_model.py
 from __future__ import annotations
 import random
-from workspaces.pws_aligner.votes import Vote, AbstainReason
-from workspaces.pws_aligner.label_model import DawidSkene, MajorityVote
-from workspaces.pws_aligner.hypotheses import Hypothesis, vote_to_hypothesis
+from pws_aligner.votes import Vote, AbstainReason
+from pws_aligner.label_model import DawidSkene, MajorityVote
+from pws_aligner.hypotheses import Hypothesis, vote_to_hypothesis
 
 
 def _synth(n=400, seed=0):
@@ -309,7 +309,7 @@ def test_dawid_skene_recovers_accuracies_and_labels():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_label_model.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_label_model.py -v`
 Expected: FAIL with `ModuleNotFoundError`.
 
 - [ ] **Step 3: Write minimal implementation**
@@ -318,13 +318,13 @@ Implement `MajorityVote` (confidence-weighted tally over `vote_to_hypothesis`) a
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_label_model.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_label_model.py -v`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/pws_aligner/label_model.py workspaces/pws_aligner/tests/test_label_model.py
+git add pws_aligner/label_model.py pws_aligner/tests/test_label_model.py
 git commit -m "feat(pws): Dawid-Skene label model recovers probe accuracy without GT"
 ```
 
@@ -333,8 +333,8 @@ git commit -m "feat(pws): Dawid-Skene label model recovers probe accuracy withou
 ### Task 4: Snorkel density / modeling-advantage gate
 
 **Files:**
-- Create: `workspaces/pws_aligner/density_gate.py`
-- Test: `workspaces/pws_aligner/tests/test_density_gate.py`
+- Create: `pws_aligner/density_gate.py`
+- Test: `pws_aligner/tests/test_density_gate.py`
 
 **Interfaces:**
 - Consumes: `Vote` (Task 1), `LabelModel`/`MajorityVote`/`DawidSkene` (Task 3).
@@ -345,10 +345,10 @@ git commit -m "feat(pws): Dawid-Skene label model recovers probe accuracy withou
 - [ ] **Step 1: Write the failing test**
 
 ```python
-# workspaces/pws_aligner/tests/test_density_gate.py
+# pws_aligner/tests/test_density_gate.py
 from __future__ import annotations
-from workspaces.pws_aligner.votes import Vote, AbstainReason
-from workspaces.pws_aligner.density_gate import label_density, choose_aggregator
+from pws_aligner.votes import Vote, AbstainReason
+from pws_aligner.density_gate import label_density, choose_aggregator
 
 
 def _span(n_fire, n_abstain):
@@ -369,16 +369,16 @@ def test_gate_picks_mv_at_low_density_and_model_midband():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_density_gate.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_density_gate.py -v`
 Expected: FAIL with `ModuleNotFoundError`.
 
 - [ ] **Step 3: Write minimal implementation**
 
 ```python
-# workspaces/pws_aligner/density_gate.py
+# pws_aligner/density_gate.py
 from __future__ import annotations
 from typing import Sequence
-from workspaces.pws_aligner.votes import Vote
+from pws_aligner.votes import Vote
 
 
 def label_density(spans: Sequence[Sequence[Vote]]) -> float:
@@ -395,13 +395,13 @@ def choose_aggregator(spans: Sequence[Sequence[Vote]], low: float = 1.0, high: f
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_density_gate.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_density_gate.py -v`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/pws_aligner/density_gate.py workspaces/pws_aligner/tests/test_density_gate.py
+git add pws_aligner/density_gate.py pws_aligner/tests/test_density_gate.py
 git commit -m "feat(pws): Snorkel density gate (MV vs label model)"
 ```
 
@@ -410,12 +410,12 @@ git commit -m "feat(pws): Snorkel density gate (MV vs label model)"
 ### Task 5: Decode bridge + scorecard acceptance — **THE KILL-GATE**
 
 **Files:**
-- Create: `workspaces/pws_aligner/decode_bridge.py`
-- Create: `workspaces/pws_aligner/run_phase1.py` (CLI: build votes for a set's spans, aggregate, write a timeline JSON in the format `score_timeline_vs_gt` reads)
-- Test: `workspaces/pws_aligner/tests/test_decode_bridge.py`
+- Create: `pws_aligner/decode_bridge.py`
+- Create: `pws_aligner/run_phase1.py` (CLI: build votes for a set's spans, aggregate, write a timeline JSON in the format `score_timeline_vs_gt` reads)
+- Test: `pws_aligner/tests/test_decode_bridge.py`
 
 **Interfaces:**
-- Consumes: per-span posterior `dict[Hypothesis, float]` (Task 3), `choose_aggregator` (Task 4). Existing: `workspaces.alignment_prototype.infer` (to obtain per-span probe `AlignmentResult`s and the feature vectors from `neuro/precision.py`), and the predicted-timeline JSON schema that `score_timeline_vs_gt` consumes (`out/<set_id>_predicted_timeline.json`).
+- Consumes: per-span posterior `dict[Hypothesis, float]` (Task 3), `choose_aggregator` (Task 4). Existing: `alignment.infer` (to obtain per-span probe `AlignmentResult`s and the feature vectors from `neuro/precision.py`), and the predicted-timeline JSON schema that `score_timeline_vs_gt` consumes (`out/<set_id>_predicted_timeline.json`).
 - Produces:
   - `posterior_to_placement(span_id, posterior, bin_s=2.0) -> dict` — one timeline-span dict: `recording_id`, `offset_s` (bin center of MAP hypothesis), `confidence` (MAP posterior mass), `abstain` (True if NULL wins).
   - `run_phase1(set_id: str) -> Path` — end-to-end: reuse `infer` to get probe outputs per span, `collect_votes`, gate, aggregate, write the fork's timeline JSON.
@@ -423,10 +423,10 @@ git commit -m "feat(pws): Snorkel density gate (MV vs label model)"
 - [ ] **Step 1: Write the failing test (unit — placement extraction)**
 
 ```python
-# workspaces/pws_aligner/tests/test_decode_bridge.py
+# pws_aligner/tests/test_decode_bridge.py
 from __future__ import annotations
-from workspaces.pws_aligner.hypotheses import Hypothesis
-from workspaces.pws_aligner.decode_bridge import posterior_to_placement
+from pws_aligner.hypotheses import Hypothesis
+from pws_aligner.decode_bridge import posterior_to_placement
 
 
 def test_map_hypothesis_becomes_placement():
@@ -446,15 +446,15 @@ def test_null_winner_abstains():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_decode_bridge.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_decode_bridge.py -v`
 Expected: FAIL with `ModuleNotFoundError`.
 
 - [ ] **Step 3: Write minimal implementation of `posterior_to_placement`**
 
 ```python
-# workspaces/pws_aligner/decode_bridge.py
+# pws_aligner/decode_bridge.py
 from __future__ import annotations
-from workspaces.pws_aligner.hypotheses import Hypothesis
+from pws_aligner.hypotheses import Hypothesis
 
 
 def posterior_to_placement(span_id: str, posterior: dict[Hypothesis, float], bin_s: float = 2.0) -> dict:
@@ -471,7 +471,7 @@ def posterior_to_placement(span_id: str, posterior: dict[Hypothesis, float], bin
 
 - [ ] **Step 4: Run unit test to verify it passes**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_decode_bridge.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_decode_bridge.py -v`
 Expected: PASS.
 
 - [ ] **Step 5: Implement `run_phase1` CLI**
@@ -482,11 +482,11 @@ Wire `run_phase1(set_id)`: call the existing `infer` path to get per-span probe 
 
 ```bash
 # PRIMARY board = BB12 (1fsnxchk). Hand-tuned baseline (existing pipeline) for reference:
-venvs/audio/bin/python -m workspaces.alignment_prototype.infer --set-id 1fsnxchk
-venvs/audio/bin/python -m workspaces.alignment_prototype.score_timeline_vs_gt --set-id 1fsnxchk --fibers --decompose
+venvs/audio/bin/python -m alignment.infer --set-id 1fsnxchk
+venvs/audio/bin/python -m alignment.score_timeline_vs_gt --set-id 1fsnxchk --fibers --decompose
 # PWS fork:
-venvs/audio/bin/python -m workspaces.pws_aligner.run_phase1 --set-id 1fsnxchk
-venvs/audio/bin/python -m workspaces.alignment_prototype.score_timeline_vs_gt --set-id 1fsnxchk --timeline out/1fsnxchk_pws_timeline.json --fibers --decompose
+venvs/audio/bin/python -m pws_aligner.run_phase1 --set-id 1fsnxchk
+venvs/audio/bin/python -m alignment.score_timeline_vs_gt --set-id 1fsnxchk --timeline out/1fsnxchk_pws_timeline.json --fibers --decompose
 # CONFIRMATORY = BB11 (2nvzlh2k), ONLY with the Whisper lyrics probe disabled (it stalls on MPS);
 # if it hangs, skip BB11 for the gate — the decision rests on BB12.
 ```
@@ -496,7 +496,7 @@ venvs/audio/bin/python -m workspaces.alignment_prototype.score_timeline_vs_gt --
 - [ ] **Step 7: Commit**
 
 ```bash
-git add workspaces/pws_aligner/decode_bridge.py workspaces/pws_aligner/run_phase1.py workspaces/pws_aligner/tests/test_decode_bridge.py
+git add pws_aligner/decode_bridge.py pws_aligner/run_phase1.py pws_aligner/tests/test_decode_bridge.py
 git commit -m "feat(pws): decode bridge + phase-1 scorecard gate [record baseline vs PWS numbers in body]"
 ```
 
@@ -505,8 +505,8 @@ git commit -m "feat(pws): decode bridge + phase-1 scorecard gate [record baselin
 ### Task 6: FABLE instance-feature label model — **GATED on Task 5 lift**
 
 **Files:**
-- Create: `workspaces/pws_aligner/fable/__init__.py`, `workspaces/pws_aligner/fable/model.py`
-- Test: `workspaces/pws_aligner/tests/test_fable.py`
+- Create: `pws_aligner/fable/__init__.py`, `pws_aligner/fable/model.py`
+- Test: `pws_aligner/tests/test_fable.py`
 
 **Interfaces:**
 - Consumes: `Vote` (with non-empty `features`), the `LabelModel` protocol (Task 3).
@@ -517,11 +517,11 @@ git commit -m "feat(pws): decode bridge + phase-1 scorecard gate [record baselin
 - [ ] **Step 1: Write the failing test (feature-dependent synthetic oracle)**
 
 ```python
-# workspaces/pws_aligner/tests/test_fable.py
+# pws_aligner/tests/test_fable.py
 from __future__ import annotations
 import random
-from workspaces.pws_aligner.votes import Vote, AbstainReason
-from workspaces.pws_aligner.fable.model import Fable
+from pws_aligner.votes import Vote, AbstainReason
+from pws_aligner.fable.model import Fable
 
 
 def _synth_feature_dependent(n=600, seed=1):
@@ -556,16 +556,16 @@ def test_fable_learns_feature_dependent_accuracy():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_fable.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_fable.py -v`
 Expected: FAIL with `ModuleNotFoundError`.
 
 - [ ] **Step 3: Implement `Fable` (adapt reference impl behind the protocol)**
 
-Bring in the FABLE reference (EBCC + GP classifier over `features` + Pólya-Gamma VI, Lanczos low-rank per `2210.02724`), wrapped so `fit`/`predict_proba`/`probe_accuracy` match Task 3's protocol and `probe_accuracy_at` exposes the instance-conditioned accuracy. Add any new dependency (e.g. a GP lib) to `workspaces/pws_aligner/requirements.txt`, not the repo root.
+Bring in the FABLE reference (EBCC + GP classifier over `features` + Pólya-Gamma VI, Lanczos low-rank per `2210.02724`), wrapped so `fit`/`predict_proba`/`probe_accuracy` match Task 3's protocol and `probe_accuracy_at` exposes the instance-conditioned accuracy. Add any new dependency (e.g. a GP lib) to `pws_aligner/requirements.txt`, not the repo root.
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_fable.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_fable.py -v`
 Expected: PASS.
 
 - [ ] **Step 5: Re-run the scorecard gate with FABLE**
@@ -575,7 +575,7 @@ Repeat Task 5 Step 6 with `Fable` swapped in for `DawidSkene`. Record BB11/BB12 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add workspaces/pws_aligner/fable/ workspaces/pws_aligner/tests/test_fable.py workspaces/pws_aligner/requirements.txt
+git add pws_aligner/fable/ pws_aligner/tests/test_fable.py pws_aligner/requirements.txt
 git commit -m "feat(pws): FABLE instance-feature label model [record vs Dawid-Skene in body]"
 ```
 
@@ -584,11 +584,11 @@ git commit -m "feat(pws): FABLE instance-feature label model [record vs Dawid-Sk
 ### Task 7: Confident-Learning verifier + GT-as-validation calibration
 
 **Files:**
-- Create: `workspaces/pws_aligner/verifier.py`
-- Test: `workspaces/pws_aligner/tests/test_verifier.py`
+- Create: `pws_aligner/verifier.py`
+- Test: `pws_aligner/tests/test_verifier.py`
 
 **Interfaces:**
-- Consumes: per-span soft labels from the label model (Task 3/6), GT loader `workspaces.alignment_prototype.score_timeline_vs_gt` (for the validation-only calibration report on BB11/BB12).
+- Consumes: per-span soft labels from the label model (Task 3/6), GT loader `alignment.score_timeline_vs_gt` (for the validation-only calibration report on BB11/BB12).
 - Produces:
   - `prune_confident_errors(soft_labels, predicted_proba) -> tuple[set[str], "JointEstimate"]` — Confident-Learning joint estimate `Q_{ỹ,y*}` + the span_ids to prune/reweight (`1911.00068`).
   - `calibration_report(label_model, gt) -> dict[str, tuple[float, float]]` — per-probe (learned_accuracy, GT-measured_accuracy) on BB11/BB12; **validation only, never fed back into fit**. Flags probes whose learned precision diverges from the `probe_precision_transfer` measurements (e.g. fp's 0.90→0.53 swing).
@@ -596,9 +596,9 @@ git commit -m "feat(pws): FABLE instance-feature label model [record vs Dawid-Sk
 - [ ] **Step 1: Write the failing test (error injection)**
 
 ```python
-# workspaces/pws_aligner/tests/test_verifier.py
+# pws_aligner/tests/test_verifier.py
 from __future__ import annotations
-from workspaces.pws_aligner.verifier import prune_confident_errors
+from pws_aligner.verifier import prune_confident_errors
 
 
 def test_prunes_injected_label_errors():
@@ -615,7 +615,7 @@ def test_prunes_injected_label_errors():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_verifier.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_verifier.py -v`
 Expected: FAIL with `ModuleNotFoundError`.
 
 - [ ] **Step 3: Implement Confident-Learning estimator**
@@ -624,20 +624,20 @@ Implement the confident-joint per `1911.00068`: per-class thresholds `t_j = mean
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_verifier.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_verifier.py -v`
 Expected: PASS.
 
 - [ ] **Step 5: Produce the calibration report on BB11/BB12**
 
 ```bash
-venvs/audio/bin/python -m workspaces.pws_aligner.verifier --calibrate --sets 2nvzlh2k,1fsnxchk
+venvs/audio/bin/python -m pws_aligner.verifier --calibrate --sets 2nvzlh2k,1fsnxchk
 ```
 Record the per-probe (learned, GT-measured) accuracy table. This closes the secondary success bar (learned precisions track `probe_precision_transfer`).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add workspaces/pws_aligner/verifier.py workspaces/pws_aligner/tests/test_verifier.py
+git add pws_aligner/verifier.py pws_aligner/tests/test_verifier.py
 git commit -m "feat(pws): confident-learning verifier + GT calibration report"
 ```
 

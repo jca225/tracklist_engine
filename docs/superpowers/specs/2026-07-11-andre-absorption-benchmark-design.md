@@ -3,11 +3,11 @@
 **Date:** 2026-07-11
 **Status:** approved thesis, pre-implementation
 **Owner:** John
-**Home:** `workspaces/alignment_prototype/external/`
+**Home:** `alignment/external/`
 
 ## Authorization note (freeze exception)
 
-`workspaces/alignment_prototype/CLAUDE.md` declares a **sensor-phase freeze**
+`alignment/CLAUDE.md` declares a **sensor-phase freeze**
 ("do NOT add new probes/channels/priors"). John has **explicitly lifted the
 freeze for this work** (2026-07-11). This spec therefore permits new channels —
 specifically the resample pitch-search arm (§Phase 2). An implementation task

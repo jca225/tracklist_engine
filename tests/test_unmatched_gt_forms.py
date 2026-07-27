@@ -7,7 +7,7 @@ are silently unscored -- ``unmatched_gt_forms`` surfaces exactly those, which
 
 from __future__ import annotations
 
-from workspaces.alignment_prototype.never_matched import unmatched_gt_forms
+from alignment.never_matched import unmatched_gt_forms
 
 
 def _row(tid, slot, stem, ss, se):
@@ -33,7 +33,7 @@ def test_multiform_slot_second_form_is_unmatched_when_one_span():
     assert out[0]["claimed_stem"] == "regular"
     assert out[0]["set_start_s"] == 1599.0
     # recording-level accounting is blind to this (the recording IS matched):
-    from workspaces.alignment_prototype.never_matched import never_matched_recordings
+    from alignment.never_matched import never_matched_recordings
 
     assert never_matched_recordings(gt, spans) == []
 

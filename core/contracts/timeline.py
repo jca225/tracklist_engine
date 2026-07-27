@@ -1,6 +1,6 @@
 """PredictedTimeline — the typed record for `out/<set>_predicted_timeline*.json`.
 
-Writer: `workspaces/alignment_prototype/infer.py` (spans), mutated in place by
+Writer: `alignment/infer.py` (spans), mutated in place by
 `joint_ref_decode` (ref_segments). Until those write through this module, the
 decoder is TOLERANT of unknown span fields (infer adds provenance fields
 freely) but STRICT about the fields consumers key on: a missing/mistyped

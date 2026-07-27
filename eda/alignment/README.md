@@ -3,7 +3,7 @@
 Exploratory probes on **mix-side MERT** — sections, events, and boundary detection.
 This is the **data-analysis phase** described in
 [docs/aligner_attention_design.md](../../docs/aligner_attention_design.md). It is
-**not** the algorithmic aligner (`workspaces/alignment_prototype/`, future `alignment/`).
+**not** the algorithmic aligner (`alignment/`, future `alignment/`).
 
 ## Modules
 

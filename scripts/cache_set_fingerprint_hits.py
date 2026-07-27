@@ -4,7 +4,7 @@
 For each tracklist slot with a ``recording_id``, slide a window in a band
 around the scraped cue (or coarse timeline start) and write peaked matches to:
 
-  * local JSON cache: ``workspaces/alignment_prototype/.cache/set_fp_hits/<set_id>.json``
+  * local JSON cache: ``alignment/.cache/set_fp_hits/<set_id>.json``
   * canonical DB ``set_fingerprint_hits`` (unless ``--no-push-pi``)
 
 Requires reference fingerprints in ``fp_index`` cache (run
@@ -29,9 +29,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-from workspaces.alignment_prototype.fp_index import DEFAULT_CACHE_DIR, FpKey, load
-from workspaces.alignment_prototype.fp_placement_refine import find_aligning_dir
-from workspaces.alignment_prototype.mix_fp_hits import (
+from alignment.fp_index import DEFAULT_CACHE_DIR, FpKey, load
+from alignment.fp_placement_refine import find_aligning_dir
+from alignment.mix_fp_hits import (
     MixFpHit,
     load_mix_mono,
     scan_band,
@@ -40,7 +40,7 @@ from workspaces.alignment_prototype.mix_fp_hits import (
 PI_HOST = "pi-storage"
 CANONICAL_DB = "/mnt/storage/data/db/music_database.db"
 DEFAULT_HITS_CACHE = (
-    REPO / "workspaces" / "alignment_prototype" / ".cache" / "set_fp_hits"
+    REPO / "alignment" / ".cache" / "set_fp_hits"
 )
 
 _WIN_S = 12.0

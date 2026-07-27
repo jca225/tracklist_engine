@@ -105,7 +105,7 @@ problem**. Multiple independent work streams keep needing to touch it, which
 usually means it is doing too much.
 
 Known standing hotspot in this repo:
-`workspaces/alignment_prototype/score_timeline_vs_gt.py` — contested by four
+`alignment/score_timeline_vs_gt.py` — contested by four
 branches simultaneously as of 2026-07-25.
 
 Do not "fix" a hotspot by resolving its conflicts faster. Raise it as a

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MSST RoFormer backend — venvs/msst + model checkpoints for workspaces/msst_webui.
+# MSST RoFormer backend — venvs/msst + model checkpoints for vendor/msst_webui.
 #
 # Host-detecting, idempotent:
 #   - Mac          : dedicated venvs/msst (python3.13, MPS torch wheels)
@@ -21,7 +21,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MSST="$REPO_ROOT/workspaces/msst_webui"
+MSST="$REPO_ROOT/vendor/msst_webui"
 MSST_COMMIT="${MSST_COMMIT:-a48a17e}"   # validated locally 2026-06 (Mac smoke)
 
 echo "== repo: $REPO_ROOT"
@@ -83,12 +83,12 @@ for sub in configs data; do
 done
 
 echo "== downloading pinned RoFormer checkpoints (~2.5 GB)"
-"$PY" "$REPO_ROOT/workspaces/separation_qa/download_msst_models.py"
+"$PY" "$REPO_ROOT/scripts/download_msst_models.py"
 
 # --- smoke: 15s BS-RoFormer clip, device-appropriate ---------------------------
 DEVICE=$([[ "$HAS_CUDA" == "1" ]] && echo cuda || echo mps)
-mkdir -p "$REPO_ROOT/workspaces/separation_qa/smoke_out/clips"
-CLIP="$REPO_ROOT/workspaces/separation_qa/smoke_out/clips/setup_smoke.wav"
+mkdir -p "$REPO_ROOT/vendor/msst_webui/smoke_out/clips"
+CLIP="$REPO_ROOT/vendor/msst_webui/smoke_out/clips/setup_smoke.wav"
 SMOKE_SRC="${SMOKE_SRC:-$HOME/aligning/1fsnxchk__Two Friends - Big Bootie Mix Volume 12/tracks/002__Manse - Freeze Time (AltVersion).m4a}"
 if [[ -f "$SMOKE_SRC" ]]; then
   ffmpeg -y -i "$SMOKE_SRC" -t 15 -ar 44100 -ac 2 "$CLIP" >/dev/null 2>&1

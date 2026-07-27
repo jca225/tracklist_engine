@@ -63,12 +63,12 @@ from a separate scorecard; it is re-scored on the same spans as the baselines.
 
 ## 3. Architecture (smallest-code path)
 
-New module: `workspaces/alignment_prototype/experiments/bb_baselines.py`
+New module: `alignment/experiments/bb_baselines.py`
 (final name TBD in the plan). It:
 
 1. **Builds `eval_bench.Sample` objects from BB data** and reuses
    `method_nmf` / `method_dtw` / `method_no_warp` from
-   `workspaces/alignment_prototype/external/eval_bench.py` **unchanged**. Reusing
+   `alignment/external/eval_bench.py` **unchanged**. Reusing
    the identical baseline code that ran on UnmixDB is an honesty win — same
    baseline, two datasets.
 2. Per GT span constructs one `Sample` with:

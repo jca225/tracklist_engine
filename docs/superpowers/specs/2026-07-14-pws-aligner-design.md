@@ -177,7 +177,7 @@ LFs**, and pair them with a novelty/unseen-mass channel (Good-Turing / captureâ€
 
 ## II.1 Decisions (fixed)
 - **Phasing:** label-model-first (Phase 1), then open-vocab discovery (Phase 2). *(Chosen 2026-07-14.)*
-- **Home:** new fork `workspaces/pws_aligner/` that **imports** (does not copy) `alignment_prototype`'s
+- **Home:** new fork `pws_aligner/` that **imports** (does not copy) `alignment_prototype`'s
   `harness/`, `agentic/`, `neuro/`, `fibers/` and rewires them as a PWS pipeline. The working aligner
   keeps producing `docs/alignment_status.md`; the fork must **beat it on the scorecard before
   promotion** (`workspaces_dir` convention).

@@ -91,7 +91,7 @@ subject to:
 Policy: `P(choice) ∝ exp(β · U)`. Fit β, λ, and the feature weighting on observed
 BB sequences (BB11 `2nvzlh2k`, BB12 `1fsnxchk`, + more sets). Held-out test:
 given mix state, **rank the true next track/pair against catalog negatives**
-(reuses the `workspaces/alignment_prototype/` retrieval machinery).
+(reuses the `alignment/` retrieval machinery).
 
 ### "Why" = decompose U
 

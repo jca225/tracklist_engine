@@ -7,7 +7,7 @@ oracle ladder quantified its e2e impact and the fix is yours.
 
 ## The finding (quantified)
 
-The acappella **oracle ladder** (`workspaces/alignment_prototype/evals/oracle_ladder.py`,
+The acappella **oracle ladder** (`alignment/evals/oracle_ladder.py`,
 write-up `evals/ORACLE_LADDER_FINDINGS.md`) decomposes the acappella oracle→e2e
 trajectory gap. **Routing is a large, free slice** — bigger than placement in
 BB12, and it needs **no modeling**, only correct stem routing at inference:

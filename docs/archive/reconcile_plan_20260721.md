@@ -55,7 +55,7 @@ Two structural findings beyond the census:
    full reviewed content: `reconcile-handoff-doc` (== `origin/cotrain-grammar-coverage`,
    diff empty). → PARK, see register.
 2. **The entire pws_aligner phase-1b LF suite (~5.7k lines, 44 files, fully tested)
-   is unlanded.** Main has the cotrain/corpus-harvest side of `workspaces/pws_aligner/`
+   is unlanded.** Main has the cotrain/corpus-harvest side of `pws_aligner/`
    but none of `continuous_model.py`, the A1–A5/B1–B4 labeling functions, policy,
    stem_routing, verifier, or their 20 test files. `align-pwsv4-transitions`
    (v4 σ-shrinkage, Gate v4: "calibration collapse CURED, placement win on BB12,
@@ -127,7 +127,7 @@ Ordering matters because five branches touch `labeling/` (`export_als_to_gt.py`,
 5. **PR: earliest-instance tie-break** (`earliest-instance-tiebreak`) — scope: `path_decode.py`, `looptrace/run.py`, `looptrace/segments.py`, `joint_ref_decode.py` + 3 test files (incl. the uncommitted one). Push branch to origin first (local-only).
 6. **PR: lab backfill** (`synthetic-warp-wiring` + `eda/mashup-pir-infodyn`) — scope: `lab/corpus_empirics/bb_mashup_grammar.py` + findings.md section, `lab/information_dynamics/{bb_mashup_pir_v1.py, markov_infodyn.py, FINDINGS.md}`. Pure lab/, no DAG entanglement.
 7. **PR: identity-miss decomposition artifacts** (`identity-miss-decomposition`) — scope: `eda/alignment/failure_analysis/{IDENTITY_MISS_DECOMPOSITION.md, identity_miss_decompose.py}` + plan doc. Clean merge today.
-8. **PR: pws_aligner phase-1b + v4** (`align-pwsv4-transitions`) — scope: 44 files under `workspaces/pws_aligner/` + `scripts/backfill_track_fingerprints.py` hardening. Land as experimental workspace; keep v4 promotion claims out of `docs/alignment_status.md` (BB11 validation still pending). Supersedes and retires `pws-phase1b-continuous`.
+8. **PR: pws_aligner phase-1b + v4** (`align-pwsv4-transitions`) — scope: 44 files under `pws_aligner/` + `scripts/backfill_track_fingerprints.py` hardening. Land as experimental workspace; keep v4 promotion claims out of `docs/alignment_status.md` (BB11 validation still pending). Supersedes and retires `pws-phase1b-continuous`.
 
 **Wave 3 — split the current branch (`trm-ablation-framework`, 124 unlanded files):**
 9. **PR-A: labeling/als toolkit + manifest reconciliation** — `labeling/als/*` (cst, raw_cst, read/write, roundtrip, validate, tags, identity, gap_classify), `labeling/ground_truth/schema.py`, `export_als_to_gt.py`, `write_back_ground_truth.py`, `labeling/fixtures/id_maps/*`, `scripts/{resolve_manifest_recording_ids,diagnose_manifest_als_paths,build_work_map,reconcile_works}.py`, `gt_review_ui.py`. Must go after #56 (both touch `labeling/als/`). Include the currently-uncommitted `bb12_ground_truth.yaml` edit (commit it first).
@@ -162,7 +162,7 @@ Ordering matters because five branches touch `labeling/` (`export_als_to_gt.py`,
 | `trm-pr-check` | fix/trm-ablation-merge |
 
 **Removable after a small save (2):**
-- `bb12-inventory-repair` — save/discard the modified `.superpowers/sdd/task-3-report.md` (low value, likely discardable) and the untracked `workspaces/alignment_prototype/out`.
+- `bb12-inventory-repair` — save/discard the modified `.superpowers/sdd/task-3-report.md` (low value, likely discardable) and the untracked `alignment/out`.
 - `eda-source-resolve` — inspect 2 modified files (`eda/alignment/spectrogram_review/source_audio.py`, its test): post-PR-#38 tweaks; keep as patch if non-trivial.
 
 **Preserve (8):** root repo (trm-ablation-framework), `acap-instance-separability`, `als-audio-roundtrip`, `crush-content-identity`, `crush-plan-corrections`, `e1-flywheel`, `e1-hubert-corroborate`, `gt-release-gate`.
@@ -172,7 +172,7 @@ Ordering matters because five branches touch `labeling/` (`export_als_to_gt.py`,
 1. **`reconcile-handoff-doc`** (branch kept; = `origin/cotrain-grammar-coverage`). Preserve: the F0 timeline-provenance guard + BB12 regression pin (`timeline_provenance.py`, 2 test files, the 9,480-line `1fsnxchk_agentic_timeline.json` fixture, `path_decode.py` fiber-consistency hunks, `2026-07-17-instance-selection-arbiter-design.md`). Why parked, not landed: reviewed in PRs #11/#12 but those merged into a side branch; main's scorer has since been changed by WS0 deinflation + the A2 `core.timebase.Trajectory` refactor, so the pinned BB12 figure and the path_decode hunks need re-validation before landing. Decision needed: re-land the provenance-guard concept against today's scorer, or record as closed. Also holds (via `align-f0-scorer`) two review-dropped files: `looptrace/NOTES.md`, `results/bb_baselines_placement.json` — keep the branch tips tagged and nothing is lost.
 2. **`work-grouping-proposal`** (branch kept, remote exists). Preserve: `docs/work_grouping_proposal.md`, `scripts/propose_work_grouping.py`, `labeling/fixtures/work_map.json`. DRY-RUN version-sibling grouping; potentially subsumed by the Crush path/identity root-cause plan (which builds work maps via `scripts/build_work_map.py` on trm-ablation-framework). Decision needed: reconcile the two work-map approaches, then land one or close both.
 3. **`e1-flywheel` worktree (dirty, 11 modified + 1 untracked)**. Preserve before any cleanup: `docs/agent_handoff_e1_flywheel_20260719.md` (untracked) and uncommitted edits to `agentic/{belief,live_runners,loop}.py`, `infer.py`, `lyrics_align.py`, `trajectory/pseudo_materialize.py` + tests, EXPERIMENTS.md. This is live E1 session state that never became commits. Suggested: commit to the branch as a WIP checkpoint (or `git stash store` + note), then decide against PR #35's final state.
-4. **`e1-hubert-corroborate` worktree extras** (branch is LAND via PR #35, but the worktree carries uncommitted work): untracked `scripts/persist_e1_pool.py`, `workspaces/alignment_prototype/docs/e1_session_state.md`, plus edits to `lyrics_align.py`, `mert_store.py`, `set_mert_backfill_loop.py`, a test. Commit onto the PR branch or park explicitly before rebasing #35.
+4. **`e1-hubert-corroborate` worktree extras** (branch is LAND via PR #35, but the worktree carries uncommitted work): untracked `scripts/persist_e1_pool.py`, `alignment/docs/e1_session_state.md`, plus edits to `lyrics_align.py`, `mert_store.py`, `set_mert_backfill_loop.py`, a test. Commit onto the PR branch or park explicitly before rebasing #35.
 5. **Root repo**: uncommitted `labeling/fixtures/bb12_ground_truth.yaml` modification — commit onto trm-ablation-framework before the Wave-3 split (goes with PR-A).
 
 ## Recommended execution order

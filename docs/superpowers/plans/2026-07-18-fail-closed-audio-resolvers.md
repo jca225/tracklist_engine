@@ -22,9 +22,9 @@
 
 **Files:**
 - Create: `tests/test_fail_closed_audio_resolvers.py`
-- Modify: `workspaces/alignment_prototype/stem_resolve.py`
-- Modify: `workspaces/alignment_prototype/refine_ref_offsets.py`
-- Modify: `workspaces/alignment_prototype/joint_ref_decode.py`
+- Modify: `alignment/stem_resolve.py`
+- Modify: `alignment/refine_ref_offsets.py`
+- Modify: `alignment/joint_ref_decode.py`
 
 **Interfaces:**
 - Consumes: `resolve_stem(set_dir: Path | None, slot_label: str | None, track: dict | None, stem_name: str) -> Path | None`
@@ -124,7 +124,7 @@ Expected: stem tests pass with no unexpected warnings.
 
 **Files:**
 - Modify: `tests/test_fail_closed_audio_resolvers.py`
-- Modify: `workspaces/alignment_prototype/infer_fused.py`
+- Modify: `alignment/infer_fused.py`
 
 **Interfaces:**
 - Consumes: `_resolve_ref(track: dict, set_dir: Path) -> Path | None`
@@ -202,10 +202,10 @@ Expected: all resolver tests pass.
 Check:
 
 ```text
-workspaces/alignment_prototype/stem_resolve.py
-workspaces/alignment_prototype/refine_ref_offsets.py
-workspaces/alignment_prototype/joint_ref_decode.py
-workspaces/alignment_prototype/infer_fused.py
+alignment/stem_resolve.py
+alignment/refine_ref_offsets.py
+alignment/joint_ref_decode.py
+alignment/infer_fused.py
 tests/test_fail_closed_audio_resolvers.py
 ```
 

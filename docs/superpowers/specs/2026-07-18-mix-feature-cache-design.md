@@ -73,7 +73,7 @@ corpus_harvest  (--mix-fp-cache <root>)  ──►  MixFeatureCache(compute_mix_
         harvest reads compact fp + windowed chroma → per-set cost = seconds, bounded RAM
 ```
 
-### 1. `fingerprint_from_file_streaming` (in `workspaces/alignment_prototype/landmark_fp.py`)
+### 1. `fingerprint_from_file_streaming` (in `alignment/landmark_fp.py`)
 
 ```python
 def fingerprint_from_file_streaming(
@@ -91,7 +91,7 @@ def fingerprint_from_file_streaming(
 - Returns a `LandmarkFingerprint` structurally identical to `fingerprint_from_audio`.
 - Reuses `constellation` + `hashes` unchanged — no DSP reimplementation.
 
-### 2. `mix_fp_store.py` (new, in `workspaces/pws_aligner/`)
+### 2. `mix_fp_store.py` (new, in `pws_aligner/`)
 
 ```python
 def load_or_build(cache_root: Path, key: str, mix_path: str | Path,

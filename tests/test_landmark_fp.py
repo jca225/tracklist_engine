@@ -7,7 +7,7 @@ import pytest
 
 pytest.importorskip("librosa")  # landmark_fp computes the STFT via librosa at runtime
 
-from workspaces.alignment_prototype.landmark_fp import (
+from alignment.landmark_fp import (
     LandmarkFingerprint,
     fingerprint_from_audio,
     fp_offset,

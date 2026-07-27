@@ -11,18 +11,18 @@ import numpy as np
 
 from core.contracts import MANIFEST_FILENAME, load_manifest
 from eda.alignment.ridge_diagnostic.cases import CaseRecord
-from workspaces.alignment_prototype.landmark_fp import (
+from alignment.landmark_fp import (
     SR as FP_SR,
     fingerprint_from_audio,
 )
-from workspaces.alignment_prototype.path_decode import _ensure_feat
-from workspaces.alignment_prototype.refine_ref_offsets import (
+from alignment.path_decode import _ensure_feat
+from alignment.refine_ref_offsets import (
     HOP,
     SR,
     find_aligning_dir,
     ref_audio_for,
 )
-from workspaces.alignment_prototype.trajectory.features import pool_bins
+from alignment.trajectory.features import pool_bins
 
 Channel = Literal["hubert", "chroma", "fp_hit", "instr_stem"]
 

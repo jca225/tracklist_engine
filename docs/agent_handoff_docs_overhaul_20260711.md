@@ -84,16 +84,16 @@ See the corrections ledger.)*
 make scorecard
 
 # Per-set, strict + fiber-aware + oracle decomposition
-venvs/audio/bin/python -m workspaces.alignment_prototype.score_timeline_vs_gt \
+venvs/audio/bin/python -m alignment.score_timeline_vs_gt \
     --set-id 1fsnxchk --fibers --decompose
-venvs/audio/bin/python -m workspaces.alignment_prototype.score_timeline_vs_gt \
+venvs/audio/bin/python -m alignment.score_timeline_vs_gt \
     --set-id 2nvzlh2k --fibers --decompose
 
 # Driver comparison board (classical vs agentic vs ml)
 make race
 
 # Oracle placement baseline (isolates placement from decode)
-venvs/audio/bin/python -m workspaces.alignment_prototype.path_decode --eval \
+venvs/audio/bin/python -m alignment.path_decode --eval \
     --feature hubert --stems acappella --fibers --workers 8
 ```
 
@@ -110,15 +110,15 @@ corrections ledger and fall back to the carry-with-warning rule (§2).
 
 Enumerate every artifact that states an alignment status or number. Known set
 (verify + extend by grepping for `%`, `traj`, `precision`, `BB11`, `BB12`,
-`accuracy` under `workspaces/alignment_prototype`, `docs/`, `eda/alignment`):
+`accuracy` under `alignment`, `docs/`, `eda/alignment`):
 
 | Artifact | Role today | Likely fate |
 |---|---|---|
-| `workspaces/alignment_prototype/CLAUDE.md` | module guide + inline numbers | strip numbers → cite canonical |
+| `alignment/CLAUDE.md` | module guide + inline numbers | strip numbers → cite canonical |
 | `eda/alignment/failure_analysis/FINDINGS.md` | failure taxonomy + re-measures | keep as deep appendix; canonical owns headline |
-| `workspaces/alignment_prototype/looptrace/NOTES.md` | looptrace phase log + dead threads | keep; cite canonical for headline |
-| `workspaces/alignment_prototype/cotrain_loso_findings.md` | LOSO result | fold headline into canonical; keep detail |
-| `workspaces/alignment_prototype/external/fiber_validation_findings.md` | SALAMI validation | keep; canonical cites it |
+| `alignment/looptrace/NOTES.md` | looptrace phase log + dead threads | keep; cite canonical for headline |
+| `alignment/cotrain_loso_findings.md` | LOSO result | fold headline into canonical; keep detail |
+| `alignment/external/fiber_validation_findings.md` | SALAMI validation | keep; canonical cites it |
 | `docs/agent_handoff_fibers_20260710.md` | race board (fiber-aware) | source for canonical fiber rows |
 | `docs/archive/agent_handoff_flywheel_select_20260711.md` | flywheel gears 2–3 | keep as active-work pointer |
 | `attic/EXPERIMENTS.md` | closed-experiments ledger | keep; canonical links "dead" methods here |
@@ -194,7 +194,7 @@ wholesale — correct in place per the memory rules in the global instructions.
 
 Lightweight, no big build:
 
-1. **One-place rule.** Add to `workspaces/alignment_prototype/CLAUDE.md` (and a
+1. **One-place rule.** Add to `alignment/CLAUDE.md` (and a
    one-liner in root `CLAUDE.md`): *"Alignment status numbers live only in
    `docs/alignment_status.md`, regenerated from the scorers (§3 commands) with a
    date+SHA stamp. Do not hand-type metrics into other docs or memory — cite the

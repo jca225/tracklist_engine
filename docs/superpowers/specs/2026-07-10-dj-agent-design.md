@@ -36,7 +36,7 @@ their own audio library), not the content.
 | Asset | Role |
 |---|---|
 | `labeling/als/` codec (parse∘print=id) | .als emission — the product wedge |
-| `workspaces/alignment_prototype/synthetic_mix/render_v2.py` | structure→audio renderer (adapt for mashup render) |
+| `alignment/synthetic_mix/render_v2.py` | structure→audio renderer (adapt for mashup render) |
 | ingest + Roformer stems + `candidate_vocal_gate` | song name → audio → stems |
 | analysis (beat_this grids, Essentia BPM/key, sections, cue-detr) | placement + compatibility inputs |
 | `warp_prior.json` (n=316) + BB12 GT taxonomy | priors for gain edges, stretch sanity |

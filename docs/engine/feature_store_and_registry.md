@@ -70,7 +70,7 @@ type: `tests/provenance/test_registry.py::test_new_dummy_type_is_content_address
 
 ## The two real producers (workspaces, not core)
 
-`workspaces/alignment_prototype/producers.py` (core stays stdlib-only; concrete
+`alignment/producers.py` (core stays stdlib-only; concrete
 producers import aligner modules sideways):
 
 - **`analyze.landmark_fp`** — fresh compute through `Registry.run`: audio bytes
@@ -95,10 +95,10 @@ producers import aligner modules sideways):
 CLI (pi access read-only; falls back to `--audio-file`):
 
 ```bash
-venvs/audio/bin/python -m workspaces.alignment_prototype.producers \
+venvs/audio/bin/python -m alignment.producers \
     --track 12m8zb3x --set-id 1fsnxchk
 venvs/audio/bin/python -m core.provenance.laws \
-    --db workspaces/alignment_prototype/out/provenance/producers
+    --db alignment/out/provenance/producers
 ```
 
 ## Migration stance

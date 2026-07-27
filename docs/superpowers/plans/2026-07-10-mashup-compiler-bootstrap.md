@@ -263,7 +263,7 @@ git add -A && git commit -m "feat: frozen engine modules copied from tracklist_e
 
 ### Task 3: Extract the crash-safe .als clip builder (`engine/als_seed.py`)
 
-The clip-construction code lives in `$TLE/workspaces/alignment_prototype/review/seed_als_from_timeline.py` — it embeds three hard-won Ableton-crash fixes (`strip_automation`, `renumber_pointee_ids` incl. `<Pointee>`, `NextPointeeId` bump). Extract the reusable functions verbatim, with one extension: `rewrite_clip` gains a `pitch_coarse` parameter (upstream hard-codes `PitchCoarse=0`; mashups transpose ±1).
+The clip-construction code lives in `$TLE/alignment/review/seed_als_from_timeline.py` — it embeds three hard-won Ableton-crash fixes (`strip_automation`, `renumber_pointee_ids` incl. `<Pointee>`, `NextPointeeId` bump). Extract the reusable functions verbatim, with one extension: `rewrite_clip` gains a `pitch_coarse` parameter (upstream hard-codes `PitchCoarse=0`; mashups transpose ±1).
 
 **Files:**
 - Create: `$MC/engine/als_seed.py`

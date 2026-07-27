@@ -14,7 +14,7 @@
 
 - Interpreter: `venvs/audio/bin/python`; run/import from repo root.
 - **Set ids (verified — do NOT swap): BB11 = `2nvzlh2k`, BB12 = `1fsnxchk`.**
-- **EDA only.** Live under `eda/alignment/ridge_diagnostic/`. Do NOT add probes/channels to `workspaces/alignment_prototype/{infer,harness,drivers}` — sensor phase is closed.
+- **EDA only.** Live under `eda/alignment/ridge_diagnostic/`. Do NOT add probes/channels to `alignment/{infer,harness,drivers}` — sensor phase is closed.
 - **No training.** No contrastive encoder, no Milvus, no new retrieval stack.
 - **Looking exercise, not statistics.** n≈8–12 by design. Do not claim feature-engineered findings from n&lt;50. Verdict language: "ridge present / absent," not p-values.
 - **Numbers SSOT:** do not hand-type alignment headline metrics into FINDINGS — cite `docs/alignment_status.md`.
@@ -84,9 +84,9 @@ eda/alignment/ridge_diagnostic/.gitignore  # CREATE: ignore out/
 - Produces: `select_hard_cases(*, n: int = 12, min_place_err_s: float = 15.0, timeline_by_set: dict[str, Path] | None = None) -> list[CaseRecord]`
 
 **Selection rules (exact):**
-1. Prefer agentic timelines at `workspaces/alignment_prototype/out/<set_id>_agentic_timeline.json`.
-2. If missing, fall back to `workspaces/alignment_prototype/out/<set_id>_predicted_timeline_lt.json` (same source `failure_analysis/build_span_table` uses), then any `*_predicted_timeline*.json`.
-3. Score with `score_spans(set_id, timeline_path)` from `workspaces.alignment_prototype.score_timeline_vs_gt`.
+1. Prefer agentic timelines at `alignment/out/<set_id>_agentic_timeline.json`.
+2. If missing, fall back to `alignment/out/<set_id>_predicted_timeline_lt.json` (same source `failure_analysis/build_span_table` uses), then any `*_predicted_timeline*.json`.
+3. Score with `score_spans(set_id, timeline_path)` from `alignment.score_timeline_vs_gt`.
 4. Keep spans where `id_correct is True` and `place_err_s is not None` and `place_err_s >= min_place_err_s`.
 5. Sort by `place_err_s` descending; take top `n` across both sets (mix BB11+BB12).
 6. Enrich each survivor from GT YAML (`labeling/fixtures/bb1{1,2}_ground_truth.yaml`) for tempo_ratio, pitch_shift_semi, ref_segments, audible onset via `gt_placement_onset`.
@@ -138,12 +138,12 @@ from pathlib import Path
 
 import yaml
 
-from workspaces.alignment_prototype.path_decode import gt_placement_onset
-from workspaces.alignment_prototype.score_timeline_vs_gt import score_spans
+from alignment.path_decode import gt_placement_onset
+from alignment.score_timeline_vs_gt import score_spans
 
 _REPO = Path(__file__).resolve().parents[3]
 _OUT = Path(__file__).resolve().parent / "out"
-_ALN_OUT = _REPO / "workspaces" / "alignment_prototype" / "out"
+_ALN_OUT = _REPO / "alignment" / "out"
 
 SET_META = {
     "1fsnxchk": ("BB12", _REPO / "labeling/fixtures/bb12_ground_truth.yaml"),
@@ -242,7 +242,7 @@ EOF
 - Modify: `tests/eda/alignment/test_ridge_diagnostic.py`
 
 **Interfaces:**
-- Consumes: `CaseRecord`, aligning dir via `workspaces.alignment_prototype.refine_ref_offsets.find_aligning_dir` (or `recon_probe.find_aligning_dir` — same pattern).
+- Consumes: `CaseRecord`, aligning dir via `alignment.refine_ref_offsets.find_aligning_dir` (or `recon_probe.find_aligning_dir` — same pattern).
 - Produces:
   ```python
   Channel = Literal["hubert", "chroma", "fp_hit", "instr_stem"]
@@ -327,7 +327,7 @@ def compute_panel(case: CaseRecord, *, bin_s: float = 0.5, pad_s: float = 15.0) 
 `fp_hit` implementation sketch (keep in this file; do not add a harness probe):
 
 ```python
-from workspaces.alignment_prototype.landmark_fp import fingerprint_from_audio
+from alignment.landmark_fp import fingerprint_from_audio
 
 def fp_hit_matrix(mix_y, ref_y, sr, *, bin_s: float) -> np.ndarray:
     # hash landmarks; for each matching hash pair accumulate into
@@ -496,8 +496,8 @@ Include: purpose, decision rule (copy from spec), exact run command, inputs (tim
 ```bash
 # Preconditions
 ls ~/aligning/1fsnxchk__* ~/aligning/2nvzlh2k__* | head
-ls workspaces/alignment_prototype/out/*agentic_timeline.json \
-   workspaces/alignment_prototype/out/*predicted_timeline*.json 2>/dev/null | head
+ls alignment/out/*agentic_timeline.json \
+   alignment/out/*predicted_timeline*.json 2>/dev/null | head
 
 venvs/audio/bin/python -m eda.alignment.ridge_diagnostic.run --n 2 --min-place-err-s 15
 ls eda/alignment/ridge_diagnostic/out/cases.json \
@@ -601,7 +601,7 @@ make check
 
 ## Fallback if timelines are missing
 
-1. Try existing predicted timelines under `workspaces/alignment_prototype/out/`.
+1. Try existing predicted timelines under `alignment/out/`.
 2. If none: `make align SET=1fsnxchk` then `make align SET=2nvzlh2k` (classical base). Agentic preferred but not mandatory for v1 — record source in `cases.json`.
 3. Taxonomy-only hand-pick is **out of scope for v1** (loses "model's actual error"). If forced, document the deviation in FINDINGS and tag cases `taxonomy_only`.
 

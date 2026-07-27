@@ -5,7 +5,7 @@ known weak axes, scoped to **not collide** with the parallel aligner agent.
 
 ## Results & pivot (2026-06-29) — read this first
 
-All work lives in `workspaces/alignment_prototype/neuro/` (no harness/infer edits).
+All work lives in `alignment/neuro/` (no harness/infer edits).
 
 - **WS1 (precision fusion): PARTIAL / mostly negative.** Curve-precision predicts
   correctness (AUC z=0.75 > raw-peak 0.64) and gives a clean monotonic ABSTENTION
@@ -46,7 +46,7 @@ This is the principle behind the [placement-wall decomposition error] finding.
 The parallel agent is actively editing — per `git status` — `infer.py`,
 `pretrain.py`, and `synthetic_mix/`. Therefore:
 
-1. All new code lands in a **new** subdir: `workspaces/alignment_prototype/neuro/`.
+1. All new code lands in a **new** subdir: `alignment/neuro/`.
 2. **Do NOT edit** `infer.py`, `pretrain.py`, `synthetic_mix/`, the notebook, or
    (to be safe) any currently-modified file. Compose, don't mutate.
 3. New probes conform to `harness/contract.Probe` but are first exercised through
@@ -82,10 +82,10 @@ other agent has merged and a probe has cleared its win bar.
 - Beat grid: `set_measures` / `track_measures` tables (mix & ref downbeats);
   MertSeries is already measure-aligned → phrase indices available.
 - Per-axis eval (read-only, score vs GT):
-  - `python -m workspaces.alignment_prototype.acappella_ref_offset_eval --workers 8`  (n=24 acappella)
-  - `python -m workspaces.alignment_prototype.instrumental_ref_offset_eval --workers 8`  (n=5)
-  - `python -m workspaces.alignment_prototype.eval_placement [--feature chroma|fp]`  (BB12 regular)
-  - `python -m workspaces.alignment_prototype.eval_ref_detection --eval [--stems acappella] [--feature hubert]`
+  - `python -m alignment.acappella_ref_offset_eval --workers 8`  (n=24 acappella)
+  - `python -m alignment.instrumental_ref_offset_eval --workers 8`  (n=5)
+  - `python -m alignment.eval_placement [--feature chroma|fp]`  (BB12 regular)
+  - `python -m alignment.eval_ref_detection --eval [--stems acappella] [--feature hubert]`
 
 ---
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import json
-from workspaces.alignment_prototype.never_matched import (
+from alignment.never_matched import (
     never_matched_recordings,
     write_never_matched,
 )

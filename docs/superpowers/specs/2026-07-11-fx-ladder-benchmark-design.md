@@ -3,7 +3,7 @@
 **Date:** 2026-07-11
 **Status:** approved design, pre-implementation
 **Owner:** John
-**Home:** `workspaces/alignment_prototype/synthetic_mix/` + `external/eval_bench.py`
+**Home:** `alignment/synthetic_mix/` + `external/eval_bench.py`
 
 ## North star (session)
 

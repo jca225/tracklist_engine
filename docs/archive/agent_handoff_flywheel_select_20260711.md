@@ -20,7 +20,7 @@ labeling seeder.** Retrain half already exists (`export_als_to_gt` + `cotrain`).
   memorizes placement per-set. Consequence for this cycle: on a *new* set many
   spans will escalate (weak placement) — good for coverage, but **cap the batch
   with `TOP`** so a labeling session is human-sized.
-  Write-up: `workspaces/alignment_prototype/cotrain_loso_findings.md`.
+  Write-up: `alignment/cotrain_loso_findings.md`.
 - **Agentic probes are `validated=False`** (provisional precisions,
   `agentic/actions.py`). That's fine here: **escalation/ranking-what-to-label does
   NOT need validated auto-commit precision.** Do not try to flip `validated=True`

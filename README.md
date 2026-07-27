@@ -4,7 +4,7 @@
 
 ## What it does
 
-Scrapes DJ set tracklists from the web, ingests the underlying track audio (with version/variant/stem QA), and runs per-track audio analysis (Roformer stem separation, beat detection, cue-point detection, loudness, MERT embeddings). Humans produce ground-truth labels by aligning stems against mixes in Ableton (`labeling/`), and that ground truth trains the **automatic aligner** — the active research front, incubating in `workspaces/alignment_prototype/`. Two GT sets are fully labeled (BB11, BB12) and drive all evaluation.
+Scrapes DJ set tracklists from the web, ingests the underlying track audio (with version/variant/stem QA), and runs per-track audio analysis (Roformer stem separation, beat detection, cue-point detection, loudness, MERT embeddings). Humans produce ground-truth labels by aligning stems against mixes in Ableton (`labeling/`), and that ground truth trains the **automatic aligner** — the active research front, incubating in `alignment/`. Two GT sets are fully labeled (BB11, BB12) and drive all evaluation.
 
 A separate personalization layer (`personalization/`) derives SoundCloud listener cohorts and per-user taste priors as a read-only export for a future learning repo. It sits off the DAG.
 
@@ -137,7 +137,7 @@ GT status: **BB11 and BB12 are done** and are the evaluation corpus. Rule of thu
 
 North star (`docs/alignment_objective.md`): consume `{tokenized tracklist, track audios, set audio}` → an Ableton-round-trippable structure, trained on manual GT. Kernel entrypoint: `make align SET=<id>`.
 
-Everything experimental lives in `workspaces/alignment_prototype/`:
+Everything experimental lives in `alignment/`:
 
 - **harness/** — driver-agnostic evaluation harness; `make race` races the end-to-end drivers against GT, `make scorecard` scores against GT.
 - **drivers/** — three e2e drivers (agentic owns placement, ml owns ref-decode).
@@ -146,7 +146,7 @@ Everything experimental lives in `workspaces/alignment_prototype/`:
 - **fibers/** — self-repeat structure (which parts of a track repeat itself), used as gates and evidence.
 - Placement evidence that has earned its place: audio fingerprinting for fine placement, HuBERT features for vocal identity/offset (chroma fails on re-pitched acappellas), per-stem fingerprint matching for instrumentals.
 
-Dead ends are recorded in `workspaces/alignment_prototype/attic/EXPERIMENTS.md` — **read it before re-testing an idea**; many plausible approaches are already ruled out with verdicts.
+Dead ends are recorded in `alignment/attic/EXPERIMENTS.md` — **read it before re-testing an idea**; many plausible approaches are already ruled out with verdicts.
 
 Corpus-level findings from exploratory analysis live in `lab/corpus_empirics/findings.md`.
 
@@ -202,6 +202,6 @@ Python (FastAPI jobqueue, scraping via `web_crawler/`, PyTorch audio stack: Rofo
 - `CLAUDE.md` — the DAG, the identity model in full, and the per-module index
 - `docs/alignment_objective.md` — the aligner north star (target spec)
 - `docs/architecture_north_star.md` — architecture map + Point A→B phases
-- `workspaces/alignment_prototype/CLAUDE.md` — current aligner state
+- `alignment/CLAUDE.md` — current aligner state
 - `analysis/pipeline.py` — `analyze_track`: the core per-track analysis composition
 - `web_crawler/main.py` — tracklist scraper entry point

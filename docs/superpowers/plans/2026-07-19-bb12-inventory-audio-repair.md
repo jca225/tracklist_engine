@@ -314,7 +314,7 @@ Ensure no consumer silently plays the wrong `NNN__*` file when the manifest stub
 **Files:**
 - Modify: `eda/alignment/spectrogram_review/source_audio.py` (already partially done — land + extend)
 - Modify: `tests/eda/test_spectrogram_source_audio.py`
-- Modify: aligner entry that loads refs (search `resolve_source_audio` / `find_aligning_dir` / `_resolve_ref_audio` in `workspaces/alignment_prototype/`) — add preflight that lists unresolved GT ids before a run
+- Modify: aligner entry that loads refs (search `resolve_source_audio` / `find_aligning_dir` / `_resolve_ref_audio` in `alignment/`) — add preflight that lists unresolved GT ids before a run
 
 **Interfaces:**
 - `resolve_source_audio`: if `tracks[recording_id]` exists and paths are dead → `None` (no slot FS fallback)
@@ -465,7 +465,7 @@ venvs/audio/bin/python -m labeling.reconcile_aligning_manifest 1fsnxchk --report
 # use the repo’s existing failure_analysis entrypoint, e.g.:
 venvs/audio/bin/python -m eda.alignment.failure_analysis.build_span_table \
   --set-id 1fsnxchk \
-  --timeline workspaces/alignment_prototype/out/1fsnxchk_agentic_timeline.json \
+  --timeline alignment/out/1fsnxchk_agentic_timeline.json \
   --gt labeling/fixtures/bb12_ground_truth.yaml \
   --out eda/alignment/failure_analysis/out/span_table.csv
 ```
@@ -494,7 +494,7 @@ Expect: `src=yes` for all non-unalignable cards; Lux card absent or explicitly p
 
 - [ ] **Step 3: Regenerate `docs/alignment_status.md` via the project’s scorer stamp path** (never hand-edit headline numbers).
 
-- [ ] **Step 4: EXPERIMENTS ledger note** in `workspaces/alignment_prototype/attic/EXPERIMENTS.md`:  
+- [ ] **Step 4: EXPERIMENTS ledger note** in `alignment/attic/EXPERIMENTS.md`:  
   `BB12 inventory coherence (2026-07-19) — verdict: <helps | neutral | insufficient>`.
 
 ---

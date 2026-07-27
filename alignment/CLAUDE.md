@@ -1,0 +1,183 @@
+# alignment — P5 span aligner (offline)
+
+Incubates in `workspaces/` per [alignment_program_plan.md](../../docs/alignment_program_plan.md).
+Promote to top-level `alignment/` when stable.
+
+**Phase policy (2026-07-09): the sensor phase is closed.** The channel
+inventory (fp/HuBERT/lyrics/fibers/chroma/surprise/recon/warp-prior) is rich
+enough; the wall is the actor, not perception. Until the learned model
+(`trajectory/` + `drivers/ml`) and its data engine (agentic pseudo-labels)
+ship, do NOT add new probes/channels/priors — new ideas go to a note in
+`looptrace/NOTES.md` or the attic ledger, not to code. The three sanctioned
+lanes: (1) the canonical driver path (`drivers/` + `make race`), (2) the
+learned trajectory decoder + training data, (3) contracts/entropy work
+([entropy_reduction_plan](../../docs/entropy_reduction_plan.md)).
+
+**Closed experiments live in [attic/](attic/EXPERIMENTS.md)** — a verdict ledger
+of ~20 one-off probes/evals whose questions are answered. Read the verdict
+before re-testing an idea; most attic scripts are there because the idea was
+measured and rejected.
+
+## Live kernel
+
+Six entry points; everything else at top level is a module they import.
+
+| entry point | role |
+|---|---|
+| `infer.py` | cross-set inference: identity (MERT `predict_sequence`) + placement (`--fp-placement` + `--stem-placement`, both default on) + ref offsets |
+| `joint_ref_decode.py` | post-infer segment decode: `path_decode.decode_path` Viterbi writes per-span `ref_segments` into the timeline JSON (feature-routed: acappella→HuBERT, else chroma; `--decoder looptrace` for the loop-collapse variant) |
+| `train.py` | MERT head training / eval (`--eval`, `--train-mert`); watch the `MISS` report on new sets |
+| `path_decode.py` | Viterbi span decoder over ref offset (loop/jump/odd-ratio); `--eval` = oracle-placement upper bound; also home of `trajectory_acc` scoring |
+| `agentic/` | POMDP agentic loop (`python -m ...agentic --set-id <id> --gt <yaml>`); `--live` runs real fp/lyrics/HuBERT/mert/surprise probes |
+| `harness/` | Probe/AlignmentResult/DeterministicDriver contract; `axes.py` = stem→axis routing; `merge.py` `source_priority` = axis-priority fusion |
+
+Core modules (imported, not run — these stay **flat**; the high fan-in makes
+moving them a 100-file rewrite for no capability): `dataset/records/split/
+losses/eval` (GT spans), `mert_store/mert_features/mert_model` (identity),
+`landmark_fp/fp_index/mix_fp_hits/fp_placement_refine` (fingerprint placement),
+`refine_ref_offsets` (chroma matched filter), `stem_placement` (HuBERT
+acappella set_start), `instr_stem_placement`+`instrumental_probe` (instrumental
+stem-fp), `ref_fibers` (repeat classes) + `fp_probe`/`harmony_fibers` (fiber
+detectors), `lyrics_align` (+`vocal_enhance`/`enhance_vocal` subprocess),
+`recon_probe` (reconstruction features; feeds `trajectory/` + `drivers/ml`),
+`continuity_refine`, `sequence_decode`, `slot_priors`, `fine_refine`,
+`stem_resolve`, `tempo_curve` (als tempo primitives), `export_mert_from_pi`.
+
+Subdirectories: `drivers/` (classical/agentic/ml end-to-end drivers + `make
+race`), `looptrace/` (acappella loop-collapse decode), `trajectory/` (learned
+segment-trajectory decoder), `neuro/` (probe-precision fusion), `synthetic_mix/`
+(synthetic mashup pretrain data), `external/` (UnmixDB/SALAMI loaders + caches;
+also the external-corpus runners `eval_bench`+`nmf_baseline` (André-2024
+benchmark) and `pretrain` (UnmixDB)), `review/` (human-review loop:
+`review_server`/`fiber_server`/`fiber_ui`/`discern_server`,
+`render_review_snippets`, `seed_als_from_timeline`, `seed_worst_spans_als`,
+`seed_stem_review_als` — the last renders a stem-match review queue as a
+CAND/CAT A/B Live set with `--harvest` verdict write-back), `evals/` (internal evals:
+`fiber_ab`, `lyrics_ref_decode`, `verify_vocal`), `harness/`, `agentic/`,
+`attic/` (closed experiments, see ledger).
+
+## Scorecard — the source of truth for "did it help"
+
+```bash
+make scorecard        # per-span table + impact-weighted failure attribution (BB11+BB12)
+# or per set:
+venvs/audio/bin/python -m alignment.score_timeline_vs_gt \
+    --set-id 1fsnxchk [--fibers] [--decompose]
+```
+
+`eda/alignment/failure_analysis/` is the canonical breakdown (one binding cause
+per span, weighted by GT-seconds lost). **Axis rule: take `claimed_stem` from
+the matched GT row, never from the timeline span** — the materialized value was
+corrupted by the row-text drop bug (fixed 888caca; pi DB re-materialized
+2026-07-09, now 19/25 real instrumentals visible — the residual ~6/set are
+class-1 inventory gaps the scrape never marked, so GT stays authoritative
+where it exists; pre-re-materialize timelines still carry stale values).
+`score_timeline_vs_gt` does this now.
+
+**Headline numbers live in [docs/alignment_status.md](../../docs/alignment_status.md)**
+(canonical, dated+SHA stamped, regenerated from the scorers). Do not hand-type
+status metrics here — cite the canonical doc. Current shape (regenerated
+2026-07-11, `_lt`): identity 84/83% (BB12/BB11), set_start median 6.3/7.9 s,
+acappella trajectory **10–12% strict / 30–33% fiber-aware** (the old "21%"
+conflated the binary success-rate with the mean traj-acc — see corrections C3),
+85% of GT-seconds lost. Loss attribution: decode-residual **38% ≈ placement 37%**
+(co-equal walls; the old "45% > ~31%" drifted) > mis-route 9% > identity 6%.
+Acappella is 51% of mix-seconds and the worst axis. Full taxonomy + levers:
+[failure_analysis/FINDINGS.md](../../eda/alignment/failure_analysis/FINDINGS.md).
+
+## Design decisions (load-bearing — do not relearn these)
+
+- **Axis decomposition:** song ≈ timbre × harmony × language, near-orthogonal.
+  timbre=MERT (identity ONLY — pooled-MERT cosine cannot localize; ~900 s off
+  unconstrained), harmony=chroma, language=HuBERT. Match on the
+  nuisance-invariant axis per stem: vocals→HuBERT (key-invariant — 31% of BB11
+  acappellas are re-pitched and key changes break chroma; 2.1 s vs 39.6 s median
+  ref-offset), instrumental→chroma+fingerprint. Fusion uses the axis prior
+  (`harness/merge.py` `source_priority`), never raw cross-probe confidence.
+- **Stem-wise alignment:** a mix moment is a sum of layers; full-mix-only
+  matching entangles them. Align per stem channel (mix_vocals↔ref vocals, etc.)
+  AND full mix, fused at decode.
+- **set_start = ref_start + fp diagonal offset.** The old ~30 s "placement wall"
+  was a decomposition error: the landmark fp localizes the alignment diagonal to
+  0.2 s/76%; DJs start tracks mid-song. `mix_fp_hits.decode_placements` (vote
+  extent + monotonic decode) is the placement source in `infer`.
+- **fp is precise but unleashed** — wrong-diagonal picks land hundreds of
+  seconds off. `--fp-placement-gate-s 90` trusts fp only as a local refinement
+  of MERT (BB12: median 30.5→6.6 s, p90 78→61 s; gate helps median AND tail).
+- **Acappella set_start needs HuBERT** (`--stem-placement`): full-mix fp is weak
+  on vocals; `place_joint` votes the diagonal in mix_vocals (BB12 <15 s
+  61→76%, p90 96→72 s; known regression <4 s 44→34% — confidence floor TODO).
+  Refines set_start ONLY; joint ref_start stays repeat-ambiguous.
+- **Segment-list output:** 63% of GT spans are non-straight (multiseg/loop/
+  odd-ratio); the aligner emits per-span `ref_segments` and `trajectory_acc`
+  scores every class. Headline = multiseg+loop fiber-aware.
+- **Fibers are HuBERT+silence-gate, never chroma** (`ref_fibers`); externally
+  validated precise-but-low-recall (SALAMI P .88 / R .06) — that under-merge is
+  why `fiber_gate` doesn't transfer; multimodal fibers are the open lever.
+- **Old checkpoints:** any MERT head trained before the 2026-06-11 GT
+  regeneration (a450005) learned ~0 ref offsets — retrain, don't reuse.
+
+## Commands
+
+```bash
+venvs/audio/bin/python -m alignment.train --eval --train-mert
+venvs/audio/bin/python -m alignment.infer --set-id 2nvzlh2k --band-s 45
+venvs/audio/bin/python -m alignment.joint_ref_decode --set-id 2nvzlh2k
+# fingerprint backfill (corpus-wide, done) + per-set hit cache:
+venvs/audio/bin/python scripts/backfill_track_fingerprints.py --dry-run
+venvs/audio/bin/python scripts/cache_set_fingerprint_hits.py --set-id 1fsnxchk
+# UnmixDB pretrain (external/unmixdb.py loader):
+venvs/audio/bin/python -m alignment.external.pretrain --dry-run --unmixdb-root ~/data/unmixdb-v1.1
+```
+
+## Human review loop (predictions → GT)
+
+1. `infer` writes `out/<set_id>_predicted_timeline.json`.
+2. `render_review_snippets --set-id <id>` → per-span A/B clips +
+   `out/review/<set_id>/review.html` (keyboard verdicts, worst-first; ~30–40 min
+   for ~150 spans).
+3. `seed_als_from_timeline --set-id <id>` → pre-seeded Live project, **stamped
+   `<SET> SEEDED.als`** (hard-refuses `* align.als`; locator #1 marks it
+   machine-predicted). Round-trips its own output through `labeling/als`.
+4. Human corrects → `labeling/export_als_to_gt.py` → new GT; diff vs the
+   predicted timeline = honest scorecard. Requires a pull via
+   `labeling/pull_set_for_alignment.py` (slot-spine fix ed7f121).
+
+**Seeding-for-labeling is DEAD as a use case (John, 2026-07-06).** John
+hand-labels every set in his own convention (clean session, varying master
+tempo). Never pitch seeded sessions as labeling acceleration. The seeder's only
+role is review-loop rendering. Master-tempo *emission* is deferred but has an
+eventual consumer — the product-grade `.als` output (north-star deliverable:
+hand-convention session, varying master tempo, unwarped mix);
+`labeling.als.tempo_sec_to_beat` (property-tested) is its core primitive.
+
+## Not wired yet / scoped
+
+- **Multi-set co-train + LOSO — BUILT 2026-07-11** (`cotrain.py`: `SetStores`,
+  `cotrain`, `run_loso`; `train.py --loso --sets bb11,bb12`; `SpanTarget.set_id`).
+  The head trains on set-agnostic `build_examples`, so co-train = concat per-set
+  examples + one `train_ensemble`; LOSO wraps the head around the held-out set
+  with a scraped-cue anchor (leakage-free). **First result (n=2): identity
+  transfers 100% cross-set both directions; placement does NOT (bb11 18.6 s vs
+  bb12 1436 s, unstable) — the MERT head memorizes placement per-set.** Full
+  write-up + caveats: [cotrain_loso_findings.md](cotrain_loso_findings.md). Lever
+  for transferable placement = the `trajectory/` decoder or denser GT, not this
+  head. Next flywheel gears (unbuilt): orchestration driver
+  (predict→seed→correct→retrain) + batch selection.
+- **Acappella ref-offset instance selection** — the biggest modelling prize
+  (34% of all loss; six decode-layer threads dead, see looptrace/NOTES.md).
+  ~~Live lever: learned selector over {HuBERT diagonal, fiber μ/ambiguity, fp
+  sharpness}.~~ **MEASURED DEAD (n=2, 2026-07-18, `evals/instance_separability.py`
+  + INSTANCE_SEPARABILITY_FINDINGS.md):** those three content features do NOT
+  separate the correct instance from same-fiber rivals (at/below chance tie-fair;
+  fitted selector transfers *below* chance both directions, μ weight sign-flips
+  BB11↔BB12) — BB10 won't rescue it. **The real signal is positional:** the GT
+  instance is the *earliest* fiber member in ~0.93 of recoverable rows and this
+  transfers with no fit. Live lever = an **earliest-fiber-instance / ref-position
+  tie-break** in the acappella decoder (distinct from the current continuity/warp
+  tie-break), to be measured e2e via `make scorecard`. Needs no BB10.
+- Acappella set_start p90 tail; HuBERT confidence floor (the <4 s regression).
+- Per-stem instrumental set_start (chroma fails on instrumental presence;
+  GT n=5 can't validate).
+- B3: `fiber_ambiguity`/μ not yet fed into live decode; learned fusion arbiter
+  (C1/C2) gated on more GT.

@@ -91,7 +91,7 @@ labeling/
     audio_index.py                 stable `track_audio_id` → local on-disk
                                    path index for a pulled aligning folder
                                    (written by `pull_set_for_alignment.py`;
-                                   consumed by workspaces/alignment_prototype
+                                   consumed by alignment
                                    resolvers). Moved here from `identity/` —
                                    it's a *pulled-folder path resolver*, not
                                    an identity-assignment tool.

@@ -23,9 +23,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
-from workspaces.alignment_prototype import provenance  # noqa: E402
+from alignment import provenance  # noqa: E402
 
-OUT = REPO / "workspaces" / "alignment_prototype" / "out"
+OUT = REPO / "alignment" / "out"
 GT = {
     "1fsnxchk": REPO / "labeling" / "fixtures" / "bb12_ground_truth.yaml",
     "2nvzlh2k": REPO / "labeling" / "fixtures" / "bb11_ground_truth.yaml",
@@ -44,7 +44,7 @@ def main(argv: list[str] | None = None) -> int:
     rows = None
     if not args.no_pi:
         try:
-            from workspaces.alignment_prototype.infer import fetch_slot_rows
+            from alignment.infer import fetch_slot_rows
 
             rows = fetch_slot_rows(sid)
         except Exception as e:  # pi unreachable — degrade to local-only check

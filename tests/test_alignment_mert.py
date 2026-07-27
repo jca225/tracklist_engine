@@ -6,10 +6,10 @@ import pytest
 
 pytest.importorskip("torch")  # mert_model needs torch; absent in deps-light CI
 
-from workspaces.alignment_prototype.mert_features import build_examples, candidate_list
-from workspaces.alignment_prototype.mert_model import TrainConfig, train_head
-from workspaces.alignment_prototype.mert_store import MertSeries
-from workspaces.alignment_prototype.records import SlotCandidate, SpanTarget
+from alignment.mert_features import build_examples, candidate_list
+from alignment.mert_model import TrainConfig, train_head
+from alignment.mert_store import MertSeries
+from alignment.records import SlotCandidate, SpanTarget
 
 
 def _synthetic_series(n: int, dim: int, *, offset: float = 0.0) -> MertSeries:

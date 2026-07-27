@@ -5,7 +5,7 @@ consumed, and the alignment bench re-based on the honest ruler.
 
 ## What shipped (all on `synthetic-warp-wiring`, pushed)
 
-- **`fibers/` package** (`workspaces/alignment_prototype/fibers/`): detect /
+- **`fibers/` package** (`alignment/fibers/`): detect /
   harmony / gt_als, shims at old paths (`ref_fibers`, `harmony_fibers`).
 - **Two real detector bugs found by the first-ever unit fixtures**
   (`tests/test_fibers.py`, 12 tests): silence gate needed an absolute floor;

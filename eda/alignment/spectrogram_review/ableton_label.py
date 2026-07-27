@@ -9,7 +9,7 @@ from typing import Any
 
 import yaml
 
-from workspaces.alignment_prototype.score_timeline_vs_gt import norm_slot
+from alignment.score_timeline_vs_gt import norm_slot
 
 _REPO = Path(__file__).resolve().parents[3]
 

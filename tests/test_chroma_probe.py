@@ -5,8 +5,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import workspaces.alignment_prototype.harness.chroma_probe as cp
-from workspaces.alignment_prototype.harness import (
+import alignment.harness.chroma_probe as cp
+from alignment.harness import (
     AlignmentResult,
     CandidatePool,
     MixContext,

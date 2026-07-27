@@ -50,7 +50,7 @@ flowchart LR
 
 - Merge Crush deliverables: gt-gate stack (#34/#37), branch consolidation (#48).
 - Freeze referee: which timeline (`_lt`), which scorer flags — document once in SSOT.
-- **Replay inventory:** list every open thread in [attic/EXPERIMENTS.md](../workspaces/alignment_prototype/attic/EXPERIMENTS.md) + open aligner issues (#2/#3/#4) as "re-run on clean GT" or "CLOSED — was poison."
+- **Replay inventory:** list every open thread in [attic/EXPERIMENTS.md](../alignment/attic/EXPERIMENTS.md) + open aligner issues (#2/#3/#4) as "re-run on clean GT" or "CLOSED — was poison."
 
 ### RT1 — Alignment algorithm on clean GT (2–4 weeks)
 

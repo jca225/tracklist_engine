@@ -6,12 +6,12 @@ is **alignment-support** analysis (the aligner imports from `eda/alignment/`):
 
 - **`alignment/`** — mix structure analysis (MERT probes, section/event
   boundaries) **that the algorithmic aligner depends on**:
-  `workspaces/alignment_prototype/mert_store.py` imports
+  `alignment/mert_store.py` imports
   `eda.alignment.mert_vectors`, and `eda/alignment/failure_analysis/` **is the
   scorecard** (`make scorecard`), importing `path_decode` / `score_timeline_vs_gt`
   from the aligner. See [alignment/README.md](alignment/README.md) and
   [docs/aligner_attention_design.md](../docs/aligner_attention_design.md). Not the
-  aligner itself (`workspaces/alignment_prototype/`).
+  aligner itself (`alignment/`).
 - **`queries/`** — ad-hoc query scratch.
 - **`common.py`** — shared DB access + DataFrame loading + pydantic_ai agent
   integration, used by the notebooks (`eda.ipynb`, `set_structure.ipynb`,

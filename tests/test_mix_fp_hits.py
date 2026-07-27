@@ -7,8 +7,8 @@ import pytest
 
 pytest.importorskip("librosa")  # fingerprint pipeline computes the STFT via librosa
 
-from workspaces.alignment_prototype.landmark_fp import fingerprint_from_audio
-from workspaces.alignment_prototype.mix_fp_hits import (
+from alignment.landmark_fp import fingerprint_from_audio
+from alignment.mix_fp_hits import (
     candidate_density,
     fp_candidate_evidence,
     pick_dense_competitive,
@@ -103,7 +103,7 @@ def test_placement_curve_peaks_near_coarse() -> None:
         band_s=15.0,
         win_s=8.0,
     )
-    from workspaces.alignment_prototype.sequence_decode import NEG
+    from alignment.sequence_decode import NEG
 
     valid = curve > NEG / 2
     assert valid.any()

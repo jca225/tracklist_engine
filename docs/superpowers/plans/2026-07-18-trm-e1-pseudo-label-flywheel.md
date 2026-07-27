@@ -25,8 +25,8 @@
 ### Task 1: Shared pseudo-safe agentic refinement
 
 **Files:**
-- Modify: `workspaces/alignment_prototype/drivers/agentic.py`
-- Modify: `workspaces/alignment_prototype/agentic/live_runners.py`
+- Modify: `alignment/drivers/agentic.py`
+- Modify: `alignment/agentic/live_runners.py`
 - Test: `tests/alignment_prototype/test_agentic.py`
 
 **Interfaces:**
@@ -40,7 +40,7 @@
 Add tests that distinguish independent agreement, correlated agreement, and one genuinely high-precision probe:
 
 ```python
-from workspaces.alignment_prototype.drivers.agentic import pseudo_acceptance
+from alignment.drivers.agentic import pseudo_acceptance
 
 
 def test_pseudo_acceptance_requires_independence_or_high_precision():
@@ -176,8 +176,8 @@ Expected: all tests pass, including the new G2 and shared-refinement cases.
 - [ ] **Step 8: Commit Task 1**
 
 ```bash
-git add workspaces/alignment_prototype/drivers/agentic.py \
-  workspaces/alignment_prototype/agentic/live_runners.py \
+git add alignment/drivers/agentic.py \
+  alignment/agentic/live_runners.py \
   tests/alignment_prototype/test_agentic.py
 git commit -m "feat(agentic): add pseudo-safe unlabeled refinement"
 ```
@@ -187,9 +187,9 @@ git commit -m "feat(agentic): add pseudo-safe unlabeled refinement"
 ### Task 2: Auditable pseudo-GT materializer
 
 **Files:**
-- Create: `workspaces/alignment_prototype/trajectory/pseudo_materialize.py`
-- Create: `workspaces/alignment_prototype/trajectory/tests/test_pseudo_materialize.py`
-- Modify: `workspaces/alignment_prototype/trajectory/pseudo_labels.py`
+- Create: `alignment/trajectory/pseudo_materialize.py`
+- Create: `alignment/trajectory/tests/test_pseudo_materialize.py`
+- Modify: `alignment/trajectory/pseudo_labels.py`
 
 **Interfaces:**
 - Consumes: validated agentic timeline JSON and pulled-set manifest JSON.
@@ -236,7 +236,7 @@ Run:
 
 ```bash
 venvs/audio/bin/python -m pytest \
-  workspaces/alignment_prototype/trajectory/tests/test_pseudo_materialize.py -q
+  alignment/trajectory/tests/test_pseudo_materialize.py -q
 ```
 
 Expected: collection fails because `pseudo_materialize` does not exist.
@@ -292,7 +292,7 @@ Reject `driver_mode != "auto_commit"` as `g0_mode` unless `pseudo_gate_rejection
 Support:
 
 ```bash
-python -m workspaces.alignment_prototype.trajectory.pseudo_materialize \
+python -m alignment.trajectory.pseudo_materialize \
   --timeline PATH --manifest PATH --output PATH
 ```
 
@@ -308,8 +308,8 @@ Run:
 
 ```bash
 venvs/audio/bin/python -m pytest \
-  workspaces/alignment_prototype/trajectory/tests/test_pseudo_labels.py \
-  workspaces/alignment_prototype/trajectory/tests/test_pseudo_materialize.py -q
+  alignment/trajectory/tests/test_pseudo_labels.py \
+  alignment/trajectory/tests/test_pseudo_materialize.py -q
 ```
 
 Expected: all tests pass.
@@ -317,9 +317,9 @@ Expected: all tests pass.
 - [ ] **Step 9: Commit Task 2**
 
 ```bash
-git add workspaces/alignment_prototype/trajectory/pseudo_labels.py \
-  workspaces/alignment_prototype/trajectory/pseudo_materialize.py \
-  workspaces/alignment_prototype/trajectory/tests/test_pseudo_materialize.py
+git add alignment/trajectory/pseudo_labels.py \
+  alignment/trajectory/pseudo_materialize.py \
+  alignment/trajectory/tests/test_pseudo_materialize.py
 git commit -m "feat(trajectory): materialize audited pseudo ground truth"
 ```
 
@@ -328,8 +328,8 @@ git commit -m "feat(trajectory): materialize audited pseudo ground truth"
 ### Task 3: Pseudo-training input and leakage guard
 
 **Files:**
-- Modify: `workspaces/alignment_prototype/trajectory/train.py`
-- Create: `workspaces/alignment_prototype/trajectory/tests/test_train_pseudo.py`
+- Modify: `alignment/trajectory/train.py`
+- Create: `alignment/trajectory/tests/test_train_pseudo.py`
 
 **Interfaces:**
 - Produces: `load_pseudo_train_yaml(path: Path, eval_set: str) -> tuple[str, Path]`.
@@ -357,7 +357,7 @@ Run:
 
 ```bash
 venvs/audio/bin/python -m pytest \
-  workspaces/alignment_prototype/trajectory/tests/test_train_pseudo.py -q
+  alignment/trajectory/tests/test_train_pseudo.py -q
 ```
 
 Expected: import fails because `load_pseudo_train_yaml` does not exist.
@@ -404,7 +404,7 @@ Run:
 
 ```bash
 venvs/audio/bin/python -m pytest \
-  workspaces/alignment_prototype/trajectory/tests/ -q
+  alignment/trajectory/tests/ -q
 ```
 
 Expected: all trajectory tests pass.
@@ -412,8 +412,8 @@ Expected: all trajectory tests pass.
 - [ ] **Step 7: Commit Task 3**
 
 ```bash
-git add workspaces/alignment_prototype/trajectory/train.py \
-  workspaces/alignment_prototype/trajectory/tests/test_train_pseudo.py
+git add alignment/trajectory/train.py \
+  alignment/trajectory/tests/test_train_pseudo.py
 git commit -m "feat(trajectory): train from leakage-guarded pseudo labels"
 ```
 
@@ -422,12 +422,12 @@ git commit -m "feat(trajectory): train from leakage-guarded pseudo labels"
 ### Task 4: E1 orchestration command
 
 **Files:**
-- Create: `workspaces/alignment_prototype/trajectory/e1.py`
-- Create: `workspaces/alignment_prototype/trajectory/tests/test_e1.py`
+- Create: `alignment/trajectory/e1.py`
+- Create: `alignment/trajectory/tests/test_e1.py`
 - Modify: `Makefile`
 
 **Interfaces:**
-- Adds CLI: `python -m workspaces.alignment_prototype.trajectory.e1`.
+- Adds CLI: `python -m alignment.trajectory.e1`.
 - Adds Make target: `make trm-e1`.
 - Inputs: pool set ID, eval set ID, base timeline, synthetic root, output directory.
 - Outputs: agentic timeline, pseudo YAML, subprocess logs, checkpoints, and `e1_result.json`.
@@ -458,7 +458,7 @@ Run:
 
 ```bash
 venvs/audio/bin/python -m pytest \
-  workspaces/alignment_prototype/trajectory/tests/test_e1.py -q
+  alignment/trajectory/tests/test_e1.py -q
 ```
 
 Expected: collection fails because `trajectory.e1` does not exist.
@@ -495,7 +495,7 @@ Invoke `materialize_pseudo_gt` directly. If `accepted == 0`, write `e1_result.js
 
 - [ ] **Step 6: Build and execute reproducible model commands**
 
-Use `sys.executable -m workspaces.alignment_prototype.trajectory.train`. Run a two-epoch pseudo-TRM smoke first. Full mode then runs:
+Use `sys.executable -m alignment.trajectory.train`. Run a two-epoch pseudo-TRM smoke first. Full mode then runs:
 
 1. conv + Viterbi on pseudo-BB10 → BB11;
 2. synthetic-only TRM → BB11 using `--synthetic-root`;
@@ -521,7 +521,7 @@ Make target:
 
 ```make
 trm-e1:
-	venvs/audio/bin/python -m workspaces.alignment_prototype.trajectory.e1 \
+	venvs/audio/bin/python -m alignment.trajectory.e1 \
 		--pool-set $(POOL) --eval-set $(EVAL) \
 		--base-timeline $(TIMELINE) --synthetic-root $(SYNTH)
 ```
@@ -537,7 +537,7 @@ Run:
 ```bash
 venvs/audio/bin/python -m pytest \
   tests/alignment_prototype/test_agentic.py \
-  workspaces/alignment_prototype/trajectory/tests/ -q
+  alignment/trajectory/tests/ -q
 ```
 
 Expected: all focused tests pass.
@@ -546,8 +546,8 @@ Expected: all focused tests pass.
 
 ```bash
 git add Makefile \
-  workspaces/alignment_prototype/trajectory/e1.py \
-  workspaces/alignment_prototype/trajectory/tests/test_e1.py
+  alignment/trajectory/e1.py \
+  alignment/trajectory/tests/test_e1.py
 git commit -m "feat(trajectory): orchestrate the E1 pseudo-label experiment"
 ```
 
@@ -556,8 +556,8 @@ git commit -m "feat(trajectory): orchestrate the E1 pseudo-label experiment"
 ### Task 5: Verify and run E1
 
 **Files:**
-- Modify only after a completed experiment: `workspaces/alignment_prototype/attic/EXPERIMENTS.md`
-- Generated and untracked: `workspaces/alignment_prototype/out/e1/**`
+- Modify only after a completed experiment: `alignment/attic/EXPERIMENTS.md`
+- Generated and untracked: `alignment/out/e1/**`
 
 **Interfaces:**
 - Consumes the completed code from Tasks 1–4 and local pulled/cached assets.
@@ -578,12 +578,12 @@ Expected: guardrails, typecheck, and full tests pass.
 Run:
 
 ```bash
-venvs/audio/bin/python -m workspaces.alignment_prototype.trajectory.e1 \
+venvs/audio/bin/python -m alignment.trajectory.e1 \
   --pool-set w1mgcjt \
   --eval-set 2nvzlh2k \
-  --base-timeline workspaces/alignment_prototype/out/w1mgcjt_predicted_timeline.json \
+  --base-timeline alignment/out/w1mgcjt_predicted_timeline.json \
   --synthetic-root data/synthetic_mixes_v2 \
-  --out-dir workspaces/alignment_prototype/out/e1 \
+  --out-dir alignment/out/e1 \
   --smoke-only
 ```
 
@@ -619,7 +619,7 @@ Expected: `make check` passes; only the intended ledger change is tracked, while
 - [ ] **Step 7: Commit the measured verdict**
 
 ```bash
-git add workspaces/alignment_prototype/attic/EXPERIMENTS.md
+git add alignment/attic/EXPERIMENTS.md
 git commit -m "docs(trm): record E1 pseudo-label verdict"
 ```
 

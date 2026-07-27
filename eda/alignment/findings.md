@@ -367,7 +367,7 @@ the aligner should not rely on it as a universal boundary cue.
 
 Reproduce: [`warp_analysis/`](warp_analysis/) — `extract_warp_table.py`,
 `decompose_bpm.py`, `build_prior.py`. Feeds synthetic-mashup generation
-(`workspaces/alignment_prototype/synthetic_mix/`) via the emitted
+(`alignment/synthetic_mix/`) via the emitted
 [`warp_analysis/warp_prior.json`](warp_analysis/warp_prior.json).
 
 Warp splits into two orthogonal axes, each pinned to a stem channel — **same

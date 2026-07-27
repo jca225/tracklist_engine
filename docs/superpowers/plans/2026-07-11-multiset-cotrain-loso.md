@@ -16,7 +16,7 @@
 - Unit/golden tests MUST NOT depend on pi-storage or GPU — monkeypatch `build_examples`, `train_ensemble`, and store loaders.
 - The existing single-set `train.py --eval [--train-mert]` path must keep working unchanged (additive only).
 - Cross-set eval MUST anchor placement on **scraped tracklist cues** (aligner input), never the held-out set's GT — see Task 3. Anchoring on GT is leakage; `anchor_sigma_s=None` collapses to front-of-mix (floor artifact). Cues are fair.
-- Existing tests live in `workspaces/alignment_prototype/tests/` and `.../external/tests/`. New tests: `workspaces/alignment_prototype/tests/test_cotrain.py`.
+- Existing tests live in `alignment/tests/` and `.../external/tests/`. New tests: `alignment/tests/test_cotrain.py`.
 - GT fixtures: `labeling/fixtures/bb11_ground_truth.yaml`, `labeling/fixtures/bb12_ground_truth.yaml`.
 
 ---
@@ -24,9 +24,9 @@
 ### Task 1: Thread `set_id` through `SpanTarget`
 
 **Files:**
-- Modify: `workspaces/alignment_prototype/records.py` (SpanTarget dataclass)
-- Modify: `workspaces/alignment_prototype/dataset.py` (`track_to_target`, `load_set`)
-- Test: `workspaces/alignment_prototype/tests/test_cotrain.py` (create)
+- Modify: `alignment/records.py` (SpanTarget dataclass)
+- Modify: `alignment/dataset.py` (`track_to_target`, `load_set`)
+- Test: `alignment/tests/test_cotrain.py` (create)
 
 **Interfaces:**
 - Produces: `SpanTarget.set_id: str` (default `""`, additive/non-breaking). `dataset.track_to_target(t, set_id: str = "")` populates it; `load_set` passes `gt.set_id`.
@@ -34,9 +34,9 @@
 - [ ] **Step 1: Write the failing test**
 
 ```python
-# workspaces/alignment_prototype/tests/test_cotrain.py
+# alignment/tests/test_cotrain.py
 from pathlib import Path
-from workspaces.alignment_prototype.dataset import load_set
+from alignment.dataset import load_set
 from core.result import Ok
 
 _REPO = Path(__file__).resolve().parents[3]
@@ -55,7 +55,7 @@ def test_load_set_stamps_set_id_on_every_target():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/tests/test_cotrain.py -v`
+Run: `venvs/audio/bin/python -m pytest alignment/tests/test_cotrain.py -v`
 Expected: FAIL — `SpanTarget` has no `set_id` (AttributeError) or the values are empty.
 
 - [ ] **Step 3: Add the field and populate it**
@@ -86,18 +86,18 @@ Then in `load_set`, where targets are built from the parsed `gt`, pass `gt.set_i
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/tests/test_cotrain.py -v`
+Run: `venvs/audio/bin/python -m pytest alignment/tests/test_cotrain.py -v`
 Expected: PASS.
 
 Also confirm no regression in the loader-dependent suite:
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/tests/ -q`
+Run: `venvs/audio/bin/python -m pytest alignment/tests/ -q`
 Expected: all pass.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/records.py workspaces/alignment_prototype/dataset.py \
-        workspaces/alignment_prototype/tests/test_cotrain.py
+git add alignment/records.py alignment/dataset.py \
+        alignment/tests/test_cotrain.py
 git commit -m "feat(records): SpanTarget.set_id, stamped by load_set"
 ```
 
@@ -106,8 +106,8 @@ git commit -m "feat(records): SpanTarget.set_id, stamped by load_set"
 ### Task 2: `cotrain.py` — multi-set head training
 
 **Files:**
-- Create: `workspaces/alignment_prototype/cotrain.py`
-- Test: `workspaces/alignment_prototype/tests/test_cotrain.py` (append)
+- Create: `alignment/cotrain.py`
+- Test: `alignment/tests/test_cotrain.py` (append)
 
 **Interfaces:**
 - Consumes: `build_examples`, `train_ensemble`, `TrainConfig` (all in `mert_model.py`); `MertSeries` (from `mert_store`).
@@ -119,8 +119,8 @@ git commit -m "feat(records): SpanTarget.set_id, stamped by load_set"
 
 ```python
 # append to test_cotrain.py
-import workspaces.alignment_prototype.cotrain as ct
-from workspaces.alignment_prototype.cotrain import SetStores, cotrain
+import alignment.cotrain as ct
+from alignment.cotrain import SetStores, cotrain
 
 
 def test_cotrain_concatenates_examples_across_sets(monkeypatch):
@@ -147,13 +147,13 @@ def test_cotrain_concatenates_examples_across_sets(monkeypatch):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/tests/test_cotrain.py::test_cotrain_concatenates_examples_across_sets -v`
+Run: `venvs/audio/bin/python -m pytest alignment/tests/test_cotrain.py::test_cotrain_concatenates_examples_across_sets -v`
 Expected: FAIL — `cotrain` module does not exist.
 
 - [ ] **Step 3: Implement `cotrain.py`**
 
 ```python
-# workspaces/alignment_prototype/cotrain.py
+# alignment/cotrain.py
 """Multi-set co-training: concatenate per-set MERT examples, train one head.
 
 The head trains on set-agnostic materialized examples (`build_examples`), so
@@ -163,12 +163,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from workspaces.alignment_prototype.mert_model import (
+from alignment.mert_model import (
     TrainConfig,
     build_examples,
     train_ensemble,
 )
-from workspaces.alignment_prototype.records import SpanTarget
+from alignment.records import SpanTarget
 
 
 @dataclass(frozen=True)
@@ -195,13 +195,13 @@ def cotrain(train_sets, *, cfg: TrainConfig | None = None, device: str = "cpu", 
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/tests/test_cotrain.py -v`
+Run: `venvs/audio/bin/python -m pytest alignment/tests/test_cotrain.py -v`
 Expected: PASS (all cotrain tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/cotrain.py workspaces/alignment_prototype/tests/test_cotrain.py
+git add alignment/cotrain.py alignment/tests/test_cotrain.py
 git commit -m "feat(cotrain): SetStores + cotrain — concat per-set examples, one head"
 ```
 
@@ -210,9 +210,9 @@ git commit -m "feat(cotrain): SetStores + cotrain — concat per-set examples, o
 ### Task 3: LOSO driver + `train.py --loso`
 
 **Files:**
-- Modify: `workspaces/alignment_prototype/cotrain.py` (add `run_loso`)
-- Modify: `workspaces/alignment_prototype/train.py` (CLI `--loso`)
-- Test: `workspaces/alignment_prototype/tests/test_cotrain.py` (append)
+- Modify: `alignment/cotrain.py` (add `run_loso`)
+- Modify: `alignment/train.py` (CLI `--loso`)
+- Test: `alignment/tests/test_cotrain.py` (append)
 
 **Interfaces:**
 - Consumes: `cotrain`, `SetStores`, `load_set` (dataset), `load_bb12_mert` (mert_store), `slot_candidates_from_targets` (dataset), `MertLearnedAligner` + `median_start_by_label` (slot_priors) + `median_duration_by_slot` (mert_model), `evaluate` (eval).
@@ -231,7 +231,7 @@ report — an honest floor, never GT leakage.
 ```python
 # append to test_cotrain.py
 def test_run_loso_holds_each_set_out(monkeypatch):
-    import workspaces.alignment_prototype.cotrain as ctmod
+    import alignment.cotrain as ctmod
 
     # two fake sets; capture which set is held out on each cotrain call
     held_train_ids = []
@@ -268,7 +268,7 @@ def test_run_loso_holds_each_set_out(monkeypatch):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/tests/test_cotrain.py::test_run_loso_holds_each_set_out -v`
+Run: `venvs/audio/bin/python -m pytest alignment/tests/test_cotrain.py::test_run_loso_holds_each_set_out -v`
 Expected: FAIL — `run_loso` / `_load_set_stores` do not exist.
 
 - [ ] **Step 3: Implement `_load_set_stores` + `run_loso` in `cotrain.py`**
@@ -282,10 +282,10 @@ def _load_set_stores(set_id_or_yaml):
     """Load a set's (targets, mix, refs, slot_pools) into SetStores. Accepts a
     yaml Path; resolves set_id from the parsed GT. SSHes pi for MERT (cached)."""
     from core.result import Err, Ok
-    from workspaces.alignment_prototype.dataset import (
+    from alignment.dataset import (
         load_set, slot_candidates_from_targets,
     )
-    from workspaces.alignment_prototype.mert_store import load_bb12_mert
+    from alignment.mert_store import load_bb12_mert
 
     match load_set(Path(set_id_or_yaml)):
         case Err(msg):
@@ -305,7 +305,7 @@ def _cue_anchor(set_id):
     """{slot_label: cue_seconds} from scraped tracklist cues (aligner INPUT, not
     GT). Returns {} if unavailable."""
     try:
-        from workspaces.alignment_prototype.infer import fetch_slot_rows
+        from alignment.infer import fetch_slot_rows
         rows = fetch_slot_rows(set_id)
         out = {}
         for r in rows:
@@ -318,8 +318,8 @@ def _cue_anchor(set_id):
 
 
 def run_loso(set_yamls, *, cfg=None, device="cpu", anchor_from_cues=True):
-    from workspaces.alignment_prototype.eval import evaluate
-    from workspaces.alignment_prototype.mert_model import (
+    from alignment.eval import evaluate
+    from alignment.mert_model import (
         MertLearnedAligner, median_duration_by_slot,
     )
 
@@ -355,7 +355,7 @@ at the top and drop the local imports.)
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/tests/test_cotrain.py -v`
+Run: `venvs/audio/bin/python -m pytest alignment/tests/test_cotrain.py -v`
 Expected: PASS (all cotrain tests).
 
 - [ ] **Step 5: Wire `train.py --loso`**
@@ -373,8 +373,8 @@ Near the top of `main` (after parsing), before the single-set `load_set` path:
 
 ```python
     if args.loso:
-        from workspaces.alignment_prototype.cotrain import run_loso
-        from workspaces.alignment_prototype.mert_model import TrainConfig
+        from alignment.cotrain import run_loso
+        from alignment.mert_model import TrainConfig
         fixtures = _REPO / "labeling/fixtures"
         yamls = {s: fixtures / f"{s}_ground_truth.yaml" for s in args.sets.split(",")}
         rep = run_loso(yamls, cfg=TrainConfig(epochs=40, search_margin_s=90.0),
@@ -391,7 +391,7 @@ Near the top of `main` (after parsing), before the single-set `load_set` path:
 Run:
 
 ```bash
-venvs/audio/bin/python -m workspaces.alignment_prototype.train --loso --sets bb11,bb12
+venvs/audio/bin/python -m alignment.train --loso --sets bb11,bb12
 ```
 
 Expected: two blocks — held-out bb11 and held-out bb12 — each printing set_start median / `<Xs` / identity from `evaluate`, with the anchor source noted. This is the first honest cross-set generalization number. Record the printed numbers in the commit body. If MERT stores are missing and pi is unreachable, report BLOCKED with the error (do not fake numbers).
@@ -399,8 +399,8 @@ Expected: two blocks — held-out bb11 and held-out bb12 — each printing set_s
 - [ ] **Step 7: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/cotrain.py workspaces/alignment_prototype/train.py \
-        workspaces/alignment_prototype/tests/test_cotrain.py
+git add alignment/cotrain.py alignment/train.py \
+        alignment/tests/test_cotrain.py
 git commit -m "feat(cotrain): run_loso + train.py --loso — first cross-set generalization number
 
 <paste the held-out bb11 / bb12 numbers here>"

@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from workspaces.alignment_prototype.path_decode import _gt_pieces, _pieces, _ref_at
+from alignment.path_decode import _gt_pieces, _pieces, _ref_at
 
 _REPO = Path(__file__).resolve().parents[1]
 _GT_YAMLS = sorted((_REPO / "labeling" / "fixtures").glob("*_ground_truth.yaml"))

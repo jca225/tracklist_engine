@@ -36,7 +36,7 @@ Existing partial antidotes (to generalize, not replace):
 - `docs/alignment_status.md` — SSOT for **numbers**. Excellent stamp convention:
   dated + commit SHA, "this doc owns every headline number; others cite, do not
   restate; if stale, re-run — do not hand-edit."
-- `workspaces/alignment_prototype/attic/EXPERIMENTS.md` — SSOT for **dead ends**.
+- `alignment/attic/EXPERIMENTS.md` — SSOT for **dead ends**.
 - `docs/alignment_recharacterization.md` — the interpretive **frame** (3 axes:
   identity / placement / structure).
 

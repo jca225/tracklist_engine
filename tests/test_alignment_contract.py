@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from workspaces.alignment_prototype.harness import (
+from alignment.harness import (
     AlignmentResult,
     CandidatePool,
     MixContext,
@@ -16,7 +16,7 @@ from workspaces.alignment_prototype.harness import (
     RefContext,
     RefSegment,
 )
-from workspaces.alignment_prototype.records import SlotCandidate
+from alignment.records import SlotCandidate
 
 
 def test_valid_result_constructs():

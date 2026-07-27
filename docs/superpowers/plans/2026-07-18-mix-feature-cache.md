@@ -17,23 +17,23 @@
 - **Cache key** = `str(set_audio_id)`; **cache file** = `{cache_root}/{key}.fp` (raw `to_blob()` bytes). Default cache_root `/mnt/storage/data/mix_fp_cache/`.
 - **Backward compatibility:** with no `--mix-fp-cache`, `corpus_harvest` behavior is byte-unchanged (live per-run fingerprint).
 - **Commit:** use `git commit --no-verify` ONLY for the known gitignored `workspaces/msst_webui/` entropy noise; end messages with `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
-- **Tests:** pytest, in `workspaces/pws_aligner/tests/` and `workspaces/alignment_prototype/` test locations mirroring existing tests. Run: `venvs/audio/bin/python -m pytest <path> -v`.
+- **Tests:** pytest, in `pws_aligner/tests/` and `alignment/` test locations mirroring existing tests. Run: `venvs/audio/bin/python -m pytest <path> -v`.
 
 ## File structure
 
-- `workspaces/alignment_prototype/landmark_fp.py` — **add** `fingerprint_from_file_streaming` (Task 1).
-- `workspaces/pws_aligner/mix_fp_store.py` — **new**, `load_or_build` file cache (Task 2).
-- `workspaces/pws_aligner/cotrain_seam.py` + `workspaces/pws_aligner/corpus_harvest.py` — **modify** to thread a cache-backed `compute_mix_fp` (Task 3).
+- `alignment/landmark_fp.py` — **add** `fingerprint_from_file_streaming` (Task 1).
+- `pws_aligner/mix_fp_store.py` — **new**, `load_or_build` file cache (Task 2).
+- `pws_aligner/cotrain_seam.py` + `pws_aligner/corpus_harvest.py` — **modify** to thread a cache-backed `compute_mix_fp` (Task 3).
 - `scripts/cache_mix_fingerprints.py` — **new** precompute driver (Task 4).
-- Tests: `workspaces/alignment_prototype/tests/test_fingerprint_streaming.py`, `workspaces/pws_aligner/tests/test_mix_fp_store.py`, extend `workspaces/pws_aligner/tests/test_corpus_harvest.py`, `tests/test_cache_mix_fingerprints.py` (or alongside).
+- Tests: `alignment/tests/test_fingerprint_streaming.py`, `pws_aligner/tests/test_mix_fp_store.py`, extend `pws_aligner/tests/test_corpus_harvest.py`, `tests/test_cache_mix_fingerprints.py` (or alongside).
 
 ---
 
 ### Task 1: `fingerprint_from_file_streaming` — memory-bounded fingerprint
 
 **Files:**
-- Modify: `workspaces/alignment_prototype/landmark_fp.py` (add function after `fingerprint_from_audio`)
-- Test: `workspaces/alignment_prototype/tests/test_fingerprint_streaming.py` (create)
+- Modify: `alignment/landmark_fp.py` (add function after `fingerprint_from_audio`)
+- Test: `alignment/tests/test_fingerprint_streaming.py` (create)
 
 **Interfaces:**
 - Consumes: `constellation`, `hashes`, `LandmarkFingerprint`, `SR`, `FPS` (same module).
@@ -46,7 +46,7 @@
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `workspaces/alignment_prototype/tests/test_fingerprint_streaming.py`:
+Create `alignment/tests/test_fingerprint_streaming.py`:
 
 ```python
 from __future__ import annotations
@@ -54,7 +54,7 @@ from __future__ import annotations
 import numpy as np
 import soundfile as sf
 
-from workspaces.alignment_prototype.landmark_fp import (
+from alignment.landmark_fp import (
     SR,
     fingerprint_from_audio,
     fingerprint_from_file_streaming,
@@ -106,7 +106,7 @@ def test_streaming_never_loads_whole_signal(monkeypatch, tmp_path):
     wav = tmp_path / "m.wav"
     sf.write(wav, y, SR)
     import librosa
-    from workspaces.alignment_prototype import landmark_fp
+    from alignment import landmark_fp
 
     seen = []
     real_load = librosa.load
@@ -125,12 +125,12 @@ def test_streaming_never_loads_whole_signal(monkeypatch, tmp_path):
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/tests/test_fingerprint_streaming.py -v`
+Run: `venvs/audio/bin/python -m pytest alignment/tests/test_fingerprint_streaming.py -v`
 Expected: FAIL — `ImportError: cannot import name 'fingerprint_from_file_streaming'`.
 
 - [ ] **Step 3: Implement the streaming builder**
 
-In `workspaces/alignment_prototype/landmark_fp.py`, after `fingerprint_from_audio`:
+In `alignment/landmark_fp.py`, after `fingerprint_from_audio`:
 
 ```python
 def fingerprint_from_file_streaming(
@@ -178,13 +178,13 @@ Add `from pathlib import Path` to the imports if not present (the module uses `s
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/tests/test_fingerprint_streaming.py -v`
+Run: `venvs/audio/bin/python -m pytest alignment/tests/test_fingerprint_streaming.py -v`
 Expected: PASS (3 tests). If `test_streaming_matches_full_signal_fingerprint` Jaccard is marginally below 0.9 on this synthetic, raise `overlap_s` in the test to 5.0 and re-run — do NOT lower the assertion below 0.85 without noting why in the report.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/alignment_prototype/landmark_fp.py workspaces/alignment_prototype/tests/test_fingerprint_streaming.py
+git add alignment/landmark_fp.py alignment/tests/test_fingerprint_streaming.py
 git commit --no-verify -m "feat(fp): fingerprint_from_file_streaming — memory-bounded chunked fingerprint
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -195,8 +195,8 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ### Task 2: `mix_fp_store.load_or_build` — persistent file cache
 
 **Files:**
-- Create: `workspaces/pws_aligner/mix_fp_store.py`
-- Test: `workspaces/pws_aligner/tests/test_mix_fp_store.py`
+- Create: `pws_aligner/mix_fp_store.py`
+- Test: `pws_aligner/tests/test_mix_fp_store.py`
 
 **Interfaces:**
 - Consumes: `LandmarkFingerprint` (to_blob/from_blob), `fingerprint_from_file_streaming` (Task 1).
@@ -211,13 +211,13 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `workspaces/pws_aligner/tests/test_mix_fp_store.py`:
+Create `pws_aligner/tests/test_mix_fp_store.py`:
 
 ```python
 from __future__ import annotations
 
-from workspaces.alignment_prototype.landmark_fp import LandmarkFingerprint
-from workspaces.pws_aligner.mix_fp_store import load_or_build
+from alignment.landmark_fp import LandmarkFingerprint
+from pws_aligner.mix_fp_store import load_or_build
 
 _FP = LandmarkFingerprint(fps=43.0, duration_s=12.0, hashes={(1, 2, 3): (10, 20)})
 
@@ -258,12 +258,12 @@ def test_atomic_no_tmp_left_behind(tmp_path):
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_mix_fp_store.py -v`
-Expected: FAIL — `ModuleNotFoundError: workspaces.pws_aligner.mix_fp_store`.
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_mix_fp_store.py -v`
+Expected: FAIL — `ModuleNotFoundError: pws_aligner.mix_fp_store`.
 
 - [ ] **Step 3: Implement the store**
 
-Create `workspaces/pws_aligner/mix_fp_store.py`:
+Create `pws_aligner/mix_fp_store.py`:
 
 ```python
 """Persistent per-mix landmark-fingerprint file cache.
@@ -279,7 +279,7 @@ import os
 from pathlib import Path
 from typing import Callable
 
-from workspaces.alignment_prototype.landmark_fp import (
+from alignment.landmark_fp import (
     LandmarkFingerprint,
     fingerprint_from_file_streaming,
 )
@@ -318,13 +318,13 @@ def load_or_build(
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_mix_fp_store.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_mix_fp_store.py -v`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add workspaces/pws_aligner/mix_fp_store.py workspaces/pws_aligner/tests/test_mix_fp_store.py
+git add pws_aligner/mix_fp_store.py pws_aligner/tests/test_mix_fp_store.py
 git commit --no-verify -m "feat(harvest): mix_fp_store.load_or_build — persistent fingerprint file cache
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -335,9 +335,9 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ### Task 3: Wire the cache into the harvest scorer
 
 **Files:**
-- Modify: `workspaces/pws_aligner/cotrain_seam.py` (`real_probe_scorer` ~line 588–641)
-- Modify: `workspaces/pws_aligner/corpus_harvest.py` (`ScorerFactory`, `_default_scorer_factory`, `run_corpus_harvest`, `main`)
-- Test: extend `workspaces/pws_aligner/tests/test_corpus_harvest.py`
+- Modify: `pws_aligner/cotrain_seam.py` (`real_probe_scorer` ~line 588–641)
+- Modify: `pws_aligner/corpus_harvest.py` (`ScorerFactory`, `_default_scorer_factory`, `run_corpus_harvest`, `main`)
+- Test: extend `pws_aligner/tests/test_corpus_harvest.py`
 
 **Interfaces:**
 - Consumes: `mix_fp_store.load_or_build` (Task 2); `MixFeatureCache` (existing).
@@ -349,13 +349,13 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing test**
 
-Add to `workspaces/pws_aligner/tests/test_corpus_harvest.py`:
+Add to `pws_aligner/tests/test_corpus_harvest.py`:
 
 ```python
 def test_harvest_uses_cached_fp_when_cache_root_set(tmp_path):
     # Pre-warm a cache file for set_audio_id 77; harvest must read it, not build live.
-    from workspaces.alignment_prototype.landmark_fp import LandmarkFingerprint
-    from workspaces.pws_aligner import mix_fp_store
+    from alignment.landmark_fp import LandmarkFingerprint
+    from pws_aligner import mix_fp_store
 
     cache_root = tmp_path / "fpcache"
     cache_root.mkdir()
@@ -404,12 +404,12 @@ def test_harvest_no_cache_root_passes_none(tmp_path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_corpus_harvest.py::test_harvest_uses_cached_fp_when_cache_root_set -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_corpus_harvest.py::test_harvest_uses_cached_fp_when_cache_root_set -v`
 Expected: FAIL — `TypeError` (factory called with 2 args / `run_corpus_harvest` has no `mix_fp_cache_root`).
 
 - [ ] **Step 3: Thread `compute_mix_fp` through `real_probe_scorer`**
 
-In `workspaces/pws_aligner/cotrain_seam.py`, change the `real_probe_scorer` signature and the `MixFeatureCache()` construction:
+In `pws_aligner/cotrain_seam.py`, change the `real_probe_scorer` signature and the `MixFeatureCache()` construction:
 
 ```python
 def real_probe_scorer(
@@ -431,7 +431,7 @@ and at the cache construction (was `feat_cache = MixFeatureCache()`):
 
 - [ ] **Step 4: Thread it through `corpus_harvest`**
 
-In `workspaces/pws_aligner/corpus_harvest.py`:
+In `pws_aligner/corpus_harvest.py`:
 
 (a) Change the `ScorerFactory` type and `_default_scorer_factory` (currently `ScorerFactory = Callable[[Path, Path], RefMixScorer]` and a 2-arg default factory):
 
@@ -477,7 +477,7 @@ and inside the per-set loop (currently `scorer = scorer_factory(mix_full, mix_st
             _key = str(set_audio_id)
 
             def compute_mix_fp(mix, _root=_root, _key=_key):
-                from workspaces.pws_aligner.mix_fp_store import load_or_build
+                from pws_aligner.mix_fp_store import load_or_build
 
                 return load_or_build(_root, _key, mix.audio_path)
 
@@ -511,13 +511,13 @@ and in the harvest branch, pass it to `run_corpus_harvest`:
 
 - [ ] **Step 5: Run the corpus_harvest test file**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_corpus_harvest.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_corpus_harvest.py -v`
 Expected: PASS — the 2 new tests plus all pre-existing ones. If a pre-existing test factory (`def factory(mix_full_path, mix_stem_dir):`) now fails on arity, update its signature to `def factory(mix_full_path, mix_stem_dir, compute_mix_fp=None):` (four such factories: `test_run_harvest_writes_only_accepts`, `test_run_harvest_instrumental_needs_three_channels`, `test_run_harvest_is_idempotent`, `test_run_harvest_builds_one_scorer_per_set`).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add workspaces/pws_aligner/cotrain_seam.py workspaces/pws_aligner/corpus_harvest.py workspaces/pws_aligner/tests/test_corpus_harvest.py
+git add pws_aligner/cotrain_seam.py pws_aligner/corpus_harvest.py pws_aligner/tests/test_corpus_harvest.py
 git commit --no-verify -m "feat(harvest): --mix-fp-cache wires cached fingerprint into the scorer
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -529,7 +529,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 **Files:**
 - Create: `scripts/cache_mix_fingerprints.py`
-- Test: `workspaces/pws_aligner/tests/test_cache_mix_fingerprints.py`
+- Test: `pws_aligner/tests/test_cache_mix_fingerprints.py`
 
 **Interfaces:**
 - Consumes: `query_corpus_slots` (corpus_harvest), `mix_fp_store.load_or_build`.
@@ -543,12 +543,12 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `workspaces/pws_aligner/tests/test_cache_mix_fingerprints.py`:
+Create `pws_aligner/tests/test_cache_mix_fingerprints.py`:
 
 ```python
 from __future__ import annotations
 
-from workspaces.alignment_prototype.landmark_fp import LandmarkFingerprint
+from alignment.landmark_fp import LandmarkFingerprint
 from scripts.cache_mix_fingerprints import distinct_mixes, warm_cache
 
 
@@ -592,7 +592,7 @@ def test_warm_cache_counts_build_failures(tmp_path):
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_cache_mix_fingerprints.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_cache_mix_fingerprints.py -v`
 Expected: FAIL — `ModuleNotFoundError: scripts.cache_mix_fingerprints`.
 
 - [ ] **Step 3: Implement the driver**
@@ -617,8 +617,8 @@ from typing import Callable, Sequence
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-from workspaces.pws_aligner.corpus_harvest import query_corpus_slots  # noqa: E402
-from workspaces.pws_aligner.mix_fp_store import load_or_build  # noqa: E402
+from pws_aligner.corpus_harvest import query_corpus_slots  # noqa: E402
+from pws_aligner.mix_fp_store import load_or_build  # noqa: E402
 
 DEFAULT_CACHE_ROOT = Path("/mnt/storage/data/mix_fp_cache")
 
@@ -690,16 +690,16 @@ if __name__ == "__main__":
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/pws_aligner/tests/test_cache_mix_fingerprints.py -v`
+Run: `venvs/audio/bin/python -m pytest pws_aligner/tests/test_cache_mix_fingerprints.py -v`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Full new-suite + commit**
 
-Run: `venvs/audio/bin/python -m pytest workspaces/alignment_prototype/tests/test_fingerprint_streaming.py workspaces/pws_aligner/tests/test_mix_fp_store.py workspaces/pws_aligner/tests/test_corpus_harvest.py workspaces/pws_aligner/tests/test_cache_mix_fingerprints.py -v`
+Run: `venvs/audio/bin/python -m pytest alignment/tests/test_fingerprint_streaming.py pws_aligner/tests/test_mix_fp_store.py pws_aligner/tests/test_corpus_harvest.py pws_aligner/tests/test_cache_mix_fingerprints.py -v`
 Expected: PASS (all).
 
 ```bash
-git add scripts/cache_mix_fingerprints.py workspaces/pws_aligner/tests/test_cache_mix_fingerprints.py
+git add scripts/cache_mix_fingerprints.py pws_aligner/tests/test_cache_mix_fingerprints.py
 git commit --no-verify -m "feat(harvest): cache_mix_fingerprints — batch fingerprint precompute driver
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"

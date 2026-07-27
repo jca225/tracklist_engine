@@ -13,11 +13,11 @@ is doable at n=2 now. This is that work queue.
 1. `docs/alignment_recharacterization.md` — the three-axes frame (identity / placement /
    **structure**). Read progress as three curves. Structure is the frontier.
 2. `docs/alignment_status.md` — the SSOT for every headline number. Never hand-type a metric.
-3. `workspaces/alignment_prototype/CLAUDE.md` — "Phase policy (sensor phase is CLOSED)",
+3. `alignment/CLAUDE.md` — "Phase policy (sensor phase is CLOSED)",
    "Design decisions", "Not wired yet / scoped". **Do NOT add new probes/channels/priors.**
-4. `workspaces/alignment_prototype/evals/ORACLE_LADDER_FINDINGS.md` — what this session
+4. `alignment/evals/ORACLE_LADDER_FINDINGS.md` — what this session
    established (below).
-5. `workspaces/alignment_prototype/attic/EXPERIMENTS.md` + `looptrace/NOTES.md` — dead ends.
+5. `alignment/attic/EXPERIMENTS.md` + `looptrace/NOTES.md` — dead ends.
    **Read the verdict before re-testing anything.**
 
 ## 1. What this session established (start here, don't redo it)
@@ -84,7 +84,7 @@ This is the parameter-free gate that decides whether BB10-labeling-then-fitting 
 (REFUTED twice). This task differs: a *ranker over enumerated fiber instances* using the three
 *named* features jointly — the module's own "Not wired yet" lever, un-tried.
 
-**Home:** `workspaces/alignment_prototype/evals/` (next to `oracle_ladder.py`, reuse its
+**Home:** `alignment/evals/` (next to `oracle_ladder.py`, reuse its
 GT-row/fiber plumbing). **Arbiter:** per-set separability + transfer tables (measurement); this
 feeds the selector go/no-go, it does not need to move `make scorecard` yet.
 
@@ -98,7 +98,7 @@ task, done for free.
 The transferable lever for placement (which the MERT head memorizes per-set) is the learned
 decoder, not a hand-tuned prior. It is **n=2-validatable now**.
 
-- Code: `workspaces/alignment_prototype/trajectory/` (data/features/model/targets/decode/train).
+- Code: `alignment/trajectory/` (data/features/model/targets/decode/train).
   Current: conv-over-cross-similarity actor, **held-out BB11 ~0.42–0.49**. `model.py` documents
   that v2 (fixed diagonal-mean channels) REGRESSED — don't repeat it; the `stretch_slopes`
   channels are the untested knob (slope-aware pooling for tempo-stretched/oddratio spans).
@@ -127,7 +127,7 @@ Lower priority than A/B — it deepens understanding, it doesn't build toward th
   **Axis rule:** take `claimed_stem` from the matched GT row, never the timeline span.
 - **n=2 → LOSO both directions, report per-set, never a cross-set CI.** Ruthless on overfitting.
 - **Sensor phase frozen:** no new probes/channels/priors. New probe ideas → a NOTE, not code.
-- **Off-limits (other session's live surface):** `workspaces/pws_aligner/**`, the
+- **Off-limits (other session's live surface):** `pws_aligner/**`, the
   `acquisition-data-engine` / `cotrain-*` branches. Routing and identity fixes are their turf —
   you only *measure* their slices (already done).
 - The single most north-star-consequential thing that unblocks the *next* tier is **labeling BB10**

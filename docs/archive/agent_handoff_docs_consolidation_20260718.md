@@ -47,7 +47,7 @@ instruction resolves to a real, current file.
 ~60 of the 149 index lines are alignment-core verdicts (TRM, PWS-dead, fibers,
 placement, identity, cotrain/LOSO, sensor-freeze, etc.). Their content now belongs
 in the state-of-record doc + the attic ledger
-(`workspaces/alignment_prototype/attic/EXPERIMENTS.md`). Fold content in, then cut
+(`alignment/attic/EXPERIMENTS.md`). Fold content in, then cut
 the index entries to a few pointers (state-of-record, status SSOT, closed-experiments
 ledger). **Knowledge is not deleted — it stops being loaded every session.** Target:
 alignment index footprint ~60 → ~6 lines.
@@ -82,7 +82,7 @@ Canonical sources confirmed this session (cite, don't re-derive):
 - Alignment status SSOT: `docs/alignment_status.md` (stamped 2026-07-11, `eb21a5e`).
   Identity 83–84% (transfers 100% cross-set, LOSO n=2); placement + which-instance
   decode = co-equal walls (37%/38% of loss); 85% GT-seconds lost.
-- TRM bake-off: `workspaces/alignment_prototype/docs/trm_decoder_bakeoff.md` — verdict
+- TRM bake-off: `alignment/docs/trm_decoder_bakeoff.md` — verdict
   box 2026-07-18: architecture works, sim2real is the wall; lever = synthetic REALISM
   or the real pseudo-label flywheel, NOT more GPU.
 - PWS label model REFUTED twice (attic ledger, 2026-07-14): categorical offset-bin DS

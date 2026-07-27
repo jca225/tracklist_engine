@@ -13,7 +13,7 @@ from core.provenance import (
     SubjectRef,
     connect,
 )
-from workspaces.alignment_prototype.belief_timeline import (
+from alignment.belief_timeline import (
     axis_belief_bundle,
     beliefs_from_bundle,
     decode_and_register_timeline,

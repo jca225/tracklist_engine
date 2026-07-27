@@ -1,0 +1,372 @@
+"""Download canonical original audio and compute shared cue points.
+
+For each canonical track_id, ensure a `track_audio` row exists with
+`stem='regular'`. If the DJ scraped an acapella or instrumental
+variant (cue-detr performs poorly on those — trained on EDM with full
+spectral content), we additionally fetch the full-song version so cue
+points can be computed on dense audio. Those cue points are stored in
+`canonical_track_cue_points` keyed by track_id and shared across all
+variants of the same song.
+
+Run:
+    venvs/audio/bin/python -m analysis.cues.canonical_cues \\
+        --set-id 2nvzlh2k
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import sqlite3
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+from analysis.cues import grid_repair
+from core.db import connect
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+# Audio storage root. Default points at the canonical pi-storage path; override
+# via TRACKLIST_AUDIO_ROOT for local-scratch runs (see CLAUDE.md → Storage).
+_AUDIO_ROOT = Path(os.environ.get("TRACKLIST_AUDIO_ROOT", "/mnt/storage"))
+_ORIGINALS_DIR = _AUDIO_ROOT / "objects" / "canonical_originals"
+DEFAULT_DB_PATH = _REPO_ROOT / "data/db/music_database.db"
+
+# Cue-detr sensitivity: the default (0.9) is tuned for strong EDM drops.
+# Lowering it surfaces section-boundary cues in pop and other genres.
+# Calibrated empirically on BB11 refs (see conversation log).
+CUE_DETR_SENSITIVITY: float = 0.5
+
+
+@dataclass(frozen=True)
+class OriginalSpec:
+    """A canonical track for which we need an 'original' variant."""
+
+    track_id: str
+    artist: str
+    title: str
+
+
+# Hand-curated for BB11's 5 GT refs. When expanding to other sets, this
+# table should be derived automatically from tracklist metadata (strip
+# version-tag suffixes like '(Acappella)' / '(Instrumental)').
+BB11_ORIGINALS: tuple[OriginalSpec, ...] = (
+    OriginalSpec("g8gtgdx", "Bastille", "Good Grief Don Diablo Remix"),
+    OriginalSpec("26b4gz6f", "The Fray", "How to Save a Life"),
+    OriginalSpec("4gy6y1p", "Carly Rae Jepsen", "Call Me Maybe"),
+    OriginalSpec("2m5wh0t5", "Gnash", "I Hate U I Love U Olivia O'Brien"),
+    # ntm7wqx (Antoine Delvig & Paul Vinx - Blondies) already has an original variant.
+)
+
+
+# ---- yt-dlp search + download --------------------------------------------
+
+
+def _resolve_search(query: str) -> tuple[str, str] | None:
+    """Returns (youtube_id, canonical_url) for the top match of `query`."""
+    try:
+        proc = subprocess.run(
+            [
+                "venvs/audio/bin/yt-dlp",
+                "--print",
+                "%(id)s\t%(webpage_url)s",
+                "--no-download",
+                f"ytsearch1:{query}",
+            ],
+            cwd=_REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        print(f"  ! search failed for {query!r}: {e}", file=sys.stderr)
+        return None
+    line = proc.stdout.strip().splitlines()[0] if proc.stdout.strip() else ""
+    if "\t" not in line:
+        return None
+    vid, url = line.split("\t", 1)
+    return vid, url
+
+
+def _download(query: str, out_path: Path) -> bool:
+    """Download top ytsearch match of `query` to `out_path` as m4a.
+    Returns True on success."""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    tmpl = str(out_path.with_suffix(".%(ext)s"))
+    try:
+        subprocess.run(
+            [
+                "venvs/audio/bin/yt-dlp",
+                "-f",
+                "bestaudio[ext=m4a]/bestaudio",
+                "-x",
+                "--audio-format",
+                "m4a",
+                "-o",
+                tmpl,
+                "--no-warnings",
+                "--quiet",
+                f"ytsearch1:{query}",
+            ],
+            cwd=_REPO_ROOT,
+            check=True,
+            timeout=300,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        print(f"  ! download failed: {e}", file=sys.stderr)
+        return False
+    return out_path.exists()
+
+
+# ---- DB helpers -----------------------------------------------------------
+
+
+def _find_original_audio(
+    conn: sqlite3.Connection, track_id: str
+) -> tuple[int, str] | None:
+    r = conn.execute(
+        "SELECT track_audio_id, path FROM track_audio WHERE recording_id=? AND stem='regular'",
+        (track_id,),
+    ).fetchone()
+    return (int(r["track_audio_id"]), str(r["path"])) if r else None
+
+
+def _insert_original_audio(
+    conn: sqlite3.Connection,
+    *,
+    track_id: str,
+    path: str,
+    yt_id: str,
+    yt_url: str,
+) -> int:
+    """Insert a new track_audio row with stem='regular'. Returns
+    the track_audio_id. If the row already exists (same platform/player_id)
+    returns the existing id."""
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO track_audio
+            (recording_id, track_id, platform, source_url, player_id, path, codec,
+             is_reference, stem, variant)
+        VALUES (?, ?, 'youtube', ?, ?, ?, 'm4a', 0, 'regular', 'regular')
+        """,
+        (track_id, track_id, yt_url, yt_id, path),
+    )
+    conn.commit()
+    r = conn.execute(
+        "SELECT track_audio_id FROM track_audio WHERE track_id=? AND platform='youtube' AND player_id=?",
+        (track_id, yt_id),
+    ).fetchone()
+    return int(r["track_audio_id"])
+
+
+def _has_canonical_cues(conn: sqlite3.Connection, track_id: str) -> bool:
+    r = conn.execute(
+        "SELECT 1 FROM canonical_track_cue_points WHERE track_id=?", (track_id,)
+    ).fetchone()
+    return r is not None
+
+
+def _downbeat_grid(conn: sqlite3.Connection, track_audio_id: int) -> list[float]:
+    """Repaired downbeat grid for a track_audio row, [] if not analyzed yet."""
+    r = conn.execute(
+        "SELECT downbeat_times_json FROM track_analysis WHERE track_audio_id=?",
+        (track_audio_id,),
+    ).fetchone()
+    if r is None or not r["downbeat_times_json"]:
+        return []
+    raw = json.loads(r["downbeat_times_json"])
+    return list(grid_repair.repair_beat_grid(raw).times)
+
+
+def _write_canonical_cues(
+    conn: sqlite3.Connection,
+    *,
+    track_id: str,
+    cues: list[float],
+    source_track_audio_id: int,
+    source_stem: str,
+    sensitivity: float,
+) -> None:
+    # DJ-usable cues are downbeat events; cue-detr's peak-picking never snaps
+    # (34% of raw cues sit off-grid). Snap when the source audio has a beat
+    # grid; pass through untouched when it doesn't.
+    grid = _downbeat_grid(conn, source_track_audio_id)
+    if grid:
+        cues = list(grid_repair.snap_to_grid(cues, grid))
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO canonical_track_cue_points
+            (track_id, cue_points_json, source_track_audio_id,
+             source_stem, cue_detr_sensitivity)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (track_id, json.dumps(cues), source_track_audio_id, source_stem, sensitivity),
+    )
+    conn.commit()
+
+
+# ---- cue-detr -------------------------------------------------------------
+
+
+def _run_cue_detr(audio_path: Path, sensitivity: float) -> list[float]:
+    """Run cue-detr on a single audio file, return sorted cue points in seconds.
+
+    Works by copying the file into a scratch directory since cue-detr's
+    public API is directory-based (predict_cue_points_for_dir).
+    """
+    # Lazy import — cue-detr loads heavy models on first call.
+    sys.path.insert(0, str(_REPO_ROOT / "cue-detr"))
+    from cue_points import predict_cue_points_for_dir  # type: ignore[import-not-found]
+
+    scratch = _REPO_ROOT / "data/cache/cue_detr_scratch"
+    if scratch.exists():
+        shutil.rmtree(scratch)
+    scratch.mkdir(parents=True, exist_ok=True)
+    link = scratch / audio_path.name
+    try:
+        link.symlink_to(audio_path)
+    except OSError:
+        shutil.copy(audio_path, link)
+
+    try:
+        result = predict_cue_points_for_dir(
+            tracks_dir=str(scratch),
+            sensitivity=sensitivity,
+            print_points=False,
+            write_output=False,
+        )
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+    for fname, points in result.items():
+        if fname == link.name:
+            return sorted(float(x) for x in points)
+    return []
+
+
+# ---- main flow ------------------------------------------------------------
+
+
+def process(spec: OriginalSpec, conn: sqlite3.Connection) -> None:
+    print(f"\n[{spec.track_id}] {spec.artist} — {spec.title}")
+
+    existing = _find_original_audio(conn, spec.track_id)
+    if existing is None:
+        query = f"{spec.artist} {spec.title}"
+        resolved = _resolve_search(query)
+        if resolved is None:
+            print("  SKIP: yt search returned nothing")
+            return
+        yt_id, yt_url = resolved
+        out_path = _ORIGINALS_DIR / f"{spec.track_id}__youtube__{yt_id}.m4a"
+        if not out_path.exists():
+            print(f"  downloading {yt_url} → {out_path.name}")
+            ok = _download(query, out_path)
+            if not ok:
+                print("  SKIP: download failed")
+                return
+        ta_id = _insert_original_audio(
+            conn,
+            track_id=spec.track_id,
+            path=str(out_path),
+            yt_id=yt_id,
+            yt_url=yt_url,
+        )
+        print(f"  inserted track_audio_id={ta_id}")
+    else:
+        ta_id, audio_path_str = existing
+        print(f"  original already present: track_audio_id={ta_id}")
+
+    if _has_canonical_cues(conn, spec.track_id):
+        print("  canonical cues already present — skipping cue-detr")
+        return
+
+    ta_path = conn.execute(
+        "SELECT path FROM track_audio WHERE track_audio_id=?",
+        (ta_id,),
+    ).fetchone()["path"]
+    print(f"  running cue-detr (sens={CUE_DETR_SENSITIVITY}) on {Path(ta_path).name}")
+    cues = _run_cue_detr(Path(ta_path), CUE_DETR_SENSITIVITY)
+    print(
+        f"  → {len(cues)} cues: {[round(c, 1) for c in cues[:8]]}{'…' if len(cues) > 8 else ''}"
+    )
+    _write_canonical_cues(
+        conn,
+        track_id=spec.track_id,
+        cues=cues,
+        source_track_audio_id=ta_id,
+        source_stem="regular",
+        sensitivity=CUE_DETR_SENSITIVITY,
+    )
+    print("  stored canonical_track_cue_points")
+
+
+def backfill_existing_originals(conn: sqlite3.Connection) -> None:
+    """Populate canonical_track_cue_points for tracks that already have an
+    'original' variant by running cue-detr at CUE_DETR_SENSITIVITY on the
+    audio. Rows whose stored sensitivity already matches are skipped; rows
+    with a different stored sensitivity (e.g. legacy 0.9 backfills reusing
+    track_analysis.cue_points_json) are re-run so the table is uniform."""
+    rows = conn.execute(
+        """
+        SELECT ta.track_id, ta.track_audio_id, ta.path,
+               cp.cue_detr_sensitivity AS stored_sensitivity
+        FROM track_audio ta
+        LEFT JOIN canonical_track_cue_points cp ON cp.track_id = ta.track_id
+        WHERE ta.stem = 'regular'
+          AND (cp.track_id IS NULL OR cp.cue_detr_sensitivity != ?)
+        """,
+        (CUE_DETR_SENSITIVITY,),
+    ).fetchall()
+    for r in rows:
+        audio_path = Path(r["path"])
+        if not audio_path.exists():
+            print(f"  SKIP {r['track_id']}: audio missing at {audio_path}")
+            continue
+        prior = r["stored_sensitivity"]
+        action = "re-running" if prior is not None else "running"
+        print(
+            f"  {action} cue-detr (sens={CUE_DETR_SENSITIVITY}) on {r['track_id']}"
+            + (f" [was sens={prior}]" if prior is not None else "")
+        )
+        cues = _run_cue_detr(audio_path, CUE_DETR_SENSITIVITY)
+        _write_canonical_cues(
+            conn,
+            track_id=r["track_id"],
+            cues=cues,
+            source_track_audio_id=r["track_audio_id"],
+            source_stem="regular",
+            sensitivity=CUE_DETR_SENSITIVITY,
+        )
+        print(f"  → {len(cues)} cues stored")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--set-id", required=True)
+    parser.add_argument("--db", type=Path, default=DEFAULT_DB_PATH)
+    args = parser.parse_args()
+
+    if args.set_id != "2nvzlh2k":
+        print(
+            "Only BB11 is pre-curated right now. Add an OriginalSpec "
+            "table for other sets or automate variant detection."
+        )
+        return 1
+
+    with connect(args.db) as conn:
+        print("Backfilling canonical cues from existing 'original' variants…")
+        backfill_existing_originals(conn)
+        print("\nProcessing BB11 tracks needing an original variant…")
+        for spec in BB11_ORIGINALS:
+            process(spec, conn)
+    print("\ndone")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

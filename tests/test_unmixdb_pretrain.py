@@ -8,16 +8,16 @@ import pytest
 
 pytest.importorskip("torch")  # checkpoint/mert_model import torch; CI excludes it
 
-from workspaces.alignment_prototype.external.checkpoint import (
+from alignment.external.checkpoint import (
     PretrainMeta,
     load_head,
     save_head,
 )
-from workspaces.alignment_prototype.external.unmixdb import (
+from alignment.external.unmixdb import (
     labels_to_targets,
     parse_labels,
 )
-from workspaces.alignment_prototype.mert_model import MertAlignHead, TrainConfig
+from alignment.mert_model import MertAlignHead, TrainConfig
 
 _FIXTURE = (
     Path(__file__).resolve().parents[1] / "labeling/fixtures/unmixdb_sample.labels.txt"
@@ -36,7 +36,7 @@ def test_parse_labels_three_tracks() -> None:
 
 
 def test_labels_to_targets_recording_ids() -> None:
-    from workspaces.alignment_prototype.external.unmixdb import UnmixMix
+    from alignment.external.unmixdb import UnmixMix
 
     spans = parse_labels(_FIXTURE)
     mix = UnmixMix(

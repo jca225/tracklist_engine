@@ -18,12 +18,12 @@ this session (2026-06-25); see [alignment_research_plan.md](archive/alignment_re
 
 ```bash
 # benchmark on UnmixDB (placement + warp + identity)
-venvs/audio/bin/python -m workspaces.alignment_prototype.external.eval_bench \
+venvs/audio/bin/python -m alignment.external.eval_bench \
     --unmixdb-root ~/data/unmixdb-v1.1 --max-mixes 150 \
     --methods fused,grid_mf,nmf --n-distractors 10 --identity
 
 # fused inference on a REAL pulled set (no pi/MERT) -> timeline JSON + abstention
-venvs/audio/bin/python -m workspaces.alignment_prototype.infer_fused --set-id 1fsnxchk
+venvs/audio/bin/python -m alignment.infer_fused --set-id 1fsnxchk
 
 # gain + EQ per track: recover_banded(V, dicts, anchors) / recover_editable(...)
 # anchors = {track_idx: (set_start_s, stretch)} from fp_offset (landmark_fp).

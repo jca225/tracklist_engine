@@ -116,7 +116,7 @@ Phases; each has an exit criterion. Owner key: **[K]** kernel/infra lane
   identify + abstain → ACRCloud → human confirm) rides the same kernel with a
   retrieval front-end. Exit: N unseen sets aligned + review-loop-audited with
   zero operator flags.
-- **P6 — promotion.** `workspaces/alignment_prototype` → top-level
+- **P6 — promotion.** `alignment` → top-level
   `alignment/` (the chain module the root CLAUDE.md always reserved for it);
   attic stays behind; this doc becomes `alignment/CLAUDE.md`'s architecture
   section. Gate: P1–P4 exits held for two consecutive new sets.

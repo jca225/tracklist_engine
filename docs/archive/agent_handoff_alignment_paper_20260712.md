@@ -16,7 +16,7 @@ that's supporting evidence, not the headline (SOTA claim not defensible; see rec
 
 ## Built + merged this session (on `main`)
 
-- **Ablation harness** — `workspaces/alignment_prototype/experiments/` (matrix/store/
+- **Ablation harness** — `alignment/experiments/` (matrix/store/
   run/report/cli) + `score_spans()` refactor + `make align-ablate`. One scorer,
   span-bootstrap CIs, per-cell sqlite store. Built subagent-driven, reviewed, merged.
   Later hardened: resilient to per-cell failure (`4232ae7`).

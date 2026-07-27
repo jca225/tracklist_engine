@@ -15,7 +15,7 @@ from core.provenance.laws import LawVerdict, check_laws
 
 torch = pytest.importorskip("torch")
 
-from workspaces.alignment_prototype.register_identity_head import (  # noqa: E402
+from alignment.register_identity_head import (  # noqa: E402
     register_mert_identity_head,
 )
 
@@ -32,11 +32,11 @@ def world(tmp_path):
 @pytest.fixture
 def training_files(tmp_path):
     """A tiny real head checkpoint + stand-in GT/MERT training-input files."""
-    from workspaces.alignment_prototype.external.checkpoint import (
+    from alignment.external.checkpoint import (
         PretrainMeta,
         save_head,
     )
-    from workspaces.alignment_prototype.mert_model import MertAlignHead, TrainConfig
+    from alignment.mert_model import MertAlignHead, TrainConfig
 
     ckpt = tmp_path / "head.pt"
     save_head(

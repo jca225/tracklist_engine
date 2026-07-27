@@ -12,7 +12,7 @@ MAE set_start +0.056s). Root cause is structural — we trained on the wrong dis
 | MAE set_start | 33.251s | 33.307s | +0.056s |
 
 Artifacts pulled locally:
-- `workspaces/alignment_prototype/.cache/pretrain_synthetic_mert.pt` (100-mix MERT)
+- `alignment/.cache/pretrain_synthetic_mert.pt` (100-mix MERT)
 - `data/synthetic_mixes/synth_pretrain.log`
 
 Vast instance `42571634` (`synth-pretrain`) destroyed.
@@ -67,7 +67,7 @@ Use these as acceptance gates for generated YAML (per window):
 
 ## Architecture (new modules)
 
-Extend `workspaces/alignment_prototype/synthetic_mix/`:
+Extend `alignment/synthetic_mix/`:
 
 ```
 timeline.py      # Slot timeline: ordered sections with start/end, overlap policy
@@ -132,7 +132,7 @@ dependency before re-running ablation.
 **Goal:** 20 windows that pass `validate.py` stats + 5-ear human pass.
 
 ```bash
-venvs/audio/bin/python -m workspaces.alignment_prototype.synthetic_mix.generate_v2 \
+venvs/audio/bin/python -m alignment.synthetic_mix.generate_v2 \
   --n 20 --window-min 5 --curriculum bb12-lite --out data/synthetic_mixes_v2
 ```
 
@@ -169,9 +169,9 @@ harness compares pretrain→finetune vs finetune-only on the same decoder.
 **Goal:** pretrain consumes `ref_segments`; smoke on 20 windows locally.
 
 ```bash
-venvs/audio/bin/python -m workspaces.alignment_prototype.external.pretrain \
+venvs/audio/bin/python -m alignment.external.pretrain \
   --synthetic-root data/synthetic_mixes_v2 --features mert --max-mixes 20 \
-  --out workspaces/alignment_prototype/.cache/pretrain_synthetic_v2_smoke.pt
+  --out alignment/.cache/pretrain_synthetic_v2_smoke.pt
 ```
 
 **Gate:** `examples=` count scales with segments (not just span rows).
@@ -230,5 +230,5 @@ Start with `bb12-lite`; only scale after ear-check passes.
 
 - `docs/archive/synthetic_mix_plan.md` — Phase 1 plan + kill criteria
 - `labeling/fixtures/bb12_ground_truth.yaml` — topology oracle
-- `workspaces/alignment_prototype/synthetic_mix/` — Phase 1 implementation
+- `alignment/synthetic_mix/` — Phase 1 implementation
 - `.cursor/skills/vast-jobs/SKILL.md` — Vast orchestration

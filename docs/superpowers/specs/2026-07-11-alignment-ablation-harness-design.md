@@ -49,7 +49,7 @@ metric path; the others are demoted to debug.
 
 ## 3. Architecture
 
-New package: **`workspaces/alignment_prototype/experiments/`**.
+New package: **`alignment/experiments/`**.
 
 Data flow:
 
@@ -198,7 +198,7 @@ overhaul treats the harness as authoritative and corrects the prose.
 
 ## 8. Definition of done
 
-- [ ] `make ablate` (or `python -m workspaces.alignment_prototype.experiments.run
+- [ ] `make ablate` (or `python -m alignment.experiments.run
       --matrix paper`) produces the full paper table set from cached cells.
 - [ ] Every headline number traces to `score.py`; guard test enforces it.
 - [ ] Ablation rows carry paired span-level bootstrap CIs; no set-level CI exists

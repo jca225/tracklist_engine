@@ -1,6 +1,6 @@
 # Auditory-neuroscience probes for the agentic aligner
 
-**Status:** BUILT 2026-07-02 (`workspaces/alignment_prototype/agentic/auditory.py`
+**Status:** BUILT 2026-07-02 (`alignment/agentic/auditory.py`
 + belief-layer gates). DSP verified on synthetic signals (8 tests);
 **precisions PROVISIONAL — unvalidated until a GT eval pass.**
 

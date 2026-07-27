@@ -35,7 +35,7 @@ the warp map anyway, so the scored GT is one straight segment per clip.
 
 ## Phase 0 probe — decode-representability decomposition
 
-`workspaces/alignment_prototype/acappella_warp_decode_probe.py`. The decode's
+`alignment/acappella_warp_decode_probe.py`. The decode's
 representable class (`path_decode.decode_path`) is **one global slope `s` + free
 per-segment offset** (loops/section-jumps cost `lam`, allowed). A span is
 representable iff its GT segments share one slope AND that slope is in the grid.
@@ -101,10 +101,10 @@ small n, but re-confirm on the next labeled set.
 ## Repro
 ```
 # decomposition (use the CANONICAL hand-label, not BB12 align.als):
-venvs/audio/bin/python -m workspaces.alignment_prototype.acappella_warp_decode_probe \
+venvs/audio/bin/python -m alignment.acappella_warp_decode_probe \
   --als "$HOME/aligning/_backups/.../big bootie 12 labeling_fast.als" \
   --set-dir "$HOME/aligning/1fsnxchk__*" --stems acappella,regular,instrumental
 # grid A/B (revert path_decode between runs; baseline narrow grid is the winner):
-venvs/audio/bin/python -m workspaces.alignment_prototype.path_decode \
+venvs/audio/bin/python -m alignment.path_decode \
   --eval --stems acappella --feature hubert --fibers
 ```
