@@ -1,6 +1,6 @@
 # Alignment — State of Record (current best + settled decisions)
 
-> **As of 2026-07-27 @ `0ebf0829`.** **RT1 honest baseline on `main`** (PR
+> **As of 2026-07-27 @ `1bdf6eef`.** **RT1 honest baseline on `main`** (PR
 > #105); [alignment_status.md](alignment_status.md) is the numbers SSOT. **Phase 1B
 > DEFERS** on blind LF (#23); tight GT-span re-measure remains open. **Crush Phase B
 > foundation SHIPPED** (#27 / PR #80); **derivation lever C0–C3 code SHIPPED** (PR
