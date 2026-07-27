@@ -414,3 +414,26 @@ decoder, and default-off scorer seam. **Do not re-test** source-family-only
 structure calibration on these two sets. The next structure calibrator needs
 candidate-level evidence (path score shape, agreement, fiber ambiguity, or a
 learned trajectory posterior), not merely `ref_decode_status`.
+
+## Hand-crafted candidate-level structure calibration (2026-07-26) — NO-GO
+
+**Question:** does adding path geometry, decoded coverage, independent placement
+agreement, and fiber ambiguity to the structure calibrator produce a
+transferable held-set posterior?
+
+**Method:** a regularized, class-balanced logistic probe over candidate-level
+features, trained on one complete-GT set and evaluated frozen on the other, then
+reversed. Structure success uses the standing strict-trajectory gate. Features
+include path confidence, segment count/coverage, proposal spread, and fiber
+membership/ambiguity.
+
+**Verdict:** no transferable discrimination. Held-set ranking is effectively
+chance in both directions; one direction produces no accepted candidates at the
+standing posterior floor. The other direction's accepted subset does not meet a
+high-precision cutover bar. This is not repaired by lowering the floor.
+
+**Do not re-test** hand-crafted combinations of these same timeline summary
+fields on BB11/BB12. They summarize the decoder's output but do not expose its
+uncertainty about competing trajectories. The next structure belief must come
+from the learned trajectory decoder's candidate distribution/logits (or a new
+independent sensor), calibrated cross-set.

@@ -1,6 +1,6 @@
 # Alignment — State of Record (current best + settled decisions)
 
-> **As of 2026-07-26 @ `325bcc3`.** **RT1 honest baseline landed on `main`** (PR
+> **As of 2026-07-26 @ `b73a4c1`.** **RT1 honest baseline landed on `main`** (PR
 > #105): the de-poisoned + form-centric scorecard, regenerated bridge id_maps, and
 > human-verified GT completion are now canonical, and [alignment_status.md](alignment_status.md)
 > carries the honest numbers (identity 51%/61% per-span vs the old poisoned 82/84).
@@ -122,8 +122,9 @@ wrong-variant label cannot slip (decision #17, Phase A).
   not transfer to real BB audio; the live data path is real, high-precision
   pseudo-labels, with synthetic realism as the alternative lever (decision #14).
   Phase 2 structure beliefs and null-preserving timeline round-trip are built
-  off-path, but source-family-only calibration abstains rather than clearing the
-  structure gate; candidate-level evidence is the live calibration front.
+  off-path. Source-family and hand-crafted candidate-summary calibration both
+  fail the cross-set structure gate; the learned trajectory decoder's own
+  candidate distribution is now the live calibration front.
 
 **Cross-cutting machinery (settled, in use):**
 - **Scorer** scores over played + gain-audible intervals only (de-inflated; no
@@ -143,6 +144,16 @@ and co-training seam). Harness: `harness/`. Agentic loop: `agentic/`.
 ## 2. Settled decisions (append-only; status = SETTLED | SUPERSEDED-BY-#N)
 
 > Append new entries at the top. Never rewrite history — supersede it.
+
+**#25 — Hand-crafted timeline summaries do not calibrate structure cross-set.**
+`2026-07-26` · SETTLED. Adding path geometry, decoded coverage, independent
+placement agreement, and fiber ambiguity to the development-only LOSO
+calibrator does not yield transferable structure discrimination. Do not lower
+the posterior floor or keep recombining the same summaries. The next honest
+structure posterior must expose competition inside the learned trajectory
+decoder (candidate logits/distribution) or come from a new independent sensor.
+Dead-end detail is in the EXPERIMENTS ledger; headline numbers remain in
+[alignment_status.md](alignment_status.md).
 
 **#24 — Phase 2 belief→timeline contract is viable; source-family-only structure
 calibration defers.** `2026-07-26` · SETTLED (contract) / OPEN (candidate-level
@@ -431,17 +442,18 @@ from scorers. Dead ends live in the EXPERIMENTS ledger.
 
 ## 3. Open fronts (what's live / undecided right now)
 
-- **Phase 2 candidate-level structure calibration — immediate architecture
-  front (decision #24).** The off-path calibrated-belief decoder, provenance
-  round-trip, and default-off scorer seam are built. The first LOSO calibrator
-  proves the plumbing and yields a placement shadow lane, but source family
-  (`ref_decode_status`) is too weak to commit structure. Next: construct a
-  candidate-level structure posterior from path-score shape, independent-probe
-  agreement, and fiber ambiguity (or the learned trajectory model's posterior);
-  train on one BB set and freeze on the other; require nonzero honest structure
-  coverage before re-running the per-axis gate. **Do not lower the posterior
-  floor to manufacture coverage.** Dual-read/hot-path planning remains blocked
-  until this shadow gate clears on both sets.
+- **Phase 2 learned trajectory posterior — immediate architecture front
+  (decision #25).** The off-path belief decoder, provenance round-trip, and
+  default-off scorer seam are built; the leakage-safe LOSO producer proves the
+  calibration plumbing. Source-family and hand-crafted candidate-summary
+  structure calibration are now closed. The trajectory decoder now retains a
+  versioned `uncalibrated_trajectory_logits` evidence artifact off-path
+  (`decode_with_evidence`) without changing the hard-path decode API. Next:
+  LOSO-calibrate that distribution on one BB set and freeze on the other, then
+  emit STRUCTURE beliefs through the existing seam. Require nonzero honest
+  structure coverage before re-running the per-axis gate. **Do not lower the
+  posterior floor to manufacture coverage.** Dual-read/hot-path planning
+  remains blocked until this shadow gate clears on both sets.
 - **Phase 1B tight-window re-measure — the immediate open 1B front (decision #23).**
   The e2e gate ran on broad parent-slot windows and the blind LF underperformed the
   claim; the coarse window is the prime suspect (query-query cosine ≈ 0.99, vs the
