@@ -54,26 +54,30 @@ class PlacementStructureBeliefs:
     structure: AxisBelief
 
 
-def _placement_candidate(result: AlignmentResult) -> str:
-    if result.offset_s is None:
-        raise ValueError("committed alignment result has no placement coordinate")
+def _placement_candidate(set_start_s: float) -> str:
     return json.dumps(
         {
-            "recording_id": result.recording_id,
-            "ref_start_s": result.offset_s,
+            "schema": "placement-v1",
+            "set_start_s": set_start_s,
         },
         sort_keys=True,
         separators=(",", ":"),
     )
 
 
-def _structure_candidate(result: AlignmentResult) -> str:
+def _structure_candidate(
+    result: AlignmentResult, *, mix_time_origin_s: float
+) -> str:
+    if not result.segments:
+        raise ValueError("structure belief requires an explicit segment sequence")
     return json.dumps(
         {
+            "schema": "structure-v1",
+            "mix_time_frame": "set_absolute_s",
             "recording_id": result.recording_id,
             "segments": [
                 {
-                    "mix_start_s": segment.mix_start_s,
+                    "mix_start_s": mix_time_origin_s + segment.mix_start_s,
                     "ref_start_s": segment.ref_start_s,
                     "ref_end_s": segment.ref_end_s,
                 }
@@ -93,14 +97,19 @@ def record_placement_structure_beliefs(
     result: AlignmentResult,
     placement_rule: DecisionRule,
     structure_rule: DecisionRule,
+    set_start_s: float | None = None,
+    segment_mix_time_origin_s: float | None = None,
     placement_probability: CalibratedAxisProbability | None = None,
     structure_probability: CalibratedAxisProbability | None = None,
 ) -> PlacementStructureBeliefs:
     """Persist separate placement and structure belief chains for one probe.
 
-    A committed result requires explicit calibrated probabilities for both
-    axes.  An abstention requires neither and produces empty posteriors, hence
-    ``UNRESOLVED`` beliefs with ``chosen=None``.
+    A committed placement requires an explicit mix-time ``set_start_s`` plus a
+    calibrated placement probability.  ``AlignmentResult.offset_s`` is
+    reference-time for path decode and MUST NOT be reused as mix-time placement.
+    Structure commits only when an explicit segment sequence, its mix-time
+    origin, and a calibrated structure probability are present. Missing axes
+    persist as unresolved.
     """
     if placement_rule.axis is not Axis.PLACEMENT:
         raise ValueError("placement_rule must target Axis.PLACEMENT")
@@ -112,22 +121,48 @@ def record_placement_structure_beliefs(
         Axis.STRUCTURE: structure_probability,
     }
     if result.abstain:
-        if any(value is not None for value in calibrated.values()):
+        if set_start_s is not None or segment_mix_time_origin_s is not None or any(
+            value is not None for value in calibrated.values()
+        ):
             raise ValueError("an abstaining result cannot carry axis probabilities")
     else:
-        if placement_probability is None or structure_probability is None:
+        if set_start_s is None or placement_probability is None:
             raise ValueError(
-                "committed results require calibrated placement and structure "
-                "probabilities"
+                "committed results require explicit set_start_s and calibrated "
+                "placement probability"
             )
         if placement_probability.axis is not Axis.PLACEMENT:
             raise ValueError("placement_probability must target Axis.PLACEMENT")
-        if structure_probability.axis is not Axis.STRUCTURE:
+        if (
+            structure_probability is not None
+            and structure_probability.axis is not Axis.STRUCTURE
+        ):
             raise ValueError("structure_probability must target Axis.STRUCTURE")
+        if structure_probability is not None and not result.segments:
+            raise ValueError(
+                "structure_probability requires an explicit segment sequence"
+            )
+        if structure_probability is not None and segment_mix_time_origin_s is None:
+            raise ValueError(
+                "structure_probability requires segment_mix_time_origin_s"
+            )
 
     candidate_ids = {
-        Axis.PLACEMENT: None if result.abstain else _placement_candidate(result),
-        Axis.STRUCTURE: None if result.abstain else _structure_candidate(result),
+        Axis.PLACEMENT: (
+            None
+            if result.abstain or set_start_s is None
+            else _placement_candidate(set_start_s)
+        ),
+        Axis.STRUCTURE: (
+            None
+            if result.abstain
+            or structure_probability is None
+            or segment_mix_time_origin_s is None
+            or not result.segments
+            else _structure_candidate(
+                result, mix_time_origin_s=segment_mix_time_origin_s
+            )
+        ),
     }
     rules = {
         Axis.PLACEMENT: placement_rule,
