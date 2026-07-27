@@ -1,37 +1,22 @@
 # Alignment — State of Record (current best + settled decisions)
 
-> **As of 2026-07-26 @ `c62e9f5`.** **RT1 honest baseline landed on `main`** (PR
+> **As of 2026-07-27 @ `6ec532c`.** **RT1 honest baseline landed on `main`** (PR
 > #105): the de-poisoned + form-centric scorecard, regenerated bridge id_maps, and
 > human-verified GT completion are now canonical, and [alignment_status.md](alignment_status.md)
 > carries the honest numbers (identity 51%/61% per-span vs the old poisoned 82/84).
 > This is the honest-as-possible read of the **July `_lt` predictions**; the fully
 > honest number still needs a **re-inference on clean canonical** (decision #18's
 > remaining step). **Phase 1B identity capability = BUILT + MEASURED e2e, DEFERS on
-> BB12 (does not ship)** (landed on `main` via PR #109; extraction driver + gate
-> added this session). The full override pipeline is now real and validated on GPU
-> data: multi-candidate pool (Part A) + blind stem-MERT chamfer LF (Part B) + a
-> gated `infer.py` override seam (Part C, **default-off / fail-closed**) + the L3
-> stem-MERT extraction runner (`extract_stem_mert.py`) + a GT-anchored acceptance
-> gate (`eval_1b_identity.py`). **First honest, GT-anchored acappella number: the
-> blind LF does NOT beat the tokenizer claim on BB12** (net-negative — it fixes some
-> wrong claims but breaks more correct ones; numbers in [alignment_status.md](alignment_status.md)).
-> Per the spec's own rule, **blind-LF-alone defers** — awaits the co-train combiner
-> (decision #23). **Load-bearing caveat:** the query windows were the broad
-> parent-slot spans (acappella `w`-rows inherit the parent cue), which depress the
-> LF (query-query cosine ≈ 0.99); a **tight GT-span re-measure** is the open front
-> before concluding the approach's ceiling. Side finding: the tokenizer's acappella
-> *claim* is itself wrong on a majority of slots (claim-vs-GT baseline).
->
-> Prior settled context: decisions #20/#21/#22 — open-set identity works against a
-> real candidate pool, the combiner **transfers** cross-set (BB11↔BB12 LOSO) but ≈
-> borda, and **identity is stem-split** (vocal → chroma useless / MERT-L3;
-> instrumental → chroma top-tier / MERT-L22; MERT's cross-set instability is
-> vocal-specific). #18/#19 — the shipped "identity axis" measures the tokenizer
-> claim, not the aligner (Phase 1B is the fix). **Operation Crush has EXITED**
-> (decision #15) with GT de-poisoned + content-addressed on canonical; completeness
-> Phase A shipped (#17, PR #75), Phases B–E remain. The current best still spans
-> unmerged branches: TRM/flywheel on `trm-ablation-framework`; co-training/grammar/
-> transition artifacts on `cotrain-corpus-harvest` — reconcile before use.
+> BB12 (does not ship)** (PR #109). Blind-LF-alone defers (#23); **tight GT-span
+> re-measure** remains the open 1B front. **Crush completeness Phase B foundation
+> SHIPPED** (decision #27, PR #80): `content_history` ledger + never-drop-on-replace
+> + FLAC-PCM key + tombstones. The coverage lift is **not** that foundation — it is
+> the **derivation lever** (stem-regen never-drop + certificate-gated historical
+> emit; plan `phase-b-derivation-worker-path-plan.md`) still open as C0–C3 + pi gate.
+> Week-2 architecture priority: **E1 real-pseudo TRM flywheel** (unblocks Phase 2
+> structure after #26); reconcile the `e1-flywheel` worktree onto main before
+> treating it as current-best. Co-training/grammar artifacts on
+> `cotrain-corpus-harvest` still need reconcile.
 >
 > **What this doc is.** The single *living* answer to "what is the aligner at its
 > best right now, and what have we settled on — so build ON this, don't
@@ -147,6 +132,23 @@ and co-training seam). Harness: `harness/`. Agentic loop: `agentic/`.
 ## 2. Settled decisions (append-only; status = SETTLED | SUPERSEDED-BY-#N)
 
 > Append new entries at the top. Never rewrite history — supersede it.
+
+**#27 — Crush completeness Phase B foundation SHIPPED; coverage lift = derivation
+lever (still open).** `2026-07-27` · SETTLED (foundation) / OPEN (derivation C0–C3
++ pi acceptance). PR #80 landed `ingest/content_history.py` (B1), never-drop-hash
+on replace (B2 half), FLAC-PCM/mdat payload keys in catalog (B3 part), and
+relink/detach tombstones (B4). That closes the *ledger substrate*. It does **not**
+by itself lift BB12 66%→~80%: payload-equal historical generations are already
+bound by the live payload key (redundant), and payload-different ones lack a
+sound certificate without **derivation lineage** (parent master hash on separated
+rows). Remaining work is the deferred plan
+[phase-b-derivation-worker-path-plan.md](superpowers/plans/2026-07-22-phase-b-derivation-worker-path-plan.md):
+C0 parent_* columns → C1 stem-regen never-drop in `run_separation` → C2
+certificate-gated historical emit → C3 `historical-content` id_source plumbing →
+coordinated pi migrate + BB re-export. **Do not force-deploy**; C1 touches GPU/Mac
+separation hot paths. Supersedes the "Phase B = next build" open-front wording
+and #17's "Next = Phase B". Phases C–E (prov backlog / fuzzy / write-back close)
+remain after the derivation lever.
 
 **#26 — Synthetic-only TRM evidence cannot calibrate STRUCTURE yet.**
 `2026-07-26` · SETTLED. The live `.cache/trajectory/decoder_1fsnxchk.pt`
@@ -317,25 +319,16 @@ candidates are bounded by the claim spine, so the aligner cannot identify a
 recording the spine never claims. Numbers → alignment_status.md after re-inference.
 
 **#17 — Crush completeness Phase A SHIPPED: sound correctness + axis plumbing.**
-`2026-07-22` · SETTLED (Phase A) / OPEN (Phases B–E). First execution of the #16 rule set,
-local-only (no pi/DB writes, no new data), on **PR #75** (`gt-binding-completeness`, 5
-commits, subagent-driven + opus whole-branch review). A1 = ambiguity hard-abstain keyed on
-`(recording_id, stem, variant)` at both `_load_content_catalog` and `from_entries` (an
-ambiguous hash abstains, never last-writer-wins); A2 = `stem`+`variant` plumbed
-catalog→bind→`GroundTruthTrack.claimed_variant`, sourced from the content bind when bound;
-A3 = catalog stem-derivation correctness (`ta.stem='regular'` parent filter, strict
-stem-name map, `kind` master/separated); A4 = catalog scope = true `pull_set_for_alignment`
-parity (`COALESCE(recording_id,track_id)` + dual-key match); fix wave = separated stems
-inherit the parent's `variant` (a real per-axis-soundness bug the whole-branch review
-caught). `tests/labeling/` green, gt_als_gate unchanged. **Next = Phase B** (content-history
-hash ledger + FLAC-PCM key) — the sound completeness lever, **gated on a coordinated pi
-deploy** (pi ~92 behind, issue #73; do not force-deploy). Residual: the catalog still omits
-the pull's `dj_set_track_media_links` UNION, so sided/`tlp` slots stay catalog-invisible
-(safe — they abstain; candidate Phase-A′ or fold into Phase C prov). Numbers →
-alignment_status.md after Phase E re-export.
+`2026-07-22` · SETTLED (Phase A) / SUPERSEDED-IN-PART-BY-#27 (Phase B foundation).
+First execution of the #16 rule set, local-only (no pi/DB writes, no new data), on
+**PR #75** (`gt-binding-completeness`, 5 commits). A1–A4 as recorded; residual catalog
+omits `dj_set_track_media_links` UNION (sided/`tlp` stay invisible → abstain). Phase B
+foundation shipped via #27; remaining completeness = derivation lever + Phases C–E.
+Numbers → alignment_status.md after Phase E re-export.
 
 **#16 — Crush completeness rule set (the final exit): sound multi-channel binding,
-certificate-gated.** `2026-07-22` · SETTLED (rules) / SHIPPING (Phase A done — #17; B–E open). Crush's
+certificate-gated.** `2026-07-22` · SETTLED (rules) / SHIPPING (Phase A #17 + Phase B
+foundation #27 done; derivation lever + C–E open). Crush's
 soundness exit (#15) left ~40% of GT clips abstaining — honest, but recoverable. The
 recoverable set is *identity-preserving churn* (retry / re-separate / retag: same song,
 new bytes) whose old hashes were discarded. Rule set (twice Fable-reviewed): identity
@@ -542,15 +535,17 @@ from scorers. Dead ends live in the EXPERIMENTS ledger.
   (4) longer-context / robust-aggregation MERT for the long-span contamination
   cases. Code in the `bb11_acap_id` / `bb12_acap_id` scratchpads, promotable to
   `evals/`.
-- **Crush completeness Phase B — the immediate next build (decision #17 → #16).**
-  Content-history hash ledger keyed `(recording_id, stem, variant, kind)` + never-drop-hash
-  acquisition hooks + certificate-gated bind-across + FLAC-PCM/mdat payload keys + relink/
-  detach tombstones (plan tasks B1–B4). This is the *sound* completeness lever (recovers the
-  ~40% churn abstains as byte-exact binds, lifts BB12 66%→~80%+ with zero new wrong labels).
-  **GATE: Phase B touches canonical pi**, which is ~92 commits behind with live parallel WIP
-  (issue #73) — a real `make deploy` is a **separately coordinated task; do not force-deploy**
-  (Phase A stayed local to avoid exactly this). Then re-export → GATE write-back → the
-  re-measure below.
+- **Crush derivation lever — the remaining sound completeness lift (decision #27).**
+  Phase B foundation (ledger + never-drop-on-replace + FLAC-PCM + tombstones) is on
+  `main` (PR #80). Open: C0 `parent_*` columns → C1 stem-regen never-drop in
+  `run_separation` → C2 certificate-gated historical catalog emit → C3
+  `historical-content` id_source plumbing → coordinated pi migrate + BB re-export.
+  Spec/plan: [phase-b-derivation-worker-path-plan.md](superpowers/plans/2026-07-22-phase-b-derivation-worker-path-plan.md).
+  **GATE: C1 touches GPU/Mac separation hot paths + pi** — no force-deploy; scratch-DB
+  first. This is the 26-stem re-separation class that actually moves coverage.
+- **Phase 1B identity capability — BUILT + measured e2e, DEFERS (#23); pure-cores
+  open-front wording below is STALE.** Pipeline on `main` (PR #109). Remaining 1B
+  work is the tight-window re-measure + BB11 LOSO, not "wire the cores."
 - **Audio coverage reality (census 2026-07-22).** For the two GT sets, **every GT row is
   backed by present audio**: all 543 BB11+BB12 referenced files are on disk (8 show "missing"
   only via the issue-#74 mojibake path bug — files present under correct UTF-8). Six truly
@@ -575,22 +570,6 @@ from scorers. Dead ends live in the EXPERIMENTS ledger.
   commit (`43d6f0e`, mislabeled a guardrails bump) deleted ~1,590 files; the poison
   branch was deleted from origin after the 6 good commits were cherry-picked into
   #105. See [operation_rolling_thunder_proposed.md](operation_rolling_thunder_proposed.md).
-- **Phase 1B identity capability — pure cores BUILT, not yet wired (branch
-  `provenance-engine-phase1`).** The capability half of decision #19's fix-path-1:
-  replace the shipped **size-1 candidate pool** (which forces the aligner to inherit
-  the tokenizer claim) with a real multi-candidate pool + a **fail-closed** audio-
-  perception override. Done + unit-tested this session: `open_set_identity.py` (blind
-  stem-routed MERT-chamfer identity LF — no tracklist prior, no oracle pitch;
-  conditional top-k + borda + margin gate) and `stem_mert.py` (stem-domain per-layer
-  MERT extraction core). Spec: `docs/engine/phase1b_identity_capability_spec.md`
-  (on branch `provenance-engine-phase1` until it merges).
-  **Remaining (in order):** (A) `candidate_pool.py` (variant-aware {claim} ∪ stem-ref
-  pool); (B) the MERT **data dependency** — a variant-aware L3/L22 stem-MERT extraction
-  runner + a GPU pull (deferred this session; `export_mert_from_pi.py` already takes a
-  layer arg but exports full-mix/full-track, not stems); (C) the `infer.py` gated
-  override seam (touches the live inference path — do LAST). Acceptance gate:
-  identity ≥ the RT1 baseline on **both** sets (do-no-harm), numbers → status.md only
-  after. Grounded in decisions #19/#20/#21/#22.
 - **`labeling/` package reorganization — PARKED by owner (2026-07-22, "do later").** Raised
   after Phase A; assessment: the recurring bug class is SSOT drift (A4 = catalog vs pull
   reimplementing slot→audio resolution), not disorganization broadly. Pilot when resumed =
