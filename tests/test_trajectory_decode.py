@@ -12,6 +12,8 @@ pytest.importorskip("torch")
 import torch  # noqa: E402
 
 from workspaces.alignment_prototype.trajectory.decode import (  # noqa: E402
+    TrajectoryEvidence,
+    decode_with_evidence,
     viterbi_segments,
 )
 from workspaces.alignment_prototype.trajectory.model import diag_mean  # noqa: E402
@@ -58,6 +60,54 @@ class TestViterbiSegments:
         segs = viterbi_segments(g, BIN, lam=4.0)
         assert len(segs) == 1
         assert segs[0][2] == 47.5  # segment ends where NULL takes over
+
+
+class TestTrajectoryEvidence:
+    def test_peaked_and_flat_logits_retain_different_uncertainty(self) -> None:
+        path = list(range(4, 8))
+        peaked = _grid_logits(4, 12, path)
+        flat = torch.zeros(4, 13)
+
+        peaked_segments, peaked_evidence = decode_with_evidence(peaked, BIN)
+        _, flat_evidence = decode_with_evidence(flat, BIN)
+
+        assert peaked_segments
+        assert peaked_evidence.evidence_kind == "uncalibrated_trajectory_logits"
+        assert peaked_evidence.frames[0].normalized_entropy < 0.5
+        assert peaked_evidence.frames[0].top1_top2_margin > 0.5
+        assert flat_evidence.frames[0].normalized_entropy == pytest.approx(1.0)
+        assert flat_evidence.frames[0].top1_top2_margin == pytest.approx(0.0)
+
+    def test_null_dominance_is_explicit(self) -> None:
+        logits = _grid_logits(3, 8, [2, 3, 4])
+        logits[1, -1] = 20.0
+
+        segments, evidence = decode_with_evidence(logits, BIN)
+
+        assert segments
+        assert evidence.frames[1].decoded_ref_bin is None
+        assert evidence.frames[1].null_probability > 0.99
+        assert evidence.frames[1].candidates[0].ref_bin is None
+
+    def test_json_round_trip_is_deterministic(self) -> None:
+        logits = _grid_logits(3, 8, [2, 3, 4])
+        _, evidence = decode_with_evidence(logits, BIN)
+
+        payload = evidence.to_json()
+        restored = TrajectoryEvidence.from_json(payload)
+
+        assert restored == evidence
+        assert restored.to_json() == payload
+
+    def test_rejects_mislabeled_or_future_schema(self) -> None:
+        with pytest.raises(ValueError, match="unsupported"):
+            TrajectoryEvidence.from_json(
+                '{"schema_version":2,"evidence_kind":"uncalibrated_trajectory_logits","frames":[]}'
+            )
+        with pytest.raises(ValueError, match="unexpected"):
+            TrajectoryEvidence.from_json(
+                '{"schema_version":1,"evidence_kind":"structure_probability","frames":[]}'
+            )
 
 
 class TestDiagMean:
