@@ -54,6 +54,8 @@ CREATE TABLE IF NOT EXISTS content_history (
     track_audio_id  INTEGER,                   -- row this generation realized (nullable; replace mints a new id)
     content_sha256  TEXT,                      -- full-file sha256 (== track_audio.sha256)
     payload_sha256  TEXT,                      -- mdat / FLAC decoded-PCM MD5 (tag-invariant)
+    parent_content_sha256 TEXT,                -- sound parent master content hash (derivation cert, C0)
+    parent_payload_sha256 TEXT,                -- optional parent payload hash (derivation cert, C0)
     op              TEXT,                      -- fetch|retry|re-separate|retag|replace|relink|detach|...
     source          TEXT,                      -- replace_track_audio|acquire_variant|manual|...
     generation      INTEGER NOT NULL DEFAULT 0,
@@ -68,6 +70,22 @@ CREATE INDEX IF NOT EXISTS idx_content_history_content_sha ON content_history(co
 CREATE INDEX IF NOT EXISTS idx_content_history_payload_sha ON content_history(payload_sha256);
 """
 
+# Additive columns for DBs whose CREATE ran before C0 (pi auto-pull may ship
+# code before migrate_content_history_parent.sql). Applied after SCHEMA.
+_PARENT_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("parent_content_sha256", "TEXT"),
+    ("parent_payload_sha256", "TEXT"),
+)
+
+
+def _ensure_schema(conn: sqlite3.Connection) -> None:
+    """CREATE IF NOT EXISTS + ALTER missing parent_* columns (C0 self-heal)."""
+    conn.executescript(SCHEMA)
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(content_history)")}
+    for name, typ in _PARENT_COLUMNS:
+        if name not in cols:
+            conn.execute(f"ALTER TABLE content_history ADD COLUMN {name} {typ}")
+
 
 @dataclass(frozen=True)
 class Generation:
@@ -79,6 +97,8 @@ class Generation:
     kind: str
     content_sha256: str | None = None
     payload_sha256: str | None = None
+    parent_content_sha256: str | None = None
+    parent_payload_sha256: str | None = None
     track_audio_id: int | None = None
     version: str | None = None
     op: str | None = None
@@ -120,19 +140,19 @@ def append_generation_on(conn: sqlite3.Connection, g: Generation) -> int:
     err = _validate(g)
     if err is not None:
         raise ValueError(f"{err.kind}: {err.detail}")
-    # Self-heal: ensure the table exists before writing. The pi's auto-pull
-    # timer (issue #73) ships code without running migrations, so a
-    # never-drop-hash hook can land before the backfill migration runs — this
-    # makes the first append create the table rather than crash with "no such
-    # table". The migration then only owns the generation-0 backfill.
-    conn.executescript(SCHEMA)
+    # Self-heal: ensure the table (+ C0 parent_* columns) exists before writing.
+    # The pi's auto-pull timer (issue #73) ships code without running migrations,
+    # so a never-drop-hash hook can land before the backfill / parent migrations
+    # run — this makes the first append create/alter rather than crash.
+    _ensure_schema(conn)
     gen = g.generation if g.generation is not None else _next_generation(conn, g)
     cur = conn.execute(
         """
         INSERT INTO content_history
           (recording_id, version, stem, variant, kind, track_audio_id,
-           content_sha256, payload_sha256, op, source, generation, valid)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           content_sha256, payload_sha256, parent_content_sha256,
+           parent_payload_sha256, op, source, generation, valid)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             g.recording_id,
@@ -143,6 +163,8 @@ def append_generation_on(conn: sqlite3.Connection, g: Generation) -> int:
             g.track_audio_id,
             g.content_sha256,
             g.payload_sha256,
+            g.parent_content_sha256,
+            g.parent_payload_sha256,
             g.op,
             g.source,
             gen,

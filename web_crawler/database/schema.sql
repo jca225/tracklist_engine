@@ -816,6 +816,8 @@ CREATE TABLE IF NOT EXISTS content_history (
     track_audio_id  INTEGER,                   -- row this generation realized (nullable; replace mints a new id)
     content_sha256  TEXT,                      -- full-file sha256 (== track_audio.sha256)
     payload_sha256  TEXT,                      -- mdat / FLAC decoded-PCM MD5 (tag-invariant)
+    parent_content_sha256 TEXT,                -- sound parent master content hash (derivation cert, C0)
+    parent_payload_sha256 TEXT,                -- optional parent payload hash (derivation cert, C0)
     op              TEXT,                      -- fetch|retry|re-separate|retag|replace|relink|detach|...
     source          TEXT,                      -- replace_track_audio|acquire_variant|manual|...
     generation      INTEGER NOT NULL DEFAULT 0,

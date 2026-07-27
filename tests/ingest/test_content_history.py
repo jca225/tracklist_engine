@@ -145,6 +145,97 @@ def test_chain_on_missing_table_returns_empty(tmp_path: Path):
     assert chain(p, "whatever", "regular", "regular", "master") == []
 
 
+def test_parent_hashes_roundtrip(db: Path):
+    """C0 — separated generations carry parent master hashes for derivation cert."""
+    r = append_generation(
+        db,
+        _gen(
+            stem="acappella",
+            kind="separated",
+            content_sha256="stem_old",
+            parent_content_sha256="parent_master_sha",
+            parent_payload_sha256="parent_payload_sha",
+            op="re-separate",
+        ),
+    )
+    assert isinstance(r, Ok)
+    ch = chain(db, "rec_congrats", "acappella", "regular", "separated")
+    assert ch[0]["parent_content_sha256"] == "parent_master_sha"
+    assert ch[0]["parent_payload_sha256"] == "parent_payload_sha"
+
+
+def test_self_heal_adds_parent_columns_to_legacy_table(tmp_path: Path):
+    """Pre-C0 DBs have content_history without parent_*; append must ALTER."""
+    p = tmp_path / "legacy.db"
+    legacy = """
+    CREATE TABLE content_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        recording_id TEXT NOT NULL,
+        version TEXT,
+        stem TEXT NOT NULL,
+        variant TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        track_audio_id INTEGER,
+        content_sha256 TEXT,
+        payload_sha256 TEXT,
+        op TEXT,
+        source TEXT,
+        generation INTEGER NOT NULL DEFAULT 0,
+        valid INTEGER NOT NULL DEFAULT 1,
+        ts DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    """
+    with sqlite3.connect(p) as c:
+        c.executescript(legacy)
+    r = append_generation(
+        p,
+        _gen(
+            kind="separated",
+            stem="acappella",
+            content_sha256="s1",
+            parent_content_sha256="p1",
+        ),
+    )
+    assert isinstance(r, Ok)
+    ch = chain(p, "rec_congrats", "acappella", "regular", "separated")
+    assert ch[0]["parent_content_sha256"] == "p1"
+
+
+def test_parent_migration_alters_legacy_table(tmp_path: Path):
+    """migrate_content_history_parent.sql adds parent_* onto a pre-C0 table."""
+    p = tmp_path / "legacy.db"
+    parent_mig = _REPO / "scripts" / "migrations" / "migrate_content_history_parent.sql"
+    with sqlite3.connect(p) as c:
+        c.executescript(
+            """
+            CREATE TABLE content_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                recording_id TEXT NOT NULL,
+                version TEXT,
+                stem TEXT NOT NULL,
+                variant TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                track_audio_id INTEGER,
+                content_sha256 TEXT,
+                payload_sha256 TEXT,
+                op TEXT,
+                source TEXT,
+                generation INTEGER NOT NULL DEFAULT 0,
+                valid INTEGER NOT NULL DEFAULT 1,
+                ts DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
+        # Apply only the ALTER lines (skip PRAGMA / comments).
+        for line in parent_mig.read_text().splitlines():
+            s = line.strip()
+            if s.upper().startswith("ALTER TABLE"):
+                c.execute(s.rstrip(";"))
+        cols = {r[1] for r in c.execute("PRAGMA table_info(content_history)")}
+    assert "parent_content_sha256" in cols
+    assert "parent_payload_sha256" in cols
+
+
 # --- migration: backfill + idempotency + DDL drift guard ---
 
 _TRACK_AUDIO = """
