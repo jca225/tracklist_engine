@@ -55,6 +55,8 @@ def test_committed_probe_records_independent_axis_beliefs(tmp_path):
         result=result,
         placement_rule=PLACEMENT_RULE,
         structure_rule=STRUCTURE_RULE,
+        set_start_s=101.25,
+        segment_mix_time_origin_s=101.25,
         placement_probability=CalibratedAxisProbability(
             Axis.PLACEMENT, 0.8, "path-placement-cal-v1"
         ),
@@ -69,7 +71,10 @@ def test_committed_probe_records_independent_axis_beliefs(tmp_path):
     assert beliefs.structure.decision is Decision.ACCEPTED
     placement = json.loads(beliefs.placement.chosen or "")
     structure = json.loads(beliefs.structure.chosen or "")
-    assert placement == {"recording_id": "rec-1", "ref_start_s": 12.5}
+    assert placement == {"schema": "placement-v1", "set_start_s": 101.25}
+    assert structure["schema"] == "structure-v1"
+    assert structure["mix_time_frame"] == "set_absolute_s"
+    assert structure["segments"][0]["mix_start_s"] == 101.25
     assert len(structure["segments"]) == 2
     assert (
         beliefs.placement.contributing_evidence_ids
@@ -108,7 +113,7 @@ def test_raw_probe_confidence_is_not_accepted_as_a_posterior(tmp_path):
         source="path",
     )
 
-    with pytest.raises(ValueError, match="require calibrated"):
+    with pytest.raises(ValueError, match="require .*calibrated"):
         record_placement_structure_beliefs(
             repo=repo,
             run=run,
@@ -116,6 +121,7 @@ def test_raw_probe_confidence_is_not_accepted_as_a_posterior(tmp_path):
             result=result,
             placement_rule=PLACEMENT_RULE,
             structure_rule=STRUCTURE_RULE,
+            set_start_s=10.0,
         )
 
 
@@ -129,7 +135,55 @@ def test_abstention_rejects_fabricated_probability(tmp_path):
             result=AlignmentResult.abstained(source="path"),
             placement_rule=PLACEMENT_RULE,
             structure_rule=STRUCTURE_RULE,
+            set_start_s=None,
             placement_probability=CalibratedAxisProbability(
                 Axis.PLACEMENT, 0.8, "cal-v1"
             ),
         )
+
+
+def test_ref_offset_cannot_silently_become_mix_time_placement(tmp_path):
+    repo, run = _repo_run(tmp_path)
+    result = AlignmentResult(
+        recording_id="rec-1",
+        offset_s=987.0,
+        confidence=0.9,
+        source="path",
+    )
+    with pytest.raises(ValueError, match="explicit set_start_s"):
+        record_placement_structure_beliefs(
+            repo=repo,
+            run=run,
+            subject=SubjectRef("set-slot", "set::001"),
+            result=result,
+            placement_rule=PLACEMENT_RULE,
+            structure_rule=STRUCTURE_RULE,
+            placement_probability=CalibratedAxisProbability(
+                Axis.PLACEMENT, 0.9, "cal-v1"
+            ),
+        )
+
+
+def test_probe_without_segments_abstains_on_structure(tmp_path):
+    repo, run = _repo_run(tmp_path)
+    result = AlignmentResult(
+        recording_id="rec-1",
+        offset_s=4.0,
+        confidence=0.8,
+        source="fp",
+    )
+    beliefs = record_placement_structure_beliefs(
+        repo=repo,
+        run=run,
+        subject=SubjectRef("set-slot", "set::001"),
+        result=result,
+        placement_rule=PLACEMENT_RULE,
+        structure_rule=STRUCTURE_RULE,
+        set_start_s=50.0,
+        placement_probability=CalibratedAxisProbability(
+            Axis.PLACEMENT, 0.8, "placement-cal-v1"
+        ),
+    )
+    assert beliefs.placement.decision is Decision.ACCEPTED
+    assert beliefs.structure.decision is Decision.UNRESOLVED
+    assert beliefs.structure.chosen is None

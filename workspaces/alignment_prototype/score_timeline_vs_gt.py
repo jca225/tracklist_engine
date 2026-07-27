@@ -305,11 +305,20 @@ def score_spans(
         # but enters at audible_start_s, and the aligner locks the audible entry.
         place_err_s = abs(gt_placement_onset(g) - s["set_start_s"])
 
-        fib = _fibers_for(_resolve_ref_audio(s, by_tid.get(recording_id), stem=gstem))
-        strict, _npred, facc = trajectory_acc(
-            _pred_segs_from_span(s, anchor_s=float(g["set_start_s"])), g, fiber=fib
-        )
-        fiber_val = facc if fibers else strict
+        structure_abstained = bool(s.get("structure_abstained"))
+        if structure_abstained:
+            strict = None
+            fiber_val = None
+        else:
+            fib = _fibers_for(
+                _resolve_ref_audio(s, by_tid.get(recording_id), stem=gstem)
+            )
+            strict, _npred, facc = trajectory_acc(
+                _pred_segs_from_span(s, anchor_s=float(g["set_start_s"])),
+                g,
+                fiber=fib,
+            )
+            fiber_val = facc if fibers else strict
 
         # overlay density
         density_times = _sample_played_times(g)
@@ -328,7 +337,9 @@ def score_spans(
 
         # ref_err_s: straight clips only (same exclusion logic as main())
         ref_err_s: float | None = None
-        if not (g.get("is_loop") or g.get("ref_segments")):
+        if not structure_abstained and not (
+            g.get("is_loop") or g.get("ref_segments")
+        ):
             ratio = float(g.get("tempo_ratio") or 1.0)
             if 0.9 <= ratio <= 1.15:
                 expected = (
@@ -385,6 +396,20 @@ def main(argv: list[str] | None = None) -> int:
         help="score an arbitrary timeline JSON (default: out/<set-id>_predicted_timeline.json)",
     )
     p.add_argument(
+        "--axis-belief-bundle",
+        type=Path,
+        default=None,
+        help="DEFAULT OFF: decode calibrated PLACEMENT/STRUCTURE beliefs into an "
+        "evaluation-only timeline before running the canonical scorer",
+    )
+    p.add_argument(
+        "--axis-belief-eval-output",
+        type=Path,
+        default=None,
+        help="path for the generated evaluation timeline (requires "
+        "--axis-belief-bundle; default: <timeline>.axis-beliefs-eval.json)",
+    )
+    p.add_argument(
         "--emit-never-matched",
         type=str,
         default=None,
@@ -415,6 +440,31 @@ def main(argv: list[str] | None = None) -> int:
         print(f"(gt: {args.gt.name})")
 
     tl_path = args.timeline or (OUT_DIR / f"{args.set_id}_predicted_timeline.json")
+    if args.axis_belief_eval_output is not None and args.axis_belief_bundle is None:
+        p.error("--axis-belief-eval-output requires --axis-belief-bundle")
+    if args.axis_belief_bundle is not None:
+        from workspaces.alignment_prototype.belief_timeline import (
+            prepare_belief_evaluation_timeline,
+        )
+
+        output = args.axis_belief_eval_output or tl_path.with_name(
+            f"{tl_path.stem}.axis-beliefs-eval.json"
+        )
+        coverage = prepare_belief_evaluation_timeline(
+            tl_path,
+            args.axis_belief_bundle,
+            output,
+            expected_set_id=args.set_id,
+        )
+        tl_path = output
+        print(
+            "(axis beliefs: "
+            f"placement {coverage['placement_accepted']}/"
+            f"{coverage['source_spans']} accepted; "
+            f"structure abstained "
+            f"{coverage['structure_abstained_among_placement_accepted']}; "
+            f"evaluation timeline {output})"
+        )
 
     # Print id-map normalization count before score_spans (mirrors old behaviour).
     id_map_path = _REPO / "labeling" / "fixtures" / "id_maps" / f"{args.set_id}.json"
@@ -505,6 +555,8 @@ def main(argv: list[str] | None = None) -> int:
                 s["name"][:36],
             )
         )
+        if s.get("structure_abstained"):
+            continue
         # Recover the actual GT set_start for worst-placement display
         rows = gt_by_tid2.get(sc.recording_id)
         if rows:
@@ -601,11 +653,15 @@ def main(argv: list[str] | None = None) -> int:
             f"({lost_s:.0f}s GT invisible to per-span metrics): {breakdown}"
         )
     pe = np.array([r[0] for r in place_errs])
-    print(
-        f"set placement |pred-gt|: median={np.median(pe):.1f}s  "
-        f"<5s: {100 * (pe < 5).mean():.0f}%  <15s: {100 * (pe < 15).mean():.0f}%  "
-        f"p90={np.percentile(pe, 90):.1f}s  (n={len(pe)})"
-    )
+    if pe.size:
+        print(
+            f"set placement |pred-gt|: median={np.median(pe):.1f}s  "
+            f"<5s: {100 * (pe < 5).mean():.0f}%  "
+            f"<15s: {100 * (pe < 15).mean():.0f}%  "
+            f"p90={np.percentile(pe, 90):.1f}s  (n={len(pe)})"
+        )
+    else:
+        print("set placement |pred-gt|: no accepted, GT-matchable placements")
     re_ = np.array([r[0] for r in ref_rows])
     if re_.size:
         print(
