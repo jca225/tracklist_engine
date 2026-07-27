@@ -1,13 +1,13 @@
 # Alignment — State of Record (current best + settled decisions)
 
-> **As of 2026-07-26 @ `b2b9e59`.** **RT1 honest baseline landed on `main`** (PR
+> **As of 2026-07-26 @ `22cf799`.** **RT1 honest baseline landed on `main`** (PR
 > #105): the de-poisoned + form-centric scorecard, regenerated bridge id_maps, and
 > human-verified GT completion are now canonical, and [alignment_status.md](alignment_status.md)
 > carries the honest numbers (identity 51%/61% per-span vs the old poisoned 82/84).
 > This is the honest-as-possible read of the **July `_lt` predictions**; the fully
 > honest number still needs a **re-inference on clean canonical** (decision #18's
 > remaining step). **Phase 1B identity capability = BUILT + MEASURED e2e, DEFERS on
-> BB12 (does not ship)** (branch `phase1b-wire`, PR #109; extraction driver + gate
+> BB12 (does not ship)** (landed on `main` via PR #109; extraction driver + gate
 > added this session). The full override pipeline is now real and validated on GPU
 > data: multi-candidate pool (Part A) + blind stem-MERT chamfer LF (Part B) + a
 > gated `infer.py` override seam (Part C, **default-off / fail-closed**) + the L3
