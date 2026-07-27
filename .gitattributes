@@ -1,0 +1,15 @@
+# Merge policy for append-only ledgers.
+#
+# `merge=union` keeps BOTH sides' lines on a conflict. It is correct ONLY for
+# strictly append-only, line-oriented files where two branches add entries in
+# any order and neither rewrites existing lines. Do NOT extend it to:
+#   - structured files (JSON/YAML): union produces duplicate keys / invalid data.
+#     e.g. scripts/guardrails_ratchet.json is an in-place counter map — a
+#     concurrent bump is a 4-key hand-merge, or fix it with a max-merge driver.
+#   - living docs rewritten in place (docs/alignment_state_of_record.md): a
+#     concurrent /align-checkpoint is a semantic conflict a human must reconcile;
+#     union would splice two different "current-best" narratives together.
+
+# Closed-experiments ledger — append-only, matched by basename so it holds
+# regardless of directory (attic/ today, archive/experiments/ if promoted).
+EXPERIMENTS.md merge=union
