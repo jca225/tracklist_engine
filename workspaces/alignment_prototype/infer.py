@@ -217,6 +217,83 @@ def slot_pools_from_rows(
     return {k: tuple(v) for k, v in pools.items()}
 
 
+def _apply_open_set_identity(preds, rows, args):
+    """Fail-closed blind-LF identity override (Phase 1B, spec §2C).
+
+    Widens each slot to a real candidate pool and applies the stem-MERT chamfer
+    margin gate, replacing (override) or nulling (abstain) the span's
+    recording_id; accept-claim leaves it. Returns
+    ``(new_preds, id_source, id_prov, counts)``. Fail-closed: with no
+    cache-dir / tau / floor, or no feature bundle for the set, the claim is kept
+    verbatim and no span is touched (so ``--open-set-identity`` never silently
+    regresses when its inputs are absent).
+    """
+    import dataclasses
+
+    from workspaces.alignment_prototype.candidate_pool import build_pools
+    from workspaces.alignment_prototype.extract_stem_mert import IdentityFeatureBundle
+    from workspaces.alignment_prototype.identity_override import (
+        resolve_identities,
+        summarize,
+    )
+    from workspaces.alignment_prototype.open_set_identity import Decision
+
+    id_source = {i: "claim" for i in range(len(preds))}
+    id_prov: dict[int, dict] = {}
+    if (
+        args.identity_cache_dir is None
+        or args.identity_tau is None
+        or args.identity_floor is None
+    ):
+        print(
+            "open-set-identity: requires --identity-cache-dir + --identity-tau + "
+            "--identity-floor; keeping claim (no override)",
+            file=sys.stderr,
+        )
+        return preds, id_source, id_prov, {}
+    try:
+        bundle = IdentityFeatureBundle.load(args.set_id, args.identity_cache_dir)
+    except FileNotFoundError:
+        print(
+            f"open-set-identity: no L3/L22 feature bundle for {args.set_id} in "
+            f"{args.identity_cache_dir} (run extract_stem_mert); keeping claim",
+            file=sys.stderr,
+        )
+        return preds, id_source, id_prov, {}
+
+    pools = build_pools(rows, bundle.set_pool_by_stem)
+    results = resolve_identities(
+        pools,
+        bundle.queries,
+        bundle.refs,
+        tau=args.identity_tau,
+        floor=args.identity_floor,
+        spans=bundle.spans,
+    )
+    new_preds = list(preds)
+    for i, p in enumerate(preds):
+        res = results.get(p.slot_label)
+        if res is None:
+            continue
+        id_prov[i] = res.provenance
+        d = res.decision
+        if d.decision == Decision.OVERRIDE:
+            new_preds[i] = dataclasses.replace(p, recording_id=d.recording_id)
+            id_source[i] = "open_set_mert"
+        elif d.decision == Decision.ABSTAIN:
+            new_preds[i] = dataclasses.replace(p, recording_id=None)
+            id_source[i] = "abstain"
+        # accept_claim: recording_id unchanged
+    counts = summarize(results)
+    print(
+        f"open-set-identity: accept={counts.get(Decision.ACCEPT_CLAIM, 0)} "
+        f"override={counts.get(Decision.OVERRIDE, 0)} "
+        f"abstain={counts.get(Decision.ABSTAIN, 0)} "
+        f"(tau={args.identity_tau} floor={args.identity_floor})"
+    )
+    return tuple(new_preds), id_source, id_prov, counts
+
+
 def override_identity_from_gt(
     rows: tuple[dict, ...], gt_yaml: Path, set_id: str
 ) -> tuple[dict, ...]:
@@ -377,6 +454,24 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="abort when GT rows lack resolvable ref audio (excluding unalignable)",
     )
+    p.add_argument(
+        "--open-set-identity",
+        action="store_true",
+        help="PHASE 1B: replace the size-1 tokenizer-claim pool with a real "
+        "multi-candidate pool and apply the blind stem-MERT (L3/L22) chamfer "
+        "override, fail-closed via the margin gate (accept-claim | override | "
+        "abstain). Needs the L3/L22 feature bundle from extract_stem_mert "
+        "(--identity-cache-dir); if absent, no override is applied. Default OFF "
+        "until the acceptance gate (identity >= RT1 both sets) passes.",
+    )
+    p.add_argument("--identity-cache-dir", type=Path, default=None)
+    p.add_argument(
+        "--identity-tau",
+        type=float,
+        default=None,
+        help="override margin (cosine units) — tuned LOSO, never fit on both sets",
+    )
+    p.add_argument("--identity-floor", type=float, default=None)
     args = p.parse_args(argv)
 
     from eda.alignment.spectrogram_review.source_audio import run_audio_preflight
@@ -470,6 +565,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     print("decoding sequence…")
     preds = aligner.predict_sequence(decodable)
+
+    # ---- 2a. Phase 1B blind identity override (before placement, so downstream
+    # fp/chroma/HuBERT placement loads the CORRECTED ref) -------------------
+    identity_source: dict[int, str] = {i: "claim" for i in range(len(preds))}
+    identity_prov: dict[int, dict] = {}
+    if args.open_set_identity:
+        preds, identity_source, identity_prov, _ = _apply_open_set_identity(
+            preds, rows, args
+        )
 
     # Per-span placement provenance (serialized as start_source) — which
     # channel produced the final set_start. Starts as the MERT decode and is
@@ -891,7 +995,9 @@ def main(argv: list[str] | None = None) -> int:
                 "cue_anchor_s": anchors.get(p.slot_label),
                 "name": t.label,
                 "start_source": start_source.get(i, "mert"),
+                "identity_source": identity_source.get(i, "claim"),
                 "probe_proposals": probe_proposals.get(i, {}),
+                **({"identity": identity_prov[i]} if i in identity_prov else {}),
                 **({"placement_gated": gate_events[i]} if i in gate_events else {}),
                 **(
                     {"mert_set_start_s": mert_starts.get(i)}
@@ -923,6 +1029,9 @@ def main(argv: list[str] | None = None) -> int:
             "identity_gt": args.identity_gt_yaml.name
             if args.identity_gt_yaml
             else None,
+            "open_set_identity": args.open_set_identity,
+            "identity_tau": args.identity_tau if args.open_set_identity else None,
+            "identity_floor": args.identity_floor if args.open_set_identity else None,
             "fp_placement_gate_s": args.fp_placement_gate_s,
         },
         written_at=datetime.now().isoformat(timespec="seconds"),
