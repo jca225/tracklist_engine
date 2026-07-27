@@ -306,6 +306,15 @@ train spans and does **not** beat the raw control (or conv) on held-out BB11.
 Do **not** regenerate `docs/alignment_status.md` from this run. Next lever is
 more real pseudo mass (better lyrics∩HuBERT agreement / fp landmarks / a third
 labeled set), not more epochs on n=3.
+**Re-measure (2026-07-27, worktree on `origin/main`):** same pool/eval,
+`--reuse-agentic`. Starvation gate **clear** (`accepted=16` / `total=113`; drops
+g0=76, g2=15, g3=6). Full pipeline `status=completed` (`out/e1/e1_result.json`,
+`smoke_only: false`). Pseudo-TRM still **noise-floor** on held-out BB11 (train-fit
+rises; eval stays far below raw control) — more mass alone did not flip the
+verdict. Do **not** regenerate `alignment_status.md`. Next: higher-precision
+pseudo source or a new independent structure sensor (decision #26 still binds).
+Branch reconcile note: `e1-flywheel` reset to `origin/main` (E1 code already
+landed via #25); fat rebase of acquisition-era commits abandoned.
 ## Ableton ReAct harness — daw_env (2026-07-19)
 **Question:** does place→listen→sense→iterate in an ALS-first session beat
 probe-only agentic on hard placement (ridge decoder_wall), without Live OSC?
