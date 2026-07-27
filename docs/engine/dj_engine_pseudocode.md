@@ -3,68 +3,35 @@
 Pythonic architectural pseudocode. This is a behavioral contract, not directly
 executable production code.
 
-# Notes:
-Metaprogramming with decorators
-Decorators can register types and processors declaratively.
-```
-@artifact_type(
-    namespace="ableton",
-    name="live-session",
-    version=1,
-    media_types={"application/gzip", "application/xml"},
-)
-...
-@transformation(
-    name="ableton.parse-session",
-    version=3,
-    inputs={
-        "session": TypePattern("ableton:live-session@>=1,<2"),
-    },
-    outputs={
-        "clips": TypeId("ableton", "parsed-clips", 2),
-        "diagnostics": TypeId("core", "diagnostics", 1),
-    },
-    reproducibility="exact",
-)
-...
-@predicate(
-    namespace="tracklist",
-    name="claimed-title",
-    version=1,
-    subject_types={"set-slot"},
-    value_schema={"type": "string"},
-)
-...
+Three layers, in dependency order:
 
-# 3. Build dependency graphs from function signatures
-@asset
-def track_rows(page: HtmlPage) -> list[HtmlRow]:
-    ...
+- **§0 — fundamental rules.** What is true of the system.
+- **§0.5 — enforcement layer.** Where each rule is *made* true: declarative
+  registration, signature-derived dependency graph, import-time wiring
+  validation, construction-time invariants.
+- **§16 — law registry.** The checkable statement of each rule, tagged by the
+  mechanism that discharges it. `promotion_gates` (§11) selects from this
+  registry; it is not a second list.
 
-@asset
-def observations(rows: list[HtmlRow]) -> list[Observation]:
-    ...
+A rule that appears in §0 or §16 without a named enforcement site in §0.5 is
+aspirational, not specified.
 
-@asset
-def identity_evidence(
-    observations: list[Observation],
-    fingerprints: list[Fingerprint],
-) -> list[EvidenceEmission]:
-    ...
-
-# Generate property-based system laws
-
-# Protocols, generics, state machines, 
-# 
-```
+**Deliberately excluded**, so it stays settled: no DSL or custom syntax, no
+value-level taint tracking, no interpreter fork. The laws here want *more*
+explicit structure at call sites, not terser ones, and every identity law below
+is discharged by constructor discipline at a small fraction of the cost of
+runtime interposition.
 
 ## 0. Fundamental rules
 
 ```python
 # Source bytes are immutable and content-addressed.
+# Immutability is deep: every mapping field of a frozen record is itself frozen.
 # Runs are immutable records of one execution.
 # Observations record what a source said; they are not canonical truth.
 # Source IDs and paths are locators, not musical identity.
+# Identity values are minted only by constructors that consume evidence — never
+#   by coercing a locator, source key, or path.
 # Claims are contestable propositions.
 # Evidence supports, contradicts, or abstains on claims.
 # Identity, placement, and structure have separate beliefs and decisions.
@@ -74,6 +41,135 @@ def identity_evidence(
 # Round r outputs may feed round r+1, never round r itself.
 # Only promoted immutable snapshots are visible to consumers.
 # Every published answer must explain both data and algorithmic provenance.
+```
+
+## 0.5 Enforcement layer
+
+Everything here is import-time or construction-time. The design goal: a
+violation fails at the line that caused it, in milliseconds, naming the law —
+not at `promote()`, after a corpus run. Every intensional law in §16 names a
+site in this section.
+
+### Declarative registration
+
+```python
+@artifact_type(
+    namespace="ableton",
+    name="live-session",
+    version=1,
+    media_types={"application/gzip", "application/xml"},
+)
+class LiveSession: ...
+
+
+@predicate(
+    namespace="tracklist",
+    name="claimed-title",
+    version=1,
+    subject_types={"set-slot"},
+    value_schema=StringSchema(),      # a schema object, not a dict literal
+)
+class ClaimedTitle: ...
+
+
+@transformation(
+    name="ableton.parse-session",
+    version=3,
+    inputs={"session": TypePattern("ableton:live-session@>=1,<2")},
+    outputs={
+        "clips": TypeId("ableton", "parsed-clips", 2),
+        "diagnostics": TypeId("core", "diagnostics", 1),
+    },
+    reproducibility="exact",          # exact | seeded | nondeterministic
+)
+def parse_session(session: LiveSession) -> tuple[ParsedClips, Diagnostics]: ...
+```
+
+### Dependency graph derived from signatures
+
+Nothing declares edges by hand. The registry reads annotations.
+
+```python
+@asset
+def track_rows(page: HtmlPage) -> list[HtmlRow]: ...
+
+
+@asset
+def observations(rows: list[HtmlRow]) -> list[Observation]: ...
+
+
+@asset
+def identity_evidence(
+    observations: list[Observation],
+    fingerprints: list[Fingerprint],
+) -> list[EvidenceEmission]: ...
+
+
+class Registry(Protocol):
+    def register_type(self, spec: TypeSpec) -> None: ...
+    def register_transformation(self, spec: TransformationSpec) -> None: ...
+    def register_asset(self, fn: Callable) -> None: ...
+
+    # The queries that make the system legible without reading it.
+    def producers_of(self, type_id: TypeId) -> frozenset[TransformationSpec]: ...
+    def consumers_of(self, type_id: TypeId) -> frozenset[TransformationSpec]: ...
+    def dag(self) -> AssetGraph: ...
+    def validate_wiring(self) -> list[WiringDefect]: ...
+
+
+def validate_wiring_at_import(registry: Registry) -> None:
+    """Runs once, on import, before any work is scheduled.
+
+    Defect classes: an input type with no producer; a version range with an
+    empty solution set; a cycle in the asset graph; an output type declared but
+    never emitted; a function whose annotations disagree with its
+    `@transformation` spec.
+    """
+    defects = registry.validate_wiring()
+    if defects:
+        raise WiringError(defects)
+```
+
+### Code identity is computed, never supplied
+
+```python
+def implementation_hash(entrypoint: Callable) -> str:
+    """Hash of the entrypoint's transitive AST closure, resolved at import.
+
+    `ProcessSpec.implementation_hash` is produced here, not filled in by an
+    author. A hand-maintained hash rots silently: a helper is edited, the hash
+    does not move, provenance lies, and every gate still passes.
+    """
+```
+
+### Construction-time invariants
+
+```python
+# Per-record laws are discharged in __post_init__ of the frozen dataclass, at
+# the line that built the bad record. See Claim (§5), Interval/CurvePoint (§1).
+#
+# Identity minting is the load-bearing case. RecordingId has exactly one
+# constructor, and it takes evidence:
+
+def resolve_recording(evidence: Sequence[Evidence]) -> RecordingId:
+    """The only way a RecordingId comes into existence."""
+
+
+# Consequently `Recording(recording_id=parsed["track_key"])` is not a law
+# violation to be detected later — it is a call that does not typecheck. This
+# is the cheap alternative to value-level taint tracking, and it covers the
+# identity laws almost entirely.
+```
+
+### Laws as generated property tests
+
+```python
+def laws_as_property_tests(registry: Registry) -> Iterable[PropertyTest]:
+    """One generated test per (law, transformation) pair the law applies to.
+
+    An implementer gets a minimal counterexample from a unit test, not a gate
+    failure on a corpus run.
+    """
 ```
 
 ## 1. Shared types
@@ -86,7 +182,7 @@ from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import (
-    Any, BinaryIO, Generic, Iterable, Mapping, Optional, Protocol,
+    Any, BinaryIO, Callable, Generic, Iterable, Mapping, Optional, Protocol,
     Sequence, TypeVar, NewType,
 )
 from uuid import UUID, uuid4
@@ -106,7 +202,83 @@ SnapshotId = NewType("SnapshotId", UUID)
 ModelId = NewType("ModelId", UUID)
 RoundId = NewType("RoundId", UUID)
 
-Json = dict[str, Any]
+# NewType is *static only* — at runtime `SlotId` is `UUID` and `RecordingId(x)`
+# is `x`, unchecked. The runtime guarantee comes from constructor discipline
+# (§0.5): a RecordingId is minted only by `resolve_recording(evidence)`.
+
+FrozenMap = Mapping     # immutable by contract; construct with MappingProxyType.
+# `frozen=True` is shallow. A mutable dict inside a frozen record silently
+# invalidates its content hash — `artifact.metadata["x"] = 1` would otherwise
+# be legal and would break fundamental rule 1. Every mapping field below is a
+# FrozenMap.
+
+Json = FrozenMap[str, Any]
+# `Json` is reserved for genuinely opaque payloads. Everything the system
+# itself reasons about is named below. An `Any`-typed field is a place an
+# implementer gets no feedback and an agent gets no constraint.
+#
+# The complete permitted set, and nothing else may be added to it without a
+# reason recorded here:
+#   Artifact.metadata            per-kind probe output (media-type dependent)
+#   ParameterSet.values          arbitrary per-process parameters
+#   EnvironmentSpec.numeric_backend, Run.environment_instance   host probes
+#   ParseDiagnostic.detail, GateResult.diagnostics              per-code payload
+
+
+class UncertaintyModel(Protocol):
+    """Field-specific error model. §7's `categorical_prior`, `student_t_error`
+    and `curve_error` are constructors of these, not dict literals."""
+
+    family: str
+    def log_likelihood(self, observed: Any, hypothesis: Any) -> float: ...
+
+
+@dataclass(frozen=True)
+class NativeScore:
+    """A source's own score, pre-calibration. Never compared across families."""
+
+    family: str
+    value: float
+    scale: str                      # logit | distance | correlation | count
+    support: Optional[int]
+
+
+@dataclass(frozen=True)
+class SourceLocator:
+    """Where in an artifact an observation came from. A locator, never identity."""
+
+    artifact_id: ArtifactId
+    selector: str                   # xpath | byte range | clip index
+    ordinal: Optional[int]
+
+
+@dataclass(frozen=True)
+class DecisionRuleSpec:
+    minimum_posterior: float
+    maximum_entropy: float
+    reject_below_posterior: Optional[float]
+    quarantine_on: tuple[str, ...]  # diagnostic codes forcing quarantine
+
+
+@dataclass(frozen=True)
+class StoppingSignal:
+    """Reconstruction distance and friends. Deliberately *not* an `Evidence`:
+    the type system is what enforces `reconstruction_does_not_certify_identity`
+    (§16-I). No function accepting Evidence will accept one of these."""
+
+    name: str
+    value: float
+
+
+class Unset:
+    """Sentinel distinguishing "no value supplied" from a value of None.
+
+    Required because `None` is a meaningful value throughout — unknown
+    coordinates are None, never 0.0 — so absence cannot also be spelled None.
+    """
+
+
+UNSET = Unset()
 
 
 class Axis(StrEnum):
@@ -154,8 +326,16 @@ class EvidenceDirection(StrEnum):
 
 @dataclass(frozen=True)
 class Interval:
+    """Unknown is None, never 0.0. The Optional is the enforcement site for
+    §16-I `coordinates.no_fake_zero`: a measured 0.0 boundary is legal, an
+    *unmeasured* one cannot be spelled."""
+
     start_s: Optional[float]
     end_s: Optional[float]
+
+    def __post_init__(self) -> None:
+        if self.start_s is not None and self.end_s is not None:
+            assert self.end_s >= self.start_s, "interval is inverted"
 
 
 @dataclass(frozen=True)
@@ -196,7 +376,7 @@ class ProcessSpec:
     environment_spec_id: UUID
     dependency_lock_artifact_id: ArtifactId
     model_artifact_ids: tuple[ArtifactId, ...]
-    implementation_hash: str
+    implementation_hash: str    # computed by §0.5, never supplied by an author
 
 
 @dataclass(frozen=True)
@@ -356,7 +536,7 @@ class Observation:
     value: Any
     source_artifact_id: ArtifactId
     producer_run_id: RunId
-    source_locator: Json
+    source_locator: SourceLocator
     observed_at: datetime
     status: str                 # observed | explicit_null | abstained | malformed
     source_confidence: Optional[float]
@@ -371,7 +551,7 @@ class RelationObservation:
     object: SubjectRef
     source_artifact_id: ArtifactId
     producer_run_id: RunId
-    source_locator: Json
+    source_locator: SourceLocator
 
 
 @dataclass(frozen=True)
@@ -439,26 +619,43 @@ def materialize_track_row(row: Artifact, parsed: Json, run: Run) -> list[Observa
         observe(slot, "is_id", parsed.get("is_id"), row, run),
         observe(slot, "mashup_count", parsed.get("mashup_count"), row, run),
     ]
-    # Forbidden: Recording(recording_id=parsed["track_key"])
+    # `Recording(recording_id=parsed["track_key"])` is not a law violation to be
+    # caught downstream. RecordingId has no constructor accepting a string, so
+    # the call does not typecheck (§0.5; §16-I `identity.no_locator`).
 ```
 
 ## 5. Claims and evidence
 
 ```python
 @dataclass(frozen=True)
+class ClaimContext:
+    """Named, because it carries supersession lineage (§13) — that is structure
+    the system reasons about, not an opaque payload."""
+
+    supersedes_claim_id: Optional[ClaimId] = None
+    mix_region: Optional[Interval] = None
+
+
+@dataclass(frozen=True)
 class Claim:
     claim_id: ClaimId
     axis: Axis
     subject: SubjectRef
     predicate: str
-    object_entity: Optional[SubjectRef]
-    object_value: Optional[Any]
-    context: Json
+    object_entity: SubjectRef | Unset
+    object_value: Any | Unset
+    context: ClaimContext
     created_by_run_id: RunId
     created_at: datetime
 
-    def validate(self) -> None:
-        assert (self.object_entity is None) != (self.object_value is None)
+    def __post_init__(self) -> None:
+        # Runs at construction. `validate()` as a method the caller had to
+        # remember to call was a law with no enforcement site.
+        entity_given = not isinstance(self.object_entity, Unset)
+        value_given = not isinstance(self.object_value, Unset)
+        assert entity_given != value_given, "a claim carries an entity or a value"
+        # UNSET is distinct from None on purpose: `object_value=None` is the
+        # proposition "this value is null", which is not "no value supplied".
 
 
 @dataclass(frozen=True)
@@ -470,9 +667,9 @@ class Evidence:
     source_ref_id: UUID
     producer_run_id: RunId
     direction: EvidenceDirection
-    native_score: Json
+    native_score: NativeScore
     source_family: str
-    uncertainty_model: Json
+    uncertainty_model: UncertaintyModel
 
 
 @dataclass(frozen=True)
@@ -496,7 +693,7 @@ class EvidenceEmission:
     producer_run_id: RunId
     value: Any
     abstained: bool
-    native_score: Json
+    native_score: NativeScore
     evidence_ids: tuple[EvidenceId, ...]
     source_family: str
 
@@ -637,9 +834,9 @@ class HumanLabelAssertion:
     subject: SubjectRef
     field: str
     observed_value: Any
-    source_clip_locator: Json
+    source_clip_locator: SourceLocator
     source_audio_artifact_id: Optional[ArtifactId]
-    uncertainty_model: Json
+    uncertainty_model: UncertaintyModel   # required per field; there is no default
     ambiguity_candidates: tuple[Any, ...]
     review_status: str
     supersedes_assertion_id: Optional[UUID]
@@ -806,16 +1003,39 @@ class DecisionRule:
     decision_rule_id: UUID
     axis: Axis
     version: str
-    rule: Json
+    rule: DecisionRuleSpec
     selected_using_panel_id: Optional[UUID]
     calibration_status: str       # development_only | corpus_supported
 
 
-def decide(posterior: Mapping[str, float], entropy: float, rule: DecisionRule) -> Decision:
+def decide(
+    posterior: Mapping[str, float],
+    entropy: float,
+    rule: DecisionRule,
+    diagnostics: tuple[str, ...] = (),
+) -> Decision:
+    """Total over the Decision enum.
+
+    An earlier form of this function could only return ACCEPTED or UNRESOLVED,
+    which left REJECTED and QUARANTINED unreachable — four states declared,
+    two produced.
+    """
+    if any(code in rule.rule.quarantine_on for code in diagnostics):
+        return Decision.QUARANTINED
+
     winner, probability = max(posterior.items(), key=lambda item: item[1])
-    if probability < rule.rule["minimum_posterior"]:
+
+    if (
+        rule.rule.reject_below_posterior is not None
+        and probability < rule.rule.reject_below_posterior
+    ):
+        # Eliminated, not undecided: the candidate does not return to the
+        # review queue, because there is nothing for a human to adjudicate.
+        return Decision.REJECTED
+
+    if probability < rule.rule.minimum_posterior:
         return Decision.UNRESOLVED
-    if entropy > rule.rule["maximum_entropy"]:
+    if entropy > rule.rule.maximum_entropy:
         return Decision.UNRESOLVED
     return Decision.ACCEPTED
 
@@ -835,7 +1055,9 @@ def infer_beliefs(
             belief,
             inference_run_id=run.run_id,
             fitted_model_id=model.fitted_model_id,
-            decision=decide(belief.posterior, belief.entropy, rule),
+            decision=decide(
+                belief.posterior, belief.entropy, rule, diagnostics_for(belief)
+            ),
             decision_rule_id=rule.decision_rule_id,
         )
         for belief in raw_beliefs
@@ -941,7 +1163,7 @@ class EvaluationResult:
     label_snapshot_id: SnapshotId
     set_id: SetId
     axis: Axis
-    metrics: Json
+    metrics: FrozenMap[str, float]
     n_sets: int
     n_units: int
     interval: Optional[Json]
@@ -959,7 +1181,19 @@ def evaluate_gold_panel(
     algorithm_bundle: "AlgorithmBundle",
     panel: GoldDevelopmentPanel,
 ) -> list[EvaluationResult]:
-    assert panel.independent_set_count == 2
+    """`interpretation` is derived from the panel, never passed by the caller.
+
+    This is the enforcement site for §16-I `calibration.honest`: a caller cannot
+    label a two-set result corpus-supported, because it does not supply the
+    label. The set count is read from the panel rather than asserted equal to 2
+    — an assert on a configurable field makes the field a lie.
+    """
+    assert len(panel.label_snapshot_ids) >= panel.independent_set_count
+    scope = (
+        "corpus_supported"
+        if panel.allows_corpus_calibration_claims
+        else "development_only"
+    )
     results = []
     for development_set, held_set in leave_one_set_out(panel):
         configured = tune_on_only(algorithm_bundle, development_set)
@@ -969,30 +1203,20 @@ def evaluate_gold_panel(
             evaluate_per_set_per_axis(
                 prediction,
                 frozen_label_snapshot(held_set),
-                interpretation="development_only",
+                interpretation=scope,
             )
         )
     return results
 
 
 def promotion_gates(candidate: Snapshot) -> list[GateResult]:
-    return [
-        gate_provenance_complete(candidate),
-        gate_provenance_acyclic(candidate),
-        gate_artifacts_exist(candidate),
-        gate_no_path_or_source_key_identity(candidate),
-        gate_axis_decisions_separate(candidate),
-        gate_no_fake_coordinates(candidate),
-        gate_human_labels_are_versioned(candidate),
-        gate_human_uncertainty_is_field_specific(candidate),
-        gate_canaries(candidate),
-        gate_dependency_agreement(candidate),
-        gate_leave_one_source_family_out(candidate),
-        gate_reconstruction_plausibility(candidate),  # never certifies identity
-        gate_metrics_per_set_per_axis(candidate),
-        gate_calibration_claim_is_honest(candidate),
-        gate_random_high_confidence_audit(candidate),
-    ]
+    """Selects from LAWS (§16) by tag. There is no second list of rules.
+
+    An earlier form enumerated fifteen gates by hand while §16 listed
+    twenty-two laws under different names — two authorities for the same rules,
+    guaranteed to drift apart.
+    """
+    return [evaluate_gate(law, candidate) for law in laws_tagged("promotion")]
 
 
 def promote(candidate: Snapshot) -> Snapshot:
@@ -1161,24 +1385,58 @@ def run_cotraining_round(
     return round
 
 
-def bootstrap(corpus: Snapshot, bundle: AlgorithmBundle, max_rounds: int) -> CoTrainingRound:
-    parent = None
-    previous_objective = None
+@dataclass(frozen=True)
+class BootstrapResult:
+    """Why the loop stopped, carried explicitly.
+
+    An earlier form returned a bare CoTrainingRound: promoted on the happy path,
+    unpromoted on early exit, indistinguishable to the caller — and None when
+    `max_rounds == 0`, against a non-Optional annotation.
+    """
+
+    last_round: Optional[CoTrainingRound]
+    reason: str     # promoted | round_rejected | objective_stalled |
+                    # objective_regressed | max_rounds_exhausted | no_rounds_requested
+
+
+def bootstrap(
+    corpus: Snapshot, bundle: AlgorithmBundle, max_rounds: int
+) -> BootstrapResult:
+    parent: Optional[CoTrainingRound] = None
+    previous_objective: Optional[StoppingSignal] = None
+
     for _ in range(max_rounds):
         round = run_cotraining_round(corpus, bundle, parent)
         if round.status != "promoted":
-            return round
+            return BootstrapResult(round, "round_rejected")
 
+        # A plausibility/stopping signal, never identity truth. StoppingSignal
+        # is deliberately not an Evidence, so no belief model can consume it
+        # (§16-I `reconstruction.not_identity`).
         objective = mean_reconstruction_distance(round)
-        if previous_objective is not None and previous_objective - objective < EPSILON:
-            enqueue_active_review(unresolved_units(round), reason="objective_stalled")
-            return round
+        if previous_objective is not None:
+            delta = previous_objective.value - objective.value
+            if delta < 0:
+                # A regression is not a stall. The old `delta < EPSILON` test
+                # collapsed the two: "converged" and "the last round made it
+                # worse" are different states needing different responses.
+                enqueue_active_review(
+                    unresolved_units(round), reason="objective_regressed"
+                )
+                return BootstrapResult(round, "objective_regressed")
+            if delta < EPSILON:
+                enqueue_active_review(
+                    unresolved_units(round), reason="objective_stalled"
+                )
+                return BootstrapResult(round, "objective_stalled")
 
-        # Reconstruction is only a plausibility/stopping signal, never identity truth.
         previous_objective = objective
         corpus = build_next_generation_corpus(corpus, round)
         parent = round
-    return parent
+
+    return BootstrapResult(
+        parent, "max_rounds_exhausted" if parent is not None else "no_rounds_requested"
+    )
 ```
 
 ## 13. Corrections and selective recomputation
@@ -1195,7 +1453,7 @@ def add_correction(
         subject=old_claim.subject,
         predicate=old_claim.predicate,
         object_value=corrected_value,
-        context={"supersedes_claim_id": str(old_claim.claim_id)},
+        context=ClaimContext(supersedes_claim_id=old_claim.claim_id),
     )
     add_supporting_evidence(replacement, correction_evidence)
     enqueue_recomputation(
@@ -1297,38 +1555,168 @@ class Engine:
             human_labels=current_frozen_human_label_snapshot_for(request),
         )
 
-    def infer(self, corpus: Snapshot, max_rounds: int = 5) -> CoTrainingRound:
+    def infer(self, corpus: Snapshot, max_rounds: int = 5) -> BootstrapResult:
         return bootstrap(corpus, self.algorithm_bundle, max_rounds)
 
     def explain(self, snapshot_id: SnapshotId, occurrence_id: OccurrenceId) -> Json:
         return explain_prediction(snapshot_id, occurrence_id)
 ```
 
-## 16. Required executable laws
+## 16. Law registry
+
+One registry, two enforcement classes. The distinction is load-bearing.
+
+**Extensional (E)** — witnessed by persisted data. A candidate snapshot is
+sufficient to decide the law.
+
+**Intensional (I)** — a property of *dataflow*, which no snapshot can witness.
+A snapshot can show that no identifier looks path-derived; it cannot show that
+a path did not *flow into* an identity decision, because `hash(path)` passes
+that check while violating the law outright. Every intensional law therefore
+names the construction site, signature, or import-time check that discharges
+it. An intensional law with no site is aspirational, not specified.
+
+`promotion_gates` (§11) selects from this registry by tag. It is not a second
+list of rules.
 
 ```python
+@dataclass(frozen=True)
+class Law:
+    law_id: str
+    statement: str
+    enforcement: str            # "extensional" | "intensional"
+    site: str                   # snapshot predicate, or the §0.5 mechanism
+    tags: tuple[str, ...]       # e.g. ("promotion",) — selects it into a gate
+
+
+LAWS: tuple[Law, ...] = (
+    # ---- Extensional: decided against a snapshot -------------------------
+    Law("provenance.complete", "every artifact has a producing run",
+        "extensional", "provenance_is_complete", ("promotion",)),
+    Law("provenance.acyclic", "the derivation graph has no cycles",
+        "extensional", "provenance_is_acyclic", ("promotion",)),
+    Law("artifacts.verify", "every referenced artifact exists and rehashes",
+        "extensional", "all_artifacts_verify", ("promotion",)),
+    Law("parser.row_diagnostics", "every unrecognized source row has a diagnostic",
+        "extensional", "every_unknown_parser_row_has_diagnostic", ("promotion",)),
+    Law("abstentions.persisted", "abstentions are stored, not dropped",
+        "extensional", "all_abstentions_are_persisted", ("promotion",)),
+    Law("round.no_self_consumption", "round r never consumes its own outputs",
+        "extensional", "no_round_consumes_its_own_outputs", ("promotion",)),
+    Law("pseudo_label.acyclic", "the pseudo-label lineage graph is acyclic",
+        "extensional", "pseudo_label_graph_is_acyclic", ("promotion",)),
+    Law("rounds.rejected_reproducible", "rejected rounds are fully re-runnable",
+        "extensional", "rejected_rounds_are_reproducible", ()),
+    Law("evaluation.per_set_per_axis", "metrics are reported per set and per axis",
+        "extensional", "evaluation_is_per_set_and_per_axis", ("promotion",)),
+    Law("explainability.total", "every published value has a full explanation",
+        "extensional", "every_published_value_is_explainable", ("promotion",)),
+    Law("canaries", "seeded canary units resolve as expected",
+        "extensional", "gate_canaries", ("promotion",)),
+    Law("sources.dependency_agreement", "declared and learned dependencies agree",
+        "extensional", "gate_dependency_agreement", ("promotion",)),
+    Law("sources.leave_one_family_out", "no single source family carries a decision",
+        "extensional", "gate_leave_one_source_family_out", ("promotion",)),
+    Law("audit.high_confidence_sample", "random high-confidence decisions survive audit",
+        "extensional", "gate_random_high_confidence_audit", ("promotion",)),
+    Law("reconstruction.plausible", "decoded timelines are physically plausible",
+        "extensional", "gate_reconstruction_plausibility", ("promotion",)),
+
+    # ---- Intensional: discharged where the value is constructed -----------
+    Law("identity.no_locator",
+        "no path, source key, or locator may construct an identity value",
+        "intensional",
+        "RecordingId is minted only by resolve_recording(evidence) (§0.5); no "
+        "constructor accepts a string, so the violating call does not typecheck",
+        ("promotion",)),
+    Law("identity.no_source_key_as_recording",
+        "a source's track key is never a canonical recording id",
+        "intensional",
+        "same site as identity.no_locator; materialize_track_row (§4) cannot "
+        "name a Recording at all",
+        ("promotion",)),
+    Law("coordinates.no_fake_zero",
+        "an unmeasured coordinate is None, never 0.0",
+        "intensional",
+        "Interval/CurvePoint are Optional[float] by type (§1); an unmeasured "
+        "boundary cannot be spelled as a number",
+        ("promotion",)),
+    Law("decoder.posteriors_only",
+        "the decoder consumes posteriors, never raw source margins",
+        "intensional",
+        "TimelineDecoder.decode takes Sequence[AxisBelief] (§10); "
+        "EvidenceEmission and NativeScore are not in its signature",
+        ("promotion",)),
+    Law("axes.separate",
+        "identity, placement and structure are decided independently",
+        "intensional",
+        "three AxisBelief records and three decode() parameters (§10); there is "
+        "no combined belief type to accidentally fuse them into",
+        ("promotion",)),
+    Law("human.append_only",
+        "human label history is never overwritten",
+        "intensional",
+        "revise_assertion (§7) is the only mutator and it constructs a "
+        "superseding record; HumanLabelAssertion is frozen",
+        ("promotion",)),
+    Law("human.uncertainty_field_specific",
+        "every human assertion carries a per-field uncertainty model",
+        "intensional",
+        "HumanLabelAssertion.uncertainty_model is a required UncertaintyModel "
+        "(§1, §7) with no default",
+        ("promotion",)),
+    Law("model.has_training_snapshot",
+        "every fitted model names the training snapshot it came from",
+        "intensional",
+        "FittedModel.training_snapshot_id is non-optional (§8)",
+        ("promotion",)),
+    Law("model.has_code_and_environment",
+        "every fitted model names its code, parameters and environment",
+        "intensional",
+        "ProcessSpec requires source_code_artifact_id, environment_spec_id and "
+        "a computed implementation_hash (§0.5, §2)",
+        ("promotion",)),
+    Law("calibration.honest",
+        "a two-set development panel cannot support a corpus calibration claim",
+        "intensional",
+        "evaluate_gold_panel (§11) derives `interpretation` from the panel; the "
+        "caller never supplies it",
+        ("promotion",)),
+    Law("reconstruction.not_identity",
+        "reconstruction distance never certifies identity",
+        "intensional",
+        "mean_reconstruction_distance returns StoppingSignal, which is not an "
+        "Evidence (§1); no belief model will accept one",
+        ("promotion",)),
+    Law("immutability.deep",
+        "no mapping inside a frozen record is mutable",
+        "intensional",
+        "every mapping field is a FrozenMap (§1); mutating metadata would "
+        "otherwise invalidate content_sha256 silently",
+        ("promotion",)),
+    Law("wiring.consistent",
+        "declared transformation types match annotations and have producers",
+        "intensional",
+        "validate_wiring_at_import (§0.5); failure is an ImportError",
+        ()),
+)
+
+
+def laws_tagged(tag: str) -> tuple[Law, ...]:
+    return tuple(law for law in LAWS if tag in law.tags)
+
+
 def assert_system_laws(snapshot: Snapshot) -> None:
-    assert provenance_is_complete(snapshot)
-    assert provenance_is_acyclic(snapshot)
-    assert all_artifacts_verify(snapshot)
-    assert no_source_key_is_canonical_recording_id(snapshot)
-    assert no_path_was_used_as_identity(snapshot)
-    assert every_unknown_parser_row_has_diagnostic(snapshot)
-    assert all_abstentions_are_persisted(snapshot)
-    assert human_history_is_append_only(snapshot)
-    assert human_uncertainty_is_field_specific(snapshot)
-    assert identity_placement_structure_are_separate(snapshot)
-    assert no_unknown_coordinate_equals_zero(snapshot)
-    assert decoder_consumes_posteriors_not_raw_margins(snapshot)
-    assert every_model_has_training_snapshot(snapshot)
-    assert every_model_has_code_and_environment(snapshot)
-    assert no_round_consumes_its_own_outputs(snapshot)
-    assert pseudo_label_graph_is_acyclic(snapshot)
-    assert rejected_rounds_are_reproducible(snapshot)
-    assert evaluation_is_per_set_and_per_axis(snapshot)
-    assert not claims_corpus_calibration_from_two_sets(snapshot)
-    assert reconstruction_does_not_certify_identity(snapshot)
-    assert every_published_value_is_explainable(snapshot)
+    """The extensional backstop — *not* the primary enforcement path.
+
+    Every intensional law above has already failed at import or at construction
+    if it was going to fail. This function exists to decide the extensional
+    class, and to catch any intensional law whose site was circumvented (a
+    deserializer bypassing a constructor, a migration writing rows directly).
+    """
+    for law in LAWS:
+        if law.enforcement == "extensional":
+            assert check_extensional(law, snapshot), law.statement
 ```
 
 ## 17. The complete conceptual function

@@ -1,0 +1,44 @@
+[
+  {
+    "set_id": "2nvzlh2k",
+    "row_index": 0,
+    "recording_id": null,
+    "track_id": null,
+    "claimed_title": "THE FRAY \u25cf Over My Head (Cable Car)",
+    "claimed_artists": null,
+    "claimed_version": null,
+    "claimed_stem": "acappella",
+    "claimed_variant": null,
+    "cue_seconds": 40.0409,
+    "slot_label": "001w2",
+    "layer_role": "payload"
+  },
+  {
+    "set_id": "2nvzlh2k",
+    "row_index": 1,
+    "recording_id": null,
+    "track_id": null,
+    "claimed_title": "Good Grief (Don Diablo Remix) - (Official Instrumental)",
+    "claimed_artists": null,
+    "claimed_version": null,
+    "claimed_stem": "instrumental",
+    "claimed_variant": null,
+    "cue_seconds": 40.5357,
+    "slot_label": "001w1",
+    "layer_role": "payload"
+  },
+  {
+    "set_id": "2nvzlh2k",
+    "row_index": 2,
+    "recording_id": "4gy6y1p",
+    "track_id": "4gy6y1p",
+    "claimed_title": "Carly Rae Jepsen - Call Me Maybe (A Cappella)",
+    "claimed_artists": null,
+    "claimed_version": null,
+    "claimed_stem": "acappella",
+    "claimed_variant": null,
+    "cue_seconds": 86.5476,
+    "slot_label": "001w3",
+    "layer_role": "payload"
+  }
+]

@@ -1,0 +1,28 @@
+[package]
+name = "dj_migrate"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Legacy tracklist_engine → dj_kernel transfer machinery (dry-run by default)"
+
+[[bin]]
+name = "dj_migrate"
+path = "src/main.rs"
+
+[dependencies]
+dj_kernel = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+rusqlite = { workspace = true }
+clap = { workspace = true }
+anyhow = { workspace = true }
+indexmap = { workspace = true }
+serde_yaml = "0.9"
+
+[dev-dependencies]
+tempfile = { workspace = true }

@@ -1,0 +1,82 @@
+set_id: 2nvzlh2k
+source: ableton_session
+annotated_by: user
+tracks:
+- track: "THE FRAY \u25CF Over My Head (Cable Car)"
+  slot_label: 001w2
+  claimed_stem: acappella
+  ref_source: online_candidate
+  set_start_s: 40.0409
+  set_end_s: 91.4286
+  ref_start_s: 2.19828
+  ref_end_s: 58.0159
+  tempo_ratio: 1.08621
+  id_source: abstain
+- track: Good Grief (Don Diablo Remix) - (Official Instrumental)
+  slot_label: 001w1
+  claimed_stem: instrumental
+  ref_source: online_candidate
+  set_start_s: 40.5357
+  set_end_s: 187.381
+  ref_start_s: 35.0306
+  ref_end_s: 137.888
+  tempo_ratio: 1
+  ref_segments:
+  - mix_start_s: 40.5357
+    mix_end_s: 48.0952
+    ref_start_s: 35.0306
+    ref_end_s: 42.5901
+    tempo_ratio: 1
+  - mix_start_s: 48.0952
+    mix_end_s: 55.0298
+    ref_start_s: 42.5901
+    ref_end_s: 49.5247
+    tempo_ratio: 1
+  - mix_start_s: 55.0298
+    mix_end_s: 131.964
+    ref_start_s: 41.9056
+    ref_end_s: 118.84
+    tempo_ratio: 1
+  - mix_start_s: 131.964
+    mix_end_s: 135.774
+    ref_start_s: 134.078
+    ref_end_s: 137.888
+    tempo_ratio: 1
+  - mix_start_s: 135.774
+    mix_end_s: 142.649
+    ref_start_s: 42.6497
+    ref_end_s: 49.5247
+    tempo_ratio: 1
+  - mix_start_s: 142.649
+    mix_end_s: 187.381
+    ref_start_s: 41.9056
+    ref_end_s: 86.6378
+    tempo_ratio: 1
+  gain_curve:
+  - - 40.536
+    - 1
+  - - 48.095
+    - 1
+  - - 55.03
+    - 1
+  - - 131.964
+    - 1
+  - - 135.774
+    - 1
+  - - 142.649
+    - 1
+  - - 187.381
+    - 1
+  id_source: abstain
+- track: Carly Rae Jepsen - Call Me Maybe (A Cappella)
+  slot_label: 001w3
+  track_id: 4gy6y1p
+  claimed_stem: acappella
+  ref_source: online_candidate
+  set_start_s: 86.5476
+  set_end_s: 101.667
+  ref_start_s: 40.5
+  ref_end_s: 56.375
+  tempo_ratio: 1.05
+  pitch_shift_semi: 1
+  id_source: content

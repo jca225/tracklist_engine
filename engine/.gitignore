@@ -1,0 +1,13 @@
+/target/
+/staging/
+**/.ruff_cache/
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.pyright/
+*.egg-info/
+.venv/
+venv/
+python/.venv/
+.DS_Store
+*.pyc

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alignment_algorithm.local/schemas/analyze_response.json",
+  "title": "AnalyzeResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "feature_kind", "process_name", "process_version"],
+  "properties": {
+    "ok": { "type": "boolean" },
+    "feature_kind": { "type": "string" },
+    "process_name": { "type": "string" },
+    "process_version": { "type": "string" },
+    "content_sha256": { "type": ["string", "null"] },
+    "payload": { "type": ["object", "null"] },
+    "error": { "type": ["string", "null"] },
+    "abstained": { "type": "boolean", "default": false }
+  }
+}

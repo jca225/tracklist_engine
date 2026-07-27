@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alignment_algorithm.local/schemas/ableton_parse_response.json",
+  "title": "AbletonParseResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "process_name", "process_version", "clips"],
+  "properties": {
+    "ok": { "type": "boolean" },
+    "process_name": { "type": "string" },
+    "process_version": { "type": "string" },
+    "clips": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["clip_index"],
+        "properties": {
+          "clip_index": { "type": "integer", "minimum": 0 },
+          "audio_uri": { "type": ["string", "null"] },
+          "content_sha256": { "type": ["string", "null"] },
+          "mix_start_s": { "type": ["number", "null"] },
+          "mix_end_s": { "type": ["number", "null"] },
+          "unique_identity": { "type": "boolean" },
+          "abstained": { "type": "boolean" },
+          "abstain_reason": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "error": { "type": ["string", "null"] }
+  }
+}

@@ -14,7 +14,7 @@ REPO         := ~/tracklist_engine
 PIP          := $(REPO)/venvs/web_crawler/bin/pip
 DB           := /mnt/storage/data/db/music_database.db
 
-.PHONY: help check check-fast check-inventory docs-gc docs-gc-apply scorecard race align-state align-ablate deploy deploy-storage deploy-worker \
+.PHONY: help engine-check engine-canary check check-fast check-inventory docs-gc docs-gc-apply scorecard race align-state align-ablate deploy deploy-storage deploy-worker \
         restart-jobqueue start-scraper stop-scraper restart-retry \
         install-taste-scrape restart-taste-scrape logs-taste-scrape \
                 status logs-jobqueue logs-scraper logs-retry queue ssh-storage ssh-worker
@@ -22,6 +22,8 @@ DB           := /mnt/storage/data/db/music_database.db
 help:
 	@echo "Common targets:"
 	@echo "  make check            — guardrails + typecheck + FULL pytest suite (pre-push gate)"
+	@echo "  make engine-check     — Rust+Python incubating kernel (cd engine && make check)"
+	@echo "  make engine-canary    — engine fixtures canary-smoke (no live DB)"
 	@echo "  make check-fast       — guardrails + a curated fast pytest subset (~4s inner-loop)"
 	@echo "  make collide          — which branches will conflict, hotspots, landing order"
 	@echo "  make land-budget      — branches grown past the point where landing gets ugly"
@@ -258,3 +260,11 @@ ssh-storage:
 
 ssh-worker:
 	ssh $(PI_WORKER)
+
+# Incubating Rust provenance kernel (fixtures-only; not the live aligner).
+engine-check:
+	$(MAKE) -C engine check
+
+engine-canary:
+	$(MAKE) -C engine canary-smoke
+

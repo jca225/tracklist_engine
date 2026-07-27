@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alignment_algorithm.local/schemas/analyze_request.json",
+  "title": "AnalyzeRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifact_uri", "feature_kind", "process_name", "process_version"],
+  "properties": {
+    "artifact_uri": { "type": "string", "minLength": 1 },
+    "feature_kind": {
+      "type": "string",
+      "enum": ["beats", "cues", "mert", "fingerprint", "loudness", "diagnostics"]
+    },
+    "process_name": { "type": "string", "minLength": 1 },
+    "process_version": { "type": "string", "minLength": 1 },
+    "seed": { "type": ["integer", "null"] }
+  }
+}
