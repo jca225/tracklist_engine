@@ -69,6 +69,7 @@ check:
 # (and mypy) is the real gate; this is the "did I obviously break something" loop.
 # No `slow` marker exists in the repo, so the subset is an explicit file list.
 FAST_TESTS := tests/test_guardrails_dead_flags.py tests/test_wip_limit.py \
+	tests/test_gc_branches.py \
 	tests/test_entropy_audit.py tests/test_repo_root_paths.py \
 	tests/test_identity_axes.py tests/test_recording_axes.py \
 	tests/core tests/scripts
@@ -96,6 +97,14 @@ land-budget:
 # more than it merges. (Merges are covered by .githooks/post-merge.)
 land-verify:
 	@braid verify --since 'HEAD@{1}'
+
+# End-of-session sweep. Report is read-only; -apply deletes ONLY branches whose
+# commits are already in main (git branch -d, never -D). See AGENTS.md §2b.
+gc-branches:
+	venvs/audio/bin/python scripts/gc_branches.py
+
+gc-branches-apply:
+	venvs/audio/bin/python scripts/gc_branches.py --apply
 
 # Docs garbage collection — classify docs/ by reachability; archive dead dated
 # snapshots. Dry-run by default; `make docs-gc-apply` sweeps COLLECTABLE.
