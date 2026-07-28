@@ -21,7 +21,6 @@ from .types import (
     Artifact,
     AxisBelief,
     Claim,
-    Decision,
     DecisionRule,
     EnvironmentSpec,
     Evidence,

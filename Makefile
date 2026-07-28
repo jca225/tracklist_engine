@@ -14,17 +14,18 @@ REPO         := ~/tracklist_engine
 PIP          := $(REPO)/venvs/web_crawler/bin/pip
 DB           := /mnt/storage/data/db/music_database.db
 
-.PHONY: help engine-check engine-canary check check-fast check-inventory docs-gc docs-gc-apply scorecard race align-state align-ablate deploy deploy-storage deploy-worker \
+.PHONY: help engine-check engine-canary check check-fast check-inventory lint typecheck docs-gc docs-gc-apply scorecard race align-state align-ablate deploy deploy-storage deploy-worker \
         restart-jobqueue start-scraper stop-scraper restart-retry \
         install-taste-scrape restart-taste-scrape logs-taste-scrape \
                 status logs-jobqueue logs-scraper logs-retry queue ssh-storage ssh-worker
 
 help:
 	@echo "Common targets:"
-	@echo "  make check            — guardrails + typecheck + FULL pytest suite (pre-push gate)"
+	@echo "  make check            — guardrails + lint + typecheck + FULL pytest suite (pre-push gate)"
 	@echo "  make engine-check     — Rust+Python incubating kernel (cd engine && make check)"
 	@echo "  make engine-canary    — engine fixtures canary-smoke (no live DB)"
-	@echo "  make check-fast       — guardrails + a curated fast pytest subset (~4s inner-loop)"
+	@echo "  make check-fast       — guardrails + lint + a curated fast pytest subset (~4s inner-loop)"
+	@echo "  make lint             — ruff over the ratcheted paths (core/ today)"
 	@echo "  make collide          — which branches will conflict, hotspots, landing order"
 	@echo "  make land-budget      — branches grown past the point where landing gets ugly"
 	@echo "  make land-verify      — after a rebase: did the merge produce parseable code"
@@ -55,6 +56,7 @@ help:
 
 check:
 	venvs/audio/bin/python scripts/guardrails.py
+	bash scripts/lint.sh
 	bash scripts/typecheck.sh
 	venvs/audio/bin/python -m pytest tests/ -q
 
@@ -71,10 +73,15 @@ FAST_TESTS := tests/test_guardrails_dead_flags.py tests/test_wip_limit.py \
 	tests/core tests/scripts
 check-fast:
 	venvs/audio/bin/python scripts/guardrails.py
+	bash scripts/lint.sh
 	venvs/audio/bin/python -m pytest $(FAST_TESTS) -q
 
 typecheck:
 	bash scripts/typecheck.sh
+
+# Ruff over the ratcheted paths (core/ today). Config: pyproject.toml [tool.ruff].
+lint:
+	bash scripts/lint.sh
 
 # ---------- branch hygiene --------------------------------------------------
 # Merge cost here tracks commits-since-divergence, not calendar age: branches

@@ -24,6 +24,9 @@ jobs:
       - name: Mechanical guardrails
         run: python scripts/guardrails.py
 
+      - name: Lint (ruff, ratcheted paths)
+        run: bash scripts/lint.sh
+
       - name: Type check (strict, clean core subset)
         run: bash scripts/typecheck.sh
 

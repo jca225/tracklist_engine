@@ -1,0 +1,41 @@
+# Tool configuration only.
+#
+# This repo is NOT an installable package — it runs from the repo root against
+# venvs/ (see CLAUDE.md "Environment"). There is deliberately no [project] or
+# [build-system] table here: adding one would advertise `pip install .`, which
+# would build a broken distribution and confuse the pi-storage deploy path.
+# Dependencies stay in the six requirements-*.txt files, one per machine role
+# (pi CPU stack / gpubox / Essentia sandbox / CI / MSST / spotdl).
+#
+# What lives here: lint config that was previously nowhere. Ruff was running via
+# the editor extension with its default rules and zero config, so lint findings
+# appeared in the IDE but gated nothing. This file makes that rule set explicit
+# and `scripts/lint.sh` puts it in the gate.
+
+[tool.ruff]
+# CI pins Python 3.12 (.github/workflows/guardrails.yml); local venvs are ahead.
+# Target the floor so lint never green-lights syntax CI would reject.
+target-version = "py312"
+
+extend-exclude = [
+    "cue-detr",   # vendored DETR model — not ours to lint
+    "archive",    # retired one-offs, kept for provenance only
+    "venvs",
+    "engine/target",
+]
+
+[tool.ruff.lint]
+# Ruff's default rule set: pycodestyle errors (E4 imports, E7 statements,
+# E9 syntax) + Pyflakes (F). This is exactly what the editor extension already
+# applies, so turning the gate on adds no new IDE noise.
+#
+# Deliberately NOT enabled yet: I (isort) would reorder imports across ~500
+# files, and E501 (line length) fails on generated/data-ish lines. Add them per
+# directory as each one is cleaned, the same way scripts/typecheck.sh ratchets
+# mypy --strict.
+select = ["E4", "E7", "E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+# Notebooks and probe scripts legitimately import for side effects and shadow
+# names between cells.
+"eda/**" = ["F401", "F841"]
