@@ -11,6 +11,8 @@ from typing import Any
 import numpy as np
 import pytest
 
+pytest.importorskip("librosa")  # the LF modules under test import librosa at module scope
+
 from pws_aligner.quality.stem_routing import (
     LF_COMPETENCE,
     Stem,

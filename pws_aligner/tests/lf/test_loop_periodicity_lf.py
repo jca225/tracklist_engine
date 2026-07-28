@@ -9,6 +9,10 @@ or noise-only signal has no such periodicity.
 
 import numpy as np
 
+import pytest
+
+pytest.importorskip("librosa")  # the LF modules under test import librosa at module scope
+
 from pws_aligner.lf.fx import detect_loop_periodicity, loop_periodicity_vote
 from pws_aligner.core.votes import AbstainReason
 

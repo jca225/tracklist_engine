@@ -3,6 +3,10 @@ from __future__ import annotations
 import librosa
 import numpy as np
 
+import pytest
+
+pytest.importorskip("librosa")  # the LF modules under test import librosa at module scope
+
 from pws_aligner.lf.operations import (
     TempoPitchLabel,
     keylock_vs_varispeed,

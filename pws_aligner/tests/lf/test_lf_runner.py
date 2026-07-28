@@ -14,6 +14,10 @@ axes separate:
 
 import json
 
+import pytest
+
+pytest.importorskip("librosa")  # the LF modules under test import librosa at module scope
+
 from pws_aligner.fusion.continuous_model import ContinuousLabelModel
 from pws_aligner.fit_corpus import fit_cohort, pool_set_lf_votes
 from pws_aligner.lf.identity import ClaimedIdentityVote

@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import numpy as np
 
+import pytest
+
+pytest.importorskip("librosa")  # the LF modules under test import librosa at module scope
+
 from pws_aligner.lf.fx import detect_noise_sweep, noise_sweep_vote
 from pws_aligner.core.votes import AbstainReason
 
