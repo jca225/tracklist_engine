@@ -224,7 +224,45 @@ Read it once. This section covers only the git specifics.
 
 ## Git workflow
 
-Use your best judgement on when to commit and push. The default Claude Code rule "only commit when explicitly asked" is **overridden for this project** — proactively commit logical units of work and push them so pi-storage / pi-worker can pick them up via `make deploy`. Group changes into reviewable commits (one feature per commit, not one-giant-blob). Don't push directly to `main` if a pending change is still unstable; otherwise keep it moving.
+The failure mode here is not bad merges — it is branches that are *started* and
+never *finished*. So the protocol is two rituals, not a style guide.
+
+**Start ritual — before substantive work, every time:**
+
+```bash
+# run from the main checkout root
+git worktree add -b <type>/<slug> .claude/worktrees/<slug> origin/main
+ln -s "$PWD/venvs" .claude/worktrees/<slug>/venvs   # gitignored; the gate needs it
+make collide                                        # who else touches these files?
+```
+
+One agent, one worktree — never the primary checkout, never `main` (a PreToolUse
+hook blocks edits while HEAD is `main`). Branch names are `<type>/<slug>` with a
+conventional type (`feat`/`fix`/`chore`/`docs`/`refactor`). If `make collide`
+shows a file you're about to change is already contested by 2+ branches, pick a
+different slice or land the competing branch first.
+
+**While working:** commit logical units with conventional prefixes — the default
+"only commit when explicitly asked" rule is **overridden for this project**. One
+feature per commit, not one-giant-blob. `make check` must pass before every push;
+never `--no-verify`. Keep the branch under **10 commits ahead of `origin/main`**
+(the guardrails WIP fence trips above that): landing cost tracks
+commits-since-divergence, not calendar age.
+
+**Finish ritual — a branch is worth finishing or worth parking; leaving it is the
+only strictly-negative option:**
+
+1. Open the PR and land it. **One open PR per agent at a time** — finish before
+   starting. Land smallest first; every commit that reaches `main` makes every
+   other open branch worse.
+2. After a rebase, `make land-verify` (git has no post-rebase hook).
+3. `make gc-branches` — deletes merged local branches, lists idle worktrees and
+   park candidates. `braid park <branch>` anything you're abandoning, then
+   `git worktree remove <path>` (idle worktrees here cost 4–15 GB each and hold
+   their branch hostage).
+
+Full rules — isolation, the gate, SSOT for numbers, live-state coordination —
+are in [AGENTS.md](AGENTS.md).
 
 ## Guardrails
 

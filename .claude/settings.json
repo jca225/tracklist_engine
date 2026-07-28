@@ -57,7 +57,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "command -v braid >/dev/null 2>&1 && braid status || true"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-posture.sh\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-worktree.sh\""
           }
         ]
       }

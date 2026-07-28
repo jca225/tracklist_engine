@@ -18,7 +18,7 @@ is dead.
 **Gate / hygiene**
 - `guardrails.py` + `guardrails_ratchet.json`
 - `entropy_audit.py` + `entropy_ratchet.json`
-- `typecheck.sh`, `docs_gc.py`, `merge_train.py`
+- `typecheck.sh`, `docs_gc.py`, `merge_train.py`, `gc_branches.py`
 
 **Analysis loops**
 - `mac_analyze_loop.py`, `mac_analyze_sets.py`

@@ -623,7 +623,13 @@ def _check_gt_als_drift() -> list[Violation]:
 # local-only and absent in CI / fresh clones), so an age gate would be silently
 # unenforceable. Commit-count is `git rev-list --count origin/main..HEAD` — the
 # same number the branch-hygiene tooling reports.
-WIP_COMMIT_LIMIT = 15
+#
+# Threshold: 10, lowered from 15 on 2026-07-28. The limit is set at the measured
+# conflict cliff for this repo, not at a round number — branches under ~10
+# commits ahead conflicted with main in 0-2 files; branches over ~15 conflicted
+# in 9-28. A fence at 15 therefore only fired once the branch was already
+# expensive to land, which is too late to act on.
+WIP_COMMIT_LIMIT = 10
 
 
 def over_wip_limit(commits_ahead: int, branch_name: str, allow_big: bool) -> bool:
