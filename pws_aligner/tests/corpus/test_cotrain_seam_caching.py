@@ -12,6 +12,10 @@ import numpy as np
 import pytest
 
 soundfile = pytest.importorskip("soundfile")
+# The fp/chroma probes lazy-import librosa and ABSTAIN when it is missing, so
+# without it this test collects and runs but counts zero fingerprints. Skip
+# rather than assert on work that never happened (CI omits the audio stack).
+pytest.importorskip("librosa")
 
 from alignment.landmark_fp import SR
 from pws_aligner.corpus import mix_feature_cache
