@@ -87,9 +87,7 @@ from pws_aligner.votes import AbstainReason, Vote, collect_votes
 # where infer.py writes predicted_timeline.json).
 # Assumption: pws_aligner/ sits exactly two levels below repo root
 # (repo_root/pws_aligner/), so parents[1] == repo root.
-_DEFAULT_OUT_DIR = (
-    Path(__file__).resolve().parents[1] / "alignment" / "out"
-)
+_DEFAULT_OUT_DIR = Path(__file__).resolve().parents[1] / "alignment" / "out"
 
 
 # ---------------------------------------------------------------------------
@@ -113,9 +111,13 @@ def _span_votes(span_doc: dict) -> tuple[Vote, ...]:
     for p in probe_docs:
         abstain = bool(p.get("abstain", False))
         rid = p.get("recording_id") if not abstain else None
+        # AlignmentResult requires offset_s=None on abstain. Persisted votes
+        # carry either null (capture_votes) or a legacy 0.0 placeholder; both
+        # must normalize to None or __post_init__ rejects the row.
+        raw_offset = p.get("offset_s")
         result = AlignmentResult(
             recording_id=rid,
-            offset_s=float(p.get("offset_s", 0.0)),
+            offset_s=None if abstain else float(raw_offset or 0.0),
             confidence=float(p.get("confidence", 0.0)),
             abstain=abstain,
             source=str(p.get("probe", "unknown")),

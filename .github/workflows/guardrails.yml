@@ -28,4 +28,4 @@ jobs:
         run: bash scripts/typecheck.sh
 
       - name: Pytest
-        run: python -m pytest tests/ -q
+        run: python -m pytest tests/ pws_aligner/tests/ -q

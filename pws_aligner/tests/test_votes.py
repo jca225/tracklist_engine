@@ -18,6 +18,6 @@ def test_collect_maps_result_and_abstain_reason():
     assert votes == (
         Vote("fp", "span0", "r1", 120.0, 0.8, False, AbstainReason.NONE, (0.8, 1.2)),
         Vote(
-            "hubert", "span0", None, 0.0, 0.0, True, AbstainReason.NO_DATA, (0.0, 0.0)
+            "hubert", "span0", None, None, 0.0, True, AbstainReason.NO_DATA, (0.0, 0.0)
         ),
     )

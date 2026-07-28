@@ -53,10 +53,16 @@ help:
 
 # ---------- local guardrails ------------------------------------------------
 
+# GATE_SUITES: every test root the pre-push gate collects. pws_aligner keeps its
+# tests module-local; they were outside `tests/` and silently rotted (a deleted
+# script's orphan test plus two real abstain-contract breakages). Any new
+# module-local suite belongs here or it will rot the same way.
+GATE_SUITES := tests/ pws_aligner/tests/
+
 check:
 	venvs/audio/bin/python scripts/guardrails.py
 	bash scripts/typecheck.sh
-	venvs/audio/bin/python -m pytest tests/ -q
+	venvs/audio/bin/python -m pytest $(GATE_SUITES) -q
 
 # Fast inner-loop gate: the mechanical fences (guardrails.py already rides the
 # entropy_audit AST bug-class fences via run_checks) + a curated, import-light
