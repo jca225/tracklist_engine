@@ -10,7 +10,16 @@ __pycache__
 .DS_Store
 **/.DS_Store
 *.egg-info
+# regenerable tool caches — never commit these (see alignment/looptrace/.gitignore
+# for the local-cache rule that a 42MB .lm_cache slipped past before it existed)
 .pytest_cache
+**/.pytest_cache
+.mypy_cache
+**/.mypy_cache
+.ruff_cache
+**/.ruff_cache
+.hypothesis
+**/.hypothesis
 .ipynb_checkpoints
 **/.ipynb_checkpoints
 /spotify-downloader
