@@ -10,7 +10,15 @@ __pycache__
 .DS_Store
 **/.DS_Store
 *.egg-info
+# regenerable tool caches
 .pytest_cache
+**/.pytest_cache
+.mypy_cache
+**/.mypy_cache
+.ruff_cache
+**/.ruff_cache
+.hypothesis
+**/.hypothesis
 .ipynb_checkpoints
 **/.ipynb_checkpoints
 /spotify-downloader

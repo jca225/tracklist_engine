@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Callable
 
 from labeling.schema import GroundTruthSet, GroundTruthTrack, load
-from pws_aligner.cotrain_seam import (
+from pws_aligner.corpus.cotrain_seam import (
     DEFAULT_THRESHOLDS,
     Band,
     BandingScore,

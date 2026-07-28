@@ -5,6 +5,27 @@ This fork rebuilt probe fusion as programmatic weak supervision per
 The Phase-1 kill-gate was RUN and the DS instantiation was **refuted** — the
 module is kept as infrastructure + a documented negative result.
 
+## Layout
+
+CLI entrypoints stay at the package root so every documented
+`python -m pws_aligner.<cli>` repro command in this file keeps working.
+Internals live in topic subpackages; all intra-package imports are absolute.
+
+| Path | Holds |
+|---|---|
+| `*.py` (root) | the 7 CLIs: `run_phase1`, `run_operations`, `capture_votes`, `corpus_harvest`, `verifier`, `validate_accept_precision`, `fit_corpus` |
+| `core/` | vote substrate — `votes` (typed abstention), `hypotheses`, `decode_bridge` |
+| `fusion/` | label models — `continuous_model` (current best), `label_model` (refuted DS baseline), `density_gate` |
+| `lf/` | labeling functions — `runner`, `identity`, `ordering`, `tracklist`, `fx`, `llm`, `llm_client`, `operations` |
+| `corpus/` | flywheel — `harvest`, `cotrain_seam`, `mix_fp_store`, `mix_feature_cache` |
+| `quality/` | reference quality / abstention triage — `ref_quality`, `actuation`, `stem_routing`, `policy` |
+
+`tests/` mirrors this structure and **is in the pre-push gate** (`GATE_SUITES`
+in the Makefile). It was outside `tests/` and silently rotted once; keep it wired.
+
+**Path anchors:** every `parents[N]` lives in a root-level CLI. A module moved
+into a subpackage must not grow one — resolve paths via a CLI or `_REPO`.
+
 ## Gate RESULT (2026-07-14, v2b — genuine votes, correct frames): REFUTED
 
 Dawid–Skene over categorical 2s offset bins **lost to hand-tuned
@@ -49,9 +70,9 @@ self-consistent — the absolute-frame probes outvote fp in the wrong frame.
 - `verifier.py` — Confident-Learning joint estimator + the **GT calibration
   report** (`--calibrate --sets <csv>`): learned vs GT-measured accuracy per
   probe; a standing diagnostic, validation-only.
-- `votes.py` (typed abstention), `hypotheses.py`, `decode_bridge.py`,
-  `run_phase1.py`, `density_gate.py`.
-- `label_model.py` — the refuted DS baseline, retained as the calibration
+- `core/votes.py` (typed abstention), `core/hypotheses.py`,
+  `core/decode_bridge.py`, `run_phase1.py`, `fusion/density_gate.py`.
+- `fusion/label_model.py` — the refuted DS baseline, retained as the calibration
   harness / baseline, not a shipping fusion.
 
 History: `export_votes.py` (reconstructed votes from `probe_proposals` — flat
@@ -61,7 +82,7 @@ the spec for the full account.
 
 ### Lane 2 — operations (keylock/varispeed)
 
-**Runner:** `run_operations.py` — applies `keylock_vs_varispeed` LF from `operations.py`
+**Runner:** `run_operations.py` — applies `keylock_vs_varispeed` LF from `lf/operations.py`
 to every span in a predicted timeline.  Reuses `capture_votes.py` helpers
 (`_find_aligning_dir`, `_load_manifest_by_rid`, `_mix_audio_path`,
 `_ref_audio_path`, `_load_timeline`) for audio resolution.

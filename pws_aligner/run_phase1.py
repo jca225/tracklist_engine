@@ -73,23 +73,21 @@ if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
 from alignment.harness.contract import AlignmentResult
-from pws_aligner.continuous_model import ContinuousLabelModel
-from pws_aligner.decode_bridge import (
+from pws_aligner.fusion.continuous_model import ContinuousLabelModel
+from pws_aligner.core.decode_bridge import (
     fused_to_placement,
     posterior_to_placement,
 )
-from pws_aligner.density_gate import choose_aggregator
-from pws_aligner.hypotheses import Hypothesis
-from pws_aligner.label_model import DawidSkene, MajorityVote
-from pws_aligner.votes import AbstainReason, Vote, collect_votes
+from pws_aligner.fusion.density_gate import choose_aggregator
+from pws_aligner.core.hypotheses import Hypothesis
+from pws_aligner.fusion.label_model import DawidSkene, MajorityVote
+from pws_aligner.core.votes import AbstainReason, Vote, collect_votes
 
 # Default out/ directory relative to the alignment_prototype package (mirrors
 # where infer.py writes predicted_timeline.json).
 # Assumption: pws_aligner/ sits exactly two levels below repo root
 # (repo_root/pws_aligner/), so parents[1] == repo root.
-_DEFAULT_OUT_DIR = (
-    Path(__file__).resolve().parents[1] / "alignment" / "out"
-)
+_DEFAULT_OUT_DIR = Path(__file__).resolve().parents[1] / "alignment" / "out"
 
 
 # ---------------------------------------------------------------------------
@@ -113,9 +111,13 @@ def _span_votes(span_doc: dict) -> tuple[Vote, ...]:
     for p in probe_docs:
         abstain = bool(p.get("abstain", False))
         rid = p.get("recording_id") if not abstain else None
+        # AlignmentResult requires offset_s=None on abstain. Persisted votes
+        # carry either null (capture_votes) or a legacy 0.0 placeholder; both
+        # must normalize to None or __post_init__ rejects the row.
+        raw_offset = p.get("offset_s")
         result = AlignmentResult(
             recording_id=rid,
-            offset_s=float(p.get("offset_s", 0.0)),
+            offset_s=None if abstain else float(raw_offset or 0.0),
             confidence=float(p.get("confidence", 0.0)),
             abstain=abstain,
             source=str(p.get("probe", "unknown")),
@@ -190,7 +192,7 @@ def run_phase1(
     # LLM LF: opt-in, budgeted, sidecar-only (never in the fusion path yet).
     # Without --llm nothing here runs and the anthropic SDK is never imported.
     if llm:
-        from pws_aligner.llm_client import ClaudeClient, run_llm_lf
+        from pws_aligner.lf.llm_client import ClaudeClient, run_llm_lf
 
         llm_votes = run_llm_lf(
             span_docs,

@@ -16,7 +16,6 @@ DB           := /mnt/storage/data/db/music_database.db
 
 .PHONY: help engine-check engine-canary check check-fast check-inventory docs-gc docs-gc-apply scorecard race align-state align-ablate deploy deploy-storage deploy-worker \
         restart-jobqueue start-scraper stop-scraper restart-retry \
-        install-taste-scrape restart-taste-scrape logs-taste-scrape \
                 status logs-jobqueue logs-scraper logs-retry queue ssh-storage ssh-worker
 
 help:
@@ -42,8 +41,6 @@ help:
 	@echo "  make start-scraper    — start tracklist-scraper.service (full corpus)"
 	@echo "  make stop-scraper     — stop the scraper"
 	@echo "  make restart-retry    — stop + start the retry drain on pi-worker"
-	@echo "  make install-taste-scrape — install taste-scrape systemd unit on pi-worker"
-	@echo "  make restart-taste-scrape — restart taste scrape loop on pi-worker"
 	@echo ""
 	@echo "Logs (Ctrl-C to exit):"
 	@echo "  make logs-jobqueue logs-scraper logs-retry"
@@ -53,10 +50,16 @@ help:
 
 # ---------- local guardrails ------------------------------------------------
 
+# GATE_SUITES: every test root the pre-push gate collects. pws_aligner keeps its
+# tests module-local; they were outside `tests/` and silently rotted (a deleted
+# script's orphan test plus two real abstain-contract breakages). Any new
+# module-local suite belongs here or it will rot the same way.
+GATE_SUITES := tests/ pws_aligner/tests/
+
 check:
 	venvs/audio/bin/python scripts/guardrails.py
 	bash scripts/typecheck.sh
-	venvs/audio/bin/python -m pytest tests/ -q
+	venvs/audio/bin/python -m pytest $(GATE_SUITES) -q
 
 # Fast inner-loop gate: the mechanical fences (guardrails.py already rides the
 # entropy_audit AST bug-class fences via run_checks) + a curated, import-light
@@ -238,18 +241,6 @@ logs-scraper:
 
 logs-retry:
 	ssh $(PI_WORKER) 'sudo journalctl -u tracklist-ajax-retry.service -f --no-hostname'
-
-install-taste-scrape:
-	scp deploy/taste-scrape.service $(PI_WORKER):/tmp/taste-scrape.service
-	ssh $(PI_WORKER) 'sudo mv /tmp/taste-scrape.service /etc/systemd/system/tracklist-taste-scrape.service && sudo systemctl daemon-reload && sudo systemctl enable tracklist-taste-scrape.service'
-
-restart-taste-scrape:
-	ssh $(PI_WORKER) 'sudo systemctl restart tracklist-taste-scrape.service'
-	@sleep 2
-	@ssh $(PI_WORKER) 'sudo systemctl status tracklist-taste-scrape.service --no-pager | head -8'
-
-logs-taste-scrape:
-	ssh $(PI_WORKER) 'sudo journalctl -u tracklist-taste-scrape.service -f --no-hostname'
 
 # an ERROR-severity structural violation; it stays failed until the next clean
 # run). Requires the code to already be deployed (make deploy).

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from pws_aligner.continuous_model import ProbeNoise
+from pws_aligner.fusion.continuous_model import ProbeNoise
 from pws_aligner.verifier import (
     JointEstimate,
     calibration_report,
@@ -15,7 +15,7 @@ from pws_aligner.verifier import (
     prune_confident_errors,
     sigma_rank_inversions,
 )
-from pws_aligner.votes import AbstainReason, Vote
+from pws_aligner.core.votes import AbstainReason, Vote
 
 
 # ---------------------------------------------------------------------------

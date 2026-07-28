@@ -806,7 +806,7 @@ def test_main_accepts_file_uri_db(tmp_path, capsys):
 def test_harvest_uses_cached_fp_when_cache_root_set(tmp_path):
     # Pre-warm a cache file for set_audio_id 77; harvest must read it, not build live.
     from alignment.landmark_fp import LandmarkFingerprint
-    from pws_aligner import mix_fp_store
+    from pws_aligner.corpus import mix_fp_store
 
     cache_root = tmp_path / "fpcache"
     cache_root.mkdir()

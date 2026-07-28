@@ -39,4 +39,4 @@ done
 # self-guards to a no-op for any gated set whose committed .als is absent.
 "$PYTHON" -m labeling.verify.gt_als_gate
 PYTHON="$PYTHON" bash scripts/typecheck.sh
-"$PYTHON" -m pytest tests/ -q
+"$PYTHON" -m pytest tests/ pws_aligner/tests/ -q

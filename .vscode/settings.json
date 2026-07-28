@@ -11,11 +11,31 @@
     "reports": true,
     "deploy": true,
     "cue-detr": true,
-    ".claude/worktrees": true
+    ".claude/worktrees": true,
+
+    // Generated tool caches — regenerable, never hand-edited.
+    "**/.mypy_cache": true,
+    "**/.pytest_cache": true,
+    "**/.ruff_cache": true,
+    "**/.hypothesis": true,
+    "**/.lm_cache": true,
+    "**/.DS_Store": true,
+
+    // Tool config you don't hand-edit day to day.
+    // (.github / .gitignore / .vscode / .claude stay visible on purpose.)
+    ".cursor": true,
+    ".githooks": true,
+    ".streamlit": true,
+    ".superpowers": true,
+    ".env": true
   },
   "search.exclude": {
     "venvs": true,
     "data": true,
-    "archive": true
+    "archive": true,
+    "**/.mypy_cache": true,
+    "**/.ruff_cache": true,
+    "**/.hypothesis": true,
+    "**/.lm_cache": true
   }
 }

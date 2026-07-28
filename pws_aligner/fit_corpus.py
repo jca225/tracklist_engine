@@ -24,10 +24,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
-from .continuous_model import ContinuousLabelModel
-from .lf_runner import run_all_spans
-from .run_phase1 import _load_votes_file, _span_votes
-from .votes import Vote
+from pws_aligner.fusion.continuous_model import ContinuousLabelModel
+from pws_aligner.lf.runner import run_all_spans
+from pws_aligner.run_phase1 import _load_votes_file, _span_votes
+from pws_aligner.core.votes import Vote
 
 
 @dataclass(frozen=True)

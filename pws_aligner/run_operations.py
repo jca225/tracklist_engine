@@ -100,7 +100,7 @@ def run_operations(
         _mix_audio_path,
         _ref_audio_path,
     )
-    from pws_aligner.operations import keylock_vs_varispeed
+    from pws_aligner.lf.operations import keylock_vs_varispeed
 
     out_dir = _DEFAULT_OUT_DIR
     if timeline_path is None:
