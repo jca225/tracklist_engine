@@ -27,7 +27,7 @@ Legacy mapping (Phase 1 migration / ingest compat):
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Final, Literal, Optional
+from typing import Final, Literal
 
 Version = Literal[
     "original",
