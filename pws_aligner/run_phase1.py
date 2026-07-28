@@ -73,15 +73,15 @@ if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
 from alignment.harness.contract import AlignmentResult
-from pws_aligner.continuous_model import ContinuousLabelModel
-from pws_aligner.decode_bridge import (
+from pws_aligner.fusion.continuous_model import ContinuousLabelModel
+from pws_aligner.core.decode_bridge import (
     fused_to_placement,
     posterior_to_placement,
 )
-from pws_aligner.density_gate import choose_aggregator
-from pws_aligner.hypotheses import Hypothesis
-from pws_aligner.label_model import DawidSkene, MajorityVote
-from pws_aligner.votes import AbstainReason, Vote, collect_votes
+from pws_aligner.fusion.density_gate import choose_aggregator
+from pws_aligner.core.hypotheses import Hypothesis
+from pws_aligner.fusion.label_model import DawidSkene, MajorityVote
+from pws_aligner.core.votes import AbstainReason, Vote, collect_votes
 
 # Default out/ directory relative to the alignment_prototype package (mirrors
 # where infer.py writes predicted_timeline.json).
@@ -192,7 +192,7 @@ def run_phase1(
     # LLM LF: opt-in, budgeted, sidecar-only (never in the fusion path yet).
     # Without --llm nothing here runs and the anthropic SDK is never imported.
     if llm:
-        from pws_aligner.llm_client import ClaudeClient, run_llm_lf
+        from pws_aligner.lf.llm_client import ClaudeClient, run_llm_lf
 
         llm_votes = run_llm_lf(
             span_docs,

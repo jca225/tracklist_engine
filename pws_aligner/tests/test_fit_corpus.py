@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from pws_aligner.continuous_model import ProbeNoise
+from pws_aligner.fusion.continuous_model import ProbeNoise
 from pws_aligner.fit_corpus import (
     ablation_compare,
     fit_cohort,

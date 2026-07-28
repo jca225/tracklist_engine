@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Sequence
 
-from pws_aligner.cotrain_seam import (
+from pws_aligner.corpus.cotrain_seam import (
     BandThresholds,
     MixSpan,
     RefCandidate,
@@ -36,7 +36,7 @@ from pws_aligner.cotrain_seam import (
     corpus_mix_resolver,
     real_probe_scorer,
 )
-from pws_aligner.harvest import CERTIFIED_POLICY, harvest, write_ledger
+from pws_aligner.corpus.harvest import CERTIFIED_POLICY, harvest, write_ledger
 
 # Canonical pi-storage defaults (all overridable via CLI args for tests/other hosts).
 DEFAULT_DB = Path("/mnt/storage/data/db/music_database.db")
@@ -256,7 +256,7 @@ def run_corpus_harvest(
             _key = str(set_audio_id)
 
             def compute_mix_fp(mix, _root=_root, _key=_key):
-                from pws_aligner.mix_fp_store import load_or_build
+                from pws_aligner.corpus.mix_fp_store import load_or_build
 
                 return load_or_build(_root, _key, mix.audio_path)
 

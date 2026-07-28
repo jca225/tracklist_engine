@@ -35,9 +35,9 @@ _REPO = Path(__file__).resolve().parents[1]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from pws_aligner.continuous_model import ProbeNoise
-from pws_aligner.hypotheses import Hypothesis, vote_to_hypothesis
-from pws_aligner.votes import AbstainReason, Vote
+from pws_aligner.fusion.continuous_model import ProbeNoise
+from pws_aligner.core.hypotheses import Hypothesis, vote_to_hypothesis
+from pws_aligner.core.votes import AbstainReason, Vote
 
 # Default out/ directory (mirrors run_phase1.py)
 _DEFAULT_OUT_DIR = (

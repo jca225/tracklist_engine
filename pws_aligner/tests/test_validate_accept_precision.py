@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from labeling.schema import GroundTruthSet, GroundTruthTrack
-from pws_aligner.cotrain_seam import (
+from pws_aligner.corpus.cotrain_seam import (
     AgreementReport,
     Band,
     CandidateProposal,
