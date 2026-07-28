@@ -388,7 +388,7 @@ lacks `recording_id` on spans (schema drift).
 - `reconcile_aligning_manifest 2nvzlh2k --apply`: wired 152 slots; unresolved
   **017w2, 027, 038w2** (disk/manifest gaps).
 - GT remap: **1** row (`013w1` → `013w3`, Kill FM - Fresh); `needs_human`: `mix`.
-- Worklist: `labeling/out/bb11_inventory_worklist.csv` — **23** GT-blocking
+- Worklist: `archive/labeling/out/bb11_inventory_worklist.csv` — **23** GT-blocking
   (mostly claimed-acappella `wrong_stem` + a few `replace_version` regulars);
   **23** acquisition cases opened in `data/acquisition_cases/2nvzlh2k.jsonl`.
 - Preflight on scorer attempt: **0** missing ref audio (GT fixture) — spectrogram
