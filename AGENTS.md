@@ -8,9 +8,15 @@ is the *how we work* layer; the *what the code is* layer lives in
 ## 1. Isolate — one agent, one worktree
 - Do substantive work in a **git worktree** (`.claude/worktrees/<name>`), not the
   shared main checkout. Multiple agents in one dirty tree collide (a staged edit
-  gets swept into another agent's commit — this has happened).
+  gets swept into another agent's commit — this has happened). Keep worktrees
+  *inside* `.claude/worktrees/` — strays elsewhere on the filesystem are invisible
+  to `braid` and to everyone else.
+- **Editing files while HEAD is `main` is blocked** by the `guard-worktree`
+  PreToolUse hook. That is the one hard stop; everything else here is convention.
+  Branch first (`<type>/<slug>`), then edit.
 - **Never edit another agent's active files.** Before starting, pull/scan for
-  in-flight work; if a file is mid-edit by someone else, leave it.
+  in-flight work; if a file is mid-edit by someone else, leave it. `make collide`
+  tells you which files are already contested.
 - A worktree has no `venvs/` (gitignored). Symlink it so the gate can run:
   `ln -s <main-repo>/venvs venvs` (the symlink is gitignored).
 
@@ -24,6 +30,22 @@ is the *how we work* layer; the *what the code is* layer lives in
   raise its baseline **with justification** — don't bypass.
 - Commit in logical units with conventional prefixes (`feat:`/`fix:`/`docs:`…),
   and push so pi-storage/pi-worker pick changes up via `make deploy`.
+- Keep a branch under **10 commits ahead of `origin/main`** — the guardrails WIP
+  fence trips above that. Escape hatches (`epic` in the branch name,
+  `GUARDRAILS_ALLOW_BIG=1`) are for deliberately long-lived work, not for a
+  branch that merely got away from you.
+
+## 2b. Finish before starting
+Measured here: landing is *fast* (median 2h at 7 commits, CI 2 min) and still
+most open branches sit untouched for days. Fat branches are caused by sitting,
+not by difficulty.
+- **One open PR per agent at a time.** Land it before opening the next front.
+- **Land smallest first** — every commit that reaches `main` makes every other
+  open branch worse.
+- End a work session with `make gc-branches`: it deletes local branches already
+  merged into `main`, and lists idle worktrees and park candidates. Abandon
+  explicitly (`braid park <branch>` keeps the commits as a tag, then
+  `git worktree remove <path>`) rather than by walking away.
 
 ## 3. Numbers live in one place
 - Every alignment headline number belongs **only** in

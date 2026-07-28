@@ -11,7 +11,9 @@ all agent-authored. Merge cost here does **not** track calendar age — it track
 expensive.
 
 Measured on this repo: branches under ~10 commits ahead conflicted in 0–2 files;
-branches over ~15 conflicted in 9–28.
+branches over ~15 conflicted in 9–28. The guardrails WIP fence is set at that
+cliff — **10 commits ahead of `origin/main`** — so it fires while splitting is
+still cheap.
 
 Tool: `braid` (installed via `uv tool install --editable ~/workspace/braid`).
 Everything below is read-only — safe to run with dirty worktrees mid-flight.
@@ -40,8 +42,8 @@ make collide              # what exactly will it fight with?
 other open branch worse. A branch that would conflict in one file today
 conflicts in twenty-eight after it sits for a week of agent commits.
 
-If a branch is over budget (>15 commits ahead), do not just push through the
-rebase. Split it: land the mechanical or additive part first, keep the
+If a branch is over budget (>10 commits ahead — the guardrails WIP fence trips
+there), do not just push through the rebase. Split it: land the mechanical or additive part first, keep the
 behavioural part on the branch. This is the same phase-split rule as
 `refactor-safety`, applied to landing rather than refactoring.
 
@@ -80,11 +82,18 @@ finishing or worth parking; leaving it is the only option that is strictly
 negative.
 
 ```bash
+make gc-branches          # merged branches to delete + idle worktrees + park candidates
+make gc-branches-apply    # actually delete the merged ones (never touches unlanded work)
 braid stale --days 3      # what nobody has touched
 braid park <branch>       # keep the commits as a tag, drop the branch
 braid parked              # what is parked
 braid unpark <branch>     # bring it back
 ```
+
+`make gc-branches` is the end-of-session sweep: it only ever proposes deleting
+branches whose commits are **already in `main`**, so it cannot lose work. Run it
+before `braid stale` — most of what looks like sprawl is dead branches nobody
+deleted, not live work.
 
 Parking turns a branch into an annotated tag and deletes the branch. The
 commits are preserved exactly; the tag never needs rebasing and can never
