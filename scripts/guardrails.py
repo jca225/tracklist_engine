@@ -37,6 +37,11 @@ SKIP_DIR_NAMES = frozenset(
         "__pycache__",
         ".git",
         ".claude",
+        # Retired code (archive/README.md): tracked so it stays greppable, but
+        # deliberately out of the gate. Grading it would ratchet the baselines
+        # on code nobody maintains — and un-archiving is a plain `git mv`, at
+        # which point the fences apply again.
+        "archive",
     }
 )
 
