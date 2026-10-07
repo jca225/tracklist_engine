@@ -78,3 +78,6 @@ archive/
 engine/target/
 engine/staging/
 engine/python/.venv/
+
+# Agent worktrees (git-worktree checkouts, not source files)
+.claude/worktrees/
