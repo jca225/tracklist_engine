@@ -78,3 +78,6 @@ archive/
 engine/target/
 engine/staging/
 engine/python/.venv/
+
+# Agent worktrees (ephemeral; created by git worktree add per CLAUDE.md start ritual)
+.claude/worktrees/
