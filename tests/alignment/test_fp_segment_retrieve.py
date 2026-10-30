@@ -27,9 +27,8 @@ def test_retrieve_preserves_raw_time_correspondences():
         mix_channel="instrumental",
     )
     scale = FHOP / SR
-    assert [(m.mix_time_s, m.ref_time_s) for m in matches] == pytest.approx(
-        [(10 * scale, 30 * scale), (20 * scale, 30 * scale)]
-    )
+    assert [m.mix_time_s for m in matches] == pytest.approx([10 * scale, 20 * scale])
+    assert [m.ref_time_s for m in matches] == pytest.approx([30 * scale, 30 * scale])
     assert all(m.hash_frequency == 2 for m in matches)
     assert all(m.weight == pytest.approx(1 / math.log2(4)) for m in matches)
 
