@@ -78,3 +78,6 @@ archive/
 engine/target/
 engine/staging/
 engine/python/.venv/
+
+# Local git worktrees (transient; created by AGENTS.md start ritual)
+.claude/worktrees/
