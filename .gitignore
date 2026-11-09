@@ -78,3 +78,6 @@ archive/
 engine/target/
 engine/staging/
 engine/python/.venv/
+
+# Claude Code worktrees (local only — not committed)
+.claude/worktrees/
