@@ -78,3 +78,6 @@ archive/
 engine/target/
 engine/staging/
 engine/python/.venv/
+
+# Git worktrees (agent working copies — content is tracked on each branch)
+.claude/worktrees/
