@@ -1,5 +1,6 @@
 venv
 venvs
+.claude/worktrees/
 # Shared explorer excludes stay tracked; local launch/debug configs stay private.
 .vscode/*
 !.vscode/settings.json
