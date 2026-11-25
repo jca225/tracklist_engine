@@ -78,3 +78,6 @@ archive/
 engine/target/
 engine/staging/
 engine/python/.venv/
+
+# Git worktrees used by agent sessions (session-local, never tracked)
+.claude/worktrees/
